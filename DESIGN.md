@@ -1,0 +1,93 @@
+# Design
+
+Dumping ground for high level design notes
+
+## Influences
+
+Emacs - Extensible, uniform software environment 
+
+Hypermedia - Self-describing, uniform interface of early browser applications 
+
+Unix - Composability of programs via stdin, stderr, stdout, pipes, and plaintext 
+
+Plan 9 - Per-process hierarchical namespaces and hypermedia approach to plaintext via plumber
+
+Erlang - Message based, distributed software runtime
+
+## Client and Runtime
+
+### Guiding Questions
+
+- What are key goals of client + runtime design?
+- How will each client interact with runtime? (CLI, command bar, web, mobile,
+  voice assistants)
+- What does surface between interaction shell and client API look like?
+
+### Goals
+
+Communication between client and runtime is a simple message-based and transport
+agnostic interface.
+
+Runtime code should be able to run in several configurations:
+
+- Cross-process, for client and runtime processes on the same machine.
+- Over-network, for thin-clients that interact with runtime on different
+  machines.
+- In-process, for platforms that want same-device client-runtime but cannot
+  spawn separate process.
+
+Client API should be simple and lean so bringing up new clients is low cost.
+
+### Runtime
+
+A typical lifecycle of the client and runtime may look like:
+
+1. Clients opens a bidirectional channel to runtime.
+2. Client and runtime trade message over bidirectional channel via client API.
+3. When the client exists, it closes the channel, and runtime frees resources
+   tied to connection.
+
+The per-client state is maintained in the runtime, so client implemenation is
+lean.
+
+The client API will offer request-response style APIs on top of message passing
+for convenience, but the channel is a bidirectional.
+
+How the runtime is started may be platform dependent:
+
+- On desktop, native service management may be used (`systemd`, `launchd`, etc).
+- On web, runtime may be always running in the cloud.
+- On mobile, a in-process runtime may be spun up before client initialization.
+
+### Client API
+
+The client API should be lightweight.
+
+It should support:
+
+- Request / Response
+- Pub / Sub - including pushes from runtime
+- Hypermedia-Driven Interface
+
+### Hypermedia Client
+
+The client implementation over client API is hypermedia-driven:
+
+- TODO
+
+### vrsctl - CLI client
+
+The `vrsctl` CLI is lightweight client to runtime that offers 1-1 mapping to
+client API.
+
+Per invocation, it will:
+1. Open connection with runtime
+2. Send specified message(s)
+3. Wait for response(s)
+4. Close connection to runtime when stdin closes and all requests were processed.
+
+CLI can be used to bootstrap new clients that is able to launch `vrsctl`
+directly, or as a development tool.
+
+NDJSON-based messages and syntactic sugar to it will be used to keep CLI
+interaction close to client API as possible.
