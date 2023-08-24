@@ -69,6 +69,14 @@ It should support:
 - Pub / Sub - including pushes from runtime
 - Hypermedia-Driven Interface
 
+### Client Library
+
+The client API is largely implemented by client library.
+
+Like `libdbus`, the underlying transport should be opaque to client shells - it
+may use lower-level IPC mechanisms like unix domain sockets, or TCP, without
+affecting API surface between client and client library.
+
 ### Hypermedia Client
 
 The client implementation over client API is hypermedia-driven:
@@ -91,3 +99,4 @@ directly, or as a development tool.
 
 NDJSON-based messages and syntactic sugar to it will be used to keep CLI
 interaction close to client API as possible.
+
