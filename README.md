@@ -12,6 +12,12 @@
 >
 > — Alpha Waymond
 
+## Structure
+
+- `core`: The `vrs` library crate shared by runtime and core
+- `runtime`: The runtime implementation for `vrsd` daemon
+- `vrsctl`: A CLI shell for interacting with runtime
+
 ## What is this?
 
 This is a WIP personal software runtime so I can write software the way I want to.
