@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 vrs = { path = "../core" }
+tokio = { version = "1.32.0", features = ["full"] }
+anyhow = "1.0.75"

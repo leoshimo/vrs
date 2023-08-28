@@ -1,14 +1,7 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+use std::path::PathBuf;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+/// The path to runtime socket
+pub fn runtime_socket() -> Option<PathBuf> {
+    let home = dirs::runtime_dir().or_else(dirs::home_dir)?;
+    Some(home.as_path().join("vrsd.socket"))
 }
