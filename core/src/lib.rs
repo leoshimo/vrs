@@ -1,5 +1,8 @@
 use std::path::PathBuf;
 
+pub mod connection;
+pub mod message;
+
 /// The path to runtime socket
 pub fn runtime_socket() -> Option<PathBuf> {
     let home = dirs::runtime_dir().or_else(dirs::home_dir)?;
