@@ -1,8 +1,7 @@
 use anyhow::{Context, Result};
 use serde_json::json;
 use tokio::net::UnixStream;
-use vrs::connection::Connection;
-use vrs::message::Message;
+use vrs::connection::{Connection, Message};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -15,16 +14,19 @@ async fn main() -> Result<()> {
 
     println!("Connected to runtime: {:?}", conn);
     let mut conn = Connection::new(conn);
-    let msg = Message::new(json!({"message": "Hello"}));
-    conn.send(&msg)
+    let req = Message::Request {
+        request_id: 0,
+        contents: json!({"message": "Hello"}),
+    };
+    conn.send(&req)
         .await
         .with_context(|| "Failed to send message".to_string())?;
 
-    while let Some(msg) = conn.recv().await {
-        match msg {
-            Ok(msg) => println!(
+    while let Some(resp) = conn.recv().await {
+        match resp {
+            Ok(resp) => println!(
                 "Received response: {}",
-                serde_json::to_string_pretty(&msg.0).unwrap()
+                serde_json::to_string_pretty(&resp).unwrap()
             ),
             Err(e) => eprintln!("Received error: {}", e),
         }

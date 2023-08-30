@@ -1,11 +1,28 @@
-//! Connection wraps over bidirectional stream between client and runtime
-use crate::message::Message;
+//! Sending and receiving message over connection between client and runtime.
+
 use bytes::{BufMut, BytesMut};
 use futures::{SinkExt, StreamExt};
+use serde::{Deserialize, Serialize};
 use tokio::net::UnixStream;
 use tokio_util::codec::Framed;
 use tokio_util::codec::LengthDelimitedCodec;
 
+/// The message defining over-the-wire data between client and runtime
+#[derive(Deserialize, Serialize)]
+pub enum Message {
+    /// Request message
+    Request {
+        request_id: u32,
+        contents: serde_json::Value,
+    },
+    /// Response message for Request
+    Response {
+        request_id: u32,
+        contents: serde_json::Value,
+    },
+}
+
+/// Connection that can be used to send [crate::connection::Message]
 pub struct Connection {
     stream: Framed<UnixStream, LengthDelimitedCodec>,
 }
@@ -30,9 +47,9 @@ impl Connection {
             Err(e) => return Some(Err(e)),
         };
 
-        let json = serde_json::from_slice::<serde_json::Value>(&bytes);
-        let json = match json {
-            Ok(json) => json,
+        let msg = serde_json::from_slice::<Message>(&bytes);
+        let msg = match msg {
+            Ok(msg) => msg,
             Err(e) => {
                 return Some(Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
@@ -41,6 +58,6 @@ impl Connection {
             }
         };
 
-        Some(Ok(Message::new(json)))
+        Some(Ok(msg))
     }
 }
