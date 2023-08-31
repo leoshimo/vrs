@@ -38,3 +38,4 @@ and the goal is to bundle my favorite parts from each of those systems into one 
 
 > If `xdg-open`, `systemd`, and `dbus` raised a child in an alternative universe where Lisp replaced XML as dominant configuration language
 
+> The thing about ideas, is that ideas start out small... tiny and weak and fragile... Ideas need an environment where creator can nurture them.. feed them and shape their growth
