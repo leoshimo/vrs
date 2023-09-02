@@ -1,5 +1,6 @@
 //! Sending and receiving message over connection between client and runtime.
 
+use crate::message::{Request, Response};
 use bytes::{BufMut, BytesMut};
 use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -7,24 +8,16 @@ use tokio::net::UnixStream;
 use tokio_util::codec::Framed;
 use tokio_util::codec::LengthDelimitedCodec;
 
-/// The message defining over-the-wire data between client and runtime
-#[derive(Deserialize, Serialize)]
-pub enum Message {
-    /// Request message
-    Request {
-        request_id: u32,
-        contents: serde_json::Value,
-    },
-    /// Response message for Request
-    Response {
-        request_id: u32,
-        contents: serde_json::Value,
-    },
-}
-
 /// Connection that can be used to send [crate::connection::Message]
 pub struct Connection {
     stream: Framed<UnixStream, LengthDelimitedCodec>,
+}
+
+/// Messages between client and runtime
+#[derive(Debug, Deserialize, Serialize)]
+pub enum Message {
+    Request(Request),
+    Response(Response),
 }
 
 impl Connection {

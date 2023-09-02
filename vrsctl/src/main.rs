@@ -1,7 +1,9 @@
 use anyhow::{Context, Result};
 use serde_json::json;
+use std::io;
 use tokio::net::UnixStream;
-use vrs::connection::{Connection, Message};
+use vrs::connection::Connection;
+use vrs::shell::Shell;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -13,23 +15,20 @@ async fn main() -> Result<()> {
         .with_context(|| format!("Failed to connect to socket {}", path.display()))?;
 
     println!("Connected to runtime: {:?}", conn);
-    let mut conn = Connection::new(conn);
-    let req = Message::Request {
-        request_id: 0,
-        contents: json!({"message": "Hello"}),
-    };
-    conn.send(&req)
-        .await
-        .with_context(|| "Failed to send message".to_string())?;
+    let conn = Connection::new(conn);
+    let mut shell = Shell::new(conn);
 
-    while let Some(resp) = conn.recv().await {
-        match resp {
-            Ok(resp) => println!(
-                "Received response: {}",
-                serde_json::to_string_pretty(&resp).unwrap()
-            ),
-            Err(e) => eprintln!("Received error: {}", e),
+    loop {
+        let mut s = String::new();
+        io::stdin()
+            .read_line(&mut s)
+            .expect("failed to read from stdin");
+        let s = s.trim();
+        if s == "exit" {
+            break;
         }
+        let resp = shell.request(json!({"message": s})).await;
+        println!("Response: {:?}", resp);
     }
 
     Ok(())

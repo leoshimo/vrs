@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use serde_json::json;
 use tokio::net::UnixListener;
 use vrs::connection::{Connection, Message};
+use vrs::message::Response;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -27,11 +28,11 @@ async fn main() -> Result<()> {
                             serde_json::to_string_pretty(&msg).unwrap()
                         );
 
-                        if let Message::Request { request_id, .. } = msg {
-                            let resp = Message::Response {
-                                request_id,
-                                contents: json!({"message": "Goodbye"}),
-                            };
+                        if let Message::Request(req) = msg {
+                            let resp = Message::Response(Response {
+                                req_id: req.req_id,
+                                contents: json!({"message": format!("GOT: {}", req.contents["message"])}),
+                            });
                             conn.send(&resp).await.unwrap();
                         }
                     }
