@@ -17,12 +17,7 @@ impl Shell {
     /// Create new shell
     pub fn new(conn: Connection) -> Self {
         let (tx, rx) = mpsc::channel(32);
-        let evloop = EventLoop {
-            conn,
-            rx,
-            next_req_id: 0,
-            inflight_reqs: HashMap::new(),
-        };
+        let evloop = EventLoop::new(conn, rx);
         tokio::spawn(run(evloop));
         Self { tx }
     }
@@ -77,6 +72,15 @@ struct EventLoop {
 }
 
 impl EventLoop {
+    fn new(conn: Connection, rx: mpsc::Receiver<Event>) -> Self {
+        Self {
+            conn,
+            rx,
+            next_req_id: 0,
+            inflight_reqs: HashMap::new(),
+        }
+    }
+
     #[tracing::instrument(skip(self))]
     async fn handle_event(&mut self, e: Event) {
         debug!("received {:?}", e);
@@ -126,5 +130,47 @@ async fn run(mut evloop: EventLoop) {
             }
         };
         evloop.handle_event(ev).await;
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::shell::Message;
+    use serde_json::json;
+    use tokio::net::UnixStream;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn handle_request_response() {
+        let (local, remote) = UnixStream::pair().unwrap();
+        let local = Connection::new(local);
+        let mut remote = Connection::new(remote);
+
+        // Mock fake runtime that echos back requests
+        tokio::spawn(async move {
+            while let Some(msg) = remote.recv().await {
+                if let Ok(Message::Request(req)) = msg {
+                    let message = req.contents["message"].as_str().unwrap();
+                    let resp = Response {
+                        req_id: req.req_id,
+                        contents: json!({ "message": format!("reply {}", message)}),
+                    };
+                    remote
+                        .send(&Message::Response(resp))
+                        .await
+                        .expect("messsage should send");
+                }
+            }
+        });
+
+        let mut shell = Shell::new(local);
+        let req = shell.request(json!({"message": "one"})).await.expect("Should receive reply");
+        assert_eq!(req.contents, json!({"message": "reply one"}));
+
+        let req = shell.request(json!({"message": "two"})).await.expect("Should receive reply");
+        assert_eq!(req.contents, json!({"message": "reply two"}));
+
+        let req = shell.request(json!({"message": "three"})).await.expect("Should receive reply");
+        assert_eq!(req.contents, json!({"message": "reply three"}));
     }
 }
