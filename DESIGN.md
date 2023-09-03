@@ -100,3 +100,15 @@ directly, or as a development tool.
 NDJSON-based messages and syntactic sugar to it will be used to keep CLI
 interaction close to client API as possible.
 
+## Lisp as the Uniform Interface
+
+In vrsjmp, it's Lisp all the way down:
+
+- Scripting language is Lisp
+- Modules extends runtime via bindings in Lisp
+- User interfaces are s-expressions
+- Hypermedia controls within interface are s-expressions
+- Messages between client and runtime are s-expressions
+
+Lisp is the substrate for code and data that ties the client, runtime, and
+modules together.
