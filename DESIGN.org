@@ -1,8 +1,8 @@
-# Design
+#+TITLE: Design of vrsjmp
 
 Dumping ground for high level design notes
 
-## Influences
+* Influences
 
 Emacs - Extensible, uniform software environment 
 
@@ -14,16 +14,15 @@ Plan 9 - Per-process hierarchical namespaces and hypermedia approach to plaintex
 
 Erlang - Message based, distributed software runtime
 
-## Client and Runtime
-
-### Guiding Questions
+* Client and Runtime
+** Guiding Questions
 
 - What are key goals of client + runtime design?
 - How will each client interact with runtime? (CLI, command bar, web, mobile,
   voice assistants)
 - What does surface between interaction shell and client API look like?
 
-### Goals
+** Goals
 
 Communication between client and runtime is a simple message-based and transport
 agnostic interface.
@@ -38,7 +37,7 @@ Runtime code should be able to run in several configurations:
 
 Client API should be simple and lean so bringing up new clients is low cost.
 
-### Runtime
+** Runtime
 
 A typical lifecycle of the client and runtime may look like:
 
@@ -59,7 +58,7 @@ How the runtime is started may be platform dependent:
 - On web, runtime may be always running in the cloud.
 - On mobile, a in-process runtime may be spun up before client initialization.
 
-### Client API
+** Client API
 
 The client API should be lightweight.
 
@@ -69,7 +68,7 @@ It should support:
 - Pub / Sub - including pushes from runtime
 - Hypermedia-Driven Interface
 
-### Client Library
+** Client Library
 
 The client API is largely implemented by client library.
 
@@ -77,13 +76,13 @@ Like `libdbus`, the underlying transport should be opaque to client shells - it
 may use lower-level IPC mechanisms like unix domain sockets, or TCP, without
 affecting API surface between client and client library.
 
-### Hypermedia Client
+** Hypermedia Client
 
 The client implementation over client API is hypermedia-driven:
 
 - TODO
 
-### vrsctl - CLI client
+** vrsctl - CLI client
 
 The `vrsctl` CLI is lightweight client to runtime that offers 1-1 mapping to
 client API.
@@ -100,7 +99,7 @@ directly, or as a development tool.
 NDJSON-based messages and syntactic sugar to it will be used to keep CLI
 interaction close to client API as possible.
 
-## Lisp as the Uniform Interface
+* Lisp as the Uniform Interface
 
 In vrsjmp, it's Lisp all the way down:
 
