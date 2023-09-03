@@ -7,8 +7,10 @@ use serde::{Deserialize, Serialize};
 use tokio::net::UnixStream;
 use tokio_util::codec::Framed;
 use tokio_util::codec::LengthDelimitedCodec;
+use tracing::debug;
 
 /// Connection that can be used to send [crate::connection::Message]
+#[derive(Debug)]
 pub struct Connection {
     stream: Framed<UnixStream, LengthDelimitedCodec>,
 }
@@ -27,6 +29,7 @@ impl Connection {
     }
 
     pub async fn send(&mut self, msg: &Message) -> Result<(), std::io::Error> {
+        debug!("send msg={:?}", msg);
         let mut buf = BytesMut::new();
         let data = serde_json::to_string(msg).expect("message failed to serialize");
         buf.put(data.as_bytes());
@@ -50,7 +53,7 @@ impl Connection {
                 )))
             }
         };
-
+        debug!("recv msg={:?}", msg);
         Some(Ok(msg))
     }
 }

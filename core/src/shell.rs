@@ -4,9 +4,10 @@ use std::collections::HashMap;
 use crate::connection::{Connection, Message};
 use crate::message::{Request, Response};
 use tokio::sync::{mpsc, oneshot};
+use tracing::{debug, error};
 
 /// Handle for client shell
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Shell {
     /// Sender half to send messages to event loop
     tx: mpsc::Sender<Event>,
@@ -28,6 +29,7 @@ impl Shell {
 
     /// Dispatch a request
     pub async fn request(&mut self, contents: serde_json::Value) -> Result<Response, Error> {
+        debug!("send request contents = {:?}", contents);
         let (resp_tx, resp_rx) = oneshot::channel();
         let ev = Event::SendRequest { contents, resp_tx };
         self.tx.send(ev).await?;
@@ -62,6 +64,7 @@ pub enum Event {
 }
 
 /// Client side event loop
+#[derive(Debug)]
 struct EventLoop {
     /// The connection between runtime
     conn: Connection,
@@ -74,7 +77,9 @@ struct EventLoop {
 }
 
 impl EventLoop {
+    #[tracing::instrument(skip(self))]
     async fn handle_event(&mut self, e: Event) {
+        debug!("received {:?}", e);
         use Event::*;
         match e {
             SendRequest { contents, resp_tx } => {
@@ -91,11 +96,11 @@ impl EventLoop {
                     let _ = tx.send(resp);
                 }
                 None => {
-                    eprintln!("Received unexpected response for request - {:?}", resp);
+                    error!("Received unexpected response for request - {:?}", resp);
                 }
             },
             RecvError(e) => {
-                eprintln!("Encountered error - {}", e);
+                error!("Encountered error - {}", e);
             }
             RecvRequest { .. } => panic!("Unimplemented - received request from runtime"),
         }

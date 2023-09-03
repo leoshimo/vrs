@@ -34,7 +34,16 @@ My inspirations are:
 
 and the goal is to bundle my favorite parts from each of those systems into one software runtime.
 
+## Debugging
+
+Use `RUST_LOG` to configure logging level:
+
+```sh
+$ RUST_LOG=debug cargo run --bin vrsd
+```
+
 ### Thoughts / Quotes that map project in latent space
+
 
 > The experience of `emacs` everywhere
 
