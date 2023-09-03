@@ -164,13 +164,22 @@ mod test {
         });
 
         let mut shell = Shell::new(local);
-        let req = shell.request(json!({"message": "one"})).await.expect("Should receive reply");
+        let req = shell
+            .request(json!({"message": "one"}))
+            .await
+            .expect("Should receive reply");
         assert_eq!(req.contents, json!({"message": "reply one"}));
 
-        let req = shell.request(json!({"message": "two"})).await.expect("Should receive reply");
+        let req = shell
+            .request(json!({"message": "two"}))
+            .await
+            .expect("Should receive reply");
         assert_eq!(req.contents, json!({"message": "reply two"}));
 
-        let req = shell.request(json!({"message": "three"})).await.expect("Should receive reply");
+        let req = shell
+            .request(json!({"message": "three"}))
+            .await
+            .expect("Should receive reply");
         assert_eq!(req.contents, json!({"message": "reply three"}));
     }
 }
