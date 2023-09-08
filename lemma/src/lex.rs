@@ -7,21 +7,32 @@ use crate::{Error, Result};
 #[derive(Debug, PartialEq)]
 pub enum Token {
     Int(i32),
-    Float(f32),
     String(String),
     Symbol(String),
     ParenLeft,
     ParenRight,
 }
 
+impl std::fmt::Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Token::Int(i) => write!(f, "{}", i),
+            Token::String(s) => write!(f, "{}", s),
+            Token::Symbol(s) => write!(f, "{}", s),
+            Token::ParenLeft => write!(f, "("),
+            Token::ParenRight => write!(f, ")"),
+        }
+    }
+}
+
 /// An iterator over Tokens
-struct Tokens<'a> {
+pub(crate) struct Tokens<'a> {
     inner: Peekable<std::str::Chars<'a>>,
 }
 
 impl Tokens<'_> {
     /// Create Tokens iterator from &str
-    fn new<'a>(expr: &'a str) -> Tokens<'a> {
+    pub(crate) fn new(expr: &str) -> Tokens<'_> {
         Tokens {
             inner: expr.chars().peekable(),
         }
@@ -29,14 +40,21 @@ impl Tokens<'_> {
 
     /// Parse next symbol from inner iterator
     fn next_symbol(&mut self) -> Result<Token> {
-        let expr = std::iter::from_fn(|| self.inner.next_if(|ch| !ch.is_whitespace() && !ch.is_ascii_punctuation())).collect();
+        let expr = std::iter::from_fn(|| {
+            self.inner
+                .next_if(|ch| !ch.is_whitespace() && !ch.is_ascii_punctuation())
+        })
+        .collect();
         Ok(Token::Symbol(expr))
     }
 
     /// Pares the next int
     fn next_int(&mut self) -> Result<Token> {
-        let expr: String =
-            std::iter::from_fn(|| self.inner.next_if(|ch| !ch.is_whitespace() && !ch.is_ascii_punctuation())).collect();
+        let expr: String = std::iter::from_fn(|| {
+            self.inner
+                .next_if(|ch| !ch.is_whitespace() && !ch.is_ascii_punctuation())
+        })
+        .collect();
         let num = expr
             .parse::<i32>()
             .map_err(|_| Error::FailedToLex(format!("Unable to parse integer - {expr}")))?;
@@ -45,26 +63,37 @@ impl Tokens<'_> {
 
     /// Parse next punctuation
     fn next_punct(&mut self) -> Result<Token> {
-        let ch = self.inner.next().ok_or(Error::FailedToLex(format!("Expected punctuation")))?;
+        let ch = self
+            .inner
+            .next()
+            .ok_or(Error::FailedToLex("Expected punctuation".to_string()))?;
         match ch {
             '(' => Ok(Token::ParenLeft),
             ')' => Ok(Token::ParenRight),
-            _ => Err(Error::FailedToLex(format!("Unexpected punctuation - {ch}")))
+            _ => Err(Error::FailedToLex(format!("Unexpected punctuation - {ch}"))),
         }
     }
 
     /// Parse next string
     fn next_string(&mut self) -> Result<Token> {
-        let ch = self.inner.next().ok_or(Error::FailedToLex("Expected opening string quotation".to_string()))?;
+        let ch = self.inner.next().ok_or(Error::FailedToLex(
+            "Expected opening string quotation".to_string(),
+        ))?;
         if ch != '\"' {
-            return Err(Error::FailedToLex(format!("Expected opening string quotation - found {ch}")));
+            return Err(Error::FailedToLex(format!(
+                "Expected opening string quotation - found {ch}"
+            )));
         }
 
         let expr: String = std::iter::from_fn(|| self.inner.next_if(|ch| *ch != '\"')).collect();
 
-        let ch = self.inner.next().ok_or(Error::FailedToLex("Expected closing string quotation".to_string()))?;
+        let ch = self.inner.next().ok_or(Error::FailedToLex(
+            "Expected closing string quotation".to_string(),
+        ))?;
         if ch != '\"' {
-            return Err(Error::FailedToLex(format!("Expected closing string quotation - found {ch}")));
+            return Err(Error::FailedToLex(format!(
+                "Expected closing string quotation - found {ch}"
+            )));
         }
 
         Ok(Token::String(expr))
@@ -72,8 +101,6 @@ impl Tokens<'_> {
 }
 
 impl<'a> Iterator for Tokens<'a> {
-
-
     type Item = Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -82,7 +109,7 @@ impl<'a> Iterator for Tokens<'a> {
                 _ if ch.is_whitespace() => {
                     let _ = self.inner.next();
                     continue;
-                },
+                }
                 '\"' => self.next_string(),
                 _ if ch.is_ascii_punctuation() => self.next_punct(),
                 _ if ch.is_numeric() => self.next_int(),
@@ -94,21 +121,20 @@ impl<'a> Iterator for Tokens<'a> {
     }
 }
 
-/// Lex an expression into a list of tokens
-pub fn lex(expr: &str) -> Result<Vec<Token>> {
-    let tokens = Tokens::new(expr).collect::<Result<Vec<_>>>()?;
-    Ok(tokens)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Util - Lex an expression and collect into vec
+    fn lex(expr: &str) -> Result<Vec<Token>> {
+        let tokens = Tokens::new(expr).collect::<Result<Vec<_>>>()?;
+        Ok(tokens)
+    }
 
     #[test]
     fn lex_int() {
         assert_eq!(lex("1"), Ok(vec![Token::Int(1)]));
         assert_eq!(lex("     1     "), Ok(vec![Token::Int(1)]));
-
     }
 
     #[test]
@@ -124,63 +150,87 @@ mod tests {
     fn lex_string() {
         assert_eq!(lex("\"\""), Ok(vec![Token::String("".to_string())]));
 
-        assert_eq!(lex("\"hello\""), Ok(vec![Token::String("hello".to_string())]));
-        assert_eq!(lex("      \"hello\"      "), Ok(vec![Token::String("hello".to_string())]));
+        assert_eq!(
+            lex("\"hello\""),
+            Ok(vec![Token::String("hello".to_string())])
+        );
+        assert_eq!(
+            lex("      \"hello\"      "),
+            Ok(vec![Token::String("hello".to_string())])
+        );
 
-        assert_eq!(lex("\"  hello  world\""), Ok(vec![Token::String("  hello  world".to_string())]));
-        assert_eq!(lex("      \"hello  world  \"      "), Ok(vec![Token::String("hello  world  ".to_string())]));
+        assert_eq!(
+            lex("\"  hello  world\""),
+            Ok(vec![Token::String("  hello  world".to_string())])
+        );
+        assert_eq!(
+            lex("      \"hello  world  \"      "),
+            Ok(vec![Token::String("hello  world  ".to_string())])
+        );
     }
 
     #[test]
     fn lex_list() {
-        assert_eq!(lex("(add 1 2 \"three\")"), Ok(vec![
-            Token::ParenLeft,
-            Token::Symbol(String::from("add")),
-            Token::Int(1),
-            Token::Int(2),
-            Token::String("three".to_string()),
-            Token::ParenRight]));
+        assert_eq!(
+            lex("(add 1 2 \"three\")"),
+            Ok(vec![
+                Token::ParenLeft,
+                Token::Symbol(String::from("add")),
+                Token::Int(1),
+                Token::Int(2),
+                Token::String("three".to_string()),
+                Token::ParenRight
+            ])
+        );
 
-        assert_eq!(lex("      (add       1      2 \"three\" )"), Ok(vec![
-            Token::ParenLeft,
-            Token::Symbol(String::from("add")),
-            Token::Int(1),
-            Token::Int(2),
-            Token::String("three".to_string()),
-            Token::ParenRight]));
+        assert_eq!(
+            lex("      (add       1      2 \"three\" )"),
+            Ok(vec![
+                Token::ParenLeft,
+                Token::Symbol(String::from("add")),
+                Token::Int(1),
+                Token::Int(2),
+                Token::String("three".to_string()),
+                Token::ParenRight
+            ])
+        );
 
-        assert_eq!(lex("(() ()     (( )) )"),
-                   Ok(vec![
-                       Token::ParenLeft,
-                       Token::ParenLeft,
-                       Token::ParenRight,
-                       Token::ParenLeft,
-                       Token::ParenRight,
-
-                       Token::ParenLeft,
-                       Token::ParenLeft,
-                       Token::ParenRight,
-                       Token::ParenRight,
-                       Token::ParenRight]))
+        assert_eq!(
+            lex("(() ()     (( )) )"),
+            Ok(vec![
+                Token::ParenLeft,
+                Token::ParenLeft,
+                Token::ParenRight,
+                Token::ParenLeft,
+                Token::ParenRight,
+                Token::ParenLeft,
+                Token::ParenLeft,
+                Token::ParenRight,
+                Token::ParenRight,
+                Token::ParenRight
+            ])
+        )
     }
 
     #[test]
     fn lex_nested() {
-        assert_eq!(lex("(defun hello (x y z) (print \"hello\"))"),
-                       Ok(vec![
-                           Token::ParenLeft,
-                           Token::Symbol("defun".to_string()),
-                           Token::Symbol("hello".to_string()),
-                           Token::ParenLeft,
-                           Token::Symbol("x".to_string()),
-                           Token::Symbol("y".to_string()),
-                           Token::Symbol("z".to_string()),
-                           Token::ParenRight,
-                           Token::ParenLeft,
-                           Token::Symbol("print".to_string()),
-                           Token::String("hello".to_string()),
-                           Token::ParenRight,
-                           Token::ParenRight,
-                       ]));
+        assert_eq!(
+            lex("(defun hello (x y z) (print \"hello\"))"),
+            Ok(vec![
+                Token::ParenLeft,
+                Token::Symbol("defun".to_string()),
+                Token::Symbol("hello".to_string()),
+                Token::ParenLeft,
+                Token::Symbol("x".to_string()),
+                Token::Symbol("y".to_string()),
+                Token::Symbol("z".to_string()),
+                Token::ParenRight,
+                Token::ParenLeft,
+                Token::Symbol("print".to_string()),
+                Token::String("hello".to_string()),
+                Token::ParenRight,
+                Token::ParenRight,
+            ])
+        );
     }
 }
