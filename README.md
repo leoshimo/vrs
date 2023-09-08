@@ -19,6 +19,7 @@
 - `core`: The `vrs` library crate shared by runtime and core
 - `runtime`: The runtime implementation for `vrsd` daemon
 - `vrsctl`: A CLI shell for interacting with runtime
+- `lemma`: Embedded Lisp that is substrate for code and data
 
 ## What is this?
 

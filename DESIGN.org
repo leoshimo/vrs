@@ -111,3 +111,6 @@ In vrsjmp, it's Lisp all the way down:
 
 Lisp is the substrate for code and data that ties the client, runtime, and
 modules together.
+
+Lisp is a practical choice for highly interactive, moldable,
+application-specific progamming environments.
