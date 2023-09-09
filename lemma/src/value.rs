@@ -1,7 +1,7 @@
 //! Values in Lemma
 //! A value is the result of evaluating an [Form](crate::Form)
 
-use crate::{form, Result};
+use crate::{form, Env, Result, SymbolId};
 
 /// A value from evaluating a [Form](crate::Form).
 ///
@@ -11,18 +11,25 @@ use crate::{form, Result};
 /// [Value] is not serializable, but [Form](crate::Form) is.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
-    /// Self-evaluating integer
+    /// Integer value
     Int(i32),
-    /// Self-evaluating string
+    /// String value
     String(String),
-    /// Self-evaluating form
+    /// Form value
     Form(form::Form),
-    /// Function form
-    Function { name: String, lambda: Lambda },
+    /// Callable function value
+    Function {
+        name: String,
+        params: Params,
+        lambda: Lambda,
+    },
 }
 
-/// An function that can be evaluated with values to compute another value
-pub type Lambda = fn(&[Value]) -> Result<Value>;
+/// Parameters that function accepts
+pub type Params = Vec<SymbolId>;
+
+/// An function that accepts argument values and env to compute another value
+pub type Lambda = fn(&Env) -> Result<Value>;
 
 impl From<&str> for Value {
     fn from(value: &str) -> Self {

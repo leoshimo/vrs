@@ -23,4 +23,7 @@ pub enum Error {
 
     #[error("Evaluation error - Invalid operation to call {0}")]
     InvalidOperation(crate::Value),
+
+    #[error("Evaluation error - Unexpected number of arguments")]
+    UnexpectedNumberOfArguments,
 }

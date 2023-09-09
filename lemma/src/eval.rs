@@ -1,5 +1,9 @@
 //! Implements evaluation of expressions
-use crate::{parse::parse, value::Lambda, Env, Error, Form, Result, SymbolId, Value};
+use crate::{
+    parse::parse,
+    value::{Lambda, Params},
+    Env, Error, Form, Result, SymbolId, Value,
+};
 
 /// Evaluate a given expression
 pub fn eval_expr(expr: &str) -> Result<Value> {
@@ -43,22 +47,39 @@ pub fn eval_list(forms: &[Form], env: &Env) -> Result<Value> {
     }?;
 
     match op_value {
-        Value::Function { name, lambda } => eval_func_call(&name, lambda, arg_forms, env),
+        Value::Function {
+            name,
+            params,
+            lambda,
+        } => eval_func_call(&name, params, lambda, arg_forms, env),
         Value::Int(_) | Value::String(_) | Value::Form(_) => Err(Error::InvalidOperation(op_value)),
     }
 }
 
 /// Evalute a function call
-pub fn eval_func_call(_name: &str, lambda: Lambda, arg_forms: &[Form], env: &Env) -> Result<Value> {
+pub fn eval_func_call(
+    _name: &str,
+    params: Params,
+    lambda: Lambda,
+    arg_forms: &[Form],
+    env: &Env,
+) -> Result<Value> {
     let arg_vals = arg_forms
         .iter()
         .map(|f| eval(f, env))
         .collect::<Result<Vec<_>>>()?;
 
-    // TODO: Function local scope
-    // TODO: Parameter bindings
+    if params.len() != arg_forms.len() {
+        return Err(Error::UnexpectedNumberOfArguments);
+    }
 
-    (lambda)(&arg_vals)
+    // TODO: Lexical scope instead of Dynamic scope?
+    let mut func_env = Env::extend(env);
+    for (param, val) in params.iter().zip(arg_vals) {
+        func_env.bind(param, val);
+    }
+
+    (lambda)(&func_env)
 }
 
 #[cfg(test)]
@@ -116,8 +137,12 @@ mod tests {
             &SymbolId::from("add"),
             Value::Function {
                 name: String::from("add"),
-                lambda: |args| match (&args[0], &args[1]) {
-                    (Value::Int(x), Value::Int(y)) => Ok(Value::Int(x + y)),
+                params: vec![SymbolId::from("x"), SymbolId::from("y")],
+                lambda: |env| match (
+                    env.resolve(&SymbolId::from("x")),
+                    env.resolve(&SymbolId::from("y")),
+                ) {
+                    (Some(Value::Int(x)), Some(Value::Int(y))) => Ok(Value::Int(x + y)),
                     _ => Err(Error::InvalidArgumentsToFunctionCall),
                 },
             },
