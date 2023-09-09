@@ -18,18 +18,19 @@ pub enum Value {
     /// Form value
     Form(form::Form),
     /// Callable function value
-    Function {
-        name: String,
-        params: Params,
-        lambda: Lambda,
-    },
+    Func(Lambda),
 }
 
 /// Parameters that function accepts
 pub type Params = Vec<SymbolId>;
 
-/// An function that accepts argument values and env to compute another value
-pub type Lambda = fn(&Env) -> Result<Value>;
+/// A function that accepts argument values and env to compute another value
+#[derive(Debug, Clone, PartialEq)]
+pub struct Lambda {
+    pub name: String,
+    pub params: Params,
+    pub func: fn(&Env) -> Result<Value>,
+}
 
 impl From<&str> for Value {
     fn from(value: &str) -> Self {
@@ -59,7 +60,7 @@ impl std::fmt::Display for Value {
             Value::Int(i) => write!(f, "{}", i),
             Value::String(s) => write!(f, "{}", s),
             Value::Form(form) => write!(f, "{}", form),
-            Value::Function { name, .. } => write!(f, "<fn {}>", name),
+            Value::Func(l) => write!(f, "<fn {}>", l.name),
         }
     }
 }
