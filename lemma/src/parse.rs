@@ -1,37 +1,37 @@
 //! Parser for Lemma
 use crate::lex::{lex, Token};
-use crate::Expr;
+use crate::Form;
 use crate::{Error, Result};
 
 use std::iter::Peekable;
 
-/// Parse a given string as expression
-pub fn parse(expr: &str) -> Result<Expr> {
+/// Parse a given expression as form
+pub fn parse(expr: &str) -> Result<Form> {
     let mut tokens = lex(expr)?.into_iter().peekable();
-    let expr = parse_expr(&mut tokens)?;
+    let form = parse_form(&mut tokens)?;
     if tokens.peek().is_some() {
         return Err(Error::FailedToParse("Unterminated expression".to_string()));
     }
-    Ok(expr)
+    Ok(form)
 }
 
-/// Parse single expression. Returns result of tuple of parsed expression and remaining tokens
-fn parse_expr<I>(tokens: &mut Peekable<I>) -> Result<Expr>
+/// Parse single expression into a form. Returns result of tuple of parsed form and remaining tokens
+fn parse_form<I>(tokens: &mut Peekable<I>) -> Result<Form>
 where
     I: Iterator<Item = Token>,
 {
     let next = tokens.next().ok_or(Error::EmptyExpression)?;
-    let expr = match next {
-        Token::Int(i) => Expr::Int(i),
-        Token::Symbol(s) => Expr::Symbol(s),
-        Token::String(s) => Expr::String(s),
+    let form = match next {
+        Token::Int(i) => Form::Int(i),
+        Token::Symbol(s) => Form::Symbol(s),
+        Token::String(s) => Form::String(s),
         Token::ParenLeft => {
             let mut items = vec![];
             while let Some(next) = tokens.peek() {
                 if next == &Token::ParenRight {
                     break;
                 }
-                items.push(parse_expr(tokens)?);
+                items.push(parse_form(tokens)?);
             }
             if tokens.peek() != Some(&Token::ParenRight) {
                 return Err(Error::FailedToParse(
@@ -39,7 +39,7 @@ where
                 ));
             }
             tokens.next(); // discard ParenRight
-            Expr::List(items)
+            Form::List(items)
         }
         _ => {
             return Err(Error::FailedToParse(
@@ -47,7 +47,7 @@ where
             ))
         }
     };
-    Ok(expr)
+    Ok(form)
 }
 
 #[cfg(test)]
@@ -62,36 +62,36 @@ mod tests {
 
     #[test]
     fn parse_int() {
-        assert_eq!(parse("1"), Ok(Expr::Int(1)));
-        assert_eq!(parse("     1     "), Ok(Expr::Int(1)));
+        assert_eq!(parse("1"), Ok(Form::Int(1)));
+        assert_eq!(parse("     1     "), Ok(Form::Int(1)));
     }
 
     #[test]
     fn parse_symbol() {
-        assert_eq!(parse("hello"), Ok(Expr::Symbol(String::from("hello"))));
+        assert_eq!(parse("hello"), Ok(Form::Symbol(String::from("hello"))));
         assert_eq!(
             parse("    hello    "),
-            Ok(Expr::Symbol(String::from("hello")))
+            Ok(Form::Symbol(String::from("hello")))
         );
     }
 
     #[test]
     fn parse_string() {
-        assert_eq!(parse("\"\""), Ok(Expr::String("".to_string())));
+        assert_eq!(parse("\"\""), Ok(Form::String("".to_string())));
 
-        assert_eq!(parse("\"hello\""), Ok(Expr::String("hello".to_string())));
+        assert_eq!(parse("\"hello\""), Ok(Form::String("hello".to_string())));
         assert_eq!(
             parse("      \"hello\"      "),
-            Ok(Expr::String("hello".to_string()))
+            Ok(Form::String("hello".to_string()))
         );
 
         assert_eq!(
             parse("\"  hello  world\""),
-            Ok(Expr::String("  hello  world".to_string()))
+            Ok(Form::String("  hello  world".to_string()))
         );
         assert_eq!(
             parse("      \"hello  world  \"      "),
-            Ok(Expr::String("hello  world  ".to_string()))
+            Ok(Form::String("hello  world  ".to_string()))
         );
     }
 
@@ -99,30 +99,30 @@ mod tests {
     fn parse_list() {
         assert_eq!(
             parse("(add 1 2 \"three\")"),
-            Ok(Expr::List(vec![
-                Expr::Symbol("add".to_string()),
-                Expr::Int(1),
-                Expr::Int(2),
-                Expr::String("three".to_string()),
+            Ok(Form::List(vec![
+                Form::Symbol("add".to_string()),
+                Form::Int(1),
+                Form::Int(2),
+                Form::String("three".to_string()),
             ]))
         );
 
         assert_eq!(
             parse("      (add       1      2 \"three\" )"),
-            Ok(Expr::List(vec![
-                Expr::Symbol("add".to_string()),
-                Expr::Int(1),
-                Expr::Int(2),
-                Expr::String("three".to_string()),
+            Ok(Form::List(vec![
+                Form::Symbol("add".to_string()),
+                Form::Int(1),
+                Form::Int(2),
+                Form::String("three".to_string()),
             ]))
         );
 
         assert_eq!(
             parse("(() ()     (( )) )"),
-            Ok(Expr::List(vec![
-                Expr::List(vec![]),
-                Expr::List(vec![]),
-                Expr::List(vec![Expr::List(vec![]),]),
+            Ok(Form::List(vec![
+                Form::List(vec![]),
+                Form::List(vec![]),
+                Form::List(vec![Form::List(vec![]),]),
             ]))
         )
     }
@@ -131,17 +131,17 @@ mod tests {
     fn parse_nested() {
         assert_eq!(
             parse("(defun hello (x y z) (print \"hello\"))"),
-            Ok(Expr::List(vec![
-                Expr::Symbol("defun".to_string()),
-                Expr::Symbol("hello".to_string()),
-                Expr::List(vec![
-                    Expr::Symbol("x".to_string()),
-                    Expr::Symbol("y".to_string()),
-                    Expr::Symbol("z".to_string()),
+            Ok(Form::List(vec![
+                Form::Symbol("defun".to_string()),
+                Form::Symbol("hello".to_string()),
+                Form::List(vec![
+                    Form::Symbol("x".to_string()),
+                    Form::Symbol("y".to_string()),
+                    Form::Symbol("z".to_string()),
                 ]),
-                Expr::List(vec![
-                    Expr::Symbol("print".to_string()),
-                    Expr::String("hello".to_string()),
+                Form::List(vec![
+                    Form::Symbol("print".to_string()),
+                    Form::String("hello".to_string()),
                 ]),
             ]),)
         );
@@ -151,7 +151,7 @@ mod tests {
     fn parse_partial_form() {
         assert!(
             matches!(parse("1 2 3"), Err(Error::FailedToParse(_))),
-            "parse returns expression for full expression forms"
+            "parse should fail if entire expression cannot be consumed as single form"
         );
     }
 

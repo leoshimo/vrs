@@ -1,5 +1,5 @@
 /// The Lemma environment that has all bindings
-use crate::{Expr, Result};
+use crate::{Form, Result};
 use std::collections::HashMap;
 
 #[derive(Debug, Default)]
@@ -10,9 +10,14 @@ pub struct Env {
 #[derive(Debug)]
 pub enum Binding {
     /// Normal form bindings
-    Normal(Expr),
+    Normal(Form),
+    /// Function operator bindings
+    Function {
+        name: String,
+        func: fn(&[Form]) -> Result<Form>,
+    },
     /// Special form bindings
-    Special(fn(&[Expr]) -> Result<Expr>),
+    Special(fn(&[Form]) -> Result<Form>),
 }
 
 impl Env {
@@ -21,9 +26,9 @@ impl Env {
         self.bindings.get(symbol)
     }
 
-    /// Bind a given symbol to given expression
-    pub fn bind(&mut self, symbol: &str, expr: Expr) {
+    /// Bind a given symbol to given form
+    pub fn bind(&mut self, symbol: &str, form: Form) {
         self.bindings
-            .insert(symbol.to_string(), Binding::Normal(expr));
+            .insert(symbol.to_string(), Binding::Normal(form));
     }
 }
