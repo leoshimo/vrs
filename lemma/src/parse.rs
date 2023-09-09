@@ -10,7 +10,7 @@ pub fn parse(expr: &str) -> Result<Expr> {
     let mut tokens = lex(expr)?.into_iter().peekable();
     let expr = parse_expr(&mut tokens)?;
     if tokens.peek().is_some() {
-        return Err(Error::FailedToParse(format!("Unterminated expression")));
+        return Err(Error::FailedToParse("Unterminated expression".to_string()));
     }
     Ok(expr)
 }
