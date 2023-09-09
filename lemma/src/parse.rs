@@ -1,31 +1,53 @@
 //! Parser for Lemma
-use crate::lex::{Token, Tokens};
+use crate::lex::{lex, Token};
 use crate::Expr;
 use crate::{Error, Result};
 
-type PeekableTokens<'a> = std::iter::Peekable<Tokens<'a>>;
+use std::iter::Peekable;
 
 /// Parse a given string as expression
 pub fn parse(expr: &str) -> Result<Expr> {
-    let mut tokens = Tokens::new(expr).peekable();
+    let mut tokens = lex(expr)?.into_iter().peekable();
     let expr = parse_expr(&mut tokens)?;
-    if tokens.next().is_some() {
-        todo!("Handle unterminated expressions");
+    if tokens.peek().is_some() {
+        return Err(Error::FailedToParse(format!("Unterminated expression")));
     }
     Ok(expr)
 }
 
-/// Parse single expression
-fn parse_expr(tokens: &mut PeekableTokens<'_>) -> Result<Expr> {
-    let next = tokens.next().ok_or(Error::EmptyExpression)??;
-    match next {
-        Token::Int(i) => Ok(Expr::Int(i)),
-        Token::Symbol(s) => Ok(Expr::Symbol(s)),
-        Token::String(s) => Ok(Expr::String(s)),
-        _ => Err(Error::FailedToParse(
-            "Unexpected token while parsing expression".to_string(),
-        )),
-    }
+/// Parse single expression. Returns result of tuple of parsed expression and remaining tokens
+fn parse_expr<I>(tokens: &mut Peekable<I>) -> Result<Expr>
+where
+    I: Iterator<Item = Token>,
+{
+    let next = tokens.next().ok_or(Error::EmptyExpression)?;
+    let expr = match next {
+        Token::Int(i) => Expr::Int(i),
+        Token::Symbol(s) => Expr::Symbol(s),
+        Token::String(s) => Expr::String(s),
+        Token::ParenLeft => {
+            let mut items = vec![];
+            while let Some(next) = tokens.peek() {
+                if next == &Token::ParenRight {
+                    break;
+                }
+                items.push(parse_expr(tokens)?);
+            }
+            if tokens.peek() != Some(&Token::ParenRight) {
+                return Err(Error::FailedToParse(
+                    "Expected closing parenthesis".to_string(),
+                ));
+            }
+            tokens.next(); // discard ParenRight
+            Expr::List(items)
+        }
+        _ => {
+            return Err(Error::FailedToParse(
+                "Unexpected token while parsing expression".to_string(),
+            ))
+        }
+    };
+    Ok(expr)
 }
 
 #[cfg(test)]
@@ -113,9 +135,9 @@ mod tests {
                 Expr::Symbol("defun".to_string()),
                 Expr::Symbol("hello".to_string()),
                 Expr::List(vec![
-                    Expr::Symbol("a".to_string()),
-                    Expr::Symbol("b".to_string()),
-                    Expr::Symbol("c".to_string()),
+                    Expr::Symbol("x".to_string()),
+                    Expr::Symbol("y".to_string()),
+                    Expr::Symbol("z".to_string()),
                 ]),
                 Expr::List(vec![
                     Expr::Symbol("print".to_string()),
@@ -123,5 +145,18 @@ mod tests {
                 ]),
             ]),)
         );
+    }
+
+    #[test]
+    fn parse_partial_form() {
+        assert!(
+            matches!(parse("1 2 3"), Err(Error::FailedToParse(_))),
+            "parse returns expression for full expression forms"
+        );
+    }
+
+    #[test]
+    fn parse_unterminated_list() {
+        assert!(matches!(parse("(1 2 3"), Err(Error::FailedToParse(_))));
     }
 }

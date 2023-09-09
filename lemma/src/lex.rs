@@ -25,14 +25,20 @@ impl std::fmt::Display for Token {
     }
 }
 
+/// Tokenize entire expression as vector
+pub(crate) fn lex(expr: &str) -> Result<Vec<Token>> {
+    let tokens = Tokens::new(expr).collect::<Result<Vec<_>>>()?;
+    Ok(tokens)
+}
+
 /// An iterator over Tokens
-pub(crate) struct Tokens<'a> {
+struct Tokens<'a> {
     inner: Peekable<std::str::Chars<'a>>,
 }
 
 impl Tokens<'_> {
     /// Create Tokens iterator from &str
-    pub(crate) fn new(expr: &str) -> Tokens<'_> {
+    fn new(expr: &str) -> Tokens<'_> {
         Tokens {
             inner: expr.chars().peekable(),
         }
@@ -124,12 +130,6 @@ impl<'a> Iterator for Tokens<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Util - Lex an expression and collect into vec
-    fn lex(expr: &str) -> Result<Vec<Token>> {
-        let tokens = Tokens::new(expr).collect::<Result<Vec<_>>>()?;
-        Ok(tokens)
-    }
 
     #[test]
     fn lex_int() {
