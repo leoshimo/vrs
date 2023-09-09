@@ -1,7 +1,7 @@
 //! Parser for Lemma
 use crate::lex::{lex, Token};
-use crate::Form;
 use crate::{Error, Result};
+use crate::{Form, SymbolId};
 
 use std::iter::Peekable;
 
@@ -23,7 +23,7 @@ where
     let next = tokens.next().ok_or(Error::EmptyExpression)?;
     let form = match next {
         Token::Int(i) => Form::Int(i),
-        Token::Symbol(s) => Form::Symbol(s),
+        Token::Symbol(s) => Form::Symbol(SymbolId::from(s)),
         Token::String(s) => Form::String(s),
         Token::ParenLeft => {
             let mut items = vec![];
@@ -68,30 +68,24 @@ mod tests {
 
     #[test]
     fn parse_symbol() {
-        assert_eq!(parse("hello"), Ok(Form::Symbol(String::from("hello"))));
-        assert_eq!(
-            parse("    hello    "),
-            Ok(Form::Symbol(String::from("hello")))
-        );
+        assert_eq!(parse("hello"), Ok(Form::symbol("hello")));
+        assert_eq!(parse("    hello    "), Ok(Form::symbol("hello")));
     }
 
     #[test]
     fn parse_string() {
-        assert_eq!(parse("\"\""), Ok(Form::String("".to_string())));
+        assert_eq!(parse("\"\""), Ok(Form::string("")));
 
-        assert_eq!(parse("\"hello\""), Ok(Form::String("hello".to_string())));
-        assert_eq!(
-            parse("      \"hello\"      "),
-            Ok(Form::String("hello".to_string()))
-        );
+        assert_eq!(parse("\"hello\""), Ok(Form::string("hello")));
+        assert_eq!(parse("      \"hello\"      "), Ok(Form::string("hello")));
 
         assert_eq!(
             parse("\"  hello  world\""),
-            Ok(Form::String("  hello  world".to_string()))
+            Ok(Form::string("  hello  world"))
         );
         assert_eq!(
             parse("      \"hello  world  \"      "),
-            Ok(Form::String("hello  world  ".to_string()))
+            Ok(Form::string("hello  world  "))
         );
     }
 
@@ -100,20 +94,20 @@ mod tests {
         assert_eq!(
             parse("(add 1 2 \"three\")"),
             Ok(Form::List(vec![
-                Form::Symbol("add".to_string()),
+                Form::symbol("add"),
                 Form::Int(1),
                 Form::Int(2),
-                Form::String("three".to_string()),
+                Form::string("three"),
             ]))
         );
 
         assert_eq!(
             parse("      (add       1      2 \"three\" )"),
             Ok(Form::List(vec![
-                Form::Symbol("add".to_string()),
+                Form::symbol("add"),
                 Form::Int(1),
                 Form::Int(2),
-                Form::String("three".to_string()),
+                Form::string("three"),
             ]))
         );
 
@@ -132,17 +126,14 @@ mod tests {
         assert_eq!(
             parse("(defun hello (x y z) (print \"hello\"))"),
             Ok(Form::List(vec![
-                Form::Symbol("defun".to_string()),
-                Form::Symbol("hello".to_string()),
+                Form::symbol("defun"),
+                Form::symbol("hello"),
                 Form::List(vec![
-                    Form::Symbol("x".to_string()),
-                    Form::Symbol("y".to_string()),
-                    Form::Symbol("z".to_string()),
+                    Form::symbol("x"),
+                    Form::symbol("y"),
+                    Form::symbol("z"),
                 ]),
-                Form::List(vec![
-                    Form::Symbol("print".to_string()),
-                    Form::String("hello".to_string()),
-                ]),
+                Form::List(vec![Form::symbol("print"), Form::string("hello"),]),
             ]),)
         );
     }

@@ -1,5 +1,5 @@
 //! Implements evaluation of expressions
-use crate::{Env, Error, Form, Result, Value};
+use crate::{Env, Error, Form, Result, SymbolId, Value};
 
 /// Evaluate a form within given environment
 pub fn eval(form: &Form, env: &Env) -> Result<Value> {
@@ -11,10 +11,10 @@ pub fn eval(form: &Form, env: &Env) -> Result<Value> {
 }
 
 /// Evaluate symbol forms
-pub fn eval_symbol(symbol: &String, env: &Env) -> Result<Value> {
+pub fn eval_symbol(symbol: &SymbolId, env: &Env) -> Result<Value> {
     match env.resolve(symbol) {
         Some(value) => Ok(value.clone()),
-        None => Err(Error::UndefinedSymbol(symbol.to_string())),
+        None => Err(Error::UndefinedSymbol(symbol.clone())),
     }
 }
 
@@ -58,15 +58,18 @@ mod tests {
     #[test]
     fn eval_symbols() {
         let mut env = Env::default();
-        env.bind("greeting", Value::String(String::from("hello world")));
+        env.bind(
+            &SymbolId::from("greeting"),
+            Value::String(String::from("hello world")),
+        );
 
         assert_eq!(
-            eval(&Form::Symbol(String::from("greeting")), &env),
-            Ok(Value::String(String::from("hello world")))
+            eval(&Form::symbol("greeting"), &env),
+            Ok(Value::from("hello world"))
         );
 
         assert!(matches!(
-            eval(&Form::Symbol(String::from("undefined")), &env),
+            eval(&Form::symbol("undefined"), &env),
             Err(Error::UndefinedSymbol(_))
         ));
     }

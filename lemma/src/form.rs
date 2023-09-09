@@ -8,8 +8,36 @@ use serde::{Deserialize, Serialize};
 pub enum Form {
     Int(i32),
     String(String),
-    Symbol(String),
+    Symbol(SymbolId),
     List(Vec<Form>),
+}
+
+impl Form {
+    /// Shorhand for constructing [Form::String]
+    pub fn string(s: &str) -> Self {
+        Self::String(String::from(s))
+    }
+
+    /// Shorthand for constructing [Form::Symbol]
+    pub fn symbol(id: &str) -> Self {
+        Self::Symbol(SymbolId::from(id))
+    }
+}
+
+/// Identifier for Symbol
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct SymbolId(String);
+
+impl From<String> for SymbolId {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl From<&str> for SymbolId {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
 }
 
 impl std::fmt::Display for Form {
@@ -30,6 +58,12 @@ impl std::fmt::Display for Form {
     }
 }
 
+impl std::fmt::Display for SymbolId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -37,13 +71,13 @@ mod tests {
     #[test]
     fn form_expressions() {
         assert_eq!(Form::Int(5).to_string(), "5");
-        assert_eq!(Form::String(String::from("hello")).to_string(), "\"hello\"");
-        assert_eq!(Form::Symbol(String::from("hello")).to_string(), "hello");
+        assert_eq!(Form::string("hello").to_string(), "\"hello\"");
+        assert_eq!(Form::symbol("hello").to_string(), "hello");
         assert_eq!(
             Form::List(vec![
-                Form::Symbol(String::from("my-func")),
+                Form::symbol("my-func"),
                 Form::Int(5),
-                Form::String(String::from("string")),
+                Form::string("string"),
             ])
             .to_string(),
             "(my-func 5 \"string\")"

@@ -13,6 +13,18 @@ pub enum Value {
     Form(form::Form),
 }
 
+impl From<&str> for Value {
+    fn from(value: &str) -> Self {
+        Self::String(value.to_string())
+    }
+}
+
+impl From<String> for Value {
+    fn from(value: String) -> Self {
+        Self::String(value)
+    }
+}
+
 impl From<form::Form> for Value {
     fn from(value: form::Form) -> Self {
         match value {

@@ -1,3 +1,5 @@
+use crate::SymbolId;
+
 // TODO: Replace lazy errors with more structured errs
 #[derive(thiserror::Error, Debug, PartialEq, Clone)]
 pub enum Error {
@@ -14,5 +16,5 @@ pub enum Error {
     UnexpectedOperator(String),
 
     #[error("Undefined symbol - {0}")]
-    UndefinedSymbol(String),
+    UndefinedSymbol(SymbolId),
 }
