@@ -1,29 +1,27 @@
 //! Implements evaluation of expressions
-use crate::env::Binding;
-use crate::{Env, Error, Form, Result};
+use crate::{Env, Error, Form, Result, Value};
 
 /// Evaluate a form within given environment
-pub fn eval(form: &Form, env: &Env) -> Result<Form> {
+pub fn eval(form: &Form, env: &Env) -> Result<Value> {
     match form {
-        Form::Int(_) | Form::String(_) => Ok(form.clone()),
+        Form::Int(_) | Form::String(_) => Ok(Value::from(form.clone())),
         Form::Symbol(s) => eval_symbol(s, env),
         Form::List(l) => eval_list(l, env),
     }
 }
 
 /// Evaluate symbol forms
-pub fn eval_symbol(symbol: &String, env: &Env) -> Result<Form> {
+pub fn eval_symbol(symbol: &String, env: &Env) -> Result<Value> {
     match env.resolve(symbol) {
-        Some(Binding::Normal(form)) => Ok(form.clone()),
+        Some(value) => Ok(value.clone()),
         None => Err(Error::UndefinedSymbol(symbol.to_string())),
-        _ => todo!(),
     }
 }
 
 /// Evaluate a list form
-pub fn eval_list(forms: &[Form], env: &Env) -> Result<Form> {
+pub fn eval_list(forms: &[Form], env: &Env) -> Result<Value> {
     if forms.is_empty() {
-        return Ok(Form::List(vec![]));
+        return Ok(Value::from(Form::List(vec![])));
     }
     let (op_form, _arg_forms) = forms.split_first().expect("forms is nonempty");
 
@@ -48,11 +46,11 @@ mod tests {
     fn eval_self_evaluating() {
         let env = Env::default();
 
-        assert_eq!(eval(&Form::Int(5), &env), Ok(Form::Int(5)));
+        assert_eq!(eval(&Form::Int(5), &env), Ok(Value::Int(5)));
 
         assert_eq!(
             eval(&Form::String("Hello".to_string()), &env),
-            Ok(Form::String("Hello".to_string()))
+            Ok(Value::String("Hello".to_string()))
         );
     }
 
@@ -60,11 +58,11 @@ mod tests {
     #[test]
     fn eval_symbols() {
         let mut env = Env::default();
-        env.bind("greeting", Form::String(String::from("hello world")));
+        env.bind("greeting", Value::String(String::from("hello world")));
 
         assert_eq!(
             eval(&Form::Symbol(String::from("greeting")), &env),
-            Ok(Form::String(String::from("hello world")))
+            Ok(Value::String(String::from("hello world")))
         );
 
         assert!(matches!(
