@@ -17,4 +17,10 @@ pub enum Error {
 
     #[error("Undefined symbol - {0}")]
     UndefinedSymbol(SymbolId),
+
+    #[error("Evaluation error - Invalid arguments to function call")]
+    InvalidArgumentsToFunctionCall,
+
+    #[error("Evaluation error - Invalid operation to call {0}")]
+    InvalidOperation(crate::Value),
 }
