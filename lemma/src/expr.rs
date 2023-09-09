@@ -36,11 +36,14 @@ mod tests {
         assert_eq!(Expr::Int(5).to_string(), "5");
         assert_eq!(Expr::String(String::from("hello")).to_string(), "\"hello\"");
         assert_eq!(Expr::Symbol(String::from("hello")).to_string(), "hello");
-        assert_eq!(Expr::List(vec![
-            Expr::Symbol(String::from("my-func")),
-            Expr::Int(5),
-            Expr::String(String::from("string")),
-            ]).to_string(), "(my-func 5 \"string\")");
+        assert_eq!(
+            Expr::List(vec![
+                Expr::Symbol(String::from("my-func")),
+                Expr::Int(5),
+                Expr::String(String::from("string")),
+            ])
+            .to_string(),
+            "(my-func 5 \"string\")"
+        );
     }
-
 }

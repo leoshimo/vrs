@@ -1,22 +1,12 @@
-pub mod parse;
-
+mod env;
+mod error;
 mod eval;
 mod expr;
 mod lex;
+mod parse;
 
-pub use expr::Expr;
-
-// TODO: Replace lazy errors with more structured errs
-#[derive(thiserror::Error, Debug, PartialEq, Clone)]
-pub enum Error {
-    #[error("Failed to lex - {0}")]
-    FailedToLex(String),
-
-    #[error("Failed to parse - {0}")]
-    FailedToParse(String),
-
-    #[error("Empty expression")]
-    EmptyExpression,
-}
+pub use crate::env::Env;
+pub use crate::error::Error;
+pub use crate::expr::Expr;
 
 pub type Result<T> = std::result::Result<T, Error>;
