@@ -1,14 +1,14 @@
 //! Values in Lemma
-//! A value is the result of evaluating an [Form]
+//! A value is the result of evaluating an [Form](crate::Form)
 
 use crate::{form, Result};
 
-/// A value from evaluating a [Form].
+/// A value from evaluating a [Form](crate::Form).
 ///
-/// # Difference between [Form] and [Value]
+/// # Difference between [Form](crate::Form) and [Value]
 /// All forms can be values, but not all values are forms due to function
 /// bindings, special forms, and macro expansions.
-/// [Value] is not serializable, but [Form] is.
+/// [Value] is not serializable, but [Form](crate::Form) is.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     /// Self-evaluating integer
