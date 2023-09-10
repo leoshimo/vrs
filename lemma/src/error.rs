@@ -32,4 +32,7 @@ pub enum Error {
 
     #[error("Parameter list can only contain symbols")]
     ParameterListContainsNonSymbol,
+
+    #[error("quote expects a single argument")]
+    QuoteExpectsSingleArgument,
 }

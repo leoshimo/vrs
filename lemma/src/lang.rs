@@ -14,10 +14,11 @@ use crate::{
 pub fn std_env<'a>() -> Env<'a> {
     let mut env = Env::new();
     add_lambda(&mut env);
+    add_quote(&mut env);
     env
 }
 
-/// Adds `lambda` keyword for defining functions:
+/// Adds `lambda` symbol for creating functions
 /// `(lambda (PARAMS*) FORM)`
 pub fn add_lambda(env: &mut Env<'_>) {
     let lambda_sym = SymbolId::from("lambda");
@@ -26,6 +27,18 @@ pub fn add_lambda(env: &mut Env<'_>) {
         Value::SpecialForm(SpecialForm {
             name: lambda_sym.to_string(),
             func: lambda,
+        }),
+    );
+}
+
+/// Adds `quote` symbol for quoting forms
+pub fn add_quote(env: &mut Env) {
+    let quote_sym = SymbolId::from("quote");
+    env.bind(
+        &quote_sym,
+        Value::SpecialForm(SpecialForm {
+            name: quote_sym.to_string(),
+            func: quote,
         }),
     );
 }
@@ -61,6 +74,15 @@ fn lambda(arg_forms: &[Form], _env: &Env) -> Result<Value> {
     Ok(Value::Func(Lambda { params, func }))
 }
 
+/// Implements the `quote` special form
+fn quote(arg_forms: &[Form], _env: &Env) -> Result<Value> {
+    if arg_forms.len() == 1 {
+        Ok(Value::Form(arg_forms[0].clone()))
+    } else {
+        Err(Error::QuoteExpectsSingleArgument)
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -87,7 +109,50 @@ mod tests {
             "lambda special form returns a lambda value"
         );
 
-        // Expect ((lambda (x) x) 5) => 5
+        // ((lambda (x) x) 5) => 5
         assert_eq!(eval_expr("((lambda (x) x) 5)", &env), Ok(Value::Int(5)));
+
+        // ((lambda () (lambda (x) x))) => Value::Func
+        assert!(matches!(
+            eval_expr("((lambda () (lambda (x) x)))", &env),
+            Ok(Value::Func(_))
+        ));
+
+        // (((lambda () (lambda (x) x))) 10) => 10
+        assert_eq!(
+            eval_expr("(((lambda () (lambda (x) x))) 10)", &env),
+            Ok(Value::Int(10))
+        );
+    }
+
+    #[test]
+    fn quote() {
+        let env = std_env();
+
+        assert_eq!(
+            eval_expr("(quote (one :two three))", &env),
+            Ok(Value::Form(Form::List(vec![
+                Form::symbol("one"),
+                Form::keyword("two"),
+                Form::symbol("three"),
+            ])))
+        );
+
+        assert_eq!(
+            eval_expr("(quote (lambda (x) x))", &env),
+            Ok(Value::Form(Form::List(vec![
+                Form::symbol("lambda"),
+                Form::List(vec![Form::symbol("x")]),
+                Form::symbol("x"),
+            ])))
+        );
+
+        assert!(
+            matches!(
+                dbg!(eval_expr("((quote (lambda (x) x)) 5)", &env)),
+                Err(Error::InvalidOperation(Value::Form(_)))
+            ),
+            "A quoted operation does not recursively evaluate without explicit call to eval"
+        );
     }
 }

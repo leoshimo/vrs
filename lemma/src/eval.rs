@@ -94,9 +94,9 @@ mod tests {
     #[test]
     fn eval_self_evaluating() {
         let env = Env::new();
-        assert_eq!(eval_expr(&"5", &env), Ok(Value::Int(5)));
+        assert_eq!(eval_expr("5", &env), Ok(Value::Int(5)));
         assert_eq!(
-            eval_expr(&"\"Hello\"", &env),
+            eval_expr("\"Hello\"", &env),
             Ok(Value::String("Hello".to_string()))
         );
     }
@@ -110,7 +110,7 @@ mod tests {
             Value::String(String::from("hello world")),
         );
 
-        assert_eq!(eval_expr(&"greeting", &env), Ok(Value::from("hello world")));
+        assert_eq!(eval_expr("greeting", &env), Ok(Value::from("hello world")));
 
         assert!(matches!(
             eval_expr("undefined", &env),
