@@ -114,3 +114,20 @@ modules together.
 
 Lisp is a practical choice for highly interactive, moldable,
 application-specific progamming environments.
+
+** Lisp as Hypermedia
+
+v0.1 sketch of Lisp as Hypermedia
+
+#+begin_src lisp
+'((:text_field :id search
+               :on_change on_search_text_change
+               :value "query input")
+  (:ul :id search_results
+       (:li :content "Element 1"
+            :on_click '(action_for_elem_1))
+       (:li :content "Element 2"
+            :on_click '(action_for_elem_1))
+       (:li :content "Element 3"
+            :on_click '(action_for_elem_1))))
+#+end_src
