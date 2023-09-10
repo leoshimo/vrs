@@ -33,6 +33,11 @@ pub enum Error {
     #[error("Parameter list can only contain symbols")]
     ParameterListContainsNonSymbol,
 
+    // TODO: Should this be same as UnexpectedNumberOfArguments
     #[error("quote expects a single argument")]
     QuoteExpectsSingleArgument,
+
+    // TODO: Should this be same as UnexpectedNumberOfArguments
+    #[error("eval expects a single form argument")]
+    EvalExpectsSingleFormArgument,
 }

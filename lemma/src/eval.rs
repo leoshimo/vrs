@@ -4,6 +4,7 @@ use crate::{
     value::{Lambda, SpecialForm},
     Env, Error, Form, Result, SymbolId, Value,
 };
+use tracing::debug;
 
 /// Evaluate a given expression
 pub fn eval_expr(expr: &str, env: &Env) -> Result<Value> {
@@ -13,6 +14,7 @@ pub fn eval_expr(expr: &str, env: &Env) -> Result<Value> {
 
 /// Evaluate a form within given environment
 pub(crate) fn eval(form: &Form, env: &Env) -> Result<Value> {
+    debug!("eval - {:?}", form);
     match form {
         Form::Int(_) | Form::String(_) | Form::Keyword(_) => Ok(Value::from(form.clone())),
         Form::Symbol(s) => eval_symbol(s, env),
@@ -22,6 +24,7 @@ pub(crate) fn eval(form: &Form, env: &Env) -> Result<Value> {
 
 /// Evaluate symbol forms
 pub fn eval_symbol(symbol: &SymbolId, env: &Env) -> Result<Value> {
+    debug!("eval_symbol - {:?}", symbol);
     match env.resolve(symbol) {
         Some(value) => Ok(value.clone()),
         None => Err(Error::UndefinedSymbol(symbol.clone())),
@@ -30,6 +33,8 @@ pub fn eval_symbol(symbol: &SymbolId, env: &Env) -> Result<Value> {
 
 /// Evaluate a list form
 pub fn eval_list(forms: &[Form], env: &Env) -> Result<Value> {
+    debug!("eval_list - ({:?})", forms);
+
     if forms.is_empty() {
         return Ok(Value::from(Form::List(vec![])));
     }
@@ -56,6 +61,8 @@ pub fn eval_list(forms: &[Form], env: &Env) -> Result<Value> {
 
 /// Evalute a function call
 pub fn eval_func_call(lambda: &Lambda, arg_forms: &[Form], env: &Env) -> Result<Value> {
+    debug!("eval_func_call - ({:?})", lambda,);
+
     let arg_vals = arg_forms
         .iter()
         .map(|f| eval(f, env))
@@ -80,6 +87,7 @@ fn eval_special_form(
     arg_forms: &[Form],
     env: &Env<'_>,
 ) -> std::result::Result<Value, Error> {
+    debug!("eval_special_form - {:?}", sp_form,);
     // TODO: Lexical binding?
     (sp_form.func)(arg_forms, env)
 }

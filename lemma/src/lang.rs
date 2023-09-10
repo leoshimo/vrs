@@ -5,7 +5,7 @@
 use std::rc::Rc;
 
 use crate::{
-    eval::eval,
+    eval,
     value::{Lambda, LambdaFn, SpecialForm},
     Env, Error, Form, Result, SymbolId, Value,
 };
@@ -15,6 +15,7 @@ pub fn std_env<'a>() -> Env<'a> {
     let mut env = Env::new();
     add_lambda(&mut env);
     add_quote(&mut env);
+    add_eval(&mut env);
     env
 }
 
@@ -43,6 +44,18 @@ pub fn add_quote(env: &mut Env) {
     );
 }
 
+/// Adds the `eval` symbol for evaluating forms
+pub fn add_eval(env: &mut Env) {
+    let eval_sym = SymbolId::from("eval");
+    env.bind(
+        &eval_sym,
+        Value::SpecialForm(SpecialForm {
+            name: eval_sym.to_string(),
+            func: eval,
+        }),
+    );
+}
+
 /// Implements `lambda` special form
 fn lambda(arg_forms: &[Form], _env: &Env) -> Result<Value> {
     let (params, body) = arg_forms
@@ -66,7 +79,7 @@ fn lambda(arg_forms: &[Form], _env: &Env) -> Result<Value> {
     let func: LambdaFn = Rc::new(move |env| {
         let mut res = Value::from(Form::List(vec![])); // TODO: Dedicated nil in language?
         for form in body.iter() {
-            res = eval(form, env)?;
+            res = eval::eval(form, env)?;
         }
         Ok(res)
     });
@@ -83,14 +96,29 @@ fn quote(arg_forms: &[Form], _env: &Env) -> Result<Value> {
     }
 }
 
+/// Implements the `eval` special form
+fn eval(arg_forms: &[Form], env: &Env) -> Result<Value> {
+    let arg_form = match arg_forms {
+        [form] => Ok(form),
+        _ => Err(Error::EvalExpectsSingleFormArgument),
+    }?;
+
+    match eval::eval(arg_form, env)? {
+        Value::Form(f) => eval::eval(&f, env),
+        _ => Err(Error::EvalExpectsSingleFormArgument),
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
     use super::*;
     use crate::eval_expr;
+    use tracing_test::traced_test;
 
     #[test]
-    fn lambda() {
+    #[traced_test]
+    fn eval_lambda() {
         let env = std_env();
 
         assert!(
@@ -126,7 +154,8 @@ mod tests {
     }
 
     #[test]
-    fn quote() {
+    #[traced_test]
+    fn eval_quote() {
         let env = std_env();
 
         assert_eq!(
@@ -153,6 +182,19 @@ mod tests {
                 Err(Error::InvalidOperation(Value::Form(_)))
             ),
             "A quoted operation does not recursively evaluate without explicit call to eval"
+        );
+    }
+
+    #[test]
+    #[traced_test]
+    fn eval_eval() {
+        let env = std_env();
+
+        assert_eq!(eval_expr("(eval (quote 5))", &env), Ok(Value::Int(5)));
+
+        assert_eq!(
+            eval_expr("(eval (quote ((lambda (x) x) 5)))", &env),
+            Ok(Value::Int(5))
         );
     }
 }
