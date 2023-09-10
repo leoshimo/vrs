@@ -65,30 +65,21 @@ fn lambda(arg_forms: &[Form], _env: &Env) -> Result<Value> {
 mod tests {
 
     use super::*;
+    use crate::eval_expr;
 
     #[test]
     fn lambda() {
         let env = std_env();
 
         assert!(
-            matches!(
-                eval(&Form::symbol("lambda"), &env),
-                Ok(Value::SpecialForm(_))
-            ),
-            "lambda should be defined"
+            matches!(eval_expr("lambda", &env), Ok(Value::SpecialForm(_))),
+            "lambda symbol should be defined"
         );
 
         assert!(
             matches!(
-                eval(
-                    &Form::List(vec![
-                        Form::symbol("lambda"),
-                        Form::List(vec![
-                            Form::symbol("x"),
-                            Form::symbol("y"),
-                        ]),
-                        Form::Int(10),      // return 5
-                    ]),
+                eval_expr(
+                    "(lambda (x y) 10)",
                     &env
                 ),
                 Ok(Value::Func(Lambda { params, .. })) if params == vec![SymbolId::from("x"), SymbolId::from("y")]
@@ -97,19 +88,6 @@ mod tests {
         );
 
         // Expect ((lambda (x) x) 5) => 5
-        assert_eq!(
-            eval(
-                &Form::List(vec![
-                    Form::List(vec![
-                        Form::symbol("lambda"),
-                        Form::List(vec![Form::symbol("x")]),
-                        Form::symbol("x")
-                    ]),
-                    Form::Int(5)
-                ]),
-                &env
-            ),
-            Ok(Value::Int(5))
-        );
+        assert_eq!(eval_expr("((lambda (x) x) 5)", &env), Ok(Value::Int(5)));
     }
 }

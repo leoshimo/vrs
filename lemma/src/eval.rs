@@ -92,11 +92,9 @@ mod tests {
     #[test]
     fn eval_self_evaluating() {
         let env = Env::new();
-
-        assert_eq!(eval(&Form::Int(5), &env), Ok(Value::Int(5)));
-
+        assert_eq!(eval_expr(&"5", &env), Ok(Value::Int(5)));
         assert_eq!(
-            eval(&Form::String("Hello".to_string()), &env),
+            eval_expr(&"\"Hello\"", &env),
             Ok(Value::String("Hello".to_string()))
         );
     }
@@ -110,13 +108,10 @@ mod tests {
             Value::String(String::from("hello world")),
         );
 
-        assert_eq!(
-            eval(&Form::symbol("greeting"), &env),
-            Ok(Value::from("hello world"))
-        );
+        assert_eq!(eval_expr(&"greeting", &env), Ok(Value::from("hello world")));
 
         assert!(matches!(
-            eval(&Form::symbol("undefined"), &env),
+            eval_expr("undefined", &env),
             Err(Error::UndefinedSymbol(_))
         ));
     }
@@ -125,10 +120,7 @@ mod tests {
     #[test]
     fn eval_list_empty() {
         let env = Env::new();
-        assert_eq!(
-            eval(&Form::List(vec![]), &env),
-            Ok(Value::Form(Form::List(vec![])))
-        );
+        assert_eq!(eval_expr("()", &env), Ok(Value::Form(Form::List(vec![]))));
     }
 
     /// Eval functions
@@ -151,18 +143,9 @@ mod tests {
             }),
         );
 
-        assert!(matches!(
-            eval(&Form::symbol("add"), &env),
-            Ok(Value::Func(_)),
-        ));
+        assert!(matches!(eval_expr("add", &env), Ok(Value::Func(_)),));
 
-        assert_eq!(
-            eval(
-                &Form::List(vec![Form::symbol("add"), Form::Int(10), Form::Int(2)]),
-                &env
-            ),
-            Ok(Value::Int(12))
-        );
+        assert_eq!(eval_expr("(add 10 2)", &env), Ok(Value::Int(12)));
     }
 
     /// Eval special forms
@@ -178,18 +161,12 @@ mod tests {
         );
 
         assert!(matches!(
-            eval(&Form::symbol("quote"), &env),
+            eval_expr("quote", &env),
             Ok(Value::SpecialForm(l)) if l.name == "quote",
         ));
 
         assert_eq!(
-            eval(
-                &Form::List(vec![
-                    Form::symbol("quote"),
-                    Form::List(vec![Form::Int(1), Form::Int(2), Form::Int(3),]),
-                ]),
-                &env
-            ),
+            eval_expr("(quote (1 2 3))", &env),
             Ok(Value::Form(Form::List(vec![
                 Form::Int(1),
                 Form::Int(2),
