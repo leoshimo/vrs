@@ -155,9 +155,3 @@ mod tests {
         )
     }
 }
-// /// Form value
-// Form(form::Form),
-// /// Callable function value
-// Func(Lambda),
-// /// Callable special form
-// SpecialForm(SpecialForm),
