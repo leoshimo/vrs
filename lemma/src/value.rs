@@ -90,7 +90,7 @@ impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Value::Int(i) => write!(f, "{}", i),
-            Value::String(s) => write!(f, "{}", s),
+            Value::String(s) => write!(f, "\"{}\"", s),
             Value::Form(form) => write!(f, "{}", form),
             Value::Func(l) => write!(
                 f,
