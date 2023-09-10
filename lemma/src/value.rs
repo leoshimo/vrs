@@ -1,7 +1,7 @@
 //! Values in Lemma
 //! A value is the result of evaluating an [Form](crate::Form)
 
-use crate::{form, Env, Result, SymbolId};
+use crate::{form, Env, Form, Result, SymbolId};
 
 /// A value from evaluating a [Form](crate::Form).
 ///
@@ -19,17 +19,26 @@ pub enum Value {
     Form(form::Form),
     /// Callable function value
     Func(Lambda),
+    /// Callable special form
+    SpecialForm(SpecialForm),
 }
 
 /// Parameters that function accepts
 pub type Params = Vec<SymbolId>;
 
-/// A function that accepts argument values and env to compute another value
+/// A function that evaluates function calls
 #[derive(Debug, Clone, PartialEq)]
 pub struct Lambda {
     pub name: String,
     pub params: Params,
     pub func: fn(&Env) -> Result<Value>,
+}
+
+/// A function that evaluates special forms
+#[derive(Debug, Clone, PartialEq)]
+pub struct SpecialForm {
+    pub name: String,
+    pub func: fn(&[Form], &Env) -> Result<Value>,
 }
 
 impl From<&str> for Value {
@@ -61,6 +70,7 @@ impl std::fmt::Display for Value {
             Value::String(s) => write!(f, "{}", s),
             Value::Form(form) => write!(f, "{}", form),
             Value::Func(l) => write!(f, "<fn {}>", l.name),
+            Value::SpecialForm(s) => write!(f, "<spfn {}>", s.name),
         }
     }
 }

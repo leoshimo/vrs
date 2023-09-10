@@ -1,5 +1,9 @@
 //! Implements evaluation of expressions
-use crate::{parse::parse, value::Lambda, Env, Error, Form, Result, SymbolId, Value};
+use crate::{
+    parse::parse,
+    value::{Lambda, SpecialForm},
+    Env, Error, Form, Result, SymbolId, Value,
+};
 
 /// Evaluate a given expression
 pub fn eval_expr(expr: &str) -> Result<Value> {
@@ -44,6 +48,7 @@ pub fn eval_list(forms: &[Form], env: &Env) -> Result<Value> {
 
     match op_value {
         Value::Func(lambda) => eval_func_call(&lambda, arg_forms, env),
+        Value::SpecialForm(sp_form) => eval_special_form(&sp_form, arg_forms, env),
         Value::Int(_) | Value::String(_) | Value::Form(_) => Err(Error::InvalidOperation(op_value)),
     }
 }
@@ -66,6 +71,16 @@ pub fn eval_func_call(lambda: &Lambda, arg_forms: &[Form], env: &Env) -> Result<
     }
 
     (lambda.func)(&func_env)
+}
+
+/// Evaluate a special form expression
+fn eval_special_form(
+    sp_form: &SpecialForm,
+    arg_forms: &[Form],
+    env: &Env<'_>,
+) -> std::result::Result<Value, Error> {
+    // TODO: Lexical binding?
+    (sp_form.func)(arg_forms, env)
 }
 
 #[cfg(test)]
@@ -145,6 +160,39 @@ mod tests {
                 &env
             ),
             Ok(Value::Int(12))
+        );
+    }
+
+    /// Eval special forms
+    #[test]
+    fn eval_special_form() {
+        let mut env = Env::default();
+        env.bind(
+            &SymbolId::from("quote"),
+            Value::SpecialForm(SpecialForm {
+                name: String::from("quote"),
+                func: |arg_forms, _env| Ok(Value::Form(arg_forms[0].clone())),
+            }),
+        );
+
+        assert!(matches!(
+            eval(&Form::symbol("quote"), &env),
+            Ok(Value::SpecialForm(l)) if l.name == "quote",
+        ));
+
+        assert_eq!(
+            eval(
+                &Form::List(vec![
+                    Form::symbol("quote"),
+                    Form::List(vec![Form::Int(1), Form::Int(2), Form::Int(3),]),
+                ]),
+                &env
+            ),
+            Ok(Value::Form(Form::List(vec![
+                Form::Int(1),
+                Form::Int(2),
+                Form::Int(3),
+            ])))
         );
     }
 }
