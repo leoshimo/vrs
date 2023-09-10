@@ -1,4 +1,5 @@
 //! Parser for Lemma
+use crate::form::KeywordId;
 use crate::lex::{lex, Token};
 use crate::{Error, Result};
 use crate::{Form, SymbolId};
@@ -25,6 +26,7 @@ where
         Token::Int(i) => Form::Int(i),
         Token::Symbol(s) => Form::Symbol(SymbolId::from(s)),
         Token::String(s) => Form::String(s),
+        Token::Keyword(k) => Form::Keyword(KeywordId::from(k)),
         Token::ParenLeft => {
             let mut items = vec![];
             while let Some(next) = tokens.peek() {
@@ -41,9 +43,9 @@ where
             tokens.next(); // discard ParenRight
             Form::List(items)
         }
-        _ => {
+        Token::ParenRight => {
             return Err(Error::FailedToParse(
-                "Unexpected token while parsing expression".to_string(),
+                "Unexpected closing parenthesis while parsing expression".to_string(),
             ))
         }
     };
@@ -87,6 +89,10 @@ mod tests {
             parse("      \"hello  world  \"      "),
             Ok(Form::string("hello  world  "))
         );
+        assert_eq!(
+            parse("\"hello :not_a_keyword\""),
+            Ok(Form::string("hello :not_a_keyword"))
+        );
     }
 
     #[test]
@@ -119,6 +125,31 @@ mod tests {
                 Form::List(vec![Form::List(vec![]),]),
             ]))
         )
+    }
+
+    #[test]
+    fn parse_keywords() {
+        assert_eq!(parse(":a_keyword"), Ok(Form::keyword("a_keyword")));
+
+        // assert_eq!(
+        //     lex("(:a_keyword)"),
+        //     Ok(vec![
+        //         Token::ParenLeft,
+        //         Token::Keyword("a_keyword".to_string()),
+        //         Token::ParenRight,
+        //     ])
+        // );
+
+        // assert_eq!(
+        //     lex("(a_func :a_keyword 3)"),
+        //     Ok(vec![
+        //         Token::ParenLeft,
+        //         Token::Symbol("a_func".to_string()),
+        //         Token::Keyword("a_keyword".to_string()),
+        //         Token::Int(3),
+        //         Token::ParenRight,
+        //     ])
+        // );
     }
 
     #[test]

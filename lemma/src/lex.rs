@@ -9,6 +9,7 @@ pub enum Token {
     Int(i32),
     String(String),
     Symbol(String),
+    Keyword(String),
     ParenLeft,
     ParenRight,
 }
@@ -17,8 +18,9 @@ impl std::fmt::Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Token::Int(i) => write!(f, "{}", i),
-            Token::String(s) => write!(f, "{}", s),
+            Token::String(s) => write!(f, "\"{}\"", s),
             Token::Symbol(s) => write!(f, "{}", s),
+            Token::Keyword(s) => write!(f, ":{}", s),
             Token::ParenLeft => write!(f, "("),
             Token::ParenRight => write!(f, ")"),
         }
@@ -46,21 +48,15 @@ impl Tokens<'_> {
 
     /// Parse next symbol from inner iterator
     fn next_symbol(&mut self) -> Result<Token> {
-        let expr = std::iter::from_fn(|| {
-            self.inner
-                .next_if(|ch| !ch.is_whitespace() && !ch.is_ascii_punctuation())
-        })
-        .collect();
+        let expr =
+            std::iter::from_fn(|| self.inner.next_if(|ch| !is_symbol_delimiter(ch))).collect();
         Ok(Token::Symbol(expr))
     }
 
     /// Pares the next int
     fn next_int(&mut self) -> Result<Token> {
-        let expr: String = std::iter::from_fn(|| {
-            self.inner
-                .next_if(|ch| !ch.is_whitespace() && !ch.is_ascii_punctuation())
-        })
-        .collect();
+        let expr: String =
+            std::iter::from_fn(|| self.inner.next_if(|ch| !is_symbol_delimiter(ch))).collect();
         let num = expr
             .parse::<i32>()
             .map_err(|_| Error::FailedToLex(format!("Unable to parse integer - {expr}")))?;
@@ -104,6 +100,24 @@ impl Tokens<'_> {
 
         Ok(Token::String(expr))
     }
+
+    /// Parse keyword
+    fn next_keyword(&mut self) -> Result<Token> {
+        let ch = self.inner.next().ok_or(Error::FailedToLex(
+            "Expected symbol : for start of keyword".to_string(),
+        ))?;
+        if ch != ':' {
+            return Err(Error::FailedToLex(format!(
+                "Expected symbol : for keyword - found {}",
+                ch
+            )));
+        }
+
+        let keyword =
+            std::iter::from_fn(|| self.inner.next_if(|ch| !is_symbol_delimiter(ch))).collect();
+
+        Ok(Token::Keyword(keyword))
+    }
 }
 
 impl<'a> Iterator for Tokens<'a> {
@@ -117,6 +131,7 @@ impl<'a> Iterator for Tokens<'a> {
                     continue;
                 }
                 '\"' => self.next_string(),
+                ':' => self.next_keyword(),
                 _ if ch.is_ascii_punctuation() => self.next_punct(),
                 _ if ch.is_numeric() => self.next_int(),
                 _ => self.next_symbol(),
@@ -125,6 +140,11 @@ impl<'a> Iterator for Tokens<'a> {
         }
         None
     }
+}
+
+/// Return whether or not a given character is a symbol delimiter
+fn is_symbol_delimiter(ch: &char) -> bool {
+    ch.is_whitespace() || ch == &'(' || ch == &')'
 }
 
 #[cfg(test)]
@@ -140,6 +160,21 @@ mod tests {
     #[test]
     fn lex_symbol() {
         assert_eq!(lex("hello"), Ok(vec![Token::Symbol(String::from("hello"))]));
+        assert_eq!(
+            lex("hello world"),
+            Ok(vec![
+                Token::Symbol(String::from("hello")),
+                Token::Symbol(String::from("world")),
+            ])
+        );
+        assert_eq!(
+            lex("hello_world"),
+            Ok(vec![Token::Symbol(String::from("hello_world"))])
+        );
+        assert_eq!(
+            lex("hello-world"),
+            Ok(vec![Token::Symbol(String::from("hello-world"))])
+        );
         assert_eq!(
             lex("    hello    "),
             Ok(vec![Token::Symbol(String::from("hello"))])
@@ -207,9 +242,37 @@ mod tests {
                 Token::ParenLeft,
                 Token::ParenRight,
                 Token::ParenRight,
-                Token::ParenRight
+                Token::ParenRight,
             ])
         )
+    }
+
+    #[test]
+    fn lex_keywords() {
+        assert_eq!(
+            lex(":a_keyword"),
+            Ok(vec![Token::Keyword("a_keyword".to_string()),])
+        );
+
+        assert_eq!(
+            lex("(:a_keyword)"),
+            Ok(vec![
+                Token::ParenLeft,
+                Token::Keyword("a_keyword".to_string()),
+                Token::ParenRight,
+            ])
+        );
+
+        assert_eq!(
+            lex("(a_func :a_keyword 3)"),
+            Ok(vec![
+                Token::ParenLeft,
+                Token::Symbol("a_func".to_string()),
+                Token::Keyword("a_keyword".to_string()),
+                Token::Int(3),
+                Token::ParenRight,
+            ])
+        );
     }
 
     #[test]

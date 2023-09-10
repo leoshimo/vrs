@@ -9,6 +9,7 @@ pub enum Form {
     Int(i32),
     String(String),
     Symbol(SymbolId),
+    Keyword(KeywordId),
     List(Vec<Form>),
 }
 
@@ -22,29 +23,27 @@ impl Form {
     pub fn symbol(id: &str) -> Self {
         Self::Symbol(SymbolId::from(id))
     }
+
+    /// Shorthand for creating [Form::Keyword]
+    pub fn keyword(id: &str) -> Self {
+        Self::Keyword(KeywordId::from(id))
+    }
 }
 
 /// Identifier for Symbol
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SymbolId(String);
 
-impl From<String> for SymbolId {
-    fn from(value: String) -> Self {
-        Self(value)
-    }
-}
-
-impl From<&str> for SymbolId {
-    fn from(value: &str) -> Self {
-        Self(value.to_string())
-    }
-}
+/// Identifier for Keyword
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct KeywordId(String);
 
 impl std::fmt::Display for Form {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Form::Int(i) => write!(f, "{}", i),
             Form::String(s) => write!(f, "\"{}\"", s),
+            Form::Keyword(k) => write!(f, "{}", k),
             Form::Symbol(s) => write!(f, "{}", s),
             Form::List(l) => write!(
                 f,
@@ -64,15 +63,62 @@ impl std::fmt::Display for SymbolId {
     }
 }
 
+impl std::fmt::Display for KeywordId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, ":{}", self.0)
+    }
+}
+
+impl From<String> for SymbolId {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl From<&str> for SymbolId {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
+
+impl From<String> for KeywordId {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl From<&str> for KeywordId {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn form_expressions() {
+    fn int_to_string() {
         assert_eq!(Form::Int(5).to_string(), "5");
+    }
+
+    #[test]
+    fn string_to_string() {
         assert_eq!(Form::string("hello").to_string(), "\"hello\"");
+    }
+
+    #[test]
+    fn symbol_to_string() {
         assert_eq!(Form::symbol("hello").to_string(), "hello");
+    }
+
+    #[test]
+    fn keyword_to_string() {
+        assert_eq!(Form::keyword("hello").to_string(), ":hello");
+    }
+
+    #[test]
+    fn list_to_string() {
         assert_eq!(
             Form::List(vec![
                 Form::symbol("my-func"),

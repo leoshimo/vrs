@@ -14,7 +14,7 @@ pub fn eval_expr(expr: &str, env: &Env) -> Result<Value> {
 /// Evaluate a form within given environment
 pub(crate) fn eval(form: &Form, env: &Env) -> Result<Value> {
     match form {
-        Form::Int(_) | Form::String(_) => Ok(Value::from(form.clone())),
+        Form::Int(_) | Form::String(_) | Form::Keyword(_) => Ok(Value::from(form.clone())),
         Form::Symbol(s) => eval_symbol(s, env),
         Form::List(l) => eval_list(l, env),
     }
@@ -48,7 +48,9 @@ pub fn eval_list(forms: &[Form], env: &Env) -> Result<Value> {
     match op_value {
         Value::Func(lambda) => eval_func_call(&lambda, arg_forms, env),
         Value::SpecialForm(sp_form) => eval_special_form(&sp_form, arg_forms, env),
-        Value::Int(_) | Value::String(_) | Value::Form(_) => Err(Error::InvalidOperation(op_value)),
+        Value::Int(_) | Value::String(_) | Value::Keyword(_) | Value::Form(_) => {
+            Err(Error::InvalidOperation(op_value))
+        }
     }
 }
 
