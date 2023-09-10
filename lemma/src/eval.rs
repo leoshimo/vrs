@@ -6,10 +6,9 @@ use crate::{
 };
 
 /// Evaluate a given expression
-pub fn eval_expr(expr: &str) -> Result<Value> {
+pub fn eval_expr(expr: &str, env: &Env) -> Result<Value> {
     let form = parse(expr)?;
-    let env = Env::default();
-    eval(&form, &env)
+    eval(&form, env)
 }
 
 /// Evaluate a form within given environment
@@ -85,12 +84,14 @@ fn eval_special_form(
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
+
     use super::*;
 
     /// Self-evaluating forms
     #[test]
     fn eval_self_evaluating() {
-        let env = Env::default();
+        let env = Env::new();
 
         assert_eq!(eval(&Form::Int(5), &env), Ok(Value::Int(5)));
 
@@ -103,7 +104,7 @@ mod tests {
     /// Eval symbols
     #[test]
     fn eval_symbols() {
-        let mut env = Env::default();
+        let mut env = Env::new();
         env.bind(
             &SymbolId::from("greeting"),
             Value::String(String::from("hello world")),
@@ -123,7 +124,7 @@ mod tests {
     /// Eval list
     #[test]
     fn eval_list_empty() {
-        let env = Env::default();
+        let env = Env::new();
         assert_eq!(
             eval(&Form::List(vec![]), &env),
             Ok(Value::Form(Form::List(vec![])))
@@ -133,25 +134,26 @@ mod tests {
     /// Eval functions
     #[test]
     fn eval_function() {
-        let mut env = Env::default();
+        let mut env = Env::new();
         env.bind(
             &SymbolId::from("add"),
             Value::Func(Lambda {
-                name: String::from("add"),
                 params: vec![SymbolId::from("x"), SymbolId::from("y")],
-                func: |env| match (
-                    env.resolve(&SymbolId::from("x")),
-                    env.resolve(&SymbolId::from("y")),
-                ) {
-                    (Some(Value::Int(x)), Some(Value::Int(y))) => Ok(Value::Int(x + y)),
-                    _ => Err(Error::InvalidArgumentsToFunctionCall),
-                },
+                func: Rc::new(|env| {
+                    match (
+                        env.resolve(&SymbolId::from("x")),
+                        env.resolve(&SymbolId::from("y")),
+                    ) {
+                        (Some(Value::Int(x)), Some(Value::Int(y))) => Ok(Value::Int(x + y)),
+                        _ => Err(Error::InvalidArgumentsToFunctionCall),
+                    }
+                }),
             }),
         );
 
         assert!(matches!(
             eval(&Form::symbol("add"), &env),
-            Ok(Value::Func(l)) if l.name == "add",
+            Ok(Value::Func(_)),
         ));
 
         assert_eq!(
@@ -166,7 +168,7 @@ mod tests {
     /// Eval special forms
     #[test]
     fn eval_special_form() {
-        let mut env = Env::default();
+        let mut env = Env::new();
         env.bind(
             &SymbolId::from("quote"),
             Value::SpecialForm(SpecialForm {

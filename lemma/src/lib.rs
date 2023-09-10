@@ -6,6 +6,8 @@ mod lex;
 mod parse;
 mod value;
 
+pub mod lang;
+
 pub use crate::env::Env;
 pub use crate::error::Error;
 pub use crate::eval::eval_expr;

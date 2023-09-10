@@ -8,8 +8,15 @@ pub struct Env<'a> {
     parent: Option<&'a Env<'a>>,
 }
 
-impl<'a> Env<'a> {
-    /// Resolve a given symbol to a binding, if any
+impl Env<'_> {
+    pub fn new() -> Self {
+        Self {
+            bindings: HashMap::new(),
+            parent: None,
+        }
+    }
+
+    /// Resolve a given symbol ID to the value in this environment
     pub fn resolve(&self, symbol: &SymbolId) -> Option<&Value> {
         if let Some(value) = self.bindings.get(symbol) {
             Some(value)
@@ -26,7 +33,7 @@ impl<'a> Env<'a> {
     }
 
     /// Create a new environment existing existing one
-    pub(crate) fn extend(env: &'a Env<'a>) -> Env<'a> {
+    pub(crate) fn extend<'a>(env: &'a Env<'a>) -> Env<'a> {
         Env {
             bindings: HashMap::new(),
             parent: Some(env),

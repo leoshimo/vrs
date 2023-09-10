@@ -26,4 +26,10 @@ pub enum Error {
 
     #[error("Evaluation error - Unexpected number of arguments")]
     UnexpectedNumberOfArguments,
+
+    #[error("Missing lambda parameter list")]
+    MissingLambdaParameterList,
+
+    #[error("Parameter list can only contain symbols")]
+    ParameterListContainsNonSymbol,
 }

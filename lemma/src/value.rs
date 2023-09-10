@@ -2,6 +2,7 @@
 //! A value is the result of evaluating an [Form](crate::Form)
 
 use crate::{form, Env, Form, Result, SymbolId};
+use std::rc::Rc;
 
 /// A value from evaluating a [Form](crate::Form).
 ///
@@ -27,11 +28,33 @@ pub enum Value {
 pub type Params = Vec<SymbolId>;
 
 /// A function that evaluates function calls
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone)]
 pub struct Lambda {
-    pub name: String,
     pub params: Params,
-    pub func: fn(&Env) -> Result<Value>,
+    pub func: LambdaFn,
+}
+
+/// A function pointer stored in [Lambda]
+pub type LambdaFn = Rc<dyn Fn(&Env) -> Result<Value>>;
+
+impl PartialEq for Lambda {
+    fn eq(&self, _other: &Self) -> bool {
+        false // never equal
+    }
+}
+
+impl std::fmt::Debug for Lambda {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "<lambda ({})>",
+            self.params
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(" ")
+        )
+    }
 }
 
 /// A function that evaluates special forms
@@ -69,7 +92,15 @@ impl std::fmt::Display for Value {
             Value::Int(i) => write!(f, "{}", i),
             Value::String(s) => write!(f, "{}", s),
             Value::Form(form) => write!(f, "{}", form),
-            Value::Func(l) => write!(f, "<fn {}>", l.name),
+            Value::Func(l) => write!(
+                f,
+                "<fn ({})>",
+                l.params
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
             Value::SpecialForm(s) => write!(f, "<spfn {}>", s.name),
         }
     }
