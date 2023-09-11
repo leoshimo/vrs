@@ -49,9 +49,7 @@ pub fn eval_list(forms: &[Form], env: &mut Env) -> Result<Value> {
     match op_value {
         Value::Lambda(lambda) => eval_lambda_call(&lambda, arg_forms, env),
         Value::SpecialForm(sp_form) => eval_special_form(&sp_form, arg_forms, env),
-        Value::Int(_) | Value::String(_) | Value::Keyword(_) | Value::Form(_) => {
-            Err(Error::InvalidOperation(op_value))
-        }
+        Value::Form(_) => Err(Error::InvalidOperation(op_value)),
     }
 }
 
@@ -101,21 +99,15 @@ mod tests {
     #[test]
     fn eval_self_evaluating() {
         let mut env = Env::new();
-        assert_eq!(eval_expr("5", &mut env), Ok(Value::Int(5)));
-        assert_eq!(
-            eval_expr("\"Hello\"", &mut env),
-            Ok(Value::String("Hello".to_string()))
-        );
+        assert_eq!(eval_expr("5", &mut env), Ok(Value::from(5)));
+        assert_eq!(eval_expr("\"Hello\"", &mut env), Ok(Value::from("Hello")));
     }
 
     /// Eval symbols
     #[test]
     fn eval_symbols() {
         let mut env = Env::new();
-        env.bind(
-            &SymbolId::from("greeting"),
-            Value::String(String::from("hello world")),
-        );
+        env.bind(&SymbolId::from("greeting"), Value::from("hello world"));
 
         assert_eq!(
             eval_expr("greeting", &mut env),
@@ -152,7 +144,7 @@ mod tests {
 
         assert!(matches!(eval_expr("echo", &mut env), Ok(Value::Lambda(_)),));
 
-        assert_eq!(eval_expr("(echo 10)", &mut env), Ok(Value::Int(10)));
+        assert_eq!(eval_expr("(echo 10)", &mut env), Ok(Value::from(10)));
     }
 
     /// Eval special forms

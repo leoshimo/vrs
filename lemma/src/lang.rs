@@ -151,7 +151,10 @@ mod tests {
         );
 
         // ((lambda (x) x) 5) => 5
-        assert_eq!(eval_expr("((lambda (x) x) 5)", &mut env), Ok(Value::Int(5)));
+        assert_eq!(
+            eval_expr("((lambda (x) x) 5)", &mut env),
+            Ok(Value::from(5))
+        );
 
         // ((lambda () (lambda (x) x))) => Value::Func
         assert!(matches!(
@@ -162,7 +165,7 @@ mod tests {
         // (((lambda () (lambda (x) x))) 10) => 10
         assert_eq!(
             eval_expr("(((lambda () (lambda (x) x))) 10)", &mut env),
-            Ok(Value::Int(10))
+            Ok(Value::from(10))
         );
     }
 
@@ -203,11 +206,11 @@ mod tests {
     fn eval_eval() {
         let mut env = std_env();
 
-        assert_eq!(eval_expr("(eval (quote 5))", &mut env), Ok(Value::Int(5)));
+        assert_eq!(eval_expr("(eval (quote 5))", &mut env), Ok(Value::from(5)));
 
         assert_eq!(
             eval_expr("(eval (quote ((lambda (x) x) 5)))", &mut env),
-            Ok(Value::Int(5))
+            Ok(Value::from(5))
         );
     }
 
@@ -216,14 +219,14 @@ mod tests {
     fn eval_define_vals() {
         {
             let mut env = std_env();
-            assert_eq!(eval_expr("(define x 10)", &mut env), Ok(Value::Int(10)));
+            assert_eq!(eval_expr("(define x 10)", &mut env), Ok(Value::from(10)));
         }
 
         {
             let mut env = std_env();
             assert_eq!(
                 eval_expr("(define x \"hello\")", &mut env),
-                Ok(Value::String("hello".to_string()))
+                Ok(Value::from("hello"))
             );
         }
 
@@ -232,12 +235,12 @@ mod tests {
             let mut env = std_env();
             assert_eq!(
                 eval_expr("(define x \"hello\")", &mut env),
-                Ok(Value::String("hello".to_string()))
+                Ok(Value::from("hello"))
             );
 
             assert_eq!(
                 eval_expr("x", &mut env),
-                Ok(Value::String("hello".to_string())),
+                Ok(Value::from("hello")),
                 "x should evaluate to defined value"
             );
         }
@@ -255,12 +258,12 @@ mod tests {
 
         assert_eq!(
             eval_expr("(echo \"hello\")", &mut env),
-            Ok(Value::String("hello".to_string()))
+            Ok(Value::from("hello"))
         );
 
         assert_eq!(
             eval_expr("(echo (echo \"hello\"))", &mut env),
-            Ok(Value::String("hello".to_string()))
+            Ok(Value::from("hello"))
         );
     }
 }
