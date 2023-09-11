@@ -100,11 +100,17 @@ mod tests {
     #[test]
     fn int_to_string() {
         assert_eq!(Form::Int(5).to_string(), "5");
+        assert_eq!(Form::Int(0).to_string(), "0");
+        assert_eq!(Form::Int(-99).to_string(), "-99");
     }
 
     #[test]
     fn string_to_string() {
         assert_eq!(Form::string("hello").to_string(), "\"hello\"");
+        assert_eq!(
+            Form::string("  hello  world  ").to_string(),
+            "\"  hello  world  \"",
+        );
     }
 
     #[test]
@@ -127,6 +133,20 @@ mod tests {
             ])
             .to_string(),
             "(my-func 5 \"string\")"
+        );
+        assert_eq!(
+            Form::List(vec![
+                Form::symbol("hello"),
+                Form::List(vec![
+                    Form::symbol("world"),
+                    Form::List(vec![Form::keyword("a_keyword"),])
+                ]),
+                Form::string("string"),
+                Form::Int(10),
+                Form::Int(-99),
+            ])
+            .to_string(),
+            "(hello (world (:a_keyword)) \"string\" 10 -99)"
         );
     }
 }

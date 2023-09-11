@@ -66,12 +66,16 @@ mod tests {
     fn parse_int() {
         assert_eq!(parse("1"), Ok(Form::Int(1)));
         assert_eq!(parse("     1     "), Ok(Form::Int(1)));
+        assert_eq!(parse("10"), Ok(Form::Int(10)),);
+        assert_eq!(parse("0"), Ok(Form::Int(0)),);
+        assert_eq!(parse("-10"), Ok(Form::Int(-10)),);
     }
 
     #[test]
     fn parse_symbol() {
         assert_eq!(parse("hello"), Ok(Form::symbol("hello")));
         assert_eq!(parse("    hello    "), Ok(Form::symbol("hello")));
+        assert_eq!(parse("an_keyword"), Ok(Form::symbol("an_keyword")),);
     }
 
     #[test]
@@ -131,25 +135,25 @@ mod tests {
     fn parse_keywords() {
         assert_eq!(parse(":a_keyword"), Ok(Form::keyword("a_keyword")));
 
-        // assert_eq!(
-        //     lex("(:a_keyword)"),
-        //     Ok(vec![
-        //         Token::ParenLeft,
-        //         Token::Keyword("a_keyword".to_string()),
-        //         Token::ParenRight,
-        //     ])
-        // );
+        assert_eq!(
+            lex("(:a_keyword)"),
+            Ok(vec![
+                Token::ParenLeft,
+                Token::Keyword("a_keyword".to_string()),
+                Token::ParenRight,
+            ])
+        );
 
-        // assert_eq!(
-        //     lex("(a_func :a_keyword 3)"),
-        //     Ok(vec![
-        //         Token::ParenLeft,
-        //         Token::Symbol("a_func".to_string()),
-        //         Token::Keyword("a_keyword".to_string()),
-        //         Token::Int(3),
-        //         Token::ParenRight,
-        //     ])
-        // );
+        assert_eq!(
+            lex("(a_func :a_keyword 3)"),
+            Ok(vec![
+                Token::ParenLeft,
+                Token::Symbol("a_func".to_string()),
+                Token::Keyword("a_keyword".to_string()),
+                Token::Int(3),
+                Token::ParenRight,
+            ])
+        );
     }
 
     #[test]
@@ -167,6 +171,20 @@ mod tests {
                 Form::List(vec![Form::symbol("print"), Form::string("hello"),]),
             ]),)
         );
+
+        assert_eq!(
+            parse("(hello (world (:a_keyword)) \"string\" 10 -99)"),
+            Ok(Form::List(vec![
+                Form::symbol("hello"),
+                Form::List(vec![
+                    Form::symbol("world"),
+                    Form::List(vec![Form::keyword("a_keyword"),])
+                ]),
+                Form::string("string"),
+                Form::Int(10),
+                Form::Int(-99),
+            ]))
+        )
     }
 
     #[test]
