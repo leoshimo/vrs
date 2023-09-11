@@ -127,7 +127,7 @@ v0.1 sketch of Lisp as Hypermedia
        (:li :content "Element 1"
             :on_click '(action_for_elem_1))
        (:li :content "Element 2"
-            :on_click '(action_for_elem_1))
+            :on_click '(action_for_elem_2))
        (:li :content "Element 3"
-            :on_click '(action_for_elem_1))))
+            :on_click '(action_for_elem_3))))
 #+end_src
