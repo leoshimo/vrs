@@ -40,4 +40,7 @@ pub enum Error {
     // TODO: Should this be same as UnexpectedNumberOfArguments
     #[error("eval expects a single form argument")]
     EvalExpectsSingleFormArgument,
+
+    #[error("Unexpected arguments - {0}")]
+    UnexpectedArguments(String),
 }
