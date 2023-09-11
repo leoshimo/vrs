@@ -57,7 +57,7 @@ pub fn add_eval(env: &mut Env) {
 }
 
 /// Implements `lambda` special form
-fn lambda(arg_forms: &[Form], _env: &Env) -> Result<Value> {
+fn lambda(arg_forms: &[Form], _env: &mut Env) -> Result<Value> {
     let (params, body) = arg_forms
         .split_first()
         .ok_or(Error::MissingLambdaParameterList)?;
@@ -88,7 +88,7 @@ fn lambda(arg_forms: &[Form], _env: &Env) -> Result<Value> {
 }
 
 /// Implements the `quote` special form
-fn quote(arg_forms: &[Form], _env: &Env) -> Result<Value> {
+fn quote(arg_forms: &[Form], _env: &mut Env) -> Result<Value> {
     if arg_forms.len() == 1 {
         Ok(Value::Form(arg_forms[0].clone()))
     } else {
@@ -97,7 +97,7 @@ fn quote(arg_forms: &[Form], _env: &Env) -> Result<Value> {
 }
 
 /// Implements the `eval` special form
-fn eval(arg_forms: &[Form], env: &Env) -> Result<Value> {
+fn eval(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let arg_form = match arg_forms {
         [form] => Ok(form),
         _ => Err(Error::EvalExpectsSingleFormArgument),
@@ -119,10 +119,10 @@ mod tests {
     #[test]
     #[traced_test]
     fn eval_lambda() {
-        let env = std_env();
+        let mut env = std_env();
 
         assert!(
-            matches!(eval_expr("lambda", &env), Ok(Value::SpecialForm(_))),
+            matches!(eval_expr("lambda", &mut env), Ok(Value::SpecialForm(_))),
             "lambda symbol should be defined"
         );
 
@@ -130,7 +130,7 @@ mod tests {
             matches!(
                 eval_expr(
                     "(lambda (x y) 10)",
-                    &env
+                    &mut env
                 ),
                 Ok(Value::Func(Lambda { params, .. })) if params == vec![SymbolId::from("x"), SymbolId::from("y")]
             ),
@@ -138,17 +138,17 @@ mod tests {
         );
 
         // ((lambda (x) x) 5) => 5
-        assert_eq!(eval_expr("((lambda (x) x) 5)", &env), Ok(Value::Int(5)));
+        assert_eq!(eval_expr("((lambda (x) x) 5)", &mut env), Ok(Value::Int(5)));
 
         // ((lambda () (lambda (x) x))) => Value::Func
         assert!(matches!(
-            eval_expr("((lambda () (lambda (x) x)))", &env),
+            eval_expr("((lambda () (lambda (x) x)))", &mut env),
             Ok(Value::Func(_))
         ));
 
         // (((lambda () (lambda (x) x))) 10) => 10
         assert_eq!(
-            eval_expr("(((lambda () (lambda (x) x))) 10)", &env),
+            eval_expr("(((lambda () (lambda (x) x))) 10)", &mut env),
             Ok(Value::Int(10))
         );
     }
@@ -156,10 +156,10 @@ mod tests {
     #[test]
     #[traced_test]
     fn eval_quote() {
-        let env = std_env();
+        let mut env = std_env();
 
         assert_eq!(
-            eval_expr("(quote (one :two three))", &env),
+            eval_expr("(quote (one :two three))", &mut env),
             Ok(Value::Form(Form::List(vec![
                 Form::symbol("one"),
                 Form::keyword("two"),
@@ -168,7 +168,7 @@ mod tests {
         );
 
         assert_eq!(
-            eval_expr("(quote (lambda (x) x))", &env),
+            eval_expr("(quote (lambda (x) x))", &mut env),
             Ok(Value::Form(Form::List(vec![
                 Form::symbol("lambda"),
                 Form::List(vec![Form::symbol("x")]),
@@ -178,7 +178,7 @@ mod tests {
 
         assert!(
             matches!(
-                dbg!(eval_expr("((quote (lambda (x) x)) 5)", &env)),
+                eval_expr("((quote (lambda (x) x)) 5)", &mut env),
                 Err(Error::InvalidOperation(Value::Form(_)))
             ),
             "A quoted operation does not recursively evaluate without explicit call to eval"
@@ -188,12 +188,12 @@ mod tests {
     #[test]
     #[traced_test]
     fn eval_eval() {
-        let env = std_env();
+        let mut env = std_env();
 
-        assert_eq!(eval_expr("(eval (quote 5))", &env), Ok(Value::Int(5)));
+        assert_eq!(eval_expr("(eval (quote 5))", &mut env), Ok(Value::Int(5)));
 
         assert_eq!(
-            eval_expr("(eval (quote ((lambda (x) x) 5)))", &env),
+            eval_expr("(eval (quote ((lambda (x) x) 5)))", &mut env),
             Ok(Value::Int(5))
         );
     }

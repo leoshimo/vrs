@@ -40,7 +40,7 @@ pub struct Lambda {
 }
 
 /// A function pointer stored in [Lambda]
-pub type LambdaFn = Rc<dyn Fn(&Env) -> Result<Value>>;
+pub type LambdaFn = Rc<dyn Fn(&mut Env) -> Result<Value>>;
 
 impl PartialEq for Lambda {
     fn eq(&self, _other: &Self) -> bool {
@@ -66,7 +66,7 @@ impl std::fmt::Debug for Lambda {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SpecialForm {
     pub name: String,
-    pub func: fn(&[Form], &Env) -> Result<Value>,
+    pub func: fn(&[Form], &mut Env) -> Result<Value>,
 }
 
 impl From<&str> for Value {

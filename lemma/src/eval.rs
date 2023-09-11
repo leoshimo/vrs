@@ -7,13 +7,13 @@ use crate::{
 use tracing::debug;
 
 /// Evaluate a given expression
-pub fn eval_expr(expr: &str, env: &Env) -> Result<Value> {
+pub fn eval_expr(expr: &str, env: &mut Env) -> Result<Value> {
     let form = parse(expr)?;
     eval(&form, env)
 }
 
 /// Evaluate a form within given environment
-pub(crate) fn eval(form: &Form, env: &Env) -> Result<Value> {
+pub(crate) fn eval(form: &Form, env: &mut Env) -> Result<Value> {
     debug!("eval - {:?}", form);
     match form {
         Form::Int(_) | Form::String(_) | Form::Keyword(_) => Ok(Value::from(form.clone())),
@@ -23,7 +23,7 @@ pub(crate) fn eval(form: &Form, env: &Env) -> Result<Value> {
 }
 
 /// Evaluate symbol forms
-pub fn eval_symbol(symbol: &SymbolId, env: &Env) -> Result<Value> {
+pub fn eval_symbol(symbol: &SymbolId, env: &mut Env) -> Result<Value> {
     debug!("eval_symbol - {:?}", symbol);
     match env.resolve(symbol) {
         Some(value) => Ok(value.clone()),
@@ -32,7 +32,7 @@ pub fn eval_symbol(symbol: &SymbolId, env: &Env) -> Result<Value> {
 }
 
 /// Evaluate a list form
-pub fn eval_list(forms: &[Form], env: &Env) -> Result<Value> {
+pub fn eval_list(forms: &[Form], env: &mut Env) -> Result<Value> {
     debug!("eval_list - ({:?})", forms);
 
     if forms.is_empty() {
@@ -60,7 +60,7 @@ pub fn eval_list(forms: &[Form], env: &Env) -> Result<Value> {
 }
 
 /// Evalute a function call
-pub fn eval_func_call(lambda: &Lambda, arg_forms: &[Form], env: &Env) -> Result<Value> {
+pub fn eval_func_call(lambda: &Lambda, arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     debug!("eval_func_call - ({:?})", lambda,);
 
     let arg_vals = arg_forms
@@ -78,14 +78,14 @@ pub fn eval_func_call(lambda: &Lambda, arg_forms: &[Form], env: &Env) -> Result<
         func_env.bind(param, val);
     }
 
-    (lambda.func)(&func_env)
+    (lambda.func)(&mut func_env)
 }
 
 /// Evaluate a special form expression
 fn eval_special_form(
     sp_form: &SpecialForm,
     arg_forms: &[Form],
-    env: &Env<'_>,
+    env: &mut Env<'_>,
 ) -> std::result::Result<Value, Error> {
     debug!("eval_special_form - {:?}", sp_form,);
     // TODO: Lexical binding?
@@ -101,10 +101,10 @@ mod tests {
     /// Self-evaluating forms
     #[test]
     fn eval_self_evaluating() {
-        let env = Env::new();
-        assert_eq!(eval_expr("5", &env), Ok(Value::Int(5)));
+        let mut env = Env::new();
+        assert_eq!(eval_expr("5", &mut env), Ok(Value::Int(5)));
         assert_eq!(
-            eval_expr("\"Hello\"", &env),
+            eval_expr("\"Hello\"", &mut env),
             Ok(Value::String("Hello".to_string()))
         );
     }
@@ -118,10 +118,13 @@ mod tests {
             Value::String(String::from("hello world")),
         );
 
-        assert_eq!(eval_expr("greeting", &env), Ok(Value::from("hello world")));
+        assert_eq!(
+            eval_expr("greeting", &mut env),
+            Ok(Value::from("hello world"))
+        );
 
         assert!(matches!(
-            eval_expr("undefined", &env),
+            eval_expr("undefined", &mut env),
             Err(Error::UndefinedSymbol(_))
         ));
     }
@@ -129,8 +132,11 @@ mod tests {
     /// Eval list
     #[test]
     fn eval_list_empty() {
-        let env = Env::new();
-        assert_eq!(eval_expr("()", &env), Ok(Value::Form(Form::List(vec![]))));
+        let mut env = Env::new();
+        assert_eq!(
+            eval_expr("()", &mut env),
+            Ok(Value::Form(Form::List(vec![])))
+        );
     }
 
     /// Eval functions
@@ -153,9 +159,9 @@ mod tests {
             }),
         );
 
-        assert!(matches!(eval_expr("add", &env), Ok(Value::Func(_)),));
+        assert!(matches!(eval_expr("add", &mut env), Ok(Value::Func(_)),));
 
-        assert_eq!(eval_expr("(add 10 2)", &env), Ok(Value::Int(12)));
+        assert_eq!(eval_expr("(add 10 2)", &mut env), Ok(Value::Int(12)));
     }
 
     /// Eval special forms
@@ -171,12 +177,12 @@ mod tests {
         );
 
         assert!(matches!(
-            eval_expr("quote", &env),
+            eval_expr("quote", &mut env),
             Ok(Value::SpecialForm(l)) if l.name == "quote",
         ));
 
         assert_eq!(
-            eval_expr("(quote (1 2 3))", &env),
+            eval_expr("(quote (1 2 3))", &mut env),
             Ok(Value::Form(Form::List(vec![
                 Form::Int(1),
                 Form::Int(2),
