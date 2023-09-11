@@ -8,11 +8,11 @@ mod value;
 
 pub mod lang;
 
-pub use crate::env::Env;
-pub use crate::error::Error;
-pub use crate::eval::eval_expr;
-pub use crate::form::Form;
-pub use crate::form::SymbolId;
-pub use crate::value::Value;
+pub use env::Env;
+pub use error::Error;
+pub use eval::eval_expr;
+pub use form::Form;
+pub use form::SymbolId;
+pub use value::Value;
 
 pub type Result<T> = std::result::Result<T, Error>;
