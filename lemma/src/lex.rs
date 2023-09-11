@@ -134,7 +134,7 @@ impl<'a> Iterator for Tokens<'a> {
                 ':' => self.next_keyword(),
                 _ if is_list_delimiter(ch) => self.next_punct(),
                 _ if ch.is_numeric() || ch == &'-' => self.next_int(),
-                _ => self.next_symbol()
+                _ => self.next_symbol(),
             };
             return Some(token);
         }
@@ -151,7 +151,6 @@ fn is_symbol_delimiter(ch: &char) -> bool {
 fn is_list_delimiter(ch: &char) -> bool {
     ch == &'(' || ch == &')'
 }
-
 
 #[cfg(test)]
 mod tests {
