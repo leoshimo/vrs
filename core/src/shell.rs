@@ -23,7 +23,7 @@ impl Shell {
     }
 
     /// Dispatch a request
-    pub async fn request(&mut self, contents: serde_json::Value) -> Result<Response, Error> {
+    pub async fn request(&mut self, contents: lemma::Form) -> Result<Response, Error> {
         debug!("send request contents = {:?}", contents);
         let (resp_tx, resp_rx) = oneshot::channel();
         let ev = Event::SendRequest { contents, resp_tx };
@@ -47,7 +47,7 @@ pub enum Error {
 pub enum Event {
     /// Event for sending request to remote
     SendRequest {
-        contents: serde_json::Value,
+        contents: lemma::Form,
         resp_tx: oneshot::Sender<Response>,
     },
     /// Event when receiving response from remote
@@ -137,7 +137,6 @@ async fn run(mut evloop: EventLoop) {
 mod test {
     use super::*;
     use crate::shell::Message;
-    use serde_json::json;
     use tokio::net::UnixStream;
 
     #[tokio::test(flavor = "multi_thread")]
@@ -150,10 +149,13 @@ mod test {
         tokio::spawn(async move {
             while let Some(msg) = remote.recv().await {
                 if let Ok(Message::Request(req)) = msg {
-                    let message = req.contents["message"].as_str().unwrap();
+                    let message = match req.contents {
+                        lemma::Form::String(s) => s,
+                        _ => todo!(),
+                    };
                     let resp = Response {
                         req_id: req.req_id,
-                        contents: json!({ "message": format!("reply {}", message)}),
+                        contents: lemma::Form::String(format!("reply {}", message)),
                     };
                     remote
                         .send(&Message::Response(resp))
@@ -165,21 +167,21 @@ mod test {
 
         let mut shell = Shell::new(local);
         let req = shell
-            .request(json!({"message": "one"}))
+            .request(lemma::Form::string("one"))
             .await
             .expect("Should receive reply");
-        assert_eq!(req.contents, json!({"message": "reply one"}));
+        assert_eq!(req.contents, lemma::Form::string("reply one"));
 
         let req = shell
-            .request(json!({"message": "two"}))
+            .request(lemma::Form::string("two"))
             .await
             .expect("Should receive reply");
-        assert_eq!(req.contents, json!({"message": "reply two"}));
+        assert_eq!(req.contents, lemma::Form::string("reply two"));
 
         let req = shell
-            .request(json!({"message": "three"}))
+            .request(lemma::Form::string("three"))
             .await
             .expect("Should receive reply");
-        assert_eq!(req.contents, json!({"message": "reply three"}));
+        assert_eq!(req.contents, lemma::Form::string("reply three"));
     }
 }

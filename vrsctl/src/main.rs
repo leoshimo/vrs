@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use serde_json::json;
 use std::io::{self, Write};
 use tokio::net::UnixStream;
 use tracing::debug;
@@ -32,7 +31,7 @@ async fn main() -> Result<()> {
         if s == "exit" {
             break;
         }
-        let resp = shell.request(json!({"message": s})).await;
+        let resp = shell.request(lemma::Form::string(s)).await;
         match resp {
             Ok(resp) => println!("{}", resp.contents),
             Err(e) => println!("{}", e),

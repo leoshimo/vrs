@@ -7,7 +7,7 @@ pub struct Request {
     /// Unique ID assigned to request
     pub req_id: u32,
     /// Contents of request
-    pub contents: serde_json::Value,
+    pub contents: lemma::Form,
 }
 
 /// Incoming response
@@ -16,5 +16,5 @@ pub struct Response {
     /// Unique ID of request this response is for
     pub req_id: u32,
     /// Contents of response
-    pub contents: serde_json::Value,
+    pub contents: lemma::Form,
 }

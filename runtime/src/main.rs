@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use serde_json::json;
 use tokio::net::UnixListener;
 use tracing::{debug, error};
 use vrs::connection::{Connection, Message};
@@ -30,7 +29,10 @@ async fn main() -> Result<()> {
                         if let Message::Request(req) = msg {
                             let resp = Message::Response(Response {
                                 req_id: req.req_id,
-                                contents: json!({"message": format!("GOT: {}", req.contents["message"])}),
+                                contents: lemma::Form::string(&format!(
+                                    "Received: {}",
+                                    &req.contents
+                                )),
                             });
                             conn.send(&resp).await.unwrap();
                         }
