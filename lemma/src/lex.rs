@@ -132,9 +132,9 @@ impl<'a> Iterator for Tokens<'a> {
                 }
                 '\"' => self.next_string(),
                 ':' => self.next_keyword(),
-                _ if ch.is_ascii_punctuation() => self.next_punct(),
-                _ if ch.is_numeric() => self.next_int(),
-                _ => self.next_symbol(),
+                _ if is_list_delimiter(ch) => self.next_punct(),
+                _ if ch.is_numeric() || ch == &'-' => self.next_int(),
+                _ => self.next_symbol()
             };
             return Some(token);
         }
@@ -144,8 +144,14 @@ impl<'a> Iterator for Tokens<'a> {
 
 /// Return whether or not a given character is a symbol delimiter
 fn is_symbol_delimiter(ch: &char) -> bool {
-    ch.is_whitespace() || ch == &'(' || ch == &')'
+    ch.is_whitespace() || is_list_delimiter(ch)
 }
+
+/// Return whether or not given character is a list delimiter
+fn is_list_delimiter(ch: &char) -> bool {
+    ch == &'(' || ch == &')'
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -155,6 +161,7 @@ mod tests {
     fn lex_int() {
         assert_eq!(lex("1"), Ok(vec![Token::Int(1)]));
         assert_eq!(lex("     1     "), Ok(vec![Token::Int(1)]));
+        assert_eq!(lex("-99"), Ok(vec![Token::Int(-99)]));
     }
 
     #[test]
