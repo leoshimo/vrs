@@ -1,9 +1,5 @@
 //! Implements evaluation of expressions
-use crate::{
-    parse::parse,
-    value::{Lambda, SpecialForm},
-    Env, Error, Form, Result, SymbolId, Value,
-};
+use crate::{parse::parse, Env, Error, Form, Lambda, Result, SpecialForm, SymbolId, Value};
 use tracing::debug;
 
 /// Evaluate a given expression
@@ -51,7 +47,7 @@ pub fn eval_list(forms: &[Form], env: &mut Env) -> Result<Value> {
     }?;
 
     match op_value {
-        Value::Func(lambda) => eval_func_call(&lambda, arg_forms, env),
+        Value::Lambda(lambda) => eval_lambda_call(&lambda, arg_forms, env),
         Value::SpecialForm(sp_form) => eval_special_form(&sp_form, arg_forms, env),
         Value::Int(_) | Value::String(_) | Value::Keyword(_) | Value::Form(_) => {
             Err(Error::InvalidOperation(op_value))
@@ -59,9 +55,9 @@ pub fn eval_list(forms: &[Form], env: &mut Env) -> Result<Value> {
     }
 }
 
-/// Evalute a function call
-pub fn eval_func_call(lambda: &Lambda, arg_forms: &[Form], env: &mut Env) -> Result<Value> {
-    debug!("eval_func_call - ({:?})", lambda,);
+/// Evalute a lambda expression
+pub fn eval_lambda_call(lambda: &Lambda, arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+    debug!("eval_lambda_call - ({:?})", lambda,);
 
     let arg_vals = arg_forms
         .iter()
@@ -73,12 +69,16 @@ pub fn eval_func_call(lambda: &Lambda, arg_forms: &[Form], env: &mut Env) -> Res
     }
 
     // TODO: Lexical scope instead of Dynamic scope?
-    let mut func_env = Env::extend(env);
+    let mut lambda_env = Env::extend(env);
     for (param, val) in lambda.params.iter().zip(arg_vals) {
-        func_env.bind(param, val);
+        lambda_env.bind(param, val);
     }
 
-    (lambda.func)(&mut func_env)
+    let mut res = Value::from(Form::List(vec![])); // TODO: Dedicated nil in language?
+    for form in lambda.body.iter() {
+        res = eval(form, &mut lambda_env)?;
+    }
+    Ok(res)
 }
 
 /// Evaluate a special form expression
@@ -94,7 +94,6 @@ fn eval_special_form(
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
 
     use super::*;
 
@@ -144,24 +143,16 @@ mod tests {
     fn eval_function() {
         let mut env = Env::new();
         env.bind(
-            &SymbolId::from("add"),
-            Value::Func(Lambda {
-                params: vec![SymbolId::from("x"), SymbolId::from("y")],
-                func: Rc::new(|env| {
-                    match (
-                        env.resolve(&SymbolId::from("x")),
-                        env.resolve(&SymbolId::from("y")),
-                    ) {
-                        (Some(Value::Int(x)), Some(Value::Int(y))) => Ok(Value::Int(x + y)),
-                        _ => Err(Error::InvalidArgumentsToFunctionCall),
-                    }
-                }),
+            &SymbolId::from("echo"),
+            Value::Lambda(Lambda {
+                params: vec![SymbolId::from("x")],
+                body: vec![Form::symbol("x")],
             }),
         );
 
-        assert!(matches!(eval_expr("add", &mut env), Ok(Value::Func(_)),));
+        assert!(matches!(eval_expr("echo", &mut env), Ok(Value::Lambda(_)),));
 
-        assert_eq!(eval_expr("(add 10 2)", &mut env), Ok(Value::Int(12)));
+        assert_eq!(eval_expr("(echo 10)", &mut env), Ok(Value::Int(10)));
     }
 
     /// Eval special forms

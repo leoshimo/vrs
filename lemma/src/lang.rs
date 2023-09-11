@@ -2,13 +2,7 @@
 //! Lemma interpreter does not have built-in procedures and special forms by default.
 //! The language features are "opt in" by defining symbols within the environment
 
-use std::rc::Rc;
-
-use crate::{
-    eval,
-    value::{Lambda, LambdaFn, SpecialForm},
-    Env, Error, Form, Result, SymbolId, Value,
-};
+use crate::{eval, Env, Error, Form, Lambda, Result, SpecialForm, SymbolId, Value};
 
 /// Returns the 'standard' environment of the langugae
 pub fn std_env<'a>() -> Env<'a> {
@@ -89,15 +83,7 @@ fn lambda(arg_forms: &[Form], _env: &mut Env) -> Result<Value> {
         .collect::<Result<Vec<_>>>()?;
 
     let body = body.to_owned();
-    let func: LambdaFn = Rc::new(move |env| {
-        let mut res = Value::from(Form::List(vec![])); // TODO: Dedicated nil in language?
-        for form in body.iter() {
-            res = eval::eval(form, env)?;
-        }
-        Ok(res)
-    });
-
-    Ok(Value::Func(Lambda { params, func }))
+    Ok(Value::Lambda(Lambda { params, body }))
 }
 
 /// Implements the `quote` special form
@@ -159,7 +145,7 @@ mod tests {
                     "(lambda (x y) 10)",
                     &mut env
                 ),
-                Ok(Value::Func(Lambda { params, .. })) if params == vec![SymbolId::from("x"), SymbolId::from("y")]
+                Ok(Value::Lambda(Lambda { params, .. })) if params == vec![SymbolId::from("x"), SymbolId::from("y")]
             ),
             "lambda special form returns a lambda value"
         );
@@ -170,7 +156,7 @@ mod tests {
         // ((lambda () (lambda (x) x))) => Value::Func
         assert!(matches!(
             eval_expr("((lambda () (lambda (x) x)))", &mut env),
-            Ok(Value::Func(_))
+            Ok(Value::Lambda(_))
         ));
 
         // (((lambda () (lambda (x) x))) 10) => 10
@@ -264,7 +250,7 @@ mod tests {
 
         assert!(matches!(
             eval_expr("(define echo (lambda (x) x))", &mut env),
-            Ok(Value::Func(_))
+            Ok(Value::Lambda(_))
         ));
 
         assert_eq!(

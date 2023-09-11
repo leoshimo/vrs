@@ -14,6 +14,8 @@ pub use eval::eval_expr;
 pub use form::Form;
 pub use form::KeywordId;
 pub use form::SymbolId;
+pub use value::Lambda;
+pub use value::SpecialForm;
 pub use value::Value;
 
 pub type Result<T> = std::result::Result<T, Error>;

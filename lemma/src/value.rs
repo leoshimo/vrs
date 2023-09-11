@@ -5,7 +5,6 @@ use crate::{
     form::{self, KeywordId},
     Env, Form, Result, SymbolId,
 };
-use std::rc::Rc;
 
 /// A value from evaluating a [Form](crate::Form).
 ///
@@ -22,44 +21,18 @@ pub enum Value {
     /// Keyword value
     Keyword(KeywordId),
     /// Form value
-    Form(form::Form),
+    Form(Form),
     /// Callable function value
-    Func(Lambda),
+    Lambda(Lambda),
     /// Callable special form
     SpecialForm(SpecialForm),
 }
 
-/// Parameters that function accepts
-pub type Params = Vec<SymbolId>;
-
-/// A function that evaluates function calls
-#[derive(Clone)]
+/// A function as a value
+#[derive(Debug, Clone, PartialEq)]
 pub struct Lambda {
-    pub params: Params,
-    pub func: LambdaFn,
-}
-
-/// A function pointer stored in [Lambda]
-pub type LambdaFn = Rc<dyn Fn(&mut Env) -> Result<Value>>;
-
-impl PartialEq for Lambda {
-    fn eq(&self, _other: &Self) -> bool {
-        false // never equal
-    }
-}
-
-impl std::fmt::Debug for Lambda {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "<lambda ({})>",
-            self.params
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join(" ")
-        )
-    }
+    pub params: Vec<SymbolId>,
+    pub body: Vec<Form>,
 }
 
 /// A function that evaluates special forms
@@ -99,9 +72,9 @@ impl std::fmt::Display for Value {
             Value::String(s) => write!(f, "\"{}\"", s),
             Value::Keyword(k) => write!(f, "{}", k),
             Value::Form(form) => write!(f, "{}", form),
-            Value::Func(l) => write!(
+            Value::Lambda(l) => write!(
                 f,
-                "<fn ({})>",
+                "<lambda ({})>",
                 l.params
                     .iter()
                     .map(ToString::to_string)
