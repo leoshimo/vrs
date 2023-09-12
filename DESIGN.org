@@ -12,7 +12,7 @@ Unix - Composability of programs via stdin, stderr, stdout, pipes, and plaintext
 
 Plan 9 - Per-process hierarchical namespaces and hypermedia approach to plaintext via plumber
 
-Erlang - Message based, distributed software runtime
+Erlang - Message based, distributed software runtime w/ userspace concurrency.
 
 * Client and Runtime
 ** Guiding Questions
