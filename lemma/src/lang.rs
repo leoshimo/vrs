@@ -11,6 +11,7 @@ pub fn std_env<'a>() -> Env<'a> {
     add_quote(&mut env);
     add_eval(&mut env);
     add_define(&mut env);
+    add_if(&mut env);
     env
 }
 
@@ -46,7 +47,7 @@ pub fn add_eval(env: &mut Env) {
         &eval_sym,
         Value::SpecialForm(SpecialForm {
             name: eval_sym.to_string(),
-            func: eval,
+            func: lang_eval,
         }),
     );
 }
@@ -59,6 +60,18 @@ pub fn add_define(env: &mut Env) {
         Value::SpecialForm(SpecialForm {
             name: define_sym.to_string(),
             func: define,
+        }),
+    );
+}
+
+/// Adds the `if` symbol for conditional branching
+pub fn add_if(env: &mut Env) {
+    let if_sym = SymbolId::from("if");
+    env.bind(
+        &if_sym,
+        Value::SpecialForm(SpecialForm {
+            name: if_sym.to_string(),
+            func: lang_if,
         }),
     );
 }
@@ -96,14 +109,14 @@ fn quote(arg_forms: &[Form], _env: &mut Env) -> Result<Value> {
 }
 
 /// Implements the `eval` special form
-fn eval(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+fn lang_eval(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let arg_form = match arg_forms {
         [form] => Ok(form),
         _ => Err(Error::EvalExpectsSingleFormArgument),
     }?;
 
-    match eval::eval(arg_form, env)? {
-        Value::Form(f) => eval::eval(&f, env),
+    match eval(arg_form, env)? {
+        Value::Form(f) => eval(&f, env),
         _ => Err(Error::EvalExpectsSingleFormArgument),
     }
 }
@@ -120,6 +133,30 @@ fn define(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let val = eval::eval(val_form, env)?;
     env.bind(sym_id, val.clone());
     Ok(val)
+}
+
+/// Implements the `if` condition
+fn lang_if(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+    let (cond_form, true_form, false_form) = match arg_forms {
+        [cond_form, true_form, false_form] => Ok((cond_form, true_form, false_form)),
+        _ => Err(Error::UnexpectedArguments(
+            "if expects a condition form, true form, and false form".to_string(),
+        )),
+    }?;
+
+    let cond = match eval(cond_form, env)? {
+        Value::Form(Form::Bool(b)) => Ok(b),
+        v => Err(Error::UnexpectedConditionalValue(format!(
+            "Conditional form evaluated to {}",
+            v
+        ))),
+    }?;
+
+    if cond {
+        eval(true_form, env)
+    } else {
+        eval(false_form, env)
+    }
 }
 
 #[cfg(test)]
@@ -264,6 +301,60 @@ mod tests {
         assert_eq!(
             eval_expr("(echo (echo \"hello\"))", &mut env),
             Ok(Value::from("hello"))
+        );
+    }
+
+    #[test]
+    #[traced_test]
+    fn eval_if() {
+        let mut env = std_env();
+
+        assert_eq!(
+            eval_expr("(if true \"true\" \"false\")", &mut env),
+            Ok(Value::from("true"))
+        );
+
+        assert_eq!(
+            eval_expr("(if false \"true\" \"false\")", &mut env),
+            Ok(Value::from("false"))
+        );
+    }
+
+    #[test]
+    #[traced_test]
+    fn eval_if_with_symbols() {
+        let mut env = std_env();
+
+        eval_expr("(define is_true true)", &mut env).unwrap();
+        eval_expr("(define is_false false)", &mut env).unwrap();
+
+        assert_eq!(
+            eval_expr("(if is_true \"true\" \"false\")", &mut env),
+            Ok(Value::from("true"))
+        );
+
+        assert_eq!(
+            eval_expr("(if is_false \"true\" \"false\")", &mut env),
+            Ok(Value::from("false"))
+        );
+    }
+
+    #[test]
+    #[traced_test]
+    fn eval_if_with_lambda() {
+        let mut env = std_env();
+
+        eval_expr("(define is_true (lambda () true))", &mut env).unwrap();
+        eval_expr("(define is_false (lambda () false))", &mut env).unwrap();
+
+        assert_eq!(
+            eval_expr("(if (is_true) \"true\" \"false\")", &mut env),
+            Ok(Value::from("true"))
+        );
+
+        assert_eq!(
+            eval_expr("(if (is_false) \"true\" \"false\")", &mut env),
+            Ok(Value::from("false"))
         );
     }
 }

@@ -43,4 +43,7 @@ pub enum Error {
 
     #[error("Unexpected arguments - {0}")]
     UnexpectedArguments(String),
+
+    #[error("Unexpected conditional value - {0}")]
+    UnexpectedConditionalValue(String),
 }
