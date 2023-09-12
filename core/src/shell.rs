@@ -12,15 +12,21 @@ use tracing::{debug, error};
 pub struct Shell {
     /// Sender half to send messages to event loop
     evloop_tx: mpsc::Sender<Event>,
+    /// Cancellation token to shutdown event loop and shell handle
+    evloop_cancel_token: CancellationToken,
 }
 
 impl Shell {
     /// Create new shell
     pub fn new(conn: Connection) -> Self {
         let (evloop_tx, evloop_rx) = mpsc::channel(32);
-        let evloop = EventLoop::new(conn);
+        let evloop_cancel_token = CancellationToken::new();
+        let evloop = EventLoop::new(conn, evloop_cancel_token.clone());
         tokio::spawn(run(evloop, evloop_rx));
-        Self { evloop_tx }
+        Self {
+            evloop_tx,
+            evloop_cancel_token,
+        }
     }
 
     /// Dispatch a request
@@ -35,6 +41,12 @@ impl Shell {
     /// Returns whether or not client shell is active
     pub fn is_active(&self) -> bool {
         !self.evloop_tx.is_closed() // tx is open as long as event loop is running
+    }
+
+    /// Shutdown
+    pub async fn shutdown(&self) {
+        self.evloop_cancel_token.cancel();
+        let _ = self.evloop_tx.closed().await; // wait until shutdown
     }
 }
 
@@ -65,6 +77,8 @@ pub enum Event {
     RecvError(std::io::Error),
     /// Event when receiving request from remote
     RecvRequest(Request),
+    /// Event when connection with runtime disconnects
+    DisconnectedFromRuntime,
 }
 
 /// The state managed by client side event loop. The [Shell] is a handle to this [EventLoop]
@@ -76,14 +90,17 @@ struct EventLoop {
     inflight_reqs: HashMap<u32, oneshot::Sender<Response>>,
     /// Next request id to use
     next_req_id: u32,
+    /// Cancellation token used to shutdown event loop
+    cancellation_token: CancellationToken,
 }
 
 impl EventLoop {
-    fn new(conn: Connection) -> Self {
+    fn new(conn: Connection, cancellation_token: CancellationToken) -> Self {
         Self {
             conn,
             next_req_id: 0,
             inflight_reqs: HashMap::new(),
+            cancellation_token,
         }
     }
 
@@ -112,6 +129,10 @@ impl EventLoop {
                 error!("Encountered error - {}", e);
             }
             RecvRequest { .. } => panic!("Unimplemented - received request from runtime"),
+            DisconnectedFromRuntime => {
+                debug!("shutting down event loop...");
+                self.cancellation_token.cancel();
+            }
         }
     }
 }
@@ -132,11 +153,11 @@ async fn run(mut evloop: EventLoop, mut evloop_rx: mpsc::Receiver<Event>) {
             Some(e) = evloop_rx.recv() => e,
             msg = evloop.conn.recv() => match msg {
                 Some(msg) => msg.map(Event::from).unwrap_or_else(Event::RecvError),
-                None => {
-                    debug!("Connection closed - exiting event loop");
-                    break
-                },
+                None => Event::DisconnectedFromRuntime,
             },
+            _ = evloop.cancellation_token.cancelled() => {
+                break;
+            }
         };
         evloop.handle_event(ev).await;
     }

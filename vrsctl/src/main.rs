@@ -29,7 +29,8 @@ async fn main() -> Result<()> {
             .expect("failed to read from stdin");
         let s = s.trim();
         if s == "exit" {
-            break;
+            shell.shutdown().await;
+            continue;
         }
 
         let f = lemma::parse(s).with_context(|| format!("Invalid expression - {}", s))?;
