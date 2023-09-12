@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
+pub mod client;
 pub mod connection;
 pub mod message;
-pub mod shell;
 
 /// The path to runtime socket
 pub fn runtime_socket() -> Option<PathBuf> {

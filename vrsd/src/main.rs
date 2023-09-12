@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
 use tokio::net::UnixListener;
 use tracing::{debug, error};
+use vrs::client::Error;
 use vrs::connection::{Connection, Message};
 use vrs::message::Response;
-use vrs::shell::Error;
 
 #[tokio::main]
 async fn main() -> Result<()> {

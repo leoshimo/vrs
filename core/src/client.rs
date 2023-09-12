@@ -1,4 +1,4 @@
-//! Client shell hosting vrsjmp event loop
+//! Client handle to event loop
 use std::collections::HashMap;
 
 use crate::connection::{Connection, Message};
@@ -7,17 +7,17 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
 
-/// Handle for client shell
+/// Handle for client event loop
 #[derive(Clone, Debug)]
-pub struct Shell {
+pub struct Client {
     /// Sender half to send messages to event loop
     evloop_tx: mpsc::Sender<Event>,
-    /// Cancellation token to shutdown event loop and shell handle
+    /// Cancellation token to shutdown event loop and handle
     evloop_cancel_token: CancellationToken,
 }
 
-impl Shell {
-    /// Create new shell
+impl Client {
+    /// Create new client
     pub fn new(conn: Connection) -> Self {
         let (evloop_tx, evloop_rx) = mpsc::channel(32);
         let evloop_cancel_token = CancellationToken::new();
@@ -38,7 +38,7 @@ impl Shell {
         Ok(resp_rx.await?)
     }
 
-    /// Returns whether or not client shell is active
+    /// Returns whether or not client is active
     pub fn is_active(&self) -> bool {
         !self.evloop_tx.is_closed() // tx is open as long as event loop is running
     }
@@ -50,7 +50,7 @@ impl Shell {
     }
 }
 
-/// Errors from interacting with [Shell]
+/// Errors from interacting with [Client]
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Failed to send request")]
@@ -81,7 +81,7 @@ pub enum Event {
     DisconnectedFromRuntime,
 }
 
-/// The state managed by client side event loop. The [Shell] is a handle to this [EventLoop]
+/// The state managed by client side event loop. The [Client] is a handle to this [EventLoop]
 #[derive(Debug)]
 struct EventLoop {
     /// The connection between runtime
@@ -166,7 +166,7 @@ async fn run(mut evloop: EventLoop, mut evloop_rx: mpsc::Receiver<Event>) {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::shell::Message;
+    use crate::client::Message;
     use tokio::net::UnixStream;
 
     #[tokio::test(flavor = "multi_thread")]
@@ -195,20 +195,20 @@ mod test {
             }
         });
 
-        let mut shell = Shell::new(local);
-        let req = shell
+        let mut client = Client::new(local);
+        let req = client
             .request(lemma::Form::string("one"))
             .await
             .expect("Should receive reply");
         assert_eq!(req.contents, lemma::Form::string("reply one"));
 
-        let req = shell
+        let req = client
             .request(lemma::Form::string("two"))
             .await
             .expect("Should receive reply");
         assert_eq!(req.contents, lemma::Form::string("reply two"));
 
-        let req = shell
+        let req = client
             .request(lemma::Form::string("three"))
             .await
             .expect("Should receive reply");
@@ -230,9 +230,9 @@ mod test {
             // remote is dropped
         });
 
-        let mut shell = Shell::new(local);
+        let mut client = Client::new(local);
 
-        let req = shell.request(lemma::Form::string("hi"));
+        let req = client.request(lemma::Form::string("hi"));
         let resp = timeout(Duration::from_millis(10), req)
             .await
             .expect("Request should be notified that remote connection was dropped before timeout");

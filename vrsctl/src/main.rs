@@ -2,8 +2,8 @@ use anyhow::{Context, Result};
 use std::io::{self, Write};
 use tokio::net::UnixStream;
 use tracing::debug;
+use vrs::client::Client;
 use vrs::connection::Connection;
-use vrs::shell::Shell;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -18,9 +18,9 @@ async fn main() -> Result<()> {
 
     debug!("Connected to runtime: {:?}", conn);
     let conn = Connection::new(conn);
-    let mut shell = Shell::new(conn);
+    let mut client = Client::new(conn);
 
-    while shell.is_active() {
+    while client.is_active() {
         let mut s = String::new();
         print!("> ");
         io::stdout().flush()?;
@@ -29,13 +29,13 @@ async fn main() -> Result<()> {
             .expect("failed to read from stdin");
         let s = s.trim();
         if s == "exit" {
-            shell.shutdown().await;
+            client.shutdown().await;
             continue;
         }
 
         let f = lemma::parse(s).with_context(|| format!("Invalid expression - {}", s))?;
 
-        let resp = shell.request(f).await;
+        let resp = client.request(f).await;
         match resp {
             Ok(resp) => println!("{}", resp.contents),
             Err(e) => eprintln!("{}", e),
