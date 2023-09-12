@@ -38,8 +38,11 @@ pub enum Error {
     #[error("Failed to send request")]
     RequestSendError(#[from] tokio::sync::mpsc::error::SendError<Event>),
 
-    #[error("Failed to receive response to reques")]
+    #[error("Failed to receive response to request")]
     RequestRecvError(#[from] tokio::sync::oneshot::error::RecvError),
+
+    #[error("Receied unexpected message - {0}")]
+    UnexpectedMessage(String),
 }
 
 /// Events processed in event loop

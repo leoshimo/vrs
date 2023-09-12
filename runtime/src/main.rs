@@ -1,8 +1,10 @@
 use anyhow::{Context, Result};
+use lemma;
 use tokio::net::UnixListener;
 use tracing::{debug, error};
 use vrs::connection::{Connection, Message};
 use vrs::message::Response;
+use vrs::shell::Error;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -23,19 +25,34 @@ async fn main() -> Result<()> {
         debug!("Connected to client: {:?}", conn);
         tokio::spawn(async move {
             let mut conn = Connection::new(conn);
+
+            let mut env = lemma::lang::std_env();
+
             while let Some(msg) = conn.recv().await {
                 match msg {
                     Ok(msg) => {
-                        if let Message::Request(req) = msg {
-                            let resp = Message::Response(Response {
-                                req_id: req.req_id,
-                                contents: lemma::Form::string(&format!(
-                                    "Received: {}",
-                                    &req.contents
-                                )),
-                            });
-                            conn.send(&resp).await.unwrap();
+                        let req = match msg {
+                            Message::Request(req) => Ok(req),
+                            Message::Response(_) => {
+                                Err(Error::UnexpectedMessage("Unexpected response".to_string()))
+                            }
                         }
+                        .unwrap();
+
+                        let contents = lemma::eval(&req.contents, &mut env).unwrap();
+                        let contents = match contents {
+                            lemma::Value::Form(f) => Ok::<lemma::Form, ()>(f),
+                            _ => Ok(lemma::Form::string("Ok")),
+                        }
+                        .unwrap();
+
+                        // TODO: If result is invalid, notify client that expression was invalid
+
+                        let resp = Message::Response(Response {
+                            req_id: req.req_id,
+                            contents,
+                        });
+                        conn.send(&resp).await.unwrap();
                     }
                     Err(e) => error!("Received error: {}", e),
                 }

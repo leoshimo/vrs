@@ -31,7 +31,10 @@ async fn main() -> Result<()> {
         if s == "exit" {
             break;
         }
-        let resp = shell.request(lemma::Form::string(s)).await;
+
+        let f = lemma::parse(&s).with_context(|| format!("Invalid expression - {}", s))?;
+
+        let resp = shell.request(f).await;
         match resp {
             Ok(resp) => println!("{}", resp.contents),
             Err(e) => println!("{}", e),
