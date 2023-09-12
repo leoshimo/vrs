@@ -33,6 +33,12 @@ pub struct SpecialForm {
     pub func: fn(&[Form], &mut Env) -> Result<Value>,
 }
 
+impl From<bool> for Value {
+    fn from(value: bool) -> Self {
+        Self::Form(Form::Bool(value))
+    }
+}
+
 impl From<i32> for Value {
     fn from(value: i32) -> Self {
         Self::Form(Form::Int(value))
@@ -79,6 +85,12 @@ impl std::fmt::Display for Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bool_to_string() {
+        assert_eq!(Value::from(true).to_string(), "true");
+        assert_eq!(Value::from(false).to_string(), "false");
+    }
 
     #[test]
     fn int_to_string() {

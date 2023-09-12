@@ -9,17 +9,19 @@ pub fn eval_expr(expr: &str, env: &mut Env) -> Result<Value> {
 }
 
 /// Evaluate a form within given environment
-pub(crate) fn eval(form: &Form, env: &mut Env) -> Result<Value> {
+pub fn eval(form: &Form, env: &mut Env) -> Result<Value> {
     debug!("eval - {:?}", form);
     match form {
-        Form::Int(_) | Form::String(_) | Form::Keyword(_) => Ok(Value::from(form.clone())),
+        Form::Bool(_) | Form::Int(_) | Form::String(_) | Form::Keyword(_) => {
+            Ok(Value::from(form.clone()))
+        }
         Form::Symbol(s) => eval_symbol(s, env),
         Form::List(l) => eval_list(l, env),
     }
 }
 
 /// Evaluate symbol forms
-pub fn eval_symbol(symbol: &SymbolId, env: &mut Env) -> Result<Value> {
+fn eval_symbol(symbol: &SymbolId, env: &mut Env) -> Result<Value> {
     debug!("eval_symbol - {:?}", symbol);
     match env.resolve(symbol) {
         Some(value) => Ok(value.clone()),
@@ -28,7 +30,7 @@ pub fn eval_symbol(symbol: &SymbolId, env: &mut Env) -> Result<Value> {
 }
 
 /// Evaluate a list form
-pub fn eval_list(forms: &[Form], env: &mut Env) -> Result<Value> {
+fn eval_list(forms: &[Form], env: &mut Env) -> Result<Value> {
     debug!("eval_list - ({:?})", forms);
 
     if forms.is_empty() {
@@ -95,11 +97,22 @@ mod tests {
 
     use super::*;
 
-    /// Self-evaluating forms
     #[test]
-    fn eval_self_evaluating() {
+    fn eval_bool() {
+        let mut env = Env::new();
+        assert_eq!(eval_expr("true", &mut env), Ok(Value::from(true)));
+        assert_eq!(eval_expr("false", &mut env), Ok(Value::from(false)));
+    }
+
+    #[test]
+    fn eval_int() {
         let mut env = Env::new();
         assert_eq!(eval_expr("5", &mut env), Ok(Value::from(5)));
+    }
+
+    #[test]
+    fn eval_string() {
+        let mut env = Env::new();
         assert_eq!(eval_expr("\"Hello\"", &mut env), Ok(Value::from("Hello")));
     }
 

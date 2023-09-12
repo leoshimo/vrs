@@ -6,6 +6,7 @@ use crate::{Error, Result};
 /// Parsed Tokens from String
 #[derive(Debug, PartialEq)]
 pub enum Token {
+    Bool(bool),
     Int(i32),
     String(String),
     Symbol(String),
@@ -17,6 +18,7 @@ pub enum Token {
 impl std::fmt::Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Token::Bool(b) => write!(f, "{}", if *b { "true" } else { "false" }),
             Token::Int(i) => write!(f, "{}", i),
             Token::String(s) => write!(f, "\"{}\"", s),
             Token::Symbol(s) => write!(f, "{}", s),
@@ -48,9 +50,13 @@ impl Tokens<'_> {
 
     /// Parse next symbol from inner iterator
     fn next_symbol(&mut self) -> Result<Token> {
-        let expr =
+        let expr: String =
             std::iter::from_fn(|| self.inner.next_if(|ch| !is_symbol_delimiter(ch))).collect();
-        Ok(Token::Symbol(expr))
+        match expr.as_str() {
+            "true" => Ok(Token::Bool(true)),
+            "false" => Ok(Token::Bool(false)),
+            _ => Ok(Token::Symbol(expr)),
+        }
     }
 
     /// Pares the next int
@@ -155,6 +161,12 @@ fn is_list_delimiter(ch: &char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lex_bool() {
+        assert_eq!(lex("true"), Ok(vec![Token::Bool(true)]));
+        assert_eq!(lex("false"), Ok(vec![Token::Bool(false)]));
+    }
 
     #[test]
     fn lex_int() {

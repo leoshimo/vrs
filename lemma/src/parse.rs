@@ -23,6 +23,7 @@ where
 {
     let next = tokens.next().ok_or(Error::EmptyExpression)?;
     let form = match next {
+        Token::Bool(b) => Form::Bool(b),
         Token::Int(i) => Form::Int(i),
         Token::Symbol(s) => Form::Symbol(SymbolId::from(s)),
         Token::String(s) => Form::String(s),
@@ -60,6 +61,12 @@ mod tests {
     fn parse_empty() {
         assert_eq!(parse(""), Err(Error::EmptyExpression));
         assert_eq!(parse("            "), Err(Error::EmptyExpression));
+    }
+
+    #[test]
+    fn parse_bool() {
+        assert_eq!(parse("true"), Ok(Form::Bool(true)));
+        assert_eq!(parse("false"), Ok(Form::Bool(false)));
     }
 
     #[test]
