@@ -7,7 +7,7 @@ use crate::{Form, SymbolId};
 use std::iter::Peekable;
 
 /// Parse a given expression as form
-pub(crate) fn parse(expr: &str) -> Result<Form> {
+pub fn parse(expr: &str) -> Result<Form> {
     let mut tokens = lex(expr)?.into_iter().peekable();
     let form = parse_form(&mut tokens)?;
     if tokens.peek().is_some() {
