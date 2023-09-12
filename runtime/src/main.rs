@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use lemma;
 use tokio::net::UnixListener;
 use tracing::{debug, error};
 use vrs::connection::{Connection, Message};
@@ -46,8 +45,7 @@ async fn main() -> Result<()> {
                         }
                         .unwrap();
 
-                        // TODO: If result is invalid, notify client that expression was invalid
-
+                        // TODO: If result is invalid, notify client that expression was invalid?
                         let resp = Message::Response(Response {
                             req_id: req.req_id,
                             contents,

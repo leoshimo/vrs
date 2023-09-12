@@ -20,7 +20,7 @@ async fn main() -> Result<()> {
     let conn = Connection::new(conn);
     let mut shell = Shell::new(conn);
 
-    loop {
+    while shell.is_active() {
         let mut s = String::new();
         print!("> ");
         io::stdout().flush()?;
@@ -32,12 +32,12 @@ async fn main() -> Result<()> {
             break;
         }
 
-        let f = lemma::parse(&s).with_context(|| format!("Invalid expression - {}", s))?;
+        let f = lemma::parse(s).with_context(|| format!("Invalid expression - {}", s))?;
 
         let resp = shell.request(f).await;
         match resp {
             Ok(resp) => println!("{}", resp.contents),
-            Err(e) => println!("{}", e),
+            Err(e) => eprintln!("{}", e),
         }
     }
 

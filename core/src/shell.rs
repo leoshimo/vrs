@@ -4,22 +4,23 @@ use std::collections::HashMap;
 use crate::connection::{Connection, Message};
 use crate::message::{Request, Response};
 use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
 
 /// Handle for client shell
 #[derive(Clone, Debug)]
 pub struct Shell {
     /// Sender half to send messages to event loop
-    tx: mpsc::Sender<Event>,
+    evloop_tx: mpsc::Sender<Event>,
 }
 
 impl Shell {
     /// Create new shell
     pub fn new(conn: Connection) -> Self {
-        let (tx, rx) = mpsc::channel(32);
-        let evloop = EventLoop::new(conn, rx);
-        tokio::spawn(run(evloop));
-        Self { tx }
+        let (evloop_tx, evloop_rx) = mpsc::channel(32);
+        let evloop = EventLoop::new(conn);
+        tokio::spawn(run(evloop, evloop_rx));
+        Self { evloop_tx }
     }
 
     /// Dispatch a request
@@ -27,8 +28,13 @@ impl Shell {
         debug!("send request contents = {:?}", contents);
         let (resp_tx, resp_rx) = oneshot::channel();
         let ev = Event::SendRequest { contents, resp_tx };
-        self.tx.send(ev).await?;
+        self.evloop_tx.send(ev).await?;
         Ok(resp_rx.await?)
+    }
+
+    /// Returns whether or not client shell is active
+    pub fn is_active(&self) -> bool {
+        !self.evloop_tx.is_closed() // tx is open as long as event loop is running
     }
 }
 
@@ -61,13 +67,11 @@ pub enum Event {
     RecvRequest(Request),
 }
 
-/// Client side event loop
+/// The state managed by client side event loop. The [Shell] is a handle to this [EventLoop]
 #[derive(Debug)]
 struct EventLoop {
     /// The connection between runtime
     conn: Connection,
-    /// Receiver for events from shell
-    rx: mpsc::Receiver<Event>,
     /// Maps req_ids to Sender channel for responses
     inflight_reqs: HashMap<u32, oneshot::Sender<Response>>,
     /// Next request id to use
@@ -75,10 +79,9 @@ struct EventLoop {
 }
 
 impl EventLoop {
-    fn new(conn: Connection, rx: mpsc::Receiver<Event>) -> Self {
+    fn new(conn: Connection) -> Self {
         Self {
             conn,
-            rx,
             next_req_id: 0,
             inflight_reqs: HashMap::new(),
         }
@@ -123,13 +126,17 @@ impl From<Message> for Event {
 }
 
 /// Start client side event loop
-async fn run(mut evloop: EventLoop) {
+async fn run(mut evloop: EventLoop, mut evloop_rx: mpsc::Receiver<Event>) {
     loop {
         let ev = tokio::select! {
-            Some(e) = evloop.rx.recv() => e,
-            Some(msg) = evloop.conn.recv() => {
-                msg.map(Event::from).unwrap_or_else(Event::RecvError)
-            }
+            Some(e) = evloop_rx.recv() => e,
+            msg = evloop.conn.recv() => match msg {
+                Some(msg) => msg.map(Event::from).unwrap_or_else(Event::RecvError),
+                None => {
+                    debug!("Connection closed - exiting event loop");
+                    break
+                },
+            },
         };
         evloop.handle_event(ev).await;
     }
@@ -147,7 +154,7 @@ mod test {
         let local = Connection::new(local);
         let mut remote = Connection::new(remote);
 
-        // Mock fake runtime that echos back requests
+        // Remote echos back requests
         tokio::spawn(async move {
             while let Some(msg) = remote.recv().await {
                 if let Ok(Message::Request(req)) = msg {
@@ -185,5 +192,30 @@ mod test {
             .await
             .expect("Should receive reply");
         assert_eq!(req.contents, lemma::Form::string("reply three"));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn handle_conn_drop() {
+        use std::time::Duration;
+        use tokio::time::timeout;
+
+        let (local, remote) = UnixStream::pair().unwrap();
+        let local = Connection::new(local);
+        let mut remote = Connection::new(remote);
+
+        // Remote drops `remote` after first request
+        tokio::spawn(async move {
+            let _ = remote.recv().await;
+            // remote is dropped
+        });
+
+        let mut shell = Shell::new(local);
+
+        let req = shell.request(lemma::Form::string("hi"));
+        let resp = timeout(Duration::from_millis(10), req)
+            .await
+            .expect("Request should be notified that remote connection was dropped before timeout");
+
+        assert!(matches!(resp, Err(Error::RequestRecvError(_))));
     }
 }
