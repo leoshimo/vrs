@@ -84,7 +84,6 @@ impl EventLoop {
         }
     }
 
-    #[tracing::instrument(skip(self))]
     async fn handle_event(&mut self, e: Event) {
         debug!("received {:?}", e);
         use Event::*;
