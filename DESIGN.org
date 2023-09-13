@@ -58,7 +58,6 @@ How the runtime is started may be platform dependent:
 - On web, runtime may be always running in the cloud.
 - On mobile, a in-process runtime may be spun up before client initialization.
 
- 
 ** Runtime - High Level Lifecycle
 
 1. Runtime is initialized in host process

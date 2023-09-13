@@ -10,6 +10,7 @@ use tokio_util::codec::LengthDelimitedCodec;
 use tracing::debug;
 
 /// Connection that can be used to send [crate::connection::Message]
+/// TODO: Use AsyncRead + AsyncWrite traits instead of UnixStream
 #[derive(Debug)]
 pub struct Connection {
     stream: Framed<UnixStream, LengthDelimitedCodec>,

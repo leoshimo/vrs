@@ -1,4 +1,4 @@
-//! Client handle to event loop
+//! Headless client implementation for vrsjmp runtime
 use std::collections::HashMap;
 
 use crate::connection::{Connection, Message};
@@ -17,7 +17,7 @@ pub struct Client {
 }
 
 impl Client {
-    /// Create new client
+    /// Create new client from connection transport between client and runtime
     pub fn new(conn: Connection) -> Self {
         let (evloop_tx, evloop_rx) = mpsc::channel(32);
         let evloop_cancel_token = CancellationToken::new();
