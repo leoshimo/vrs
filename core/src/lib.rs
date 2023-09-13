@@ -1,5 +1,8 @@
 use std::path::PathBuf;
 
+mod machine;
+
+// TODO Use reexports instead
 pub mod client;
 pub mod connection;
 pub mod message;

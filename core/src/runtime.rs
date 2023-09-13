@@ -1,8 +1,9 @@
 //! Runtime implementation
 
-use tokio::sync::mpsc::error::SendError;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
+
+use crate::machine;
 
 /// Handle to runtime
 #[derive(Debug)]
@@ -29,8 +30,19 @@ impl Runtime {
         let (req_tx, req_rx) = oneshot::channel();
         self.evloop_tx
             .send(Message::GetNumberOfClients(req_tx))
-            .await?;
+            .await
+            .map_err(|_| Error::FailedToSendToEventLoop)?;
         Ok(req_rx.await?)
+    }
+
+    /// Dispatch an command to runtime
+    pub async fn dispatch(&self, cmd: lemma::Form) -> Result<lemma::Value> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.evloop_tx
+            .send(Message::DispatchCommand { cmd, resp_tx })
+            .await
+            .map_err(|_| Error::FailedToSendToEventLoop)?;
+        Ok(resp_rx.await??)
     }
 }
 
@@ -41,19 +53,31 @@ impl Default for Runtime {
 }
 
 /// Messages passed between [Runtime] and [RuntimeTask] event loop
+#[derive(Debug)]
 pub enum Message {
     GetNumberOfClients(oneshot::Sender<usize>),
+    DispatchCommand {
+        cmd: machine::Command,
+        resp_tx: oneshot::Sender<machine::Result>,
+    },
 }
 
 /// The main event loop backing runtime
 #[derive(Debug)]
-struct EventLoop {
+struct EventLoop<'a> {
+    /// The core machine
+    machine: machine::Machine<'a>,
+
+    /// Managed client tasks
     clients: Vec<JoinHandle<()>>,
 }
 
-impl EventLoop {
+impl EventLoop<'_> {
     fn new() -> Self {
-        Self { clients: vec![] }
+        Self {
+            machine: machine::Machine::new(),
+            clients: vec![],
+        }
     }
 
     /// Handle a message in event loop
@@ -62,18 +86,24 @@ impl EventLoop {
             Message::GetNumberOfClients(resp_tx) => {
                 let _ = resp_tx.send(self.clients.len());
             }
+            Message::DispatchCommand { cmd, resp_tx } => {
+                let _ = resp_tx.send(self.machine.dispatch(&cmd));
+            }
         }
     }
 }
 
 /// Errors from [Runtime]
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, PartialEq)]
 pub enum Error {
-    #[error("Failed to send message to event loop - {0}")]
-    FailedToSendToEventLoop(#[from] SendError<Message>),
+    #[error("Failed to send message to event loop")]
+    FailedToSendToEventLoop,
 
     #[error("Failed to receive response from event loop - {0}")]
     FailedToReceiveResponse(#[from] tokio::sync::oneshot::error::RecvError),
+
+    #[error("Command returned error - {0}")]
+    CommandError(#[from] machine::Error),
 }
 
 /// Result type for [Runtime]
@@ -88,5 +118,16 @@ mod tests {
     async fn runtime_init() {
         let runtime = Runtime::new();
         assert_eq!(runtime.number_of_clients().await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn runtime_dispatch() {
+        let runtime = Runtime::new();
+        let form = lemma::parse("((lambda (x) x) \"hello world\")").unwrap();
+
+        assert_eq!(
+            runtime.dispatch(form).await,
+            Ok(lemma::Value::from("hello world"))
+        );
     }
 }
