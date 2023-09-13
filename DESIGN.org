@@ -115,6 +115,20 @@ modules together.
 Lisp is a practical choice for highly interactive, moldable,
 application-specific progamming environments.
 
+** Why write your own Lisp?
+
+Paul Graham put it best:
+
+#+begin_quote
+A language is by definition reusable. The more of your application you can push
+down into a language for writing that type of application, the more of your
+software will be reusable.
+— Paul Graham
+#+end_quote
+
+When the language is tailored to the environment, software can be simple and
+rich, similar to how shell languages are designed around IO redirection.
+
 ** Lisp as Hypermedia
 
 v0.1 sketch of Lisp as Hypermedia
