@@ -58,3 +58,14 @@ impl Connection {
         Some(Ok(msg))
     }
 }
+
+#[cfg(test)]
+pub mod tests {
+    use super::Connection;
+
+    /// Returns a connection fixture for tests
+    pub fn conn_fixture() -> (Connection, Connection) {
+        let (local, remote) = tokio::net::UnixStream::pair().unwrap();
+        (Connection::new(local), Connection::new(remote))
+    }
+}

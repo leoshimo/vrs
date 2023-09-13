@@ -167,13 +167,11 @@ async fn run(mut evloop: EventLoop, mut evloop_rx: mpsc::Receiver<Event>) {
 mod test {
     use super::*;
     use crate::client::Message;
-    use tokio::net::UnixStream;
+    use crate::connection::tests::conn_fixture;
 
     #[tokio::test(flavor = "multi_thread")]
     async fn handle_request_response() {
-        let (local, remote) = UnixStream::pair().unwrap();
-        let local = Connection::new(local);
-        let mut remote = Connection::new(remote);
+        let (local, mut remote) = conn_fixture();
 
         // Remote echos back requests
         tokio::spawn(async move {
@@ -220,9 +218,7 @@ mod test {
         use std::time::Duration;
         use tokio::time::timeout;
 
-        let (local, remote) = UnixStream::pair().unwrap();
-        let local = Connection::new(local);
-        let mut remote = Connection::new(remote);
+        let (local, mut remote) = conn_fixture();
 
         // Remote drops `remote` after first request
         tokio::spawn(async move {
