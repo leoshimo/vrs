@@ -1,9 +1,12 @@
 //! Sending and receiving message over connection between client and runtime.
 
+use std::os::fd::AsRawFd;
+
 use crate::message::{Request, Response};
 use bytes::{BufMut, BytesMut};
 use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
+use tokio::io::AsyncWriteExt;
 use tokio::net::UnixStream;
 use tokio_util::codec::Framed;
 use tokio_util::codec::LengthDelimitedCodec;
@@ -11,7 +14,6 @@ use tracing::debug;
 
 /// Connection that can be used to send [crate::connection::Message]
 /// TODO: Use AsyncRead + AsyncWrite traits instead of UnixStream
-#[derive(Debug)]
 pub struct Connection {
     stream: Framed<UnixStream, LengthDelimitedCodec>,
 }
@@ -56,6 +58,18 @@ impl Connection {
         };
         debug!("recv msg={:?}", msg);
         Some(Ok(msg))
+    }
+
+    pub async fn shutdown(self) -> Result<(), std::io::Error> {
+        debug!("shutdown {:?}", self);
+        self.stream.into_inner().shutdown().await
+    }
+}
+
+impl std::fmt::Debug for Connection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let fd = self.stream.get_ref().as_raw_fd();
+        write!(f, "Connection {{ fd: {} }}", fd)
     }
 }
 
