@@ -3,9 +3,9 @@
 use std::collections::HashMap;
 
 use tokio::sync::{mpsc, oneshot};
-use tokio::task::JoinSet;
 
-use tracing::{debug, error, trace};
+use crate::task::{self, spawn_task, Task, TaskId, TaskSet};
+use tracing::{error, trace};
 
 use crate::connection::Connection;
 use crate::machine;
@@ -91,10 +91,6 @@ impl Default for Runtime {
     }
 }
 
-// ID assigned to tasks
-#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
-pub struct TaskId(u32);
-
 impl std::fmt::Display for TaskId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
@@ -110,7 +106,7 @@ pub enum Message {
         resp_tx: oneshot::Sender<machine::Result>,
     },
     NewConnection(Connection),
-    TaskEnded(TaskEndResult),
+    TaskEnded(TaskId),
     KillTask {
         id: TaskId,
         resp_tx: oneshot::Sender<Result<()>>,
@@ -130,7 +126,7 @@ struct EventLoop<'a> {
     tasks: TaskSet,
 
     /// State to task from perspective of event loop
-    task_handles: HashMap<TaskId, TaskHandle>,
+    task_handles: HashMap<TaskId, Task>,
 }
 
 impl EventLoop<'_> {
@@ -162,7 +158,7 @@ impl EventLoop<'_> {
                 self.task_handles.insert(tid, handle);
             }
             Message::TaskEnded(result) => {
-                self.task_handles.remove(&result.id);
+                self.task_handles.remove(&result);
             }
             Message::KillTask { id, resp_tx } => {
                 let _ = resp_tx.send(self.kill_task(id).await);
@@ -180,10 +176,6 @@ impl EventLoop<'_> {
     }
 }
 
-/// Represents the state of a given task
-#[derive(Debug, PartialEq)]
-struct TaskStatus {}
-
 /// Errors from [Runtime]
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum Error {
@@ -200,87 +192,11 @@ pub enum Error {
     UnrecognizedTaskId(TaskId),
 
     #[error("Task error - {0}")]
-    TaskError(#[from] TaskError),
+    TaskError(#[from] task::Error),
 }
 
 /// Result type for [Runtime]
 pub type Result<T> = std::result::Result<T, Error>;
-
-// TODO: This should be TaskResult<T> of some artifact T
-/// The result of task
-#[derive(Debug)]
-pub struct TaskEndResult {
-    id: TaskId,
-}
-
-/// Messages for task
-#[derive(Debug)]
-pub enum TaskMessage {
-    Kill,
-}
-
-/// Errors for interacting with Task
-#[derive(thiserror::Error, Debug, PartialEq)]
-pub enum TaskError {
-    #[error("Unable to send message to task")]
-    UnableToSendMessage,
-}
-
-/// The handle to task
-#[derive(Debug)]
-pub struct TaskHandle {
-    id: TaskId,
-    task_tx: mpsc::Sender<TaskMessage>,
-}
-
-pub type TaskResult<T> = std::result::Result<T, TaskError>;
-
-impl TaskHandle {
-    pub async fn kill(&self) -> TaskResult<()> {
-        debug!("kill task {}", self.id);
-        self.task_tx
-            .send(TaskMessage::Kill)
-            .await
-            .map_err(|_| TaskError::UnableToSendMessage)
-    }
-}
-
-pub type TaskSet = JoinSet<TaskEndResult>;
-
-/// Spawn a task for handling client connection
-fn spawn_task(tasks: &mut TaskSet, id: TaskId, mut conn: Connection) -> TaskHandle {
-    let (task_tx, mut task_rx) = mpsc::channel(32);
-    tasks.spawn(async move {
-        trace!("Started task {:?}", id);
-        loop {
-            tokio::select! {
-                msg = conn.recv() => match msg {
-                    Some(msg) => {
-                        trace!("Client task received message from conn {:?}", msg);
-                    }
-                    None => {
-                        trace!("Client task ending...");
-                        break;
-                    }
-                },
-                msg = task_rx.recv() => {
-                    trace!("Client task received message {:?}", msg);
-                    match msg {
-                        Some(TaskMessage::Kill) => {
-                            trace!("Killing task");
-                            break;
-                        },
-                        None => {
-                            trace!("Task handle dropped - killing task");
-                        }
-                    }
-                }
-            }
-        }
-        TaskEndResult { id }
-    });
-    TaskHandle { id, task_tx }
-}
 
 #[cfg(test)]
 mod tests {
