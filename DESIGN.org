@@ -91,7 +91,7 @@ affecting API surface between client and client library.
 
 The client implementation over client API is hypermedia-driven:
 
-- TODO
+TODO: Add notes on hypermedia client
 
 ** vrsctl - CLI client
 
