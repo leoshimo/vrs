@@ -58,6 +58,18 @@ How the runtime is started may be platform dependent:
 - On web, runtime may be always running in the cloud.
 - On mobile, a in-process runtime may be spun up before client initialization.
 
+ 
+** Runtime - High Level Lifecycle
+
+1. Runtime is initialized in host process
+2. Host process begins listening on some transport for new connections
+3. Host process hands-off accepted connections to runtime
+4. Runtime spawns a dedicated client task per connection
+5. Messages on client connection are forwarded to rest of runtime, such as
+   the interpreter task
+6. Responses are forwarded back on client connection
+7. When client task ends or connection is disconnected, the task is terminated
+
 ** Client API
 
 The client API should be lightweight.
