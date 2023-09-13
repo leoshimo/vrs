@@ -21,8 +21,10 @@ impl Runtime {
     /// Create a new runtime handle
     pub fn new() -> Self {
         let (evloop_tx, mut evloop_rx) = mpsc::channel(32);
+        let evloop_tx_weak = evloop_tx.downgrade();
+
         tokio::spawn(async move {
-            let mut evloop = EventLoop::new();
+            let mut evloop = EventLoop::new(evloop_tx_weak);
             loop {
                 tokio::select! {
                     Some(msg) = evloop_rx.recv() => {
@@ -127,15 +129,19 @@ struct EventLoop<'a> {
 
     /// State to task from perspective of event loop
     task_handles: HashMap<TaskId, Task>,
+
+    /// Weak sender to give to spawned task to notify back runtime
+    evloop_tx: mpsc::WeakSender<Message>,
 }
 
 impl EventLoop<'_> {
-    fn new() -> Self {
+    fn new(evloop_tx: mpsc::WeakSender<Message>) -> Self {
         Self {
             next_id: 0,
             machine: machine::Machine::new(),
             tasks: TaskSet::new(),
             task_handles: HashMap::new(),
+            evloop_tx,
         }
     }
 
@@ -166,7 +172,7 @@ impl EventLoop<'_> {
     fn spawn_task(&mut self, conn: Connection) {
         let id = TaskId(self.next_id);
         self.next_id = self.next_id.wrapping_add(1);
-        let task = Task::new(&mut self.tasks, id, conn);
+        let task = Task::new(&mut self.tasks, id, conn, self.evloop_tx.clone());
         trace!("Started task {:?}", task);
         self.task_handles.insert(id, task);
     }
@@ -183,7 +189,7 @@ impl EventLoop<'_> {
 }
 
 /// Errors from [Runtime]
-#[derive(thiserror::Error, Debug, PartialEq)]
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Failed to send message to event loop")]
     FailedToSendToEventLoop,
@@ -209,6 +215,7 @@ mod tests {
 
     use super::*;
     use crate::connection::tests::conn_fixture;
+    use crate::{Client, Response};
     use tokio::time::error::Elapsed;
     use tracing_test::traced_test;
 
@@ -225,10 +232,12 @@ mod tests {
         let runtime = Runtime::new();
         let form = lemma::parse("((lambda (x) x) \"hello world\")").unwrap();
 
-        assert_eq!(
-            runtime.dispatch(form).await,
-            Ok(lemma::Value::from("hello world"))
-        );
+        assert!(matches!(
+            runtime
+                .dispatch(form)
+                .await,
+            Ok(f) if f == lemma::Value::from("hello world")
+        ));
     }
 
     #[tokio::test]
@@ -237,7 +246,7 @@ mod tests {
         let runtime = Runtime::new();
         let (local, _remote) = conn_fixture();
 
-        assert_eq!(runtime.handle_conn(local).await, Ok(()));
+        assert!(matches!(runtime.handle_conn(local).await, Ok(())));
         assert_eq!(
             runtime.task_count().await.unwrap(),
             1,
@@ -290,7 +299,7 @@ mod tests {
             .expect("Should be able to retrieve tasks");
         let task_id = tasks.first().expect("There should be at least one task");
 
-        assert_eq!(runtime.kill_task(task_id).await, Ok(()));
+        assert!(matches!(runtime.kill_task(task_id).await, Ok(())));
 
         wait_until_task_number(&runtime, 0)
             .await
@@ -301,6 +310,83 @@ mod tests {
             0,
             "Number of tasks should decrease"
         );
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    async fn runtime_remote_request_simple() {
+        use crate::connection::Message;
+        use crate::{Request, Response};
+
+        let runtime = Runtime::new();
+        let (local, mut remote) = conn_fixture();
+
+        runtime
+            .handle_conn(local)
+            .await
+            .expect("Connection should be handled");
+
+        // TODO: Use =client::Client=?
+        assert!(
+            matches!(
+                remote
+                    .send(&Message::Request(Request {
+                        req_id: 0,
+                        contents: lemma::Form::string("Hello world"),
+                    }))
+                    .await,
+                Ok(())
+            ),
+            "Sending request should succeed"
+        );
+
+        let resp = remote
+            .recv()
+            .await
+            .expect("Remote should be open")
+            .expect("Read should succeed");
+
+        assert_eq!(
+            resp,
+            Message::Response(Response {
+                req_id: 0,
+                contents: lemma::Form::string("Hello world"),
+            })
+        );
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    async fn runtime_remote_request_multi() {
+        let runtime = Runtime::new();
+        let (local, remote) = conn_fixture();
+        let mut client = Client::new(remote);
+
+        runtime
+            .handle_conn(local)
+            .await
+            .expect("Connection should be handled");
+
+        // Define + run the echo function
+        let msgs = vec![
+            lemma::parse("(define echo (lambda (x) x))").unwrap(),
+            lemma::parse("(echo \"Hello world\")").unwrap(),
+        ];
+
+        let mut resps = vec![];
+        for m in msgs {
+            let resp = client.request(m).await;
+            resps.push(resp);
+        }
+
+        assert!(matches!(
+            &resps[0],
+            Ok(Response { contents, .. }) if contents == &lemma::Form::symbol("ok")
+        ));
+        assert!(matches!(
+            &resps[1],
+            Ok(Response { contents, .. }) if contents == &lemma::Form::string("Hello world")
+        ));
     }
 
     /// Waits until the number of tasks in [Runtime] is [target]

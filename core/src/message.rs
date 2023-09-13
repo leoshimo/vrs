@@ -2,7 +2,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Outgoing Requests
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct Request {
     /// Unique ID assigned to request
     pub req_id: u32,
@@ -11,7 +11,7 @@ pub struct Request {
 }
 
 /// Incoming response
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct Response {
     /// Unique ID of request this response is for
     pub req_id: u32,

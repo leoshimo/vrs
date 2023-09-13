@@ -19,7 +19,7 @@ pub struct Connection {
 }
 
 /// Messages between client and runtime
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub enum Message {
     Request(Request),
     Response(Response),

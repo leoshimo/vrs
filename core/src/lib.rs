@@ -9,8 +9,10 @@ pub mod connection;
 pub mod message;
 pub mod runtime;
 
+pub use client::Client;
 pub use connection::Connection;
 pub use message::{Request, Response};
+pub use runtime::Runtime;
 
 /// The path to runtime socket
 pub fn runtime_socket() -> Option<PathBuf> {
