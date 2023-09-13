@@ -151,11 +151,7 @@ impl EventLoop<'_> {
                 let _ = resp_tx.send(self.machine.dispatch(&cmd));
             }
             Message::NewConnection(conn) => {
-                // TODO method-fy
-                let tid = TaskId(self.next_id);
-                self.next_id = self.next_id.wrapping_add(1);
-                let handle = spawn_task(&mut self.tasks, tid, conn);
-                self.task_handles.insert(tid, handle);
+                self.spawn_task(conn);
             }
             Message::TaskEnded(result) => {
                 self.task_handles.remove(&result);
@@ -166,6 +162,15 @@ impl EventLoop<'_> {
         }
     }
 
+    /// Handle new connection in event loop
+    fn spawn_task(&mut self, conn: Connection) {
+        let tid = TaskId(self.next_id);
+        self.next_id = self.next_id.wrapping_add(1);
+        let handle = spawn_task(&mut self.tasks, tid, conn);
+        self.task_handles.insert(tid, handle);
+    }
+
+    /// Kill the task with given ID
     async fn kill_task(&self, id: TaskId) -> Result<()> {
         let handle = self
             .task_handles
