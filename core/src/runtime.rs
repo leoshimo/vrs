@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use tokio::sync::{mpsc, oneshot};
 
-use crate::task::{self, spawn_task, Task, TaskId, TaskSet};
+use crate::task::{self, Task, TaskId, TaskSet};
 use tracing::{error, trace};
 
 use crate::connection::Connection;
@@ -164,10 +164,11 @@ impl EventLoop<'_> {
 
     /// Handle new connection in event loop
     fn spawn_task(&mut self, conn: Connection) {
-        let tid = TaskId(self.next_id);
+        let id = TaskId(self.next_id);
         self.next_id = self.next_id.wrapping_add(1);
-        let handle = spawn_task(&mut self.tasks, tid, conn);
-        self.task_handles.insert(tid, handle);
+        let task = Task::new(&mut self.tasks, id, conn);
+        trace!("Started task {:?}", task);
+        self.task_handles.insert(id, task);
     }
 
     /// Kill the task with given ID

@@ -5,7 +5,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
-use tracing::{debug, trace};
+use tracing::debug;
 
 /// The handle to task
 #[derive(Debug)]
@@ -32,6 +32,36 @@ pub enum Error {
 pub type TaskSet = JoinSet<TaskId>;
 
 impl Task {
+    /// Create a new task in task set
+    pub fn new(task_set: &mut TaskSet, id: TaskId, mut conn: Connection) -> Self {
+        let (task_tx, mut task_rx) = mpsc::channel(32);
+        let cancellation_token = CancellationToken::new();
+
+        task_set.spawn(async move {
+            let mut evloop = EventLoop { cancellation_token };
+            loop {
+                let msg = tokio::select! {
+                    msg = conn.recv() => match msg {
+                        Some(Ok(msg)) => Message::from(msg),
+                        Some(Err(e)) => Message::ConnRecvError(e),
+                        None => Message::ConnectionClosed,
+                    },
+                    msg = task_rx.recv() => match msg {
+                        Some(msg) => msg,
+                        None => Message::HandleDropped,
+                    },
+                    _ = evloop.cancellation_token.cancelled() => {
+                        break;
+                    }
+                };
+                evloop.handle_msg(msg);
+            }
+            id
+        });
+
+        Self { id, task_tx }
+    }
+
     /// Kill this task
     pub async fn kill(&self) -> Result<()> {
         debug!("kill task {}", self.id);
@@ -79,40 +109,6 @@ impl EventLoop {
             Message::ConnRecvError(_) => todo!(),
         }
     }
-}
-
-// TODO: Return a future intead of adding into task set
-/// Start a client task
-pub fn spawn_task(tasks: &mut TaskSet, id: TaskId, mut conn: Connection) -> Task {
-    let (task_tx, mut task_rx) = mpsc::channel(32);
-    let cancellation_token = CancellationToken::new();
-
-    let task = Task { id, task_tx };
-
-    tasks.spawn(async move {
-        let mut evloop = EventLoop { cancellation_token };
-        trace!("Started task {:?}", id);
-        loop {
-            let msg = tokio::select! {
-                msg = conn.recv() => match msg {
-                    Some(Ok(msg)) => Message::from(msg),
-                    Some(Err(e)) => Message::ConnRecvError(e),
-                    None => Message::ConnectionClosed,
-                },
-                msg = task_rx.recv() => match msg {
-                    Some(msg) => msg,
-                    None => Message::HandleDropped,
-                },
-                _ = evloop.cancellation_token.cancelled() => {
-                    break;
-                }
-            };
-            evloop.handle_msg(msg);
-        }
-        id
-    });
-
-    task
 }
 
 // TODO: Test cases for task
