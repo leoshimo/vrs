@@ -15,13 +15,6 @@ Plan 9 - Per-process hierarchical namespaces and hypermedia approach to plaintex
 Erlang - Message based, distributed software runtime w/ userspace concurrency.
 
 * Client and Runtime
-** Guiding Questions
-
-- What are key goals of client + runtime design?
-- How will each client interact with runtime? (CLI, command bar, web, mobile,
-  voice assistants)
-- What does surface between interaction runtime and client API look like?
-
 ** Goals
 
 Communication between client and runtime is a simple message-based and transport
