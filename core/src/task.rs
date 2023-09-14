@@ -5,7 +5,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 /// The handle to task
 #[derive(Debug)]
@@ -53,22 +53,28 @@ impl Task {
 
         task_set.spawn(async move {
             let mut evloop = EventLoop {
+                id,
                 conn,
                 runtime_tx,
                 cancellation_token,
             };
+            info!("Task {id} started");
             loop {
                 let msg = tokio::select! {
                     msg = evloop.conn.recv() => match msg {
                         Some(Ok(msg)) => Message::from(msg),
                         Some(Err(e)) => Message::ConnRecvError(e),
-                        None => Message::ConnectionClosed,
+                        None => {
+                            info!("Task {id} terminating - Connection closed");
+                            break
+                        },
                     },
                     msg = task_rx.recv() => match msg {
                         Some(msg) => msg,
                         None => Message::HandleDropped,
                     },
                     _ = evloop.cancellation_token.cancelled() => {
+                        info!("Task {id} terminating - Task cancelled");
                         break;
                     }
                 };
@@ -82,7 +88,7 @@ impl Task {
 
     /// Kill this task
     pub async fn kill(&self) -> Result<()> {
-        debug!("kill task {}", self.id);
+        info!("kill task {}", self.id);
         self.task_tx
             .send(Message::Kill)
             .await
@@ -96,7 +102,6 @@ enum Message {
     Kill,
     RecvRequest(Request),
     RecvResponse(Response),
-    ConnectionClosed,
     HandleDropped,
     ConnRecvError(std::io::Error),
 }
@@ -112,6 +117,7 @@ impl From<connection::Message> for Message {
 
 /// Event loop for a task
 struct EventLoop {
+    id: TaskId,
     conn: Connection,
     runtime_tx: mpsc::WeakSender<runtime::Message>,
     cancellation_token: CancellationToken,
@@ -122,7 +128,6 @@ impl EventLoop {
         debug!("handle_msg - {msg:?}");
         match msg {
             Message::Kill => self.cancellation_token.cancel(),
-            Message::ConnectionClosed => self.cancellation_token.cancel(),
             Message::RecvRequest(req) => {
                 if let Err(e) = self.handle_req(req).await {
                     error!("Encountered error handling request - {e}");
@@ -135,6 +140,8 @@ impl EventLoop {
     }
 
     async fn handle_req(&mut self, req: Request) -> Result<()> {
+        info!("Task {} request - {}", self.id, req.contents);
+
         let sender = match self.runtime_tx.upgrade() {
             Some(sender) => Ok(sender),
             None => Err(Error::UnableToMessageRuntime),
@@ -170,9 +177,10 @@ impl EventLoop {
         self.conn
             .send(&connection::Message::Response(Response {
                 req_id: req.req_id,
-                contents,
+                contents: contents.clone(),
             }))
             .await?;
+        info!("Task {} result - {}", self.id, contents);
 
         Ok(())
     }
