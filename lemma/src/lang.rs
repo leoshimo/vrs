@@ -13,6 +13,7 @@ pub fn std_env<'a>() -> Env<'a> {
     add_def(&mut env);
     add_if(&mut env);
     add_vec(&mut env);
+    add_length(&mut env);
     add_push(&mut env);
     add_pushd(&mut env);
     add_as_form(&mut env);
@@ -88,6 +89,18 @@ pub fn add_vec(env: &mut Env) {
         Value::SpecialForm(SpecialForm {
             name: sym.to_string(),
             func: lang_vec,
+        }),
+    );
+}
+
+/// Adds the `length` symbol for determining length of collection
+pub fn add_length(env: &mut Env) {
+    let sym = SymbolId::from("length");
+    env.bind(
+        &sym,
+        Value::SpecialForm(SpecialForm {
+            name: sym.to_string(),
+            func: lang_length,
         }),
     );
 }
@@ -217,6 +230,25 @@ fn lang_vec(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
         .map(|f| eval(f, env))
         .collect::<Result<Vec<_>>>()?;
     Ok(Value::from(arg_vals))
+}
+
+fn lang_length(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+    let f = match arg_forms {
+        [f] => Ok(f),
+        _ => Err(Error::UnexpectedArguments(
+            "length expects one argument".to_string(),
+        )),
+    }?;
+
+    let length = match eval(f, env)? {
+        Value::Form(Form::List(l)) => Ok(l.len()),
+        Value::Vec(v) => Ok(v.len()),
+        _ => Err(Error::UnexpectedArguments(
+            "length expects a collection type".to_string(),
+        )),
+    }?;
+
+    Ok(Value::from(length as i32))
 }
 
 /// Implements the `push` operation on vector
