@@ -14,6 +14,7 @@ use crate::{form, Env, Form, Result, SymbolId};
 pub enum Value {
     /// Form value
     Form(Form),
+    // TODO: Think - Should Lists be considered a "foreign" value created via `list` keyword?
     /// List of values
     /// This is distinct from a [Value::Form] wrapping [Form::List], which represents pre-evaluated form
     List(Vec<Value>),

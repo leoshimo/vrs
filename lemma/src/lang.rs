@@ -13,6 +13,7 @@ pub fn std_env<'a>() -> Env<'a> {
     add_define(&mut env);
     add_if(&mut env);
     add_list(&mut env);
+    add_push(&mut env);
     env
 }
 
@@ -85,6 +86,18 @@ pub fn add_list(env: &mut Env) {
         Value::SpecialForm(SpecialForm {
             name: sym.to_string(),
             func: lang_list,
+        }),
+    );
+}
+
+/// Adds the `push` symbol for appending to list
+pub fn add_push(env: &mut Env) {
+    let sym = SymbolId::from("push");
+    env.bind(
+        &sym,
+        Value::SpecialForm(SpecialForm {
+            name: sym.to_string(),
+            func: lang_push,
         }),
     );
 }
@@ -178,6 +191,29 @@ fn lang_list(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
         .map(|f| eval(f, env))
         .collect::<Result<Vec<_>>>()?;
     Ok(Value::from(arg_vals))
+}
+
+/// Implements the `push` operation
+fn lang_push(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+    let (list_form, elem_form) = match arg_forms {
+        [list_form, elem_form] => Ok((list_form, elem_form)),
+        _ => Err(Error::UnexpectedArguments(format!(
+            "push expects a two forms - got {}",
+            arg_forms.len()
+        ))),
+    }?;
+
+    let mut list_val = match eval(list_form, env)? {
+        Value::List(l) => Ok(l),
+        v => Err(Error::UnexpectedArguments(format!(
+            "push expects first argument to evaluate to a list - got {}",
+            v
+        ))),
+    }?;
+
+    let elem_val = eval(elem_form, env)?;
+    list_val.push(elem_val);
+    Ok(Value::from(list_val))
 }
 
 #[cfg(test)]
@@ -413,6 +449,59 @@ mod tests {
                 Value::from(2),
                 Value::from(Form::keyword("three")),
             ]))
+        );
+    }
+
+    #[test]
+    #[traced_test]
+    fn eval_push() {
+        let mut env = std_env();
+
+        assert_eq!(
+            eval_expr("(define my_list (list))", &mut env),
+            Ok(<Value as From<Vec<Value>>>::from(vec![])),
+            "should define a empty list"
+        );
+
+        assert_eq!(
+            eval_expr("(push my_list 1)", &mut env),
+            Ok(Value::from(vec![Value::from(1)])),
+            "should return new list with new element"
+        );
+
+        assert_eq!(
+            eval_expr("my_list", &mut env),
+            Ok(<Value as From<Vec<Value>>>::from(vec![])),
+            "original list should be unchanged"
+        );
+
+        assert_eq!(
+            eval_expr("(define my_list (push my_list 1))", &mut env),
+            Ok(Value::from(vec![Value::from(1)])),
+        );
+
+        assert_eq!(
+            eval_expr("(define my_list (push my_list \"two\"))", &mut env),
+            Ok(Value::from(vec![Value::from(1), Value::from("two"),])),
+        );
+
+        assert_eq!(
+            eval_expr("(define my_list (push my_list :three))", &mut env),
+            Ok(Value::from(vec![
+                Value::from(1),
+                Value::from("two"),
+                Value::from(Form::keyword("three")),
+            ])),
+        );
+
+        assert_eq!(
+            eval_expr("my_list", &mut env),
+            Ok(Value::from(vec![
+                Value::from(1),
+                Value::from("two"),
+                Value::from(Form::keyword("three")),
+            ])),
+            "list should be mutated"
         );
     }
 }
