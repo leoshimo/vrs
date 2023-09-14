@@ -23,7 +23,7 @@ async fn main() -> Result<()> {
 
     while client.is_active() {
         let mut s = String::new();
-        print!("> ");
+        print!("{}", "vrs> ".bold().bright_white());
         io::stdout().flush()?;
         io::stdin()
             .read_line(&mut s)
@@ -34,7 +34,14 @@ async fn main() -> Result<()> {
             continue;
         }
 
-        let f = lemma::parse(s).with_context(|| format!("Invalid expression - {}", s))?;
+        let f = match lemma::parse(s) {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!("{} {}", "ERROR:".red(), e);
+                continue;
+            }
+        };
+
         let resp = client.request(f).await;
         match resp {
             Ok(resp) => println!("{}", resp.contents.to_string().green()),
