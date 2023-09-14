@@ -350,7 +350,10 @@ mod tests {
             resp,
             Message::Response(Response {
                 req_id: 0,
-                contents: lemma::Form::string("Hello world"),
+                contents: lemma::Form::List(vec![
+                    lemma::Form::keyword("ok"),
+                    lemma::Form::string("\"Hello world\""),
+                ]),
             })
         );
     }
@@ -372,28 +375,40 @@ mod tests {
         assert!(
             matches!(
                 client.request(p("(define echo (lambda (x) x))").unwrap()).await,
-                Ok(Response { contents, .. }) if contents == lemma::Form::keyword("ok")
+                Ok(Response { contents, .. }) if contents == lemma::Form::List(vec![
+                    lemma::Form::keyword("ok"),
+                    lemma::Form::string("<lambda (x)>"),
+                ])
             ),
             "defining a function should return :ok"
         );
         assert!(
             matches!(
                 client.request(p("echo").unwrap()).await,
-                Ok(Response { contents, .. }) if contents == lemma::Form::keyword("ok")
+                Ok(Response { contents, .. }) if contents == lemma::Form::List(vec![
+                    lemma::Form::keyword("ok"),
+                    lemma::Form::string("<lambda (x)>"),
+                ])
             ),
             "evaluating function symbol should return :ok"
         );
         assert!(
             matches!(
                 client.request(p("(echo \"Hello world\")").unwrap()).await,
-                Ok(Response { contents, .. }) if contents == lemma::Form::string("Hello world")
+                Ok(Response { contents, .. }) if contents == lemma::Form::List(vec![
+                    lemma::Form::keyword("ok"),
+                    lemma::Form::string("\"Hello world\""),
+                ])
             ),
             "evaluating a function call should return result"
         );
         assert!(
             matches!(
                 client.request(p("jibberish").unwrap()).await,
-                Ok(Response { contents, .. }) if contents == lemma::Form::keyword("err")
+                Ok(Response { contents, .. }) if contents == lemma::Form::List(vec![
+                    lemma::Form::keyword("err"),
+                    lemma::Form::string("Undefined symbol - jibberish"),
+                ])
             ),
             "evaluating a jibberish underined symbol should return :err"
         );

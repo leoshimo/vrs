@@ -162,14 +162,16 @@ impl EventLoop {
             .map_err(|_| Error::FailedToReceiveRuntimeResponse)?;
 
         let contents = match resp {
-            Ok(lemma::Value::Form(f)) => f,
-            Ok(_) => {
-                // TODO - Is there better format for unserializable `Value` responses from runtime?
-                lemma::Form::keyword("ok")
-            }
+            Ok(val) => lemma::Form::List(vec![
+                lemma::Form::keyword("ok"),
+                lemma::Form::String(val.to_string()),
+            ]),
             Err(e) => {
                 error!("Error from evaluation - {e}");
-                lemma::Form::keyword("err")
+                lemma::Form::List(vec![
+                    lemma::Form::keyword("err"),
+                    lemma::Form::String(e.to_string()),
+                ])
             }
         };
 
