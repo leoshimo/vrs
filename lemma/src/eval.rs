@@ -64,14 +64,19 @@ pub fn eval_lambda_call(lambda: &Lambda, arg_forms: &[Form], env: &mut Env) -> R
         .map(|f| eval(f, env))
         .collect::<Result<Vec<_>>>()?;
 
-    if lambda.params.len() != arg_forms.len() {
+    eval_lambda_call_vals(lambda, &arg_vals, env)
+}
+
+/// Evaluate a lambda expression, passing in values as args
+pub fn eval_lambda_call_vals(lambda: &Lambda, arg_vals: &[Value], env: &mut Env) -> Result<Value> {
+    if lambda.params.len() != arg_vals.len() {
         return Err(Error::UnexpectedNumberOfArguments);
     }
 
     // TODO: Lexical scope instead of Dynamic scope?
     let mut lambda_env = Env::extend(env);
     for (param, val) in lambda.params.iter().zip(arg_vals) {
-        lambda_env.bind(param, val);
+        lambda_env.bind(param, val.clone()); // TODO: How can I clone val?
     }
 
     let mut res = Value::from(Form::List(vec![])); // TODO: Dedicated nil in language?

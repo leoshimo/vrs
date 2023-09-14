@@ -2,7 +2,7 @@
 //! Lemma interpreter does not have built-in procedures and special forms by default.
 //! The language features are "opt in" by defining symbols within the environment
 
-use crate::{eval, Env, Error, Form, Lambda, Result, SpecialForm, SymbolId, Value};
+use crate::{eval::{eval, eval_lambda_call_vals}, Env, Error, Form, Lambda, Result, SpecialForm, SymbolId, Value};
 
 /// Returns the 'standard' environment of the langugae
 pub fn std_env<'a>() -> Env<'a> {
@@ -17,6 +17,7 @@ pub fn std_env<'a>() -> Env<'a> {
     add_push(&mut env);
     add_pushd(&mut env);
     add_as_form(&mut env);
+    add_map(&mut env);
     env
 }
 
@@ -95,12 +96,24 @@ pub fn add_vec(env: &mut Env) {
 
 /// Adds the `length` symbol for determining length of collection
 pub fn add_length(env: &mut Env) {
-    let sym = SymbolId::from("length");
+    let sym = SymbolId::from("len");
     env.bind(
         &sym,
         Value::SpecialForm(SpecialForm {
             name: sym.to_string(),
             func: lang_length,
+        }),
+    );
+}
+
+/// Adds the `map` symbol for transforming a collection
+pub fn add_map(env: &mut Env) {
+    let sym = SymbolId::from("map");
+    env.bind(
+        &sym,
+        Value::SpecialForm(SpecialForm {
+            name: sym.to_string(),
+            func: lang_map,
         }),
     );
 }
@@ -195,7 +208,7 @@ fn lang_def(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
         )),
     }?;
 
-    let val = eval::eval(val_form, env)?;
+    let val = eval(val_form, env)?;
     env.bind(sym_id, val.clone());
     Ok(val)
 }
@@ -249,6 +262,35 @@ fn lang_length(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     }?;
 
     Ok(Value::from(length as i32))
+}
+
+fn lang_map(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+    let (coll_form, lambda_form) = match arg_forms {
+        [coll_form, lambda_form] => Ok((coll_form, lambda_form)),
+        _ => Err(Error::UnexpectedArguments(format!(
+            "map expects a two forms - got {}",
+            arg_forms.len()
+        ))),
+    }?;
+
+    // TODO Think about this case - evaluation yields a Value, but value is passed into lambda
+    let vals = match eval(coll_form, env)? {
+        Value::Vec(v) => Ok(v),
+        _ => Err(Error::UnexpectedArguments("map expects first argument to be a collection".to_string())),
+    }?;
+
+    let lambda = match eval(lambda_form, env)? {
+        Value::Lambda(l) => Ok(l),
+        _ => Err(Error::UnexpectedArguments("map expects second argument to be a lambda".to_string())),
+    }?;
+
+    // This is similar to `eval_lambda_call` but also a little bit diff.
+    let mut res = vec![];
+    for v in vals {
+        res.push(eval_lambda_call_vals(&lambda, &[v], env)?);
+    }
+
+    Ok(Value::Vec(res))
 }
 
 /// Implements the `push` operation on vector
