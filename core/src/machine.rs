@@ -1,9 +1,9 @@
 //! The virtual machine connecting components in the runtime
 
-use std::thread;
 use std::process::Command;
+use std::thread;
 
-use lemma::{Env, Form, SymbolId, Value, SpecialForm, eval};
+use lemma::{eval, Env, Form, SpecialForm, SymbolId, Value};
 
 /// Handle to virtual machine environment
 #[derive(Debug)]
@@ -24,17 +24,14 @@ pub type Result = lemma::Result<lemma::Value>;
 impl Machine<'_> {
     pub fn new() -> Self {
         let mut env = lemma::lang::std_env();
-        add_open(&mut env);
-        Self {
-            env,
-        }
+        add_exec(&mut env);
+        Self { env }
     }
 
     /// Dispatch a command to be processed by machine
     pub fn dispatch(&mut self, cmd: &Message) -> Result {
         lemma::eval(cmd, &mut self.env)
     }
-
 }
 
 impl Default for Machine<'_> {
@@ -43,33 +40,38 @@ impl Default for Machine<'_> {
     }
 }
 
-fn add_open(env: &mut Env) {
-    let sym = SymbolId::from("open");
+fn add_exec(env: &mut Env) {
+    let sym = SymbolId::from("exec");
     env.bind(
         &sym,
         Value::SpecialForm(SpecialForm {
             name: sym.to_string(),
-            func: machine_open
+            func: machine_exec,
         }),
     );
 }
 
 // TODO: Use tokio::process::Command
-fn machine_open(arg_forms: &[Form], env: &mut Env) -> Result {
-    let spec = match arg_forms {
-        [f] => Ok(f),
-        _ => Err(Error::UnexpectedArguments("open expects one argument only".to_string())),
+fn machine_exec(arg_forms: &[Form], env: &mut Env) -> Result {
+    let args = arg_forms
+        .iter()
+        .map(|f| match eval(f, env)? {
+            Value::Form(Form::String(s)) => Ok(s),
+            _ => Err(Error::UnexpectedArguments(
+                "exec can only be passed string values".to_string(),
+            )),
+        })
+        .collect::<lemma::Result<Vec<String>>>()?;
+
+    let (cmd, args) = match args.split_first() {
+        Some((cmd, args)) => Ok((cmd.clone(), args.to_owned())),
+        None => Err(Error::UnexpectedArguments(
+            "No arguments provided".to_string(),
+        )),
     }?;
 
-    let arg = match eval(spec, env)? {
-        Value::Form(Form::String(s)) => Ok(s),
-        _ => Err(Error::UnexpectedArguments("open expects one string argument".to_string())),
-    }?;
-
-    thread::spawn(|| {
-        let _ = Command::new("open")
-            .arg(arg)
-            .spawn();
+    thread::spawn(move || {
+        let _ = Command::new(cmd).args(args).spawn();
     });
 
     Ok(Value::from(Form::symbol("ok")))
