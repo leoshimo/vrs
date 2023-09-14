@@ -3,6 +3,7 @@
 
 use crate::{form, Env, Form, Result, SymbolId};
 
+// TODO: Reevaluate Form / Value split w.r.t. Quoting, Forms, and Value::List
 /// A value from evaluating a [Form](crate::Form).
 ///
 /// # Difference between [Form](crate::Form) and [Value]
@@ -13,6 +14,9 @@ use crate::{form, Env, Form, Result, SymbolId};
 pub enum Value {
     /// Form value
     Form(Form),
+    /// List of values
+    /// This is distinct from a [Value::Form] wrapping [Form::List], which represents pre-evaluated form
+    List(Vec<Value>),
     /// Callable function value
     Lambda(Lambda),
     /// Callable special form
@@ -63,6 +67,18 @@ impl From<form::Form> for Value {
     }
 }
 
+impl From<Vec<form::Form>> for Value {
+    fn from(value: Vec<form::Form>) -> Self {
+        Self::Form(Form::List(value))
+    }
+}
+
+impl From<Vec<Value>> for Value {
+    fn from(value: Vec<Value>) -> Self {
+        Self::List(value)
+    }
+}
+
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -78,6 +94,15 @@ impl std::fmt::Display for Value {
                     .join(" ")
             ),
             Value::SpecialForm(s) => write!(f, "<spfn {}>", s.name),
+            Value::List(elems) => write!(
+                f,
+                "({})",
+                elems
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
         }
     }
 }

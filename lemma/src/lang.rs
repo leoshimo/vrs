@@ -12,6 +12,7 @@ pub fn std_env<'a>() -> Env<'a> {
     add_eval(&mut env);
     add_define(&mut env);
     add_if(&mut env);
+    add_list(&mut env);
     env
 }
 
@@ -72,6 +73,18 @@ pub fn add_if(env: &mut Env) {
         Value::SpecialForm(SpecialForm {
             name: if_sym.to_string(),
             func: lang_if,
+        }),
+    );
+}
+
+/// Adds the `list` symbol for creating a list
+pub fn add_list(env: &mut Env) {
+    let sym = SymbolId::from("list");
+    env.bind(
+        &sym,
+        Value::SpecialForm(SpecialForm {
+            name: sym.to_string(),
+            func: lang_list,
         }),
     );
 }
@@ -157,6 +170,14 @@ fn lang_if(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     } else {
         eval(false_form, env)
     }
+}
+
+fn lang_list(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+    let arg_vals = arg_forms
+        .iter()
+        .map(|f| eval(f, env))
+        .collect::<Result<Vec<_>>>()?;
+    Ok(Value::from(arg_vals))
 }
 
 #[cfg(test)]
@@ -355,6 +376,43 @@ mod tests {
         assert_eq!(
             eval_expr("(if (is_false) \"true\" \"false\")", &mut env),
             Ok(Value::from("false"))
+        );
+    }
+
+    #[test]
+    #[traced_test]
+    fn eval_list() {
+        let mut env = std_env();
+
+        assert_eq!(eval_expr("(list)", &mut env), Ok(Value::List(vec![])),);
+
+        assert_eq!(
+            eval_expr("(list 1 2 3)", &mut env),
+            Ok(Value::List(vec![
+                Value::from(1),
+                Value::from(2),
+                Value::from(3),
+            ]))
+        );
+
+        assert_eq!(
+            eval_expr("(list \"one\" 2 :three)", &mut env),
+            Ok(Value::List(vec![
+                Value::from("one"),
+                Value::from(2),
+                Value::from(Form::keyword("three")),
+            ]))
+        );
+
+        eval_expr("(define echo (lambda (x) x))", &mut env).expect("Should define echo function");
+
+        assert_eq!(
+            eval_expr("(list (echo \"one\") (echo 2) (echo :three))", &mut env),
+            Ok(Value::List(vec![
+                Value::from("one"),
+                Value::from(2),
+                Value::from(Form::keyword("three")),
+            ]))
         );
     }
 }
