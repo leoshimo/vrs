@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use colored::*;
 use std::io::{self, Write};
 use tokio::net::UnixStream;
 use tracing::debug;
@@ -34,10 +35,9 @@ async fn main() -> Result<()> {
         }
 
         let f = lemma::parse(s).with_context(|| format!("Invalid expression - {}", s))?;
-
         let resp = client.request(f).await;
         match resp {
-            Ok(resp) => println!("{}", resp.contents),
+            Ok(resp) => println!("{}", resp.contents.to_string().green()),
             Err(e) => eprintln!("{}", e),
         }
     }
