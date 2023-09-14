@@ -104,7 +104,7 @@ impl std::fmt::Display for TaskId {
 pub enum Message {
     ListTasks(oneshot::Sender<Vec<TaskId>>),
     DispatchCommand {
-        cmd: machine::Command,
+        cmd: machine::Message,
         resp_tx: oneshot::Sender<machine::Result>,
     },
     NewConnection(Connection),
