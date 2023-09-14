@@ -118,7 +118,7 @@ pub fn add_pushd(env: &mut Env) {
 
 /// Adds the `as_form` symbol for converting to form
 pub fn add_as_form(env: &mut Env) {
-    let sym = SymbolId::from("as_form");
+    let sym = SymbolId::from("form");
     env.bind(
         &sym,
         Value::SpecialForm(SpecialForm {
