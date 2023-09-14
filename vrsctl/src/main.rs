@@ -1,7 +1,9 @@
 use anyhow::{Context, Result};
 use colored::*;
 use lemma::{Form, KeywordId};
-use std::io::{self, Write};
+use std::fs::File;
+use std::io::IsTerminal;
+use std::io::{self, BufRead, BufReader, Read, Write};
 use tokio::net::UnixStream;
 use tracing::debug;
 use vrs::client::Client;
@@ -23,26 +25,42 @@ async fn run_cmd(mut client: Client, cmd: &str) -> Result<()> {
     Ok(())
 }
 
-async fn run_repl(mut client: Client) -> Result<()> {
+async fn run_repl(mut client: Client, read: impl Read, show_prompt: bool) -> Result<()> {
+    let mut stream = BufReader::new(read);
+
+    let mut s = String::new();
     while client.is_active() {
-        let mut s = String::new();
-        print!("{}", "vrs> ".bold().bright_white());
-        io::stdout().flush()?;
-        io::stdin()
-            .read_line(&mut s)
-            .expect("failed to read from stdin");
-        let s = s.trim();
-        if s == "exit" {
+        if show_prompt {
+            print!("{}", "vrs> ".bold().bright_white());
+            io::stdout().flush()?;
+        }
+
+        match stream.read_line(&mut s) {
+            Ok(0) | Err(_) => {
+                client.shutdown().await;
+                break;
+            }
+            _ => (),
+        };
+
+        if s.trim() == "exit" {
             client.shutdown().await;
             continue;
         }
+        if s.is_empty() {
+            continue;
+        }
+        if s.starts_with('#') {
+            s.clear();
+            continue;
+        }
 
-        let f = match lemma::parse(s) {
-            Ok(f) => f,
-            Err(e) => {
-                eprintln!("{} {}", "ERROR:".red(), e);
-                continue;
+        let f = match lemma::parse(&s) {
+            Ok(f) => {
+                s.clear();
+                f
             }
+            Err(_) => continue, // parse failing is file - continue reading
         };
 
         let resp = match client.request(f).await {
@@ -104,8 +122,15 @@ async fn main() -> Result<()> {
     // TODO: Build proper CLI
     let args = std::env::args().collect::<Vec<_>>();
     match args.get(1) {
-        Some(cmd) => run_cmd(client, cmd).await?,
-        None => run_repl(client).await?,
+        Some(cmd) => {
+            let f = std::path::Path::new(cmd);
+            if f.exists() {
+                run_repl(client, File::open(f).unwrap(), false).await?;
+            } else {
+                run_cmd(client, cmd).await?;
+            }
+        }
+        None => run_repl(client, io::stdin(), io::stdin().is_terminal()).await?,
     }
 
     Ok(())
