@@ -3,7 +3,7 @@
 
 use crate::{form, Env, Form, Result, SymbolId};
 
-// TODO: Reevaluate Form / Value split w.r.t. Quoting, Forms, and Value::List
+// TODO: Reevaluate Form / Value split w.r.t. Quoting, Forms, and Value::Vec
 /// A value from evaluating a [Form](crate::Form).
 ///
 /// # Difference between [Form](crate::Form) and [Value]
@@ -14,10 +14,10 @@ use crate::{form, Env, Form, Result, SymbolId};
 pub enum Value {
     /// Form value
     Form(Form),
-    // TODO: Think - Should Lists be considered a "foreign" value created via `list` keyword?
-    /// List of values
+    // TODO: Think - Should Vec be considered a "foreign" value created via `vec` keyword?
+    /// Vector of values
     /// This is distinct from a [Value::Form] wrapping [Form::List], which represents pre-evaluated form
-    List(Vec<Value>),
+    Vec(Vec<Value>),
     /// Callable function value
     Lambda(Lambda),
     /// Callable special form
@@ -76,7 +76,7 @@ impl From<Vec<form::Form>> for Value {
 
 impl From<Vec<Value>> for Value {
     fn from(value: Vec<Value>) -> Self {
-        Self::List(value)
+        Self::Vec(value)
     }
 }
 
@@ -95,9 +95,9 @@ impl std::fmt::Display for Value {
                     .join(" ")
             ),
             Value::SpecialForm(s) => write!(f, "<spfn {}>", s.name),
-            Value::List(elems) => write!(
+            Value::Vec(elems) => write!(
                 f,
-                "({})",
+                "<vec ({})>",
                 elems
                     .iter()
                     .map(ToString::to_string)

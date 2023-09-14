@@ -162,6 +162,10 @@ impl EventLoop {
             .map_err(|_| Error::FailedToReceiveRuntimeResponse)?;
 
         let contents = match resp {
+            Ok(lemma::Value::Form(f)) => lemma::Form::List(vec![
+                lemma::Form::keyword("ok"),
+                f, // inline forms instead of returning as string
+            ]),
             Ok(val) => lemma::Form::List(vec![
                 lemma::Form::keyword("ok"),
                 lemma::Form::String(val.to_string()),

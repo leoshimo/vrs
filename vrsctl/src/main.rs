@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use colored::*;
+use lemma::Form;
 use std::io::{self, Write};
 use tokio::net::UnixStream;
 use tracing::debug;
@@ -42,11 +43,35 @@ async fn main() -> Result<()> {
             }
         };
 
-        let resp = client.request(f).await;
-        match resp {
-            Ok(resp) => println!("{}", resp.contents.to_string().green()),
-            Err(e) => eprintln!("{}", e),
-        }
+        let resp = match client.request(f).await {
+            Ok(resp) => resp,
+            Err(e) => {
+                eprintln!("{}", e);
+                continue;
+            }
+        };
+
+        let resp_list = match resp.contents {
+            Form::List(l) => l,
+            form => {
+                eprintln!("Unexpected response form - {}", form);
+                continue;
+            }
+        };
+
+        let (keyword, f) = match &resp_list[..] {
+            [Form::Keyword(keyword), f] => (keyword, f),
+            _ => {
+                eprintln!("Unexpected response form");
+                continue;
+            }
+        };
+
+        println!(
+            "{} {}",
+            keyword.to_string().green(),
+            f.to_string().bright_white()
+        );
     }
 
     Ok(())

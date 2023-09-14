@@ -352,7 +352,7 @@ mod tests {
                 req_id: 0,
                 contents: lemma::Form::List(vec![
                     lemma::Form::keyword("ok"),
-                    lemma::Form::string("\"Hello world\""),
+                    lemma::Form::string("Hello world"),
                 ]),
             })
         );
@@ -397,7 +397,7 @@ mod tests {
                 client.request(p("(echo \"Hello world\")").unwrap()).await,
                 Ok(Response { contents, .. }) if contents == lemma::Form::List(vec![
                     lemma::Form::keyword("ok"),
-                    lemma::Form::string("\"Hello world\""),
+                    lemma::Form::string("Hello world"),
                 ])
             ),
             "evaluating a function call should return result"
