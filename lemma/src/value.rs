@@ -80,6 +80,41 @@ impl From<Vec<Value>> for Value {
     }
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum ValueToFormError {
+    #[error("Special forms cannot be converted")]
+    SpecialFormConversion,
+}
+
+// Conversion from value TO form
+impl TryFrom<Value> for Form {
+    type Error = ValueToFormError;
+
+    fn try_from(value: Value) -> std::result::Result<Self, Self::Error> {
+        match value {
+            Value::Form(f) => Ok(f),
+            Value::Vec(values) => {
+                let mut inner = vec![];
+                for v in values {
+                    inner.push(Form::try_from(v)?);
+                }
+                Ok(Form::List(inner))
+            }
+            Value::Lambda(l) => Ok(Form::List(
+                [
+                    vec![
+                        Form::keyword("lambda"),
+                        Form::List(l.params.into_iter().map(Form::Symbol).collect()),
+                    ],
+                    l.body,
+                ]
+                .concat(),
+            )),
+            Value::SpecialForm(_) => Err(ValueToFormError::SpecialFormConversion),
+        }
+    }
+}
+
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

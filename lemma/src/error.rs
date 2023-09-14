@@ -46,4 +46,7 @@ pub enum Error {
 
     #[error("Unexpected conditional value - {0}")]
     UnexpectedConditionalValue(String),
+
+    #[error("Unsupported value conversion - {0}")]
+    UnsupportedValueConversion(String),
 }

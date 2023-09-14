@@ -14,6 +14,7 @@ pub fn std_env<'a>() -> Env<'a> {
     add_if(&mut env);
     add_vec(&mut env);
     add_push(&mut env);
+    add_as_form(&mut env);
     env
 }
 
@@ -98,6 +99,18 @@ pub fn add_push(env: &mut Env) {
         Value::SpecialForm(SpecialForm {
             name: sym.to_string(),
             func: lang_push,
+        }),
+    );
+}
+
+/// Adds the `as_form` symbol for converting to form
+pub fn add_as_form(env: &mut Env) {
+    let sym = SymbolId::from("as_form");
+    env.bind(
+        &sym,
+        Value::SpecialForm(SpecialForm {
+            name: sym.to_string(),
+            func: lang_as_form,
         }),
     );
 }
@@ -214,6 +227,22 @@ fn lang_push(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let elem_val = eval(elem_form, env)?;
     vec_val.push(elem_val);
     Ok(Value::from(vec_val))
+}
+
+/// Implements the `as_form` operation on vector
+fn lang_as_form(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+    let form = match arg_forms {
+        [f] => Ok(f),
+        _ => Err(Error::UnexpectedArguments(format!(
+            "as_form expects a single forms - got {}",
+            arg_forms.len()
+        ))),
+    }?;
+
+    let val = eval(form, env)?;
+    let coerced_val =
+        Form::try_from(val).map_err(|e| Error::UnsupportedValueConversion(e.to_string()))?;
+    Ok(Value::from(coerced_val))
 }
 
 #[cfg(test)]
