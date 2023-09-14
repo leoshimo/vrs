@@ -2,7 +2,10 @@
 //! Lemma interpreter does not have built-in procedures and special forms by default.
 //! The language features are "opt in" by defining symbols within the environment
 
-use crate::{eval::{eval, eval_lambda_call_vals}, Env, Error, Form, Lambda, Result, SpecialForm, SymbolId, Value};
+use crate::{
+    eval::{eval, eval_lambda_call_vals},
+    Env, Error, Form, Lambda, Result, SpecialForm, SymbolId, Value,
+};
 
 /// Returns the 'standard' environment of the langugae
 pub fn std_env<'a>() -> Env<'a> {
@@ -14,6 +17,7 @@ pub fn std_env<'a>() -> Env<'a> {
     add_if(&mut env);
     add_vec(&mut env);
     add_length(&mut env);
+    add_get(&mut env);
     add_push(&mut env);
     add_pushd(&mut env);
     add_as_form(&mut env);
@@ -102,6 +106,19 @@ pub fn add_length(env: &mut Env) {
         Value::SpecialForm(SpecialForm {
             name: sym.to_string(),
             func: lang_length,
+        }),
+    );
+}
+
+// TODO: Formalize across types? Very loosy goosy definition atm
+/// Adds the `get` symbol which gets the thing DWIM style
+pub fn add_get(env: &mut Env) {
+    let sym = SymbolId::from("get");
+    env.bind(
+        &sym,
+        Value::SpecialForm(SpecialForm {
+            name: sym.to_string(),
+            func: lang_get,
         }),
     );
 }
@@ -264,6 +281,58 @@ fn lang_length(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     Ok(Value::from(length as i32))
 }
 
+fn lang_get(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+    let (coll_form, spec_form) = match arg_forms {
+        [coll_form, spec_form] => Ok((coll_form, spec_form)),
+        _ => Err(Error::UnexpectedArguments(
+            "get expects two arguments".to_string(),
+        )),
+    }?;
+
+    let values = match eval(coll_form, env)? {
+        Value::Form(Form::List(l)) => Ok(l.into_iter().map(Value::from).collect::<Vec<_>>()),
+        Value::Vec(v) => Ok(v),
+        _ => Err(Error::UnexpectedArguments(
+            "length expects a collection type".to_string(),
+        )),
+    }?;
+
+    match eval(spec_form, env)? {
+        Value::Form(Form::Keyword(keyword)) => {
+            // get by sym
+            let next_element: Option<Value> = values
+                .windows(2)
+                .filter_map(|w| {
+                    if w[0] == Value::Form(Form::Keyword(keyword.clone())) {
+                        w.get(1)
+                    } else {
+                        None
+                    }
+                })
+                .next()
+                .cloned();
+            match next_element {
+                Some(v) => Ok(v),
+                None => Err(Error::UnexpectedArguments(
+                    "no element with matching keyword".to_string(),
+                )),
+            }
+        }
+        Value::Form(Form::Int(idx)) => {
+            // get by idx
+            match values.get(idx as usize) {
+                Some(v) => Ok(v.clone()),
+                None => Err(Error::UnexpectedArguments(
+                    "no element at index".to_string(),
+                )),
+            }
+        }
+        _ => Err(Error::UnexpectedArguments(
+            "Unsupported get spec".to_string(),
+        )),
+    }
+}
+
 fn lang_map(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let (coll_form, lambda_form) = match arg_forms {
         [coll_form, lambda_form] => Ok((coll_form, lambda_form)),
@@ -276,12 +345,16 @@ fn lang_map(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     // TODO Think about this case - evaluation yields a Value, but value is passed into lambda
     let vals = match eval(coll_form, env)? {
         Value::Vec(v) => Ok(v),
-        _ => Err(Error::UnexpectedArguments("map expects first argument to be a collection".to_string())),
+        _ => Err(Error::UnexpectedArguments(
+            "map expects first argument to be a collection".to_string(),
+        )),
     }?;
 
     let lambda = match eval(lambda_form, env)? {
         Value::Lambda(l) => Ok(l),
-        _ => Err(Error::UnexpectedArguments("map expects second argument to be a lambda".to_string())),
+        _ => Err(Error::UnexpectedArguments(
+            "map expects second argument to be a lambda".to_string(),
+        )),
     }?;
 
     // This is similar to `eval_lambda_call` but also a little bit diff.
