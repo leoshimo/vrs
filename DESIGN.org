@@ -8,7 +8,7 @@ Emacs - Extensible, uniform software environment
 
 Hypermedia - Self-describing, uniform interface of early browser applications 
 
-Unix - Composability of programs via stdin, stderr, stdout, pipes, and plaintext 
+Unix - Composability of programs via stdio, pipes, and plaintext. Polyglot.
 
 Plan 9 - Per-process hierarchical namespaces and hypermedia approach to plaintext via plumber
 
