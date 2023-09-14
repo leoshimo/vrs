@@ -10,7 +10,7 @@ pub fn std_env<'a>() -> Env<'a> {
     add_lambda(&mut env);
     add_quote(&mut env);
     add_eval(&mut env);
-    add_define(&mut env);
+    add_def(&mut env);
     add_if(&mut env);
     add_vec(&mut env);
     add_push(&mut env);
@@ -54,14 +54,14 @@ pub fn add_eval(env: &mut Env) {
     );
 }
 
-/// Adds the `define` symbol for defining values of symbols
-pub fn add_define(env: &mut Env) {
-    let define_sym = SymbolId::from("define");
+/// Adds the `def` symbol for defining values of symbols
+pub fn add_def(env: &mut Env) {
+    let sym = SymbolId::from("def");
     env.bind(
-        &define_sym,
+        &sym,
         Value::SpecialForm(SpecialForm {
-            name: define_sym.to_string(),
-            func: define,
+            name: sym.to_string(),
+            func: lang_def,
         }),
     );
 }
@@ -147,12 +147,12 @@ fn lang_eval(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     }
 }
 
-/// Implements the `define` special form
-fn define(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+/// Implements the `def` special form
+fn lang_def(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let (sym_id, val_form) = match arg_forms {
         [Form::Symbol(s), form] => Ok((s, form)),
         _ => Err(Error::UnexpectedArguments(
-            "define expects a symbol and single form as arguments".to_string(),
+            "def expects a symbol and single form as arguments".to_string(),
         )),
     }?;
 
@@ -310,43 +310,43 @@ mod tests {
 
     #[test]
     #[traced_test]
-    fn eval_define_vals() {
+    fn eval_def_vals() {
         {
             let mut env = std_env();
-            assert_eq!(eval_expr("(define x 10)", &mut env), Ok(Value::from(10)));
+            assert_eq!(eval_expr("(def x 10)", &mut env), Ok(Value::from(10)));
         }
 
         {
             let mut env = std_env();
             assert_eq!(
-                eval_expr("(define x \"hello\")", &mut env),
+                eval_expr("(def x \"hello\")", &mut env),
                 Ok(Value::from("hello"))
             );
         }
 
         {
-            // define + eval
+            // def + eval
             let mut env = std_env();
             assert_eq!(
-                eval_expr("(define x \"hello\")", &mut env),
+                eval_expr("(def x \"hello\")", &mut env),
                 Ok(Value::from("hello"))
             );
 
             assert_eq!(
                 eval_expr("x", &mut env),
                 Ok(Value::from("hello")),
-                "x should evaluate to defined value"
+                "x should evaluate to def value"
             );
         }
     }
 
     #[test]
     #[traced_test]
-    fn eval_define_func() {
+    fn eval_def_func() {
         let mut env = std_env();
 
         assert!(matches!(
-            eval_expr("(define echo (lambda (x) x))", &mut env),
+            eval_expr("(def echo (lambda (x) x))", &mut env),
             Ok(Value::Lambda(_))
         ));
 
@@ -382,8 +382,8 @@ mod tests {
     fn eval_if_with_symbols() {
         let mut env = std_env();
 
-        eval_expr("(define is_true true)", &mut env).unwrap();
-        eval_expr("(define is_false false)", &mut env).unwrap();
+        eval_expr("(def is_true true)", &mut env).unwrap();
+        eval_expr("(def is_false false)", &mut env).unwrap();
 
         assert_eq!(
             eval_expr("(if is_true \"true\" \"false\")", &mut env),
@@ -401,8 +401,8 @@ mod tests {
     fn eval_if_with_lambda() {
         let mut env = std_env();
 
-        eval_expr("(define is_true (lambda () true))", &mut env).unwrap();
-        eval_expr("(define is_false (lambda () false))", &mut env).unwrap();
+        eval_expr("(def is_true (lambda () true))", &mut env).unwrap();
+        eval_expr("(def is_false (lambda () false))", &mut env).unwrap();
 
         assert_eq!(
             eval_expr("(if (is_true) \"true\" \"false\")", &mut env),
@@ -440,7 +440,7 @@ mod tests {
             ]))
         );
 
-        eval_expr("(define echo (lambda (x) x))", &mut env).expect("Should define echo function");
+        eval_expr("(def echo (lambda (x) x))", &mut env).expect("Should define echo function");
 
         assert_eq!(
             eval_expr("(vec (echo \"one\") (echo 2) (echo :three))", &mut env),
@@ -458,7 +458,7 @@ mod tests {
         let mut env = std_env();
 
         assert_eq!(
-            eval_expr("(define my_vec (vec))", &mut env),
+            eval_expr("(def my_vec (vec))", &mut env),
             Ok(<Value as From<Vec<Value>>>::from(vec![])),
             "should define a empty vec"
         );
@@ -476,17 +476,17 @@ mod tests {
         );
 
         assert_eq!(
-            eval_expr("(define my_vec (push my_vec 1))", &mut env),
+            eval_expr("(def my_vec (push my_vec 1))", &mut env),
             Ok(Value::from(vec![Value::from(1)])),
         );
 
         assert_eq!(
-            eval_expr("(define my_vec (push my_vec \"two\"))", &mut env),
+            eval_expr("(def my_vec (push my_vec \"two\"))", &mut env),
             Ok(Value::from(vec![Value::from(1), Value::from("two"),])),
         );
 
         assert_eq!(
-            eval_expr("(define my_vec (push my_vec :three))", &mut env),
+            eval_expr("(def my_vec (push my_vec :three))", &mut env),
             Ok(Value::from(vec![
                 Value::from(1),
                 Value::from("two"),

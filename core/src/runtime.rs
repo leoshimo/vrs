@@ -374,7 +374,7 @@ mod tests {
 
         assert!(
             matches!(
-                client.request(p("(define echo (lambda (x) x))").unwrap()).await,
+                client.request(p("(def echo (lambda (x) x))").unwrap()).await,
                 Ok(Response { contents, .. }) if contents == lemma::Form::List(vec![
                     lemma::Form::keyword("ok"),
                     lemma::Form::string("<lambda (x)>"),
