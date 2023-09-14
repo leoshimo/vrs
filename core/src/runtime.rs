@@ -358,6 +358,8 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn runtime_remote_request_multi() {
+        use lemma::parse as p;
+
         let runtime = Runtime::new();
         let (local, remote) = conn_fixture();
         let mut client = Client::new(remote);
@@ -367,26 +369,34 @@ mod tests {
             .await
             .expect("Connection should be handled");
 
-        // Define + run the echo function
-        let msgs = vec![
-            lemma::parse("(define echo (lambda (x) x))").unwrap(),
-            lemma::parse("(echo \"Hello world\")").unwrap(),
-        ];
-
-        let mut resps = vec![];
-        for m in msgs {
-            let resp = client.request(m).await;
-            resps.push(resp);
-        }
-
-        assert!(matches!(
-            &resps[0],
-            Ok(Response { contents, .. }) if contents == &lemma::Form::keyword("ok")
-        ));
-        assert!(matches!(
-            &resps[1],
-            Ok(Response { contents, .. }) if contents == &lemma::Form::string("Hello world")
-        ));
+        assert!(
+            matches!(
+                client.request(p("(define echo (lambda (x) x))").unwrap()).await,
+                Ok(Response { contents, .. }) if contents == lemma::Form::keyword("ok")
+            ),
+            "defining a function should return :ok"
+        );
+        assert!(
+            matches!(
+                client.request(p("echo").unwrap()).await,
+                Ok(Response { contents, .. }) if contents == lemma::Form::keyword("ok")
+            ),
+            "evaluating function symbol should return :ok"
+        );
+        assert!(
+            matches!(
+                client.request(p("(echo \"Hello world\")").unwrap()).await,
+                Ok(Response { contents, .. }) if contents == lemma::Form::string("Hello world")
+            ),
+            "evaluating a function call should return result"
+        );
+        assert!(
+            matches!(
+                client.request(p("jibberish").unwrap()).await,
+                Ok(Response { contents, .. }) if contents == lemma::Form::keyword("err")
+            ),
+            "evaluating a jibberish underined symbol should return :err"
+        );
     }
 
     /// Waits until the number of tasks in [Runtime] is [target]

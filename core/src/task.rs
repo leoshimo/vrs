@@ -169,7 +169,7 @@ impl EventLoop {
             }
             Err(e) => {
                 error!("Error from evaluation - {e}");
-                lemma::Form::symbol("err")
+                lemma::Form::keyword("err")
             }
         };
 
