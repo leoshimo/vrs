@@ -103,7 +103,7 @@ impl TryFrom<Value> for Form {
             Value::Lambda(l) => Ok(Form::List(
                 [
                     vec![
-                        Form::keyword("lambda"),
+                        Form::symbol("lambda"),
                         Form::List(l.params.into_iter().map(Form::Symbol).collect()),
                     ],
                     l.body,
