@@ -14,6 +14,7 @@ pub fn std_env<'a>() -> Env<'a> {
     add_if(&mut env);
     add_vec(&mut env);
     add_push(&mut env);
+    add_pushd(&mut env);
     add_as_form(&mut env);
     env
 }
@@ -99,6 +100,18 @@ pub fn add_push(env: &mut Env) {
         Value::SpecialForm(SpecialForm {
             name: sym.to_string(),
             func: lang_push,
+        }),
+    );
+}
+
+/// Adds the `pushd` symbol for appending to vector
+pub fn add_pushd(env: &mut Env) {
+    let sym = SymbolId::from("pushd");
+    env.bind(
+        &sym,
+        Value::SpecialForm(SpecialForm {
+            name: sym.to_string(),
+            func: lang_pushd,
         }),
     );
 }
@@ -227,6 +240,20 @@ fn lang_push(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let elem_val = eval(elem_form, env)?;
     vec_val.push(elem_val);
     Ok(Value::from(vec_val))
+}
+
+/// Implements the `pushd` operation on vector
+fn lang_pushd(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+    let (symbol, elem_form) = match arg_forms {
+        [Form::Symbol(symbol), elem_form] => Ok((symbol.clone(), elem_form.clone())),
+        _ => Err(Error::UnexpectedArguments(
+            "pushd expects a one symbol form and one value form".to_string(),
+        )),
+    }?;
+
+    let val = lang_push(&[Form::Symbol(symbol.clone()), elem_form], env)?;
+    env.bind(&symbol, val.clone());
+    Ok(val)
 }
 
 /// Implements the `as_form` operation on vector
