@@ -381,7 +381,7 @@ mod tests {
 
         assert!(matches!(
             &resps[0],
-            Ok(Response { contents, .. }) if contents == &lemma::Form::symbol("ok")
+            Ok(Response { contents, .. }) if contents == &lemma::Form::keyword("ok")
         ));
         assert!(matches!(
             &resps[1],

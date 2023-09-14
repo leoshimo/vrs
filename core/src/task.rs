@@ -156,7 +156,10 @@ impl EventLoop {
 
         let contents = match resp {
             Ok(lemma::Value::Form(f)) => f,
-            Ok(_) => lemma::Form::symbol("ok"),
+            Ok(_) => {
+                // TODO - Is there better format for unserializable `Value` responses from runtime?
+                lemma::Form::keyword("ok")
+            }
             Err(e) => {
                 error!("Error from evaluation - {e}");
                 lemma::Form::symbol("err")
