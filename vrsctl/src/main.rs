@@ -30,7 +30,7 @@ async fn run_repl(mut client: Client, read: impl Read, show_prompt: bool) -> Res
 
     let mut s = String::new();
     while client.is_active() {
-        if show_prompt {
+        if show_prompt && s.is_empty() {
             print!("{}", "vrs> ".bold().bright_white());
             io::stdout().flush()?;
         }
