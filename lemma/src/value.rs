@@ -136,7 +136,7 @@ impl std::fmt::Display for Value {
 }
 
 #[cfg(test)]
-mod tests {
+mod to_string_tests {
     use super::*;
 
     #[test]
@@ -231,6 +231,110 @@ mod tests {
             ])
             .to_string(),
             "<vec (one :two 3 \"four\")>"
+        );
+    }
+}
+
+#[cfg(test)]
+mod value_to_form_tests {
+    use crate::parse;
+
+    use super::*;
+
+    #[test]
+    fn form_to_form() {
+        assert_eq!(Form::from(Value::from(true)), Form::Bool(true));
+        assert_eq!(Form::from(Value::from(false)), Form::Bool(false));
+
+        assert_eq!(Form::from(Value::from(32)), Form::Int(32));
+
+        assert_eq!(
+            Form::from(Value::from("Hello world")),
+            Form::string("Hello world")
+        );
+
+        assert_eq!(
+            Form::from(Value::from(Form::symbol("a_symbol"))),
+            Form::symbol("a_symbol"),
+        );
+
+        assert_eq!(
+            Form::from(Value::from(Form::keyword("a_keyword"))),
+            Form::keyword("a_keyword"),
+        );
+
+        assert_eq!(
+            Form::from(Value::Form(Form::List(vec![
+                Form::symbol("add"),
+                Form::Int(10),
+                Form::string("ten"),
+                Form::keyword("ten"),
+            ]))),
+            Form::List(vec![
+                Form::symbol("add"),
+                Form::Int(10),
+                Form::string("ten"),
+                Form::keyword("ten"),
+            ])
+        )
+    }
+
+    #[test]
+    fn lambda_to_form() {
+        assert_eq!(
+            Form::from(Value::Lambda(Lambda {
+                params: vec![],
+                body: vec![Form::string("Hello world")],
+            })),
+            parse("(lambda () \"Hello world\")").unwrap(),
+        );
+
+        assert_eq!(
+            Form::from(Value::Lambda(Lambda {
+                params: vec![SymbolId::from("a"), SymbolId::from("b")],
+                body: vec![Form::List(vec![
+                    Form::symbol("echo"),
+                    Form::string("Hello world"),
+                ])],
+            })),
+            parse("(lambda (a b) (echo \"Hello world\"))").unwrap(),
+        );
+    }
+
+    #[test]
+    fn special_form_to_form() {
+        assert_eq!(
+            Form::from(Value::SpecialForm(SpecialForm {
+                symbol: SymbolId::from("hello"),
+                func: |_, _| { Ok(Value::from("value")) },
+            })),
+            Form::symbol("hello"),
+            "special forms should return symbol it is defined as"
+        );
+    }
+
+    #[test]
+    fn vec_to_string() {
+        assert_eq!(Form::from(Value::Vec(vec![])), Form::List(vec![]));
+
+        assert_eq!(
+            Form::from(Value::Vec(vec![Value::from(Form::symbol("a_symbol"))])),
+            Form::List(vec![Form::symbol("a_symbol")])
+        );
+
+        assert_eq!(
+            Form::from(Value::Vec(vec![
+                Value::from(Form::symbol("one")),
+                Value::from(Form::keyword("two")),
+                Value::from(Form::Int(3)),
+                Value::from(Form::string("four")),
+            ])),
+            Form::List(vec![
+                Form::symbol("one"),
+                Form::keyword("two"),
+                Form::Int(3),
+                Form::string("four"),
+            ])
         );
     }
 }
