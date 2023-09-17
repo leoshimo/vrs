@@ -3,7 +3,6 @@
 
 use crate::{form, Env, Form, Result, SymbolId};
 
-// TODO: Reevaluate Form / Value split w.r.t. Quoting, Forms, and Value::Vec
 /// A value from evaluating a [Form](crate::Form).
 ///
 /// # Difference between [Form](crate::Form) and [Value]
@@ -18,10 +17,8 @@ pub enum Value {
     Lambda(Lambda),
     /// Callable special form
     SpecialForm(SpecialForm),
-    // TODO: Think - Should Vec be considered a "foreign" value created via `vec` keyword?
-    /// Vector of values
-    /// This is distinct from a [Value::Form] wrapping [Form::List], which represents pre-evaluated form
-    Vec(Vec<Value>),
+    /// List of values
+    List(Vec<Value>),
 }
 
 /// A function as a value
@@ -76,7 +73,7 @@ impl From<Vec<form::Form>> for Value {
 
 impl From<Vec<Value>> for Value {
     fn from(value: Vec<Value>) -> Self {
-        Self::Vec(value)
+        Self::List(value)
     }
 }
 
@@ -85,13 +82,7 @@ impl From<Value> for Form {
     fn from(value: Value) -> Self {
         match value {
             Value::Form(f) => f,
-            Value::Vec(values) => {
-                let mut inner = vec![Form::symbol("vec")];
-                for v in values {
-                    inner.push(Form::from(v));
-                }
-                Form::List(inner)
-            }
+            Value::List(values) => Form::List(values.into_iter().map(Form::from).collect()),
             Value::Lambda(l) => Form::List(
                 [
                     vec![
@@ -122,7 +113,7 @@ impl std::fmt::Display for Value {
                     .join(" ")
             ),
             Value::SpecialForm(s) => write!(f, "<spform {}>", s.symbol),
-            Value::Vec(elems) => write!(
+            Value::List(elems) => write!(
                 f,
                 "<vec ({})>",
                 elems
@@ -215,15 +206,15 @@ mod to_string_tests {
 
     #[test]
     fn vec_to_string() {
-        assert_eq!(Value::Vec(vec![]).to_string(), "<vec ()>");
+        assert_eq!(Value::List(vec![]).to_string(), "<vec ()>");
 
         assert_eq!(
-            Value::Vec(vec![Value::from(Form::symbol("a_symbol"))]).to_string(),
+            Value::List(vec![Value::from(Form::symbol("a_symbol"))]).to_string(),
             "<vec (a_symbol)>"
         );
 
         assert_eq!(
-            Value::Vec(vec![
+            Value::List(vec![
                 Value::from(Form::symbol("one")),
                 Value::from(Form::keyword("two")),
                 Value::from(Form::Int(3)),
@@ -315,25 +306,21 @@ mod value_to_form_tests {
 
     #[test]
     fn vec_to_string() {
+        assert_eq!(Form::from(Value::List(vec![])), Form::List(vec![]));
+
         assert_eq!(
-            Form::from(Value::Vec(vec![])),
-            Form::List(vec![Form::symbol("vec")])
+            Form::from(Value::List(vec![Value::from(Form::symbol("a_symbol"))])),
+            Form::List(vec![Form::symbol("a_symbol")])
         );
 
         assert_eq!(
-            Form::from(Value::Vec(vec![Value::from(Form::symbol("a_symbol"))])),
-            Form::List(vec![Form::symbol("vec"), Form::symbol("a_symbol")])
-        );
-
-        assert_eq!(
-            Form::from(Value::Vec(vec![
+            Form::from(Value::List(vec![
                 Value::from(Form::symbol("one")),
                 Value::from(Form::keyword("two")),
                 Value::from(Form::Int(3)),
                 Value::from(Form::string("four")),
             ])),
             Form::List(vec![
-                Form::symbol("vec"),
                 Form::symbol("one"),
                 Form::keyword("two"),
                 Form::Int(3),

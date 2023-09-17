@@ -90,7 +90,7 @@ pub fn lang_if(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     }
 }
 
-pub fn lang_vec(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+pub fn lang_list(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let arg_vals = arg_forms
         .iter()
         .map(|f| eval(f, env))
@@ -108,7 +108,7 @@ pub fn lang_length(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
 
     let length = match eval(f, env)? {
         Value::Form(Form::List(l)) => Ok(l.len()),
-        Value::Vec(v) => Ok(v.len()),
+        Value::List(v) => Ok(v.len()),
         _ => Err(Error::UnexpectedArguments(
             "length expects a collection type".to_string(),
         )),
@@ -127,7 +127,7 @@ pub fn lang_get(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
 
     let values = match eval(coll_form, env)? {
         Value::Form(Form::List(l)) => Ok(l.into_iter().map(Value::from).collect::<Vec<_>>()),
-        Value::Vec(v) => Ok(v),
+        Value::List(v) => Ok(v),
         _ => Err(Error::UnexpectedArguments(
             "length expects a collection type".to_string(),
         )),
@@ -180,7 +180,7 @@ pub fn lang_map(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
 
     // TODO Think about this case - evaluation yields a Value, but value is passed into lambda
     let vals = match eval(coll_form, env)? {
-        Value::Vec(v) => Ok(v),
+        Value::List(v) => Ok(v),
         _ => Err(Error::UnexpectedArguments(
             "map expects first argument to be a collection".to_string(),
         )),
@@ -199,33 +199,33 @@ pub fn lang_map(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
         res.push(eval_lambda_call_vals(&lambda, &[v], env)?);
     }
 
-    Ok(Value::Vec(res))
+    Ok(Value::List(res))
 }
 
 /// Implements the `push` operation on vector
 pub fn lang_push(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
-    let (vec_form, elem_form) = match arg_forms {
-        [vec_form, elem_form] => Ok((vec_form, elem_form)),
+    let (list_form, elem_form) = match arg_forms {
+        [list_form, elem_form] => Ok((list_form, elem_form)),
         _ => Err(Error::UnexpectedArguments(format!(
             "push expects a two forms - got {}",
             arg_forms.len()
         ))),
     }?;
 
-    let mut vec_val = match eval(vec_form, env)? {
-        Value::Vec(l) => Ok(l),
+    let mut list_val = match eval(list_form, env)? {
+        Value::List(l) => Ok(l),
         v => Err(Error::UnexpectedArguments(format!(
-            "push expects first argument to evaluate to a vector - got {}",
+            "push expects first argument to evaluate to a list - got {}",
             v
         ))),
     }?;
 
     let elem_val = eval(elem_form, env)?;
-    vec_val.push(elem_val);
-    Ok(Value::from(vec_val))
+    list_val.push(elem_val);
+    Ok(Value::from(list_val))
 }
 
-/// Implements the `pushd` operation on vector
+/// Implements the `pushd` operation on list
 pub fn lang_pushd(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let (symbol, elem_form) = match arg_forms {
         [Form::Symbol(symbol), elem_form] => Ok((symbol.clone(), elem_form.clone())),
@@ -237,22 +237,6 @@ pub fn lang_pushd(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let val = lang_push(&[Form::Symbol(symbol.clone()), elem_form], env)?;
     env.bind(&symbol, val.clone());
     Ok(val)
-}
-
-/// Implements the `as_form` operation on vector
-pub fn lang_as_form(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
-    let form = match arg_forms {
-        [f] => Ok(f),
-        _ => Err(Error::UnexpectedArguments(format!(
-            "as_form expects a single forms - got {}",
-            arg_forms.len()
-        ))),
-    }?;
-
-    let val = eval(form, env)?;
-    let coerced_val =
-        Form::try_from(val).map_err(|e| Error::UnsupportedValueConversion(e.to_string()))?;
-    Ok(Value::from(coerced_val))
 }
 
 #[cfg(test)]
@@ -457,14 +441,14 @@ mod tests {
 
     #[test]
     #[traced_test]
-    fn eval_vec() {
+    fn eval_list() {
         let mut env = std_env();
 
-        assert_eq!(eval_expr("(vec)", &mut env), Ok(Value::Vec(vec![])),);
+        assert_eq!(eval_expr("(list)", &mut env), Ok(Value::List(vec![])),);
 
         assert_eq!(
-            eval_expr("(vec 1 2 3)", &mut env),
-            Ok(Value::Vec(vec![
+            eval_expr("(list 1 2 3)", &mut env),
+            Ok(Value::List(vec![
                 Value::from(1),
                 Value::from(2),
                 Value::from(3),
@@ -472,8 +456,8 @@ mod tests {
         );
 
         assert_eq!(
-            eval_expr("(vec \"one\" 2 :three)", &mut env),
-            Ok(Value::Vec(vec![
+            eval_expr("(list \"one\" 2 :three)", &mut env),
+            Ok(Value::List(vec![
                 Value::from("one"),
                 Value::from(2),
                 Value::from(Form::keyword("three")),
@@ -483,8 +467,8 @@ mod tests {
         eval_expr("(def echo (lambda (x) x))", &mut env).expect("Should define echo function");
 
         assert_eq!(
-            eval_expr("(vec (echo \"one\") (echo 2) (echo :three))", &mut env),
-            Ok(Value::Vec(vec![
+            eval_expr("(list (echo \"one\") (echo 2) (echo :three))", &mut env),
+            Ok(Value::List(vec![
                 Value::from("one"),
                 Value::from(2),
                 Value::from(Form::keyword("three")),
@@ -498,35 +482,35 @@ mod tests {
         let mut env = std_env();
 
         assert_eq!(
-            eval_expr("(def my_vec (vec))", &mut env),
+            eval_expr("(def my_lst (list))", &mut env),
             Ok(<Value as From<Vec<Value>>>::from(vec![])),
-            "should define a empty vec"
+            "should define a empty list"
         );
 
         assert_eq!(
-            eval_expr("(push my_vec 1)", &mut env),
+            eval_expr("(push my_lst 1)", &mut env),
             Ok(Value::from(vec![Value::from(1)])),
-            "should return new vec with new element"
+            "should return new list with new element"
         );
 
         assert_eq!(
-            eval_expr("my_vec", &mut env),
+            eval_expr("my_lst", &mut env),
             Ok(<Value as From<Vec<Value>>>::from(vec![])),
-            "original vec should be unchanged"
+            "original list should be unchanged"
         );
 
         assert_eq!(
-            eval_expr("(def my_vec (push my_vec 1))", &mut env),
+            eval_expr("(def my_lst (push my_lst 1))", &mut env),
             Ok(Value::from(vec![Value::from(1)])),
         );
 
         assert_eq!(
-            eval_expr("(def my_vec (push my_vec \"two\"))", &mut env),
+            eval_expr("(def my_lst (push my_lst \"two\"))", &mut env),
             Ok(Value::from(vec![Value::from(1), Value::from("two"),])),
         );
 
         assert_eq!(
-            eval_expr("(def my_vec (push my_vec :three))", &mut env),
+            eval_expr("(def my_lst (push my_lst :three))", &mut env),
             Ok(Value::from(vec![
                 Value::from(1),
                 Value::from("two"),
@@ -535,13 +519,13 @@ mod tests {
         );
 
         assert_eq!(
-            eval_expr("my_vec", &mut env),
+            eval_expr("my_lst", &mut env),
             Ok(Value::from(vec![
                 Value::from(1),
                 Value::from("two"),
                 Value::from(Form::keyword("three")),
             ])),
-            "vec should be mutated"
+            "list should be mutated"
         );
     }
 }

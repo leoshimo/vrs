@@ -25,8 +25,8 @@ pub fn std_env<'a>() -> Env<'a> {
         func: core::lang_if,
     });
     env.bind_special_form(SpecialForm {
-        symbol: SymbolId::from("vec"),
-        func: core::lang_vec,
+        symbol: SymbolId::from("list"),
+        func: core::lang_list,
     });
     env.bind_special_form(SpecialForm {
         symbol: SymbolId::from("len"),
@@ -47,10 +47,6 @@ pub fn std_env<'a>() -> Env<'a> {
     env.bind_special_form(SpecialForm {
         symbol: SymbolId::from("pushd"),
         func: core::lang_pushd,
-    });
-    env.bind_special_form(SpecialForm {
-        symbol: SymbolId::from("form"),
-        func: core::lang_as_form,
     });
     env
 }

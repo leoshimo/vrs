@@ -51,7 +51,7 @@ fn eval_list(forms: &[Form], env: &mut Env) -> Result<Value> {
     match op_value {
         Value::Lambda(lambda) => eval_lambda_call(&lambda, arg_forms, env),
         Value::SpecialForm(sp_form) => eval_special_form(&sp_form, arg_forms, env),
-        Value::Form(_) | Value::Vec(_) => Err(Error::InvalidOperation(op_value)),
+        Value::Form(_) | Value::List(_) => Err(Error::InvalidOperation(op_value)),
     }
 }
 
