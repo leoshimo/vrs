@@ -41,14 +41,10 @@ impl Default for Machine<'_> {
 }
 
 fn add_exec(env: &mut Env) {
-    let sym = SymbolId::from("exec");
-    env.bind(
-        &sym,
-        Value::SpecialForm(SpecialForm {
-            name: sym.to_string(),
-            func: machine_exec,
-        }),
-    );
+    env.bind_special_form(SpecialForm {
+        symbol: SymbolId::from("exec"),
+        func: machine_exec,
+    });
 }
 
 // TODO: Use tokio::process::Command

@@ -34,7 +34,7 @@ pub struct Lambda {
 /// A function that evaluates special forms
 #[derive(Debug, Clone, PartialEq)]
 pub struct SpecialForm {
-    pub name: String,
+    pub symbol: SymbolId,
     pub func: fn(&[Form], &mut Env) -> Result<Value>,
 }
 
@@ -80,27 +80,19 @@ impl From<Vec<Value>> for Value {
     }
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum ValueToFormError {
-    #[error("Special forms cannot be converted")]
-    SpecialFormConversion,
-}
-
-// Conversion from value TO form
-impl TryFrom<Value> for Form {
-    type Error = ValueToFormError;
-
-    fn try_from(value: Value) -> std::result::Result<Self, Self::Error> {
+// Conversion from value to form
+impl From<Value> for Form {
+    fn from(value: Value) -> Self {
         match value {
-            Value::Form(f) => Ok(f),
+            Value::Form(f) => f,
             Value::Vec(values) => {
                 let mut inner = vec![];
                 for v in values {
-                    inner.push(Form::try_from(v)?);
+                    inner.push(Form::from(v));
                 }
-                Ok(Form::List(inner))
+                Form::List(inner)
             }
-            Value::Lambda(l) => Ok(Form::List(
+            Value::Lambda(l) => Form::List(
                 [
                     vec![
                         Form::symbol("lambda"),
@@ -109,8 +101,8 @@ impl TryFrom<Value> for Form {
                     l.body,
                 ]
                 .concat(),
-            )),
-            Value::SpecialForm(_) => Err(ValueToFormError::SpecialFormConversion),
+            ),
+            Value::SpecialForm(sp_form) => Form::Symbol(sp_form.symbol),
         }
     }
 }
@@ -129,7 +121,7 @@ impl std::fmt::Display for Value {
                     .collect::<Vec<_>>()
                     .join(" ")
             ),
-            Value::SpecialForm(s) => write!(f, "<spfn {}>", s.name),
+            Value::SpecialForm(s) => write!(f, "<spfn {}>", s.symbol),
             Value::Vec(elems) => write!(
                 f,
                 "<vec ({})>",

@@ -28,147 +28,99 @@ pub fn std_env<'a>() -> Env<'a> {
 /// Adds `lambda` symbol for creating functions
 /// `(lambda (PARAMS*) FORM)`
 pub fn add_lambda(env: &mut Env<'_>) {
-    let lambda_sym = SymbolId::from("lambda");
-    env.bind(
-        &lambda_sym,
-        Value::SpecialForm(SpecialForm {
-            name: lambda_sym.to_string(),
-            func: lambda,
-        }),
-    );
+    env.bind_special_form(SpecialForm {
+        symbol: SymbolId::from("lambda"),
+        func: lambda,
+    });
 }
 
 /// Adds `quote` symbol for quoting forms
 pub fn add_quote(env: &mut Env) {
-    let quote_sym = SymbolId::from("quote");
-    env.bind(
-        &quote_sym,
-        Value::SpecialForm(SpecialForm {
-            name: quote_sym.to_string(),
-            func: quote,
-        }),
-    );
+    env.bind_special_form(SpecialForm {
+        symbol: SymbolId::from("quote"),
+        func: quote,
+    });
 }
 
 /// Adds the `eval` symbol for evaluating forms
 pub fn add_eval(env: &mut Env) {
-    let eval_sym = SymbolId::from("eval");
-    env.bind(
-        &eval_sym,
-        Value::SpecialForm(SpecialForm {
-            name: eval_sym.to_string(),
-            func: lang_eval,
-        }),
-    );
+    env.bind_special_form(SpecialForm {
+        symbol: SymbolId::from("eval"),
+        func: lang_eval,
+    });
 }
 
 /// Adds the `def` symbol for defining values of symbols
 pub fn add_def(env: &mut Env) {
-    let sym = SymbolId::from("def");
-    env.bind(
-        &sym,
-        Value::SpecialForm(SpecialForm {
-            name: sym.to_string(),
-            func: lang_def,
-        }),
-    );
+    env.bind_special_form(SpecialForm {
+        symbol: SymbolId::from("def"),
+        func: lang_def,
+    });
 }
 
 /// Adds the `if` symbol for conditional branching
 pub fn add_if(env: &mut Env) {
-    let if_sym = SymbolId::from("if");
-    env.bind(
-        &if_sym,
-        Value::SpecialForm(SpecialForm {
-            name: if_sym.to_string(),
-            func: lang_if,
-        }),
-    );
+    env.bind_special_form(SpecialForm {
+        symbol: SymbolId::from("if"),
+        func: lang_if,
+    });
 }
 
 /// Adds the `vec` symbol for creating a vector
 pub fn add_vec(env: &mut Env) {
-    let sym = SymbolId::from("vec");
-    env.bind(
-        &sym,
-        Value::SpecialForm(SpecialForm {
-            name: sym.to_string(),
-            func: lang_vec,
-        }),
-    );
+    env.bind_special_form(SpecialForm {
+        symbol: SymbolId::from("vec"),
+        func: lang_vec,
+    });
 }
 
 /// Adds the `length` symbol for determining length of collection
 pub fn add_length(env: &mut Env) {
-    let sym = SymbolId::from("len");
-    env.bind(
-        &sym,
-        Value::SpecialForm(SpecialForm {
-            name: sym.to_string(),
-            func: lang_length,
-        }),
-    );
+    env.bind_special_form(SpecialForm {
+        symbol: SymbolId::from("len"),
+        func: lang_length,
+    });
 }
 
 // TODO: Formalize across types? Very loosy goosy definition atm
 /// Adds the `get` symbol which gets the thing DWIM style
 pub fn add_get(env: &mut Env) {
-    let sym = SymbolId::from("get");
-    env.bind(
-        &sym,
-        Value::SpecialForm(SpecialForm {
-            name: sym.to_string(),
-            func: lang_get,
-        }),
-    );
+    env.bind_special_form(SpecialForm {
+        symbol: SymbolId::from("get"),
+        func: lang_get,
+    });
 }
 
 /// Adds the `map` symbol for transforming a collection
 pub fn add_map(env: &mut Env) {
-    let sym = SymbolId::from("map");
-    env.bind(
-        &sym,
-        Value::SpecialForm(SpecialForm {
-            name: sym.to_string(),
-            func: lang_map,
-        }),
-    );
+    env.bind_special_form(SpecialForm {
+        symbol: SymbolId::from("map"),
+        func: lang_map,
+    });
 }
 
 /// Adds the `push` symbol for appending to vector
 pub fn add_push(env: &mut Env) {
-    let sym = SymbolId::from("push");
-    env.bind(
-        &sym,
-        Value::SpecialForm(SpecialForm {
-            name: sym.to_string(),
-            func: lang_push,
-        }),
-    );
+    env.bind_special_form(SpecialForm {
+        symbol: SymbolId::from("push"),
+        func: lang_push,
+    });
 }
 
 /// Adds the `pushd` symbol for appending to vector
 pub fn add_pushd(env: &mut Env) {
-    let sym = SymbolId::from("pushd");
-    env.bind(
-        &sym,
-        Value::SpecialForm(SpecialForm {
-            name: sym.to_string(),
-            func: lang_pushd,
-        }),
-    );
+    env.bind_special_form(SpecialForm {
+        symbol: SymbolId::from("pushd"),
+        func: lang_pushd,
+    });
 }
 
 /// Adds the `as_form` symbol for converting to form
 pub fn add_as_form(env: &mut Env) {
-    let sym = SymbolId::from("form");
-    env.bind(
-        &sym,
-        Value::SpecialForm(SpecialForm {
-            name: sym.to_string(),
-            func: lang_as_form,
-        }),
-    );
+    env.bind_special_form(SpecialForm {
+        symbol: SymbolId::from("form"),
+        func: lang_as_form,
+    });
 }
 
 /// Implements `lambda` special form

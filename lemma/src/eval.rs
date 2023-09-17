@@ -169,17 +169,14 @@ mod tests {
     #[test]
     fn eval_special_form() {
         let mut env = Env::new();
-        env.bind(
-            &SymbolId::from("quote"),
-            Value::SpecialForm(SpecialForm {
-                name: String::from("quote"),
-                func: |arg_forms, _env| Ok(Value::Form(arg_forms[0].clone())),
-            }),
-        );
+        env.bind_special_form(SpecialForm {
+            symbol: SymbolId::from("quote"),
+            func: |arg_forms, _env| Ok(Value::Form(arg_forms[0].clone())),
+        });
 
         assert!(matches!(
             eval_expr("quote", &mut env),
-            Ok(Value::SpecialForm(l)) if l.name == "quote",
+            Ok(Value::SpecialForm(l)) if l.symbol == SymbolId::from("quote"),
         ));
 
         assert_eq!(

@@ -1,5 +1,5 @@
 /// The Lemma environment that has all bindings
-use crate::{SymbolId, Value};
+use crate::{SpecialForm, SymbolId, Value};
 use std::collections::HashMap;
 
 #[derive(Debug, Default)]
@@ -30,6 +30,11 @@ impl Env<'_> {
     /// Bind a given symbol to given form
     pub fn bind(&mut self, symbol: &SymbolId, value: Value) {
         self.bindings.insert(symbol.clone(), value);
+    }
+
+    /// Shorthand to `bind` a `SpecialForm`
+    pub fn bind_special_form(&mut self, sp_form: SpecialForm) {
+        self.bind(&sp_form.symbol.clone(), Value::SpecialForm(sp_form));
     }
 
     /// Create a new environment existing existing one
