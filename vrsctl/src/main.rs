@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use colored::*;
-use lemma::{Form, KeywordId};
+
 use std::fs::File;
 use std::io::IsTerminal;
 use std::io::{self, BufRead, BufReader, Read, Write};
@@ -8,20 +8,11 @@ use tokio::net::UnixStream;
 use tracing::debug;
 use vrs::client::Client;
 use vrs::connection::Connection;
-use vrs::Response;
 
 async fn run_cmd(mut client: Client, cmd: &str) -> Result<()> {
     let f = lemma::parse(cmd)?;
     let resp = client.request(f).await?;
-    match parse_resp(resp) {
-        Some((_keyword, f)) => {
-            println!("{}", f);
-        }
-        None => {
-            eprintln!("Unexpected response format");
-        }
-    };
-
+    println!("{}", resp.contents);
     Ok(())
 }
 
@@ -71,37 +62,9 @@ async fn run_repl(mut client: Client, read: impl Read, show_prompt: bool) -> Res
             }
         };
 
-        let (keyword, f) = match parse_resp(resp) {
-            Some(val) => val,
-            None => {
-                eprintln!("Unexpected response format");
-                continue;
-            }
-        };
-
-        println!(
-            "{} {}",
-            keyword.to_string().green(),
-            f.to_string().bright_white()
-        );
+        println!("{}", resp.contents);
     }
     Ok(())
-}
-
-/// Compensate for some TBD plumbing
-fn parse_resp(resp: Response) -> Option<(KeywordId, Form)> {
-    let resp_list = match resp.contents {
-        Form::List(l) => l,
-        form => {
-            eprintln!("Unexpected response form - {}", form);
-            return None;
-        }
-    };
-
-    match &resp_list[..] {
-        [Form::Keyword(keyword), f] => Some((keyword.clone(), f.clone())),
-        _ => None,
-    }
 }
 
 #[tokio::main]

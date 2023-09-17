@@ -162,20 +162,10 @@ impl EventLoop {
             .map_err(|_| Error::FailedToReceiveRuntimeResponse)?;
 
         let contents = match resp {
-            Ok(lemma::Value::Form(f)) => lemma::Form::List(vec![
-                lemma::Form::keyword("ok"),
-                f, // inline forms instead of returning as string
-            ]),
-            Ok(val) => lemma::Form::List(vec![
-                lemma::Form::keyword("ok"),
-                lemma::Form::String(val.to_string()),
-            ]),
+            Ok(val) => lemma::Form::from(val),
             Err(e) => {
                 error!("Error from evaluation - {e}");
-                lemma::Form::List(vec![
-                    lemma::Form::keyword("err"),
-                    lemma::Form::String(e.to_string()),
-                ])
+                lemma::Form::keyword("err") // should this have better error?
             }
         };
 
