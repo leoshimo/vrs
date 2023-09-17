@@ -14,14 +14,14 @@ use crate::{form, Env, Form, Result, SymbolId};
 pub enum Value {
     /// Form value
     Form(Form),
-    // TODO: Think - Should Vec be considered a "foreign" value created via `vec` keyword?
-    /// Vector of values
-    /// This is distinct from a [Value::Form] wrapping [Form::List], which represents pre-evaluated form
-    Vec(Vec<Value>),
     /// Callable function value
     Lambda(Lambda),
     /// Callable special form
     SpecialForm(SpecialForm),
+    // TODO: Think - Should Vec be considered a "foreign" value created via `vec` keyword?
+    /// Vector of values
+    /// This is distinct from a [Value::Form] wrapping [Form::List], which represents pre-evaluated form
+    Vec(Vec<Value>),
 }
 
 /// A function as a value
@@ -121,7 +121,7 @@ impl std::fmt::Display for Value {
                     .collect::<Vec<_>>()
                     .join(" ")
             ),
-            Value::SpecialForm(s) => write!(f, "<spfn {}>", s.symbol),
+            Value::SpecialForm(s) => write!(f, "<spform {}>", s.symbol),
             Value::Vec(elems) => write!(
                 f,
                 "<vec ({})>",
@@ -140,23 +140,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn bool_to_string() {
+    fn bool_form_to_string() {
         assert_eq!(Value::from(true).to_string(), "true");
         assert_eq!(Value::from(false).to_string(), "false");
     }
 
     #[test]
-    fn int_to_string() {
+    fn int_form_to_string() {
         assert_eq!(Value::from(32).to_string(), "32");
     }
 
     #[test]
-    fn string_to_string() {
+    fn string_form_to_string() {
         assert_eq!(Value::from("Hello world").to_string(), "\"Hello world\"");
     }
 
     #[test]
-    fn keyword_to_string() {
+    fn keyword_form_to_string() {
         assert_eq!(
             Value::from(Form::keyword("a_keyword")).to_string(),
             ":a_keyword"
@@ -178,5 +178,59 @@ mod tests {
             .to_string(),
             "(add 10 \"ten\")"
         )
+    }
+
+    #[test]
+    fn lambda_to_string() {
+        assert_eq!(
+            Value::Lambda(Lambda {
+                params: vec![],
+                body: vec![Form::string("Hello world")],
+            })
+            .to_string(),
+            "<lambda ()>",
+        );
+
+        assert_eq!(
+            Value::Lambda(Lambda {
+                params: vec![SymbolId::from("a"), SymbolId::from("b")],
+                body: vec![Form::string("Hello world")],
+            })
+            .to_string(),
+            "<lambda (a b)>",
+        );
+    }
+
+    #[test]
+    fn special_form_to_string() {
+        assert_eq!(
+            Value::SpecialForm(SpecialForm {
+                symbol: SymbolId::from("hello"),
+                func: |_, _| { Ok(Value::from("value")) },
+            })
+            .to_string(),
+            "<spform hello>"
+        );
+    }
+
+    #[test]
+    fn vec_to_string() {
+        assert_eq!(Value::Vec(vec![]).to_string(), "<vec ()>");
+
+        assert_eq!(
+            Value::Vec(vec![Value::from(Form::symbol("a_symbol"))]).to_string(),
+            "<vec (a_symbol)>"
+        );
+
+        assert_eq!(
+            Value::Vec(vec![
+                Value::from(Form::symbol("one")),
+                Value::from(Form::keyword("two")),
+                Value::from(Form::Int(3)),
+                Value::from(Form::string("four")),
+            ])
+            .to_string(),
+            "<vec (one :two 3 \"four\")>"
+        );
     }
 }
