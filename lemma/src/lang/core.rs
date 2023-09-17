@@ -4,127 +4,11 @@
 
 use crate::{
     eval::{eval, eval_lambda_call_vals},
-    Env, Error, Form, Lambda, Result, SpecialForm, SymbolId, Value,
+    Env, Error, Form, Lambda, Result, Value,
 };
 
-/// Returns the 'standard' environment of the langugae
-pub fn std_env<'a>() -> Env<'a> {
-    let mut env = Env::new();
-    add_lambda(&mut env);
-    add_quote(&mut env);
-    add_eval(&mut env);
-    add_def(&mut env);
-    add_if(&mut env);
-    add_vec(&mut env);
-    add_length(&mut env);
-    add_get(&mut env);
-    add_push(&mut env);
-    add_pushd(&mut env);
-    add_as_form(&mut env);
-    add_map(&mut env);
-    env
-}
-
-/// Adds `lambda` symbol for creating functions
-/// `(lambda (PARAMS*) FORM)`
-fn add_lambda(env: &mut Env<'_>) {
-    env.bind_special_form(SpecialForm {
-        symbol: SymbolId::from("lambda"),
-        func: lambda,
-    });
-}
-
-/// Adds `quote` symbol for quoting forms
-fn add_quote(env: &mut Env) {
-    env.bind_special_form(SpecialForm {
-        symbol: SymbolId::from("quote"),
-        func: quote,
-    });
-}
-
-/// Adds the `eval` symbol for evaluating forms
-fn add_eval(env: &mut Env) {
-    env.bind_special_form(SpecialForm {
-        symbol: SymbolId::from("eval"),
-        func: lang_eval,
-    });
-}
-
-/// Adds the `def` symbol for defining values of symbols
-fn add_def(env: &mut Env) {
-    env.bind_special_form(SpecialForm {
-        symbol: SymbolId::from("def"),
-        func: lang_def,
-    });
-}
-
-/// Adds the `if` symbol for conditional branching
-fn add_if(env: &mut Env) {
-    env.bind_special_form(SpecialForm {
-        symbol: SymbolId::from("if"),
-        func: lang_if,
-    });
-}
-
-/// Adds the `vec` symbol for creating a vector
-fn add_vec(env: &mut Env) {
-    env.bind_special_form(SpecialForm {
-        symbol: SymbolId::from("vec"),
-        func: lang_vec,
-    });
-}
-
-/// Adds the `length` symbol for determining length of collection
-fn add_length(env: &mut Env) {
-    env.bind_special_form(SpecialForm {
-        symbol: SymbolId::from("len"),
-        func: lang_length,
-    });
-}
-
-// TODO: Formalize across types? Very loosy goosy definition atm
-/// Adds the `get` symbol which gets the thing DWIM style
-fn add_get(env: &mut Env) {
-    env.bind_special_form(SpecialForm {
-        symbol: SymbolId::from("get"),
-        func: lang_get,
-    });
-}
-
-/// Adds the `map` symbol for transforming a collection
-fn add_map(env: &mut Env) {
-    env.bind_special_form(SpecialForm {
-        symbol: SymbolId::from("map"),
-        func: lang_map,
-    });
-}
-
-/// Adds the `push` symbol for appending to vector
-fn add_push(env: &mut Env) {
-    env.bind_special_form(SpecialForm {
-        symbol: SymbolId::from("push"),
-        func: lang_push,
-    });
-}
-
-/// Adds the `pushd` symbol for appending to vector
-fn add_pushd(env: &mut Env) {
-    env.bind_special_form(SpecialForm {
-        symbol: SymbolId::from("pushd"),
-        func: lang_pushd,
-    });
-}
-
-/// Adds the `as_form` symbol for converting to form
-fn add_as_form(env: &mut Env) {
-    env.bind_special_form(SpecialForm {
-        symbol: SymbolId::from("form"),
-        func: lang_as_form,
-    });
-}
-
 /// Implements `lambda` special form
-fn lambda(arg_forms: &[Form], _env: &mut Env) -> Result<Value> {
+pub fn lang_lambda(arg_forms: &[Form], _env: &mut Env) -> Result<Value> {
     let (params, body) = arg_forms
         .split_first()
         .ok_or(Error::MissingLambdaParameterList)?;
@@ -147,7 +31,7 @@ fn lambda(arg_forms: &[Form], _env: &mut Env) -> Result<Value> {
 }
 
 /// Implements the `quote` special form
-fn quote(arg_forms: &[Form], _env: &mut Env) -> Result<Value> {
+pub fn lang_quote(arg_forms: &[Form], _env: &mut Env) -> Result<Value> {
     if arg_forms.len() == 1 {
         Ok(Value::Form(arg_forms[0].clone()))
     } else {
@@ -156,7 +40,7 @@ fn quote(arg_forms: &[Form], _env: &mut Env) -> Result<Value> {
 }
 
 /// Implements the `eval` special form
-fn lang_eval(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+pub fn lang_eval(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let arg_form = match arg_forms {
         [form] => Ok(form),
         _ => Err(Error::EvalExpectsSingleFormArgument),
@@ -169,7 +53,7 @@ fn lang_eval(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
 }
 
 /// Implements the `def` special form
-fn lang_def(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+pub fn lang_def(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let (sym_id, val_form) = match arg_forms {
         [Form::Symbol(s), form] => Ok((s, form)),
         _ => Err(Error::UnexpectedArguments(
@@ -183,7 +67,7 @@ fn lang_def(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
 }
 
 /// Implements the `if` condition
-fn lang_if(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+pub fn lang_if(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let (cond_form, true_form, false_form) = match arg_forms {
         [cond_form, true_form, false_form] => Ok((cond_form, true_form, false_form)),
         _ => Err(Error::UnexpectedArguments(
@@ -206,7 +90,7 @@ fn lang_if(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     }
 }
 
-fn lang_vec(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+pub fn lang_vec(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let arg_vals = arg_forms
         .iter()
         .map(|f| eval(f, env))
@@ -214,7 +98,7 @@ fn lang_vec(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     Ok(Value::from(arg_vals))
 }
 
-fn lang_length(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+pub fn lang_length(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let f = match arg_forms {
         [f] => Ok(f),
         _ => Err(Error::UnexpectedArguments(
@@ -233,7 +117,7 @@ fn lang_length(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     Ok(Value::from(length as i32))
 }
 
-fn lang_get(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+pub fn lang_get(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let (coll_form, spec_form) = match arg_forms {
         [coll_form, spec_form] => Ok((coll_form, spec_form)),
         _ => Err(Error::UnexpectedArguments(
@@ -285,7 +169,7 @@ fn lang_get(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     }
 }
 
-fn lang_map(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+pub fn lang_map(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let (coll_form, lambda_form) = match arg_forms {
         [coll_form, lambda_form] => Ok((coll_form, lambda_form)),
         _ => Err(Error::UnexpectedArguments(format!(
@@ -319,7 +203,7 @@ fn lang_map(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
 }
 
 /// Implements the `push` operation on vector
-fn lang_push(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+pub fn lang_push(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let (vec_form, elem_form) = match arg_forms {
         [vec_form, elem_form] => Ok((vec_form, elem_form)),
         _ => Err(Error::UnexpectedArguments(format!(
@@ -342,7 +226,7 @@ fn lang_push(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
 }
 
 /// Implements the `pushd` operation on vector
-fn lang_pushd(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+pub fn lang_pushd(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let (symbol, elem_form) = match arg_forms {
         [Form::Symbol(symbol), elem_form] => Ok((symbol.clone(), elem_form.clone())),
         _ => Err(Error::UnexpectedArguments(
@@ -356,7 +240,7 @@ fn lang_pushd(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
 }
 
 /// Implements the `as_form` operation on vector
-fn lang_as_form(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+pub fn lang_as_form(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let form = match arg_forms {
         [f] => Ok(f),
         _ => Err(Error::UnexpectedArguments(format!(
@@ -375,7 +259,8 @@ fn lang_as_form(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
 mod tests {
 
     use super::*;
-    use crate::eval_expr;
+    use crate::lang::std_env;
+    use crate::{eval_expr, SymbolId};
     use tracing_test::traced_test;
 
     #[test]

@@ -86,7 +86,7 @@ impl From<Value> for Form {
         match value {
             Value::Form(f) => f,
             Value::Vec(values) => {
-                let mut inner = vec![];
+                let mut inner = vec![Form::symbol("vec")];
                 for v in values {
                     inner.push(Form::from(v));
                 }
@@ -315,11 +315,14 @@ mod value_to_form_tests {
 
     #[test]
     fn vec_to_string() {
-        assert_eq!(Form::from(Value::Vec(vec![])), Form::List(vec![]));
+        assert_eq!(
+            Form::from(Value::Vec(vec![])),
+            Form::List(vec![Form::symbol("vec")])
+        );
 
         assert_eq!(
             Form::from(Value::Vec(vec![Value::from(Form::symbol("a_symbol"))])),
-            Form::List(vec![Form::symbol("a_symbol")])
+            Form::List(vec![Form::symbol("vec"), Form::symbol("a_symbol")])
         );
 
         assert_eq!(
@@ -330,6 +333,7 @@ mod value_to_form_tests {
                 Value::from(Form::string("four")),
             ])),
             Form::List(vec![
+                Form::symbol("vec"),
                 Form::symbol("one"),
                 Form::keyword("two"),
                 Form::Int(3),
