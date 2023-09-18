@@ -10,7 +10,7 @@ name = "vrsd"
 path = "src/main.rs"
 
 [dependencies]
-vrs = { path = "../vrs" }
+vrs = { path = "../libvrs" }
 lemma = { path = "../lemma" }
 tokio = { version = "1.32.0", features = ["full"] }
 anyhow = "1.0.75"
