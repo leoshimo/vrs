@@ -18,7 +18,7 @@ A personal software runtime.
 
 ## Structure
 
-- `core`: The `vrs` library crate shared by runtime and clients
+- `vrs`: The `vrs` library crate shared by runtime and clients
 - `vrsd`: A daemon runtime implementation
 - `vrsctl`: A CLI client for interacting with runtime
 - `lemma`: Embedded Lisp that is substrate for code and data
