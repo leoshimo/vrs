@@ -4,7 +4,7 @@
 
 🚧 Under Heavy Construction
 
-[Renaissance tech for renaissance people](https://web.archive.org/web/20210428062809/https://twitter.com/dhh/status/1341758748717510659)
+A personal software runtime.
 
 > In the multiverse, you can live up to your ultimate potential. We discovered a
 > way to temporarily link your consciousness to another version of yourself,
@@ -14,10 +14,12 @@
 >
 > — Alpha Waymond
 
+[Renaissance tech for renaissance people](https://web.archive.org/web/20210428062809/https://twitter.com/dhh/status/1341758748717510659)
+
 ## Structure
 
 - `core`: The `vrs` library crate shared by runtime and clients
-- `runtime`: The runtime implementation for `vrsd` daemon
+- `vrsd`: A daemon runtime implementation
 - `vrsctl`: A CLI client for interacting with runtime
 - `lemma`: Embedded Lisp that is substrate for code and data
 
