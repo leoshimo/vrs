@@ -120,39 +120,48 @@ pub fn lang_map(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
 
 /// Implements the `push` operation on list
 pub fn lang_push(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
-    let (list_form, elem_form) = match arg_forms {
-        [list_form, elem_form] => Ok((list_form, elem_form)),
-        _ => Err(Error::UnexpectedArguments(format!(
-            "push expects a two forms - got {}",
-            arg_forms.len()
-        ))),
-    }?;
-
-    let mut list_val = match eval(list_form, env)? {
-        Value::List(l) => Ok(l),
-        v => Err(Error::UnexpectedArguments(format!(
-            "push expects first argument to evaluate to a list - got {}",
-            v
-        ))),
-    }?;
-
-    let elem_val = eval(elem_form, env)?;
-    list_val.push(elem_val);
-    Ok(Value::from(list_val))
-}
-
-/// Implements the `pushd` operation on list
-pub fn lang_pushd(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let (symbol, elem_form) = match arg_forms {
-        [Form::Symbol(symbol), elem_form] => Ok((symbol.clone(), elem_form.clone())),
+        [Form::Symbol(s), e] => Ok((s, e.clone())),
         _ => Err(Error::UnexpectedArguments(
-            "pushd expects a one symbol form and one value form".to_string(),
+            "push expects a one symbol form and one value form".to_string(),
         )),
     }?;
 
-    let val = lang_push(&[Form::Symbol(symbol.clone()), elem_form], env)?;
-    env.bind(&symbol, val.clone());
-    Ok(val)
+    let mut list_val = match env.resolve(symbol) {
+        Some(Value::List(l)) => Ok(l.clone()),
+        _ => Err(Error::UnexpectedArguments(
+            "push expects first argument to evaluate to a list".to_string(),
+        )),
+    }?;
+
+    let elem_val = eval(&elem_form, env)?;
+    list_val.push(elem_val);
+    env.bind(&symbol, Value::List(list_val.clone()));
+    Ok(Value::from(list_val))
+}
+
+/// Implements the `pop` operation on list
+pub fn lang_pop(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+    let symbol = match arg_forms {
+        [Form::Symbol(s)] => Ok(s),
+        _ => Err(Error::UnexpectedArguments(
+            "pop expects one symbol form as argument".to_string(),
+        )),
+    }?;
+
+    let mut list_val = match env.resolve(symbol) {
+        Some(Value::List(l)) => Ok(l.clone()),
+        _ => Err(Error::UnexpectedArguments(
+            "pop expects first argument to evaluate to list".to_string(),
+        )),
+    }?;
+
+    let val = list_val.pop();
+    env.bind(&symbol, Value::List(list_val.clone()));
+    match val {
+        Some(v) => Ok(v),
+        None => Ok(Value::from(Form::Nil)),
+    }
 }
 
 #[cfg(test)]
@@ -329,63 +338,10 @@ mod tests {
     fn eval_push() {
         let mut env = std_env();
 
-        assert_eq!(
-            eval_expr("(def my_lst (list))", &mut env),
-            Ok(<Value as From<Vec<Value>>>::from(vec![])),
-            "should define a empty list"
-        );
-
-        assert_eq!(
-            eval_expr("(push my_lst 1)", &mut env),
-            Ok(Value::from(vec![Value::from(1)])),
-            "should return new list with new element"
-        );
-
-        assert_eq!(
-            eval_expr("my_lst", &mut env),
-            Ok(<Value as From<Vec<Value>>>::from(vec![])),
-            "original list should be unchanged"
-        );
-
-        assert_eq!(
-            eval_expr("(def my_lst (push my_lst 1))", &mut env),
-            Ok(Value::from(vec![Value::from(1)])),
-        );
-
-        assert_eq!(
-            eval_expr("(def my_lst (push my_lst \"two\"))", &mut env),
-            Ok(Value::from(vec![Value::from(1), Value::from("two"),])),
-        );
-
-        assert_eq!(
-            eval_expr("(def my_lst (push my_lst :three))", &mut env),
-            Ok(Value::from(vec![
-                Value::from(1),
-                Value::from("two"),
-                Value::from(Form::keyword("three")),
-            ])),
-        );
-
-        assert_eq!(
-            eval_expr("my_lst", &mut env),
-            Ok(Value::from(vec![
-                Value::from(1),
-                Value::from("two"),
-                Value::from(Form::keyword("three")),
-            ])),
-            "list should be mutated"
-        );
-    }
-
-    #[test]
-    #[traced_test]
-    fn eval_pushd() {
-        let mut env = std_env();
-
         eval_expr("(def my_lst (list))", &mut env).unwrap();
 
         assert_eq!(
-            eval_expr("(pushd my_lst 1)", &mut env),
+            eval_expr("(push my_lst 1)", &mut env),
             Ok(Value::from(vec![Value::from(1)])),
         );
 
@@ -395,7 +351,7 @@ mod tests {
         );
 
         assert_eq!(
-            eval_expr("(pushd my_lst :two)", &mut env),
+            eval_expr("(push my_lst :two)", &mut env),
             Ok(Value::from(vec![
                 Value::from(1),
                 Value::from(Form::keyword("two")),
@@ -403,7 +359,7 @@ mod tests {
         );
 
         assert_eq!(
-            eval_expr("(pushd my_lst \"three\")", &mut env),
+            eval_expr("(push my_lst \"three\")", &mut env),
             Ok(Value::from(vec![
                 Value::from(1),
                 Value::from(Form::keyword("two")),
@@ -419,5 +375,28 @@ mod tests {
                 Value::from("three"),
             ])),
         )
+    }
+
+    #[test]
+    #[traced_test]
+    fn eval_pop() {
+        let mut env = std_env();
+
+        eval_expr("(def lst (list 1 2 3))", &mut env).unwrap();
+
+        assert_eq!(eval_expr("(pop lst)", &mut env), Ok(Value::from(3)));
+
+        assert_eq!(
+            eval_expr("lst", &mut env),
+            Ok(Value::from(vec![Value::from(1), Value::from(2),]))
+        );
+
+        assert_eq!(eval_expr("(pop lst)", &mut env), Ok(Value::from(2)));
+
+        assert_eq!(eval_expr("(pop lst)", &mut env), Ok(Value::from(1)));
+
+        assert_eq!(eval_expr("(pop lst)", &mut env), Ok(Value::from(Form::Nil)));
+
+        assert_eq!(eval_expr("lst", &mut env), Ok(Value::List(vec![])));
     }
 }

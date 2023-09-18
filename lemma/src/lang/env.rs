@@ -49,8 +49,8 @@ pub fn std_env<'a>() -> Env<'a> {
         func: list::lang_push,
     });
     env.bind_special_form(SpecialForm {
-        symbol: SymbolId::from("pushd"),
-        func: list::lang_pushd,
+        symbol: SymbolId::from("pop"),
+        func: list::lang_pop,
     });
     env
 }
