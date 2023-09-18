@@ -119,6 +119,8 @@ modules together.
 Lisp is a practical choice for highly interactive, moldable,
 application-specific progamming environments.
 
+[Twitter rant](https://twitter.com/leoshimo/status/1694375158897574227)
+
 ** Why write your own Lisp?
 
 Paul Graham put it best:
