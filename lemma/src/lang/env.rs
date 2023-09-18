@@ -37,6 +37,10 @@ pub fn std_env<'a>() -> Env<'a> {
         func: list::lang_get,
     });
     env.bind_special_form(SpecialForm {
+        symbol: SymbolId::from("getn"),
+        func: list::lang_getn,
+    });
+    env.bind_special_form(SpecialForm {
         symbol: SymbolId::from("map"),
         func: list::lang_map,
     });

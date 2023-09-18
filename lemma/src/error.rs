@@ -49,4 +49,10 @@ pub enum Error {
 
     #[error("Unsupported value conversion - {0}")]
     UnsupportedValueConversion(String),
+
+    #[error("No item at index - {0}")]
+    IndexOutOfBounds(usize),
+
+    #[error("No match")]
+    NoMatch,
 }
