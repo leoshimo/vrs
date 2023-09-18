@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 /// Forms that can be evaluated
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Form {
+    Nil,
     Bool(bool),
     Int(i32),
     String(String),
@@ -42,6 +43,7 @@ pub struct KeywordId(String);
 impl std::fmt::Display for Form {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Form::Nil => write!(f, "nil"),
             Form::Bool(b) => write!(f, "{}", if *b { "true" } else { "false" }),
             Form::Int(i) => write!(f, "{}", i),
             Form::String(s) => write!(f, "\"{}\"", s),
@@ -98,6 +100,11 @@ impl From<&str> for KeywordId {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nil_to_string() {
+        assert_eq!(Form::Nil.to_string(), "nil");
+    }
 
     #[test]
     fn bool_to_string() {

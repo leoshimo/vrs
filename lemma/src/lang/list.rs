@@ -51,7 +51,7 @@ pub fn lang_get(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     match eval(spec_form, env)? {
         Value::Form(Form::Int(idx)) => match values.get(idx as usize) {
             Some(v) => Ok(v.clone()),
-            None => Err(Error::IndexOutOfBounds(idx as usize)),
+            None => Ok(Value::from(Form::Nil)),
         },
         _ => Err(Error::UnexpectedArguments(
             "get expects integer as index".to_string(),
@@ -80,7 +80,7 @@ pub fn lang_getn(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let _ = iter.next();
     match iter.next() {
         Some(v) => Ok(v),
-        None => Err(Error::NoMatch),
+        None => Ok(Value::from(Form::Nil)),
     }
 }
 
@@ -238,10 +238,10 @@ mod tests {
             Err(Error::UnexpectedArguments(_))
         ));
 
-        assert!(matches!(
+        assert_eq!(
             eval_expr("(get (quote ()) 0)", &mut env),
-            Err(Error::IndexOutOfBounds(0))
-        ));
+            Ok(Value::from(Form::Nil))
+        );
 
         assert_eq!(
             eval_expr("(get (quote (1 2 3)) 0)", &mut env),
@@ -264,10 +264,10 @@ mod tests {
             Err(Error::UnexpectedArguments(_))
         ));
 
-        assert!(matches!(
+        assert_eq!(
             eval_expr("(getn (quote ()) 0)", &mut env),
-            Err(Error::NoMatch)
-        ));
+            Ok(Value::from(Form::Nil))
+        );
 
         assert_eq!(
             eval_expr("(getn (quote (1 2 3)) 1)", &mut env),

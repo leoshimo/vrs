@@ -12,7 +12,7 @@ pub fn eval_expr(expr: &str, env: &mut Env) -> Result<Value> {
 pub fn eval(form: &Form, env: &mut Env) -> Result<Value> {
     debug!("eval - {:?}", form);
     match form {
-        Form::Bool(_) | Form::Int(_) | Form::String(_) | Form::Keyword(_) => {
+        Form::Nil | Form::Bool(_) | Form::Int(_) | Form::String(_) | Form::Keyword(_) => {
             Ok(Value::from(form.clone()))
         }
         Form::Symbol(s) => eval_symbol(s, env),

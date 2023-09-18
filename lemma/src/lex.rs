@@ -6,6 +6,7 @@ use crate::{Error, Result};
 /// Parsed Tokens from String
 #[derive(Debug, PartialEq)]
 pub enum Token {
+    Nil,
     Bool(bool),
     Int(i32),
     String(String),
@@ -18,6 +19,7 @@ pub enum Token {
 impl std::fmt::Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Token::Nil => write!(f, "nil"),
             Token::Bool(b) => write!(f, "{}", if *b { "true" } else { "false" }),
             Token::Int(i) => write!(f, "{}", i),
             Token::String(s) => write!(f, "\"{}\"", s),
@@ -55,6 +57,7 @@ impl Tokens<'_> {
         match expr.as_str() {
             "true" => Ok(Token::Bool(true)),
             "false" => Ok(Token::Bool(false)),
+            "nil" => Ok(Token::Nil),
             _ => Ok(Token::Symbol(expr)),
         }
     }
@@ -161,6 +164,11 @@ fn is_list_delimiter(ch: &char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lex_nil() {
+        assert_eq!(lex("nil"), Ok(vec![Token::Nil]));
+    }
 
     #[test]
     fn lex_bool() {

@@ -22,10 +22,4 @@ pub enum Error {
 
     #[error("Unexpected arguments - {0}")]
     UnexpectedArguments(String),
-
-    #[error("No item at index - {0}")]
-    IndexOutOfBounds(usize),
-
-    #[error("No match")]
-    NoMatch,
 }
