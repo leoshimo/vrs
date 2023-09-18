@@ -1,4 +1,4 @@
-use crate::lang::core;
+use crate::lang::{core, list};
 use crate::{Env, SpecialForm, SymbolId};
 
 /// Returns the 'standard' environment of the language
@@ -26,27 +26,27 @@ pub fn std_env<'a>() -> Env<'a> {
     });
     env.bind_special_form(SpecialForm {
         symbol: SymbolId::from("list"),
-        func: core::lang_list,
+        func: list::lang_list,
     });
     env.bind_special_form(SpecialForm {
         symbol: SymbolId::from("len"),
-        func: core::lang_length,
+        func: list::lang_len,
     });
     env.bind_special_form(SpecialForm {
         symbol: SymbolId::from("get"),
-        func: core::lang_get,
+        func: list::lang_get,
     });
     env.bind_special_form(SpecialForm {
         symbol: SymbolId::from("map"),
-        func: core::lang_map,
+        func: list::lang_map,
     });
     env.bind_special_form(SpecialForm {
         symbol: SymbolId::from("push"),
-        func: core::lang_push,
+        func: list::lang_push,
     });
     env.bind_special_form(SpecialForm {
         symbol: SymbolId::from("pushd"),
-        func: core::lang_pushd,
+        func: list::lang_pushd,
     });
     env
 }
