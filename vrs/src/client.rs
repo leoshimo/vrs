@@ -1,4 +1,4 @@
-//! Headless client implementation for vrsjmp runtime
+//! Headless client implementation for vrs runtime
 use std::collections::HashMap;
 
 use crate::connection::{Connection, Message};

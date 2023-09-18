@@ -1,4 +1,4 @@
-#+TITLE: Design of vrsjmp
+#+TITLE: Design of vrs
 
 Dumping ground for high level design notes
 
@@ -105,7 +105,7 @@ interaction close to client API as possible.
 
 * Lisp as the Uniform Interface
 
-In vrsjmp, it's Lisp all the way down:
+In vrs, it's Lisp all the way down:
 
 - Scripting language is Lisp
 - Modules extends runtime via bindings in Lisp

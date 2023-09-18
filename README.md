@@ -1,6 +1,6 @@
-# vrsjmp
+# vrs
 
-[![Rust](https://github.com/leoshimo/vrsjmp/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/leoshimo/vrsjmp/actions/workflows/rust.yml)
+[![Rust](https://github.com/leoshimo/vrs/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/leoshimo/vrs/actions/workflows/rust.yml)
 
 🚧 Under Heavy Construction
 

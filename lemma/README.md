@@ -1,7 +1,7 @@
 # Lemma
 
 Lisp-dialect focused on providing uniform code and data interface for
-[vrsjmp](https://github.com/leoshimo/vrsjmp/).
+[vrs](https://github.com/leoshimo/vrs/).
 
 ## Goals
 
@@ -16,7 +16,7 @@ Lisp-dialect focused on providing uniform code and data interface for
 There is a binary target that exposes a simple REPL:
 
 ```sh
-# in vrsjmp root folder
+# in vrs root folder
 $ cargo run --bin lemma
 ```
 
