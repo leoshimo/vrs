@@ -1,6 +1,5 @@
 use crate::SymbolId;
 
-// TODO: Replace lazy errors with more structured errs
 #[derive(thiserror::Error, Debug, PartialEq, Clone)]
 pub enum Error {
     #[error("Failed to lex - {0}")]
@@ -18,37 +17,11 @@ pub enum Error {
     #[error("Undefined symbol - {0}")]
     UndefinedSymbol(SymbolId),
 
-    #[error("Evaluation error - Invalid arguments to function call")]
-    InvalidArgumentsToFunctionCall,
-
     #[error("Evaluation error - Invalid operation to call {0}")]
     InvalidOperation(crate::Value),
 
-    #[error("Evaluation error - Unexpected number of arguments")]
-    UnexpectedNumberOfArguments,
-
-    #[error("Missing lambda parameter list")]
-    MissingLambdaParameterList,
-
-    #[error("Parameter list can only contain symbols")]
-    ParameterListContainsNonSymbol,
-
-    // TODO: Should this be same as UnexpectedNumberOfArguments
-    #[error("quote expects a single argument")]
-    QuoteExpectsSingleArgument,
-
-    // TODO: Should this be same as UnexpectedNumberOfArguments
-    #[error("eval expects a single form argument")]
-    EvalExpectsSingleFormArgument,
-
     #[error("Unexpected arguments - {0}")]
     UnexpectedArguments(String),
-
-    #[error("Unexpected conditional value - {0}")]
-    UnexpectedConditionalValue(String),
-
-    #[error("Unsupported value conversion - {0}")]
-    UnsupportedValueConversion(String),
 
     #[error("No item at index - {0}")]
     IndexOutOfBounds(usize),

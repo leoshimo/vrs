@@ -70,7 +70,11 @@ pub fn eval_lambda_call(lambda: &Lambda, arg_forms: &[Form], env: &mut Env) -> R
 /// Evaluate a lambda expression, passing in values as args
 pub fn eval_lambda_call_vals(lambda: &Lambda, arg_vals: &[Value], env: &mut Env) -> Result<Value> {
     if lambda.params.len() != arg_vals.len() {
-        return Err(Error::UnexpectedNumberOfArguments);
+        return Err(Error::UnexpectedArguments(format!(
+            "expected {} arguments - got {}",
+            lambda.params.len(),
+            arg_vals.len()
+        )));
     }
 
     // TODO: Lexical scope instead of Dynamic scope?

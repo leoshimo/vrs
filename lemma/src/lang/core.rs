@@ -6,20 +6,25 @@ use crate::{eval::eval, Env, Error, Form, Lambda, Result, Value};
 
 /// Implements `lambda` special form
 pub fn lang_lambda(arg_forms: &[Form], _env: &mut Env) -> Result<Value> {
-    let (params, body) = arg_forms
-        .split_first()
-        .ok_or(Error::MissingLambdaParameterList)?;
+    let (params, body) = arg_forms.split_first().ok_or(Error::UnexpectedArguments(
+        "lambda expects two arguments".to_string(),
+    ))?;
 
     let params = match params {
         Form::List(l) => Ok(l),
-        _ => Err(Error::MissingLambdaParameterList),
+        _ => Err(Error::UnexpectedArguments(
+            "first argument should be a list".to_string(),
+        )),
     }?;
 
     let params = params
         .iter()
         .map(|p| match p {
             Form::Symbol(s) => Ok(s.clone()),
-            _ => Err(Error::ParameterListContainsNonSymbol),
+            _ => Err(Error::UnexpectedArguments(format!(
+                "invalid element in parameter list - {}",
+                p
+            ))),
         })
         .collect::<Result<Vec<_>>>()?;
 
@@ -29,10 +34,11 @@ pub fn lang_lambda(arg_forms: &[Form], _env: &mut Env) -> Result<Value> {
 
 /// Implements the `quote` special form
 pub fn lang_quote(arg_forms: &[Form], _env: &mut Env) -> Result<Value> {
-    if arg_forms.len() == 1 {
-        Ok(Value::Form(arg_forms[0].clone()))
-    } else {
-        Err(Error::QuoteExpectsSingleArgument)
+    match arg_forms {
+        [f] => Ok(Value::Form(f.clone())),
+        _ => Err(Error::UnexpectedArguments(
+            "quote expects one argument".to_string(),
+        )),
     }
 }
 
@@ -40,12 +46,16 @@ pub fn lang_quote(arg_forms: &[Form], _env: &mut Env) -> Result<Value> {
 pub fn lang_eval(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     let arg_form = match arg_forms {
         [form] => Ok(form),
-        _ => Err(Error::EvalExpectsSingleFormArgument),
+        _ => Err(Error::UnexpectedArguments(
+            "eval expects one argument".to_string(),
+        )),
     }?;
 
     match eval(arg_form, env)? {
         Value::Form(f) => eval(&f, env),
-        _ => Err(Error::EvalExpectsSingleFormArgument),
+        _ => Err(Error::UnexpectedArguments(
+            "eval expects form as argument".to_string(),
+        )),
     }
 }
 
@@ -74,8 +84,8 @@ pub fn lang_if(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
 
     let cond = match eval(cond_form, env)? {
         Value::Form(Form::Bool(b)) => Ok(b),
-        v => Err(Error::UnexpectedConditionalValue(format!(
-            "Conditional form evaluated to {}",
+        v => Err(Error::UnexpectedArguments(format!(
+            "conditional form evaluated to {}",
             v
         ))),
     }?;
