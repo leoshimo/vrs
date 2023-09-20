@@ -14,6 +14,7 @@ pub enum Token {
     Keyword(String),
     ParenLeft,
     ParenRight,
+    Quote,
 }
 
 impl std::fmt::Display for Token {
@@ -27,6 +28,7 @@ impl std::fmt::Display for Token {
             Token::Keyword(s) => write!(f, ":{}", s),
             Token::ParenLeft => write!(f, "("),
             Token::ParenRight => write!(f, ")"),
+            Token::Quote => write!(f, "'"),
         }
     }
 }
@@ -81,6 +83,7 @@ impl Tokens<'_> {
         match ch {
             '(' => Ok(Token::ParenLeft),
             ')' => Ok(Token::ParenRight),
+            '\'' => Ok(Token::Quote),
             _ => Err(Error::FailedToLex(format!("Unexpected punctuation - {ch}"))),
         }
     }
@@ -141,7 +144,7 @@ impl<'a> Iterator for Tokens<'a> {
                 }
                 '\"' => self.next_string(),
                 ':' => self.next_keyword(),
-                _ if is_list_delimiter(ch) => self.next_punct(),
+                _ if is_punct(ch) => self.next_punct(),
                 _ if ch.is_numeric() || ch == &'-' => self.next_int(),
                 _ => self.next_symbol(),
             };
@@ -153,12 +156,12 @@ impl<'a> Iterator for Tokens<'a> {
 
 /// Return whether or not a given character is a symbol delimiter
 fn is_symbol_delimiter(ch: &char) -> bool {
-    ch.is_whitespace() || is_list_delimiter(ch)
+    ch.is_whitespace() || is_punct(ch)
 }
 
-/// Return whether or not given character is a list delimiter
-fn is_list_delimiter(ch: &char) -> bool {
-    ch == &'(' || ch == &')'
+/// Return whether or not token is an interesting punctuation
+fn is_punct(ch: &char) -> bool {
+    *ch == '(' || *ch == ')' || *ch == '\''
 }
 
 #[cfg(test)]
@@ -317,6 +320,39 @@ mod tests {
                 Token::ParenLeft,
                 Token::Symbol("print".to_string()),
                 Token::String("hello".to_string()),
+                Token::ParenRight,
+                Token::ParenRight,
+            ])
+        );
+    }
+
+    #[test]
+    fn lex_quoted() {
+        assert_eq!(
+            lex("'()"),
+            Ok(vec![Token::Quote, Token::ParenLeft, Token::ParenRight,])
+        );
+        assert_eq!(
+            lex("'(1 :two \"three\")"),
+            Ok(vec![
+                Token::Quote,
+                Token::ParenLeft,
+                Token::Int(1),
+                Token::Keyword("two".to_string()),
+                Token::String("three".to_string()),
+                Token::ParenRight
+            ])
+        );
+        assert_eq!(
+            lex("(hello '(1 2 3))"),
+            Ok(vec![
+                Token::ParenLeft,
+                Token::Symbol("hello".to_string()),
+                Token::Quote,
+                Token::ParenLeft,
+                Token::Int(1),
+                Token::Int(2),
+                Token::Int(3),
                 Token::ParenRight,
                 Token::ParenRight,
             ])

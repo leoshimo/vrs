@@ -50,6 +50,10 @@ where
                 "Unexpected closing parenthesis while parsing expression".to_string(),
             ))
         }
+        Token::Quote => {
+            let quoted = parse_form(tokens)?;
+            Form::List(vec![Form::symbol("quote"), quoted])
+        }
     };
     Ok(form)
 }
@@ -196,6 +200,45 @@ mod tests {
                 Form::string("string"),
                 Form::Int(10),
                 Form::Int(-99),
+            ]))
+        )
+    }
+
+    #[test]
+    fn parse_quoted() {
+        assert_eq!(
+            parse("'()"),
+            Ok(Form::List(vec![Form::symbol("quote"), Form::List(vec![]),]))
+        );
+        assert_eq!(
+            parse("'(1 2 3)"),
+            Ok(Form::List(vec![
+                Form::symbol("quote"),
+                Form::List(vec![Form::Int(1), Form::Int(2), Form::Int(3),]),
+            ]))
+        );
+        assert_eq!(
+            parse("(hello '(1 2 3))"),
+            Ok(Form::List(vec![
+                Form::symbol("hello"),
+                Form::List(vec![
+                    Form::symbol("quote"),
+                    Form::List(vec![Form::Int(1), Form::Int(2), Form::Int(3),]),
+                ])
+            ]))
+        );
+
+        assert_eq!(
+            parse("'(hello '(1 2 3))"),
+            Ok(Form::List(vec![
+                Form::symbol("quote"),
+                Form::List(vec![
+                    Form::symbol("hello"),
+                    Form::List(vec![
+                        Form::symbol("quote"),
+                        Form::List(vec![Form::Int(1), Form::Int(2), Form::Int(3),]),
+                    ])
+                ])
             ]))
         )
     }

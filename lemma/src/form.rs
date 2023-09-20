@@ -1,5 +1,4 @@
 //! Forms in Lemma
-//! A form is a object meant to be evaluated to
 
 use crate::{Env, Result};
 use serde::{Deserialize, Serialize};
@@ -73,14 +72,19 @@ impl std::fmt::Display for Form {
             Form::String(s) => write!(f, "\"{}\"", s),
             Form::Keyword(k) => write!(f, "{}", k),
             Form::Symbol(s) => write!(f, "{}", s),
-            Form::List(l) => write!(
-                f,
-                "({})",
-                l.iter()
-                    .map(|e| e.to_string())
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            ),
+            Form::List(l) => match &l[..] {
+                [quote, form] if quote == &Form::symbol("quote") => {
+                    write!(f, "'{}", form)
+                }
+                _ => write!(
+                    f,
+                    "({})",
+                    l.iter()
+                        .map(|e| e.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                ),
+            },
             Form::Lambda(l) => write!(
                 f,
                 "<lambda ({})>",
@@ -196,6 +200,42 @@ mod tests {
             ])
             .to_string(),
             "(hello (world (:a_keyword)) \"string\" 10 -99)"
+        );
+    }
+
+    #[test]
+    fn quoted_to_string() {
+        assert_eq!(
+            Form::List(vec![Form::symbol("quote"), Form::symbol("hello")]).to_string(),
+            "'hello"
+        );
+        assert_eq!(
+            Form::List(vec![Form::symbol("quote"), Form::List(vec![])]).to_string(),
+            "'()"
+        );
+        assert_eq!(
+            Form::List(vec![
+                Form::symbol("quote"),
+                Form::List(vec![Form::Int(1), Form::Int(2), Form::Int(3),])
+            ])
+            .to_string(),
+            "'(1 2 3)"
+        );
+        assert_eq!(
+            Form::List(vec![
+                Form::symbol("quote"),
+                Form::List(vec![
+                    Form::Int(1),
+                    Form::Int(2),
+                    Form::Int(3),
+                    Form::List(vec![
+                        Form::symbol("quote"),
+                        Form::List(vec![Form::Int(4), Form::Int(5), Form::Int(6),])
+                    ])
+                ]),
+            ])
+            .to_string(),
+            "'(1 2 3 '(4 5 6))"
         );
     }
 }
