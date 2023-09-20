@@ -1,5 +1,5 @@
 //! Implements evaluation of expressions
-use crate::{parse::parse, Env, Error, Form, Lambda, Result, SpecialForm, SymbolId};
+use crate::{parse::parse, Env, Error, Form, Lambda, NativeFunc, Result, SymbolId};
 use tracing::debug;
 
 /// Evaluate a given expression
@@ -39,7 +39,7 @@ fn eval_list(forms: &[Form], env: &mut Env) -> Result<Form> {
 
     match eval(&op_form, env)? {
         Form::Lambda(lambda) => eval_lambda_call(&lambda, arg_forms, env),
-        Form::SpecialForm(sp_form) => eval_special_form(&sp_form, arg_forms, env),
+        Form::NativeFunc(sp_form) => eval_special_form(&sp_form, arg_forms, env),
         _ => Err(Error::NotAProcedure(op_form.clone())),
     }
 }
@@ -81,7 +81,7 @@ pub fn eval_lambda_call_vals(lambda: &Lambda, arg_vals: &[Form], env: &mut Env) 
 
 /// Evaluate a special form expression
 fn eval_special_form(
-    sp_form: &SpecialForm,
+    sp_form: &NativeFunc,
     arg_forms: &[Form],
     env: &mut Env<'_>,
 ) -> std::result::Result<Form, Error> {
@@ -160,14 +160,14 @@ mod tests {
     #[test]
     fn eval_special_form() {
         let mut env = Env::new();
-        env.bind_special_form(SpecialForm {
+        env.bind_native(NativeFunc {
             symbol: SymbolId::from("quote"),
             func: |arg_forms, _env| Ok(arg_forms[0].clone()),
         });
 
         assert!(matches!(
             eval_expr("quote", &mut env),
-            Ok(F::SpecialForm(l)) if l.symbol == SymbolId::from("quote"),
+            Ok(F::NativeFunc(l)) if l.symbol == SymbolId::from("quote"),
         ));
 
         assert_eq!(

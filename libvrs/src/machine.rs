@@ -3,7 +3,7 @@
 use std::process::Command;
 use std::thread;
 
-use lemma::{eval, Env, Form, SpecialForm, SymbolId};
+use lemma::{eval, Env, Form, NativeFunc, SymbolId};
 
 /// Handle to virtual machine environment
 #[derive(Debug)]
@@ -41,7 +41,7 @@ impl Default for Machine<'_> {
 }
 
 fn add_exec(env: &mut Env) {
-    env.bind_special_form(SpecialForm {
+    env.bind_native(NativeFunc {
         symbol: SymbolId::from("exec"),
         func: machine_exec,
     });

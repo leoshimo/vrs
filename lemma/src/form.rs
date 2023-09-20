@@ -16,7 +16,7 @@ pub enum Form {
     List(Vec<Form>),
     Lambda(Lambda),
     #[serde(skip)]
-    SpecialForm(SpecialForm),
+    NativeFunc(NativeFunc),
 }
 
 impl std::fmt::Debug for Form {
@@ -34,7 +34,7 @@ pub struct Lambda {
 
 /// A function that evaluates special forms
 #[derive(Debug, Clone, PartialEq)]
-pub struct SpecialForm {
+pub struct NativeFunc {
     pub symbol: SymbolId,
     pub func: fn(&[Form], &mut Env) -> Result<Form>,
 }
@@ -90,7 +90,7 @@ impl std::fmt::Display for Form {
                     .collect::<Vec<_>>()
                     .join(" ")
             ),
-            Form::SpecialForm(s) => write!(f, "<spform {}>", s.symbol),
+            Form::NativeFunc(s) => write!(f, "<nativefn {}>", s.symbol),
         }
     }
 }

@@ -106,7 +106,7 @@ mod tests {
         let mut env = std_env();
 
         assert!(
-            matches!(eval_expr("lambda", &mut env), Ok(Form::SpecialForm(_))),
+            matches!(eval_expr("lambda", &mut env), Ok(Form::NativeFunc(_))),
             "lambda symbol should be defined"
         );
 

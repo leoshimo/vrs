@@ -1,5 +1,5 @@
 /// The Lemma environment that has all bindings
-use crate::{Form, SpecialForm, SymbolId};
+use crate::{Form, NativeFunc, SymbolId};
 use std::collections::HashMap;
 
 #[derive(Debug, Default)]
@@ -33,8 +33,8 @@ impl Env<'_> {
     }
 
     /// Shorthand to `bind` a `SpecialForm`
-    pub fn bind_special_form(&mut self, sp_form: SpecialForm) {
-        self.bind(&sp_form.symbol.clone(), Form::SpecialForm(sp_form));
+    pub fn bind_native(&mut self, sp_form: NativeFunc) {
+        self.bind(&sp_form.symbol.clone(), Form::NativeFunc(sp_form));
     }
 
     /// Create a new environment existing existing one

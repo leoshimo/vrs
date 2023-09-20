@@ -14,7 +14,7 @@ pub use eval::eval_expr;
 pub use form::Form;
 pub use form::KeywordId;
 pub use form::Lambda;
-pub use form::SpecialForm;
+pub use form::NativeFunc;
 pub use form::SymbolId;
 pub use parse::parse;
 
