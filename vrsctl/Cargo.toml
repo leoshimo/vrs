@@ -13,6 +13,6 @@ anyhow = "1.0.75"
 tracing-subscriber = "0.3.17"
 tracing = "0.1.37"
 clap = { version = "4.4.4", features = ["cargo", "derive"] } 
-rustyline = "12.0.0"
+rustyline = { version = "12.0.0", features = ["derive"] }
 dirs = "5.0.1"
 
