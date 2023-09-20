@@ -14,7 +14,7 @@ pub fn eval(form: &Form, env: &mut Env) -> Result<Form> {
     match form {
         Form::Symbol(s) => eval_symbol(s, env),
         Form::List(l) => eval_list(l, env),
-        _ => Ok(Form::from(form.clone())),
+        _ => Ok(form.clone()),
     }
 }
 
@@ -37,7 +37,7 @@ fn eval_list(forms: &[Form], env: &mut Env) -> Result<Form> {
 
     let (op_form, arg_forms) = forms.split_first().expect("forms is nonempty");
 
-    match eval(&op_form, env)? {
+    match eval(op_form, env)? {
         Form::Lambda(lambda) => eval_lambda_call(&lambda, arg_forms, env),
         Form::NativeFunc(sp_form) => eval_special_form(&sp_form, arg_forms, env),
         _ => Err(Error::NotAProcedure(op_form.clone())),

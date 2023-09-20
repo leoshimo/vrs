@@ -162,7 +162,7 @@ impl EventLoop {
             .map_err(|_| Error::FailedToReceiveRuntimeResponse)?;
 
         let contents = match resp {
-            Ok(val) => lemma::Form::from(val),
+            Ok(val) => val,
             Err(e) => {
                 error!("Error from evaluation - {e}");
                 lemma::Form::keyword("err") // should this have better error?

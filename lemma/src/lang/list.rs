@@ -132,7 +132,7 @@ pub fn lang_push(arg_forms: &[Form], env: &mut Env) -> Result<Form> {
 
     let elem_val = eval(&elem_form, env)?;
     list_val.push(elem_val);
-    env.bind(&symbol, Form::List(list_val.clone()));
+    env.bind(symbol, Form::List(list_val.clone()));
     Ok(Form::List(list_val))
 }
 
@@ -153,7 +153,7 @@ pub fn lang_pop(arg_forms: &[Form], env: &mut Env) -> Result<Form> {
     }?;
 
     let val = list_val.pop();
-    env.bind(&symbol, Form::List(list_val.clone()));
+    env.bind(symbol, Form::List(list_val.clone()));
     match val {
         Some(v) => Ok(v),
         None => Ok(Form::Nil),

@@ -101,7 +101,7 @@ pub fn lang_type(arg_forms: &[Form], env: &mut Env) -> Result<Form> {
         )),
     }?;
 
-    Ok(match eval(&f, env)? {
+    Ok(match eval(f, env)? {
         Form::Nil => Form::keyword("nil"),
         Form::Bool(_) => Form::keyword("bool"),
         Form::Int(_) => Form::keyword("int"),
