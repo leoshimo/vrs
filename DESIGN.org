@@ -118,6 +118,13 @@ software will be reusable.
 When the language is tailored to the environment, software can be simple and
 rich, similar to how shell languages are designed around IO redirection.
 
+It is also my impression that a bulk of software written today fall into
+standard, institutionalized patterns - with engineers acting as "human
+compilers" to write this code out by hand. Why not let the computer write that
+code via higher-level intermediate language?
+
+See also - [Greeenspun's Tenth Rule](https://en.wikipedia.org/wiki/Greenspun's_tenth_rule)
+
 ** Lisp as the Uniform Interface
 
 In vrs, it's Lisp all the way down:
