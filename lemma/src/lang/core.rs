@@ -92,6 +92,28 @@ pub fn lang_if(arg_forms: &[Form], env: &mut Env) -> Result<Form> {
     }
 }
 
+/// Implements the `type` proc
+pub fn lang_type(arg_forms: &[Form], env: &mut Env) -> Result<Form> {
+    let f = match arg_forms {
+        [f] => Ok(f),
+        _ => Err(Error::UnexpectedArguments(
+            "type expects one argument".to_string(),
+        )),
+    }?;
+
+    Ok(match eval(&f, env)? {
+        Form::Nil => Form::keyword("nil"),
+        Form::Bool(_) => Form::keyword("bool"),
+        Form::Int(_) => Form::keyword("int"),
+        Form::String(_) => Form::keyword("string"),
+        Form::Symbol(_) => Form::keyword("symbol"),
+        Form::Keyword(_) => Form::keyword("keyword"),
+        Form::List(_) => Form::keyword("list"),
+        Form::Lambda(_) => Form::keyword("lambda"),
+        Form::NativeFunc(_) => Form::keyword("nativefn"),
+    })
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -286,6 +308,47 @@ mod tests {
         assert_eq!(
             eval_expr("(if (is_false) \"true\" \"false\")", &mut env),
             Ok(Form::string("false"))
+        );
+    }
+
+    #[test]
+    #[traced_test]
+    fn eval_type() {
+        let mut env = std_env();
+
+        assert_eq!(eval_expr("(type nil)", &mut env), Ok(Form::keyword("nil")));
+        assert_eq!(
+            eval_expr("(type true)", &mut env),
+            Ok(Form::keyword("bool"))
+        );
+        assert_eq!(
+            eval_expr("(type false)", &mut env),
+            Ok(Form::keyword("bool"))
+        );
+        assert_eq!(eval_expr("(type 1)", &mut env), Ok(Form::keyword("int")));
+        assert_eq!(
+            eval_expr("(type \"one\")", &mut env),
+            Ok(Form::keyword("string"))
+        );
+        assert_eq!(
+            eval_expr("(type :a_keyword)", &mut env),
+            Ok(Form::keyword("keyword"))
+        );
+        assert_eq!(
+            eval_expr("(type (quote ()))", &mut env),
+            Ok(Form::keyword("list"))
+        );
+        assert_eq!(
+            eval_expr("(type (lambda (x) x))", &mut env),
+            Ok(Form::keyword("lambda"))
+        );
+        assert_eq!(
+            eval_expr("(type type)", &mut env),
+            Ok(Form::keyword("nativefn"))
+        );
+        assert_eq!(
+            eval_expr("(type ((lambda (x) x) 5))", &mut env),
+            Ok(Form::keyword("int"))
         );
     }
 }
