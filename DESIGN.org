@@ -103,7 +103,22 @@ directly, or as a development tool.
 NDJSON-based messages and syntactic sugar to it will be used to keep CLI
 interaction close to client API as possible.
 
-* Lisp as the Uniform Interface
+* Lemma Lang
+** Why write your own Lisp?
+
+Paul Graham put it best:
+
+#+begin_quote
+A language is by definition reusable. The more of your application you can push
+down into a language for writing that type of application, the more of your
+software will be reusable.
+— Paul Graham
+#+end_quote
+
+When the language is tailored to the environment, software can be simple and
+rich, similar to how shell languages are designed around IO redirection.
+
+** Lisp as the Uniform Interface
 
 In vrs, it's Lisp all the way down:
 
@@ -121,21 +136,7 @@ application-specific progamming environments.
 
 [Twitter rant](https://twitter.com/leoshimo/status/1694375158897574227)
 
-** Why write your own Lisp?
-
-Paul Graham put it best:
-
-#+begin_quote
-A language is by definition reusable. The more of your application you can push
-down into a language for writing that type of application, the more of your
-software will be reusable.
-— Paul Graham
-#+end_quote
-
-When the language is tailored to the environment, software can be simple and
-rich, similar to how shell languages are designed around IO redirection.
-
-** Lisp as Hypermedia
+*** Lisp as Hypermedia
 
 v0.1 sketch of Lisp as Hypermedia
 
@@ -151,3 +152,17 @@ v0.1 sketch of Lisp as Hypermedia
        (:li :content "Element 3"
             :on_click '(action_for_elem_3))))
 #+end_src
+
+** Quirk: Dynamic Scoping
+
+Lemma uses dynamic scoping instead of lexical scoping today.
+
+This is due to few reasons:
+- Dynamic scoping is [very useful](https://www.gnu.org/software/emacs/emacs-paper.html#SEC17)
+- It simplifies implementation of interpreter
+- It simplifies implementation serialization of lemma expressions
+
+It may be nice to default to lexical scoping and add closures if existing
+utility of free variables can be provided by some other mechanism, e.g. a
+stack-based parameter like Jai's context mechanism.
+
