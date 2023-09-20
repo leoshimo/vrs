@@ -4,6 +4,8 @@ use anyhow::{Context, Result};
 use clap::{arg, command};
 use rustyline::error::ReadlineError;
 
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use tokio::net::UnixStream;
 use tracing::debug;
@@ -25,9 +27,12 @@ async fn main() -> Result<()> {
     let conn = Connection::new(conn);
     let client = Client::new(conn);
 
-    match args.get_one::<String>("command") {
-        Some(cmd) => run_cmd(client, cmd).await,
-        None => run_repl(client).await,
+    if let Some(cmd) = args.get_one::<String>("command") {
+        run_cmd(client, cmd).await
+    } else if let Some(file) = args.get_one::<String>("file") {
+        run_file(client, file).await
+    } else {
+        run_repl(client).await
     }
 }
 
@@ -35,6 +40,7 @@ async fn main() -> Result<()> {
 fn cli() -> clap::Command {
     command!()
         .arg(arg!(command: -c --command <COMMAND> "If present, COMMAND is sent and program exits"))
+        .arg(arg!(file: [FILE] "If present, executes contents of FILE"))
 }
 
 /// Run a single request
@@ -42,6 +48,51 @@ async fn run_cmd(mut client: Client, cmd: &str) -> Result<()> {
     let f = lemma::parse(cmd)?;
     let resp = client.request(f).await?;
     println!("{}", resp.contents);
+    Ok(())
+}
+
+async fn run_file(mut client: Client, file: &str) -> Result<()> {
+    let f = File::open(file).with_context(|| format!("Failed to open {}", file))?;
+    let mut f = BufReader::new(f);
+    let mut line = String::new();
+    loop {
+        match f.read_line(&mut line) {
+            Ok(0) => break,
+            Ok(_) => (),
+            Err(e) => {
+                eprintln!("Error reading file - {}", e);
+                break;
+            }
+        }
+
+        if line.starts_with('#') {
+            line.clear();
+            continue;
+        }
+
+        let f = match lemma::parse(&line) {
+            Ok(f) => f,
+            Err(lemma::Error::IncompleteExpression(_)) => {
+                continue;
+            }
+            Err(e) => {
+                eprintln!("{} - {}", e, line);
+                break;
+            }
+        };
+
+        line.clear();
+
+        match client.request(f).await {
+            Ok(resp) => {
+                println!("{}", resp.contents);
+            }
+            Err(e) => {
+                eprintln!("{}", e);
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -57,7 +108,7 @@ async fn run_repl(mut client: Client) -> Result<()> {
     loop {
         match rl.readline("vrs> ") {
             Ok(line) => {
-                if line.starts_with("#!") {
+                if line.starts_with('#') {
                     continue; // skip shebang
                 }
 
