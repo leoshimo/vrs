@@ -11,14 +11,14 @@ pub enum Error {
     #[error("Empty expression")]
     EmptyExpression,
 
-    #[error("Unexpected operator - {0}")]
-    UnexpectedOperator(String),
+    #[error("Missing procedure")]
+    MissingProcedure,
+
+    #[error("Not a procedure - {0}")]
+    NotAProcedure(crate::Form),
 
     #[error("Undefined symbol - {0}")]
     UndefinedSymbol(SymbolId),
-
-    #[error("Evaluation error - Invalid operation to call {0}")]
-    InvalidOperation(crate::Value),
 
     #[error("Unexpected arguments - {0}")]
     UnexpectedArguments(String),

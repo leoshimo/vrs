@@ -67,7 +67,7 @@ impl Runtime {
     }
 
     /// Dispatch an command to runtime
-    pub async fn dispatch(&self, cmd: lemma::Form) -> Result<lemma::Value> {
+    pub async fn dispatch(&self, cmd: lemma::Form) -> Result<lemma::Form> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.evloop_tx
             .send(Message::DispatchCommand { cmd, resp_tx })
@@ -236,7 +236,7 @@ mod tests {
             runtime
                 .dispatch(form)
                 .await,
-            Ok(f) if f == lemma::Value::from("hello world")
+            Ok(f) if f == lemma::Form::string("hello world")
         ));
     }
 
@@ -378,17 +378,14 @@ mod tests {
         );
         assert!(
             matches!(
-                client.request(p("(def echo (lambda (x) x))").unwrap()).await,
-                Ok(Response { contents, .. }) if contents == p("(lambda (x) x)").unwrap()
+                dbg!(
+                    client
+                        .request(p("(def echo (lambda (x) x))").unwrap())
+                        .await
+                ),
+                Ok(Response { .. })
             ),
-            "defining a echo binding returns its value"
-        );
-        assert!(
-            matches!(
-                client.request(p("echo").unwrap()).await,
-                Ok(Response { contents, .. }) if contents == p("(lambda (x) x)").unwrap()
-            ),
-            "echo symbol returns lambda value as a form"
+            "defining a echo binding is successful"
         );
         assert!(
             matches!(

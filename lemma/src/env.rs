@@ -1,10 +1,10 @@
 /// The Lemma environment that has all bindings
-use crate::{SpecialForm, SymbolId, Value};
+use crate::{Form, SpecialForm, SymbolId};
 use std::collections::HashMap;
 
 #[derive(Debug, Default)]
 pub struct Env<'a> {
-    bindings: HashMap<SymbolId, Value>,
+    bindings: HashMap<SymbolId, Form>,
     parent: Option<&'a Env<'a>>,
 }
 
@@ -17,7 +17,7 @@ impl Env<'_> {
     }
 
     /// Resolve a given symbol ID to the value in this environment
-    pub fn resolve(&self, symbol: &SymbolId) -> Option<&Value> {
+    pub fn resolve(&self, symbol: &SymbolId) -> Option<&Form> {
         if let Some(value) = self.bindings.get(symbol) {
             Some(value)
         } else if let Some(value) = self.parent.and_then(|p| p.resolve(symbol)) {
@@ -28,13 +28,13 @@ impl Env<'_> {
     }
 
     /// Bind a given symbol to given form
-    pub fn bind(&mut self, symbol: &SymbolId, value: Value) {
+    pub fn bind(&mut self, symbol: &SymbolId, value: Form) {
         self.bindings.insert(symbol.clone(), value);
     }
 
     /// Shorthand to `bind` a `SpecialForm`
     pub fn bind_special_form(&mut self, sp_form: SpecialForm) {
-        self.bind(&sp_form.symbol.clone(), Value::SpecialForm(sp_form));
+        self.bind(&sp_form.symbol.clone(), Form::SpecialForm(sp_form));
     }
 
     /// Create a new environment existing existing one

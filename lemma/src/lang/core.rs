@@ -2,10 +2,10 @@
 //! Lemma interpreter does not have built-in procedures and special forms by default.
 //! The language features are "opt in" by defining symbols within the environment
 
-use crate::{eval::eval, Env, Error, Form, Lambda, Result, Value};
+use crate::{eval::eval, Env, Error, Form, Lambda, Result};
 
 /// Implements `lambda` special form
-pub fn lang_lambda(arg_forms: &[Form], _env: &mut Env) -> Result<Value> {
+pub fn lang_lambda(arg_forms: &[Form], _env: &mut Env) -> Result<Form> {
     let (params, body) = arg_forms.split_first().ok_or(Error::UnexpectedArguments(
         "lambda expects two arguments".to_string(),
     ))?;
@@ -29,13 +29,13 @@ pub fn lang_lambda(arg_forms: &[Form], _env: &mut Env) -> Result<Value> {
         .collect::<Result<Vec<_>>>()?;
 
     let body = body.to_owned();
-    Ok(Value::Lambda(Lambda { params, body }))
+    Ok(Form::Lambda(Lambda { params, body }))
 }
 
 /// Implements the `quote` special form
-pub fn lang_quote(arg_forms: &[Form], _env: &mut Env) -> Result<Value> {
+pub fn lang_quote(arg_forms: &[Form], _env: &mut Env) -> Result<Form> {
     match arg_forms {
-        [f] => Ok(Value::Form(f.clone())),
+        [f] => Ok(f.clone()),
         _ => Err(Error::UnexpectedArguments(
             "quote expects one argument".to_string(),
         )),
@@ -43,7 +43,7 @@ pub fn lang_quote(arg_forms: &[Form], _env: &mut Env) -> Result<Value> {
 }
 
 /// Implements the `eval` special form
-pub fn lang_eval(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+pub fn lang_eval(arg_forms: &[Form], env: &mut Env) -> Result<Form> {
     let arg_form = match arg_forms {
         [form] => Ok(form),
         _ => Err(Error::UnexpectedArguments(
@@ -51,16 +51,11 @@ pub fn lang_eval(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
         )),
     }?;
 
-    match eval(arg_form, env)? {
-        Value::Form(f) => eval(&f, env),
-        _ => Err(Error::UnexpectedArguments(
-            "eval expects form as argument".to_string(),
-        )),
-    }
+    eval(&eval(arg_form, env)?, env)
 }
 
 /// Implements the `def` special form
-pub fn lang_def(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+pub fn lang_def(arg_forms: &[Form], env: &mut Env) -> Result<Form> {
     let (sym_id, val_form) = match arg_forms {
         [Form::Symbol(s), form] => Ok((s, form)),
         _ => Err(Error::UnexpectedArguments(
@@ -74,7 +69,7 @@ pub fn lang_def(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
 }
 
 /// Implements the `if` condition
-pub fn lang_if(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
+pub fn lang_if(arg_forms: &[Form], env: &mut Env) -> Result<Form> {
     let (cond_form, true_form, false_form) = match arg_forms {
         [cond_form, true_form, false_form] => Ok((cond_form, true_form, false_form)),
         _ => Err(Error::UnexpectedArguments(
@@ -83,7 +78,7 @@ pub fn lang_if(arg_forms: &[Form], env: &mut Env) -> Result<Value> {
     }?;
 
     let cond = match eval(cond_form, env)? {
-        Value::Form(Form::Bool(b)) => Ok(b),
+        Form::Bool(b) => Ok(b),
         v => Err(Error::UnexpectedArguments(format!(
             "conditional form evaluated to {}",
             v
@@ -111,7 +106,7 @@ mod tests {
         let mut env = std_env();
 
         assert!(
-            matches!(eval_expr("lambda", &mut env), Ok(Value::SpecialForm(_))),
+            matches!(eval_expr("lambda", &mut env), Ok(Form::SpecialForm(_))),
             "lambda symbol should be defined"
         );
 
@@ -121,27 +116,24 @@ mod tests {
                     "(lambda (x y) 10)",
                     &mut env
                 ),
-                Ok(Value::Lambda(Lambda { params, .. })) if params == vec![SymbolId::from("x"), SymbolId::from("y")]
+                Ok(Form::Lambda(Lambda { params, .. })) if params == vec![SymbolId::from("x"), SymbolId::from("y")]
             ),
             "lambda special form returns a lambda value"
         );
 
         // ((lambda (x) x) 5) => 5
-        assert_eq!(
-            eval_expr("((lambda (x) x) 5)", &mut env),
-            Ok(Value::from(5))
-        );
+        assert_eq!(eval_expr("((lambda (x) x) 5)", &mut env), Ok(Form::Int(5)));
 
-        // ((lambda () (lambda (x) x))) => Value::Func
+        // ((lambda () (lambda (x) x)))
         assert!(matches!(
             eval_expr("((lambda () (lambda (x) x)))", &mut env),
-            Ok(Value::Lambda(_))
+            Ok(Form::Lambda(_))
         ));
 
         // (((lambda () (lambda (x) x))) 10) => 10
         assert_eq!(
             eval_expr("(((lambda () (lambda (x) x))) 10)", &mut env),
-            Ok(Value::from(10))
+            Ok(Form::Int(10))
         );
     }
 
@@ -152,26 +144,26 @@ mod tests {
 
         assert_eq!(
             eval_expr("(quote (one :two three))", &mut env),
-            Ok(Value::Form(Form::List(vec![
+            Ok(Form::List(vec![
                 Form::symbol("one"),
                 Form::keyword("two"),
                 Form::symbol("three"),
-            ])))
+            ]))
         );
 
         assert_eq!(
             eval_expr("(quote (lambda (x) x))", &mut env),
-            Ok(Value::Form(Form::List(vec![
+            Ok(Form::List(vec![
                 Form::symbol("lambda"),
                 Form::List(vec![Form::symbol("x")]),
                 Form::symbol("x"),
-            ])))
+            ]))
         );
 
         assert!(
             matches!(
                 eval_expr("((quote (lambda (x) x)) 5)", &mut env),
-                Err(Error::InvalidOperation(Value::Form(_)))
+                Err(Error::NotAProcedure(_))
             ),
             "A quoted operation does not recursively evaluate without explicit call to eval"
         );
@@ -182,11 +174,11 @@ mod tests {
     fn eval_eval() {
         let mut env = std_env();
 
-        assert_eq!(eval_expr("(eval (quote 5))", &mut env), Ok(Value::from(5)));
+        assert_eq!(eval_expr("(eval (quote 5))", &mut env), Ok(Form::Int(5)));
 
         assert_eq!(
             eval_expr("(eval (quote ((lambda (x) x) 5)))", &mut env),
-            Ok(Value::from(5))
+            Ok(Form::Int(5))
         );
     }
 
@@ -195,14 +187,14 @@ mod tests {
     fn eval_def_vals() {
         {
             let mut env = std_env();
-            assert_eq!(eval_expr("(def x 10)", &mut env), Ok(Value::from(10)));
+            assert_eq!(eval_expr("(def x 10)", &mut env), Ok(Form::Int(10)));
         }
 
         {
             let mut env = std_env();
             assert_eq!(
                 eval_expr("(def x \"hello\")", &mut env),
-                Ok(Value::from("hello"))
+                Ok(Form::string("hello"))
             );
         }
 
@@ -211,12 +203,12 @@ mod tests {
             let mut env = std_env();
             assert_eq!(
                 eval_expr("(def x \"hello\")", &mut env),
-                Ok(Value::from("hello"))
+                Ok(Form::string("hello"))
             );
 
             assert_eq!(
                 eval_expr("x", &mut env),
-                Ok(Value::from("hello")),
+                Ok(Form::string("hello")),
                 "x should evaluate to def value"
             );
         }
@@ -229,17 +221,17 @@ mod tests {
 
         assert!(matches!(
             eval_expr("(def echo (lambda (x) x))", &mut env),
-            Ok(Value::Lambda(_))
+            Ok(Form::Lambda(_))
         ));
 
         assert_eq!(
             eval_expr("(echo \"hello\")", &mut env),
-            Ok(Value::from("hello"))
+            Ok(Form::string("hello"))
         );
 
         assert_eq!(
             eval_expr("(echo (echo \"hello\"))", &mut env),
-            Ok(Value::from("hello"))
+            Ok(Form::string("hello"))
         );
     }
 
@@ -250,12 +242,12 @@ mod tests {
 
         assert_eq!(
             eval_expr("(if true \"true\" \"false\")", &mut env),
-            Ok(Value::from("true"))
+            Ok(Form::string("true"))
         );
 
         assert_eq!(
             eval_expr("(if false \"true\" \"false\")", &mut env),
-            Ok(Value::from("false"))
+            Ok(Form::string("false"))
         );
     }
 
@@ -269,12 +261,12 @@ mod tests {
 
         assert_eq!(
             eval_expr("(if is_true \"true\" \"false\")", &mut env),
-            Ok(Value::from("true"))
+            Ok(Form::string("true"))
         );
 
         assert_eq!(
             eval_expr("(if is_false \"true\" \"false\")", &mut env),
-            Ok(Value::from("false"))
+            Ok(Form::string("false"))
         );
     }
 
@@ -288,12 +280,12 @@ mod tests {
 
         assert_eq!(
             eval_expr("(if (is_true) \"true\" \"false\")", &mut env),
-            Ok(Value::from("true"))
+            Ok(Form::string("true"))
         );
 
         assert_eq!(
             eval_expr("(if (is_false) \"true\" \"false\")", &mut env),
-            Ok(Value::from("false"))
+            Ok(Form::string("false"))
         );
     }
 }

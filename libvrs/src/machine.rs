@@ -3,7 +3,7 @@
 use std::process::Command;
 use std::thread;
 
-use lemma::{eval, Env, Form, SpecialForm, SymbolId, Value};
+use lemma::{eval, Env, Form, SpecialForm, SymbolId};
 
 /// Handle to virtual machine environment
 #[derive(Debug)]
@@ -19,7 +19,7 @@ pub type Message = lemma::Form;
 pub type Error = lemma::Error;
 
 /// The results from machine
-pub type Result = lemma::Result<lemma::Value>;
+pub type Result = lemma::Result<lemma::Form>;
 
 impl Machine<'_> {
     pub fn new() -> Self {
@@ -52,7 +52,7 @@ fn machine_exec(arg_forms: &[Form], env: &mut Env) -> Result {
     let args = arg_forms
         .iter()
         .map(|f| match eval(f, env)? {
-            Value::Form(Form::String(s)) => Ok(s),
+            Form::String(s) => Ok(s),
             _ => Err(Error::UnexpectedArguments(
                 "exec can only be passed string values".to_string(),
             )),
@@ -70,5 +70,5 @@ fn machine_exec(arg_forms: &[Form], env: &mut Env) -> Result {
         let _ = Command::new(cmd).args(args).spawn();
     });
 
-    Ok(Value::from(Form::symbol("ok")))
+    Ok(Form::symbol("ok"))
 }

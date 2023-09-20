@@ -1,10 +1,11 @@
 //! Forms in Lemma
-//! A form is a object meant to be evaluated to yield a [Value]
+//! A form is a object meant to be evaluated to
 
+use crate::{Env, Result};
 use serde::{Deserialize, Serialize};
 
 /// Forms that can be evaluated
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub enum Form {
     Nil,
     Bool(bool),
@@ -13,6 +14,29 @@ pub enum Form {
     Symbol(SymbolId),
     Keyword(KeywordId),
     List(Vec<Form>),
+    Lambda(Lambda),
+    #[serde(skip)]
+    SpecialForm(SpecialForm),
+}
+
+impl std::fmt::Debug for Form {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+/// A function as a value
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Lambda {
+    pub params: Vec<SymbolId>,
+    pub body: Vec<Form>,
+}
+
+/// A function that evaluates special forms
+#[derive(Debug, Clone, PartialEq)]
+pub struct SpecialForm {
+    pub symbol: SymbolId,
+    pub func: fn(&[Form], &mut Env) -> Result<Form>,
 }
 
 impl Form {
@@ -57,6 +81,16 @@ impl std::fmt::Display for Form {
                     .collect::<Vec<_>>()
                     .join(" ")
             ),
+            Form::Lambda(l) => write!(
+                f,
+                "<lambda ({})>",
+                l.params
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+            Form::SpecialForm(s) => write!(f, "<spform {}>", s.symbol),
         }
     }
 }
