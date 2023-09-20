@@ -1,79 +1,12 @@
 use anyhow::{Context, Result};
 use clap::{arg, command};
-use colored::*;
+use rustyline::error::ReadlineError;
 
-use std::io::IsTerminal;
-use std::io::{self, BufRead, BufReader, Read, Write};
+use std::path::PathBuf;
 use tokio::net::UnixStream;
 use tracing::debug;
 use vrs::client::Client;
 use vrs::connection::Connection;
-
-/// Run a single request
-async fn run_cmd(mut client: Client, cmd: &str) -> Result<()> {
-    let f = lemma::parse(cmd)?;
-    let resp = client.request(f).await?;
-    println!("{}", resp.contents);
-    Ok(())
-}
-
-/// Run an interactive REPL
-async fn run_repl(mut client: Client, read: impl Read, show_prompt: bool) -> Result<()> {
-    let mut stream = BufReader::new(read);
-
-    let mut s = String::new();
-    while client.is_active() {
-        if show_prompt && s.is_empty() {
-            print!("{}", "vrs> ".bold().bright_white());
-            io::stdout().flush()?;
-        }
-
-        match stream.read_line(&mut s) {
-            Ok(0) | Err(_) => {
-                client.shutdown().await;
-                break;
-            }
-            _ => (),
-        };
-
-        if s.trim() == "exit" {
-            client.shutdown().await;
-            continue;
-        }
-        if s.is_empty() {
-            continue;
-        }
-        if s.starts_with('#') {
-            s.clear();
-            continue;
-        }
-
-        let f = match lemma::parse(&s) {
-            Ok(f) => {
-                s.clear();
-                f
-            }
-            Err(_) => continue, // parse failing is file - continue reading
-        };
-
-        let resp = match client.request(f).await {
-            Ok(resp) => resp,
-            Err(e) => {
-                eprintln!("{}", e);
-                continue;
-            }
-        };
-
-        println!("{}", resp.contents);
-    }
-    Ok(())
-}
-
-/// The clap CLI interface
-fn cli() -> clap::Command {
-    command!()
-        .arg(arg!(command: -c --command <COMMAND> "If present, COMMAND is sent and program exits"))
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -92,6 +25,75 @@ async fn main() -> Result<()> {
 
     match args.get_one::<String>("command") {
         Some(cmd) => run_cmd(client, cmd).await,
-        None => run_repl(client, io::stdin(), io::stdin().is_terminal()).await,
+        None => run_repl(client).await,
     }
+}
+
+/// The clap CLI interface
+fn cli() -> clap::Command {
+    command!()
+        .arg(arg!(command: -c --command <COMMAND> "If present, COMMAND is sent and program exits"))
+}
+
+/// Run a single request
+async fn run_cmd(mut client: Client, cmd: &str) -> Result<()> {
+    let f = lemma::parse(cmd)?;
+    let resp = client.request(f).await?;
+    println!("{}", resp.contents);
+    Ok(())
+}
+
+/// Run an interactive REPL
+async fn run_repl(mut client: Client) -> Result<()> {
+    let mut rl = rustyline::DefaultEditor::new().with_context(|| "Failed to create line editor")?;
+    if let Some(history_file) = history_file() {
+        if let Err(e) = rl.load_history(&history_file) {
+            eprintln!("Failed to load {} - {}", history_file.to_string_lossy(), e);
+        }
+    }
+
+    loop {
+        match rl.readline("vrs> ") {
+            Ok(line) => {
+                if line.starts_with("#!") {
+                    continue; // skip shebang
+                }
+
+                let _ = rl.add_history_entry(line.as_str());
+
+                let f = lemma::parse(&line).with_context(|| "Failed to parse line".to_string())?;
+                match client.request(f).await {
+                    Ok(resp) => {
+                        println!("{}", resp.contents);
+                    }
+                    Err(e) => {
+                        eprintln!("{}", e);
+                    }
+                }
+            }
+            Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => break,
+            Err(err) => {
+                println!("Error: {:?}", err);
+                break;
+            }
+        }
+    }
+
+    client.shutdown().await;
+
+    if let Some(history_file) = history_file() {
+        if let Err(e) = rl.save_history(&history_file) {
+            eprintln!("Failed to save {} - {}", history_file.to_string_lossy(), e);
+        }
+    }
+
+    Ok(())
+}
+
+/// Path to file to use for history
+fn history_file() -> Option<PathBuf> {
+    let dir = dirs::data_local_dir()
+        .or_else(dirs::data_dir)
+        .or_else(dirs::home_dir)?;
+    Some(dir.as_path().join(".vrsctl_history"))
 }
