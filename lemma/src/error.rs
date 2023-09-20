@@ -8,8 +8,8 @@ pub enum Error {
     #[error("Failed to parse - {0}")]
     FailedToParse(String),
 
-    #[error("Empty expression")]
-    EmptyExpression,
+    #[error("Incomplete expression - {0}")]
+    IncompleteExpression(String),
 
     #[error("Missing procedure")]
     MissingProcedure,

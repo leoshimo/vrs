@@ -21,7 +21,7 @@ fn parse_form<I>(tokens: &mut Peekable<I>) -> Result<Form>
 where
     I: Iterator<Item = Token>,
 {
-    let next = tokens.next().ok_or(Error::EmptyExpression)?;
+    let next = tokens.next().ok_or(Error::IncompleteExpression("Expected a form".to_string()))?;
     let form = match next {
         Token::Nil => Form::Nil,
         Token::Bool(b) => Form::Bool(b),
@@ -38,7 +38,7 @@ where
                 items.push(parse_form(tokens)?);
             }
             if tokens.peek() != Some(&Token::ParenRight) {
-                return Err(Error::FailedToParse(
+                return Err(Error::IncompleteExpression(
                     "Expected closing parenthesis".to_string(),
                 ));
             }
@@ -64,8 +64,8 @@ mod tests {
 
     #[test]
     fn parse_empty() {
-        assert_eq!(parse(""), Err(Error::EmptyExpression));
-        assert_eq!(parse("            "), Err(Error::EmptyExpression));
+        assert!(matches!(parse(""), Err(Error::IncompleteExpression(_))));
+        assert!(matches!(parse("            "), Err(Error::IncompleteExpression(_))));
     }
 
     #[test]
@@ -253,6 +253,6 @@ mod tests {
 
     #[test]
     fn parse_unterminated_list() {
-        assert!(matches!(parse("(1 2 3"), Err(Error::FailedToParse(_))));
+        assert!(matches!(parse("(1 2 3"), Err(Error::IncompleteExpression(_))));
     }
 }
