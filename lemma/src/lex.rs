@@ -136,12 +136,20 @@ impl<'a> Iterator for Tokens<'a> {
     type Item = Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let mut is_comment = false;
+
         while let Some(ch) = self.inner.peek() {
+            if *ch == '\n' && is_comment {
+                is_comment = false;
+            }
+            if *ch == '#' {
+                is_comment = true;
+            }
+            if ch.is_whitespace() || is_comment {
+                let _ = self.inner.next();
+                continue;
+            }
             let token = match ch {
-                _ if ch.is_whitespace() => {
-                    let _ = self.inner.next();
-                    continue;
-                }
                 '\"' => self.next_string(),
                 ':' => self.next_keyword(),
                 _ if is_punct(ch) => self.next_punct(),
@@ -356,6 +364,42 @@ mod tests {
                 Token::ParenRight,
                 Token::ParenRight,
             ])
+        );
+    }
+
+    #[test]
+    fn lex_empty() {
+        assert_eq!(lex(""), Ok(vec![]));
+    }
+
+    #[test]
+    fn lex_comments() {
+        assert_eq!(
+            lex("a_symbol # A comment"),
+            Ok(vec![Token::Symbol("a_symbol".to_string())])
+        );
+
+        assert_eq!(
+            lex("a_symbol # A comment (1 2 3)"),
+            Ok(vec![Token::Symbol("a_symbol".to_string())])
+        );
+
+        assert_eq!(
+            lex("# A comment (1 2 3)\n not_a_comment"),
+            Ok(vec![Token::Symbol("not_a_comment".to_string()),]),
+        );
+
+        assert_eq!(
+            lex("a_symbol # A comment (1 2 3)   \n    '(1 2 3)"),
+            Ok(vec![
+                Token::Symbol("a_symbol".to_string()),
+                Token::Quote,
+                Token::ParenLeft,
+                Token::Int(1),
+                Token::Int(2),
+                Token::Int(3),
+                Token::ParenRight,
+            ]),
         );
     }
 }
