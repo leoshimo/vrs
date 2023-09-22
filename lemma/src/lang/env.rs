@@ -66,6 +66,10 @@ pub fn std_env<'a>() -> Env<'a> {
             symbol: SymbolId::from("+"),
             func: math::lang_add,
         });
+        env.bind_native(NativeFunc {
+            symbol: SymbolId::from("<"),
+            func: math::lang_less,
+        });
     }
 
     env
