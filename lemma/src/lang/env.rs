@@ -1,4 +1,4 @@
-use crate::lang::{core, list};
+use crate::lang::{core, list, math};
 use crate::{Env, NativeFunc, SymbolId};
 
 /// Returns the 'standard' environment of the language
@@ -60,5 +60,13 @@ pub fn std_env<'a>() -> Env<'a> {
             func: list::lang_pop,
         });
     }
+
+    {
+        env.bind_native(NativeFunc {
+            symbol: SymbolId::from("+"),
+            func: math::lang_add,
+        });
+    }
+
     env
 }

@@ -1,5 +1,6 @@
 pub mod core;
 pub mod list;
+pub mod math;
 
 mod env;
 
