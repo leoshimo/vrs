@@ -67,6 +67,10 @@ pub fn std_env<'a>() -> Env<'a> {
             func: math::lang_add,
         });
         env.bind_native(NativeFunc {
+            symbol: SymbolId::from("sub"), // TODO: Needs lexer update
+            func: math::lang_sub,
+        });
+        env.bind_native(NativeFunc {
             symbol: SymbolId::from("<"),
             func: math::lang_less,
         });
