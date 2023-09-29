@@ -18,7 +18,7 @@ pub(crate) fn start() -> KernelHandle {
 }
 
 /// Handle to `Kernel`
-pub struct KernelHandle {
+pub(crate) struct KernelHandle {
     msg_tx: mpsc::Sender<Message>,
 }
 

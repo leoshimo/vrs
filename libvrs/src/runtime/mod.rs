@@ -3,6 +3,8 @@ mod legacy;
 // v2 runtime
 mod error;
 mod kernel;
+mod namespace;
+mod process;
 
 #[allow(clippy::module_inception)]
 mod runtime;
