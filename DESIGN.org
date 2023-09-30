@@ -104,6 +104,12 @@ NDJSON-based messages and syntactic sugar to it will be used to keep CLI
 interaction close to client API as possible.
 
 * Lemma Lang
+** Goals
+
+Interactions from the REPL or hypermedia interface should be exactly how the
+applications are programmed, similar to how the language of the shell can be
+used to write scripts.
+
 ** Why write your own Lisp?
 
 Paul Graham put it best:
@@ -172,4 +178,97 @@ This is due to few reasons:
 It may be nice to default to lexical scoping and add closures if existing
 utility of free variables can be provided by some other mechanism, e.g. a
 stack-based parameter like Jai's context mechanism.
+
+* Runtime Program Execution
+
+The runtime spawns and manages processes. These are not OS processes, but
+lightweight threads of execution like [Erlang Processes](https://www.erlang.org/docs/22/reference_manual/processes.html).
+
+Each process has its own Lisp environment for evaluating S-expressions, and an
+event loop that used to process events such as:
+
+- Messages from runtime kernel, e.g. kill a process
+- Requests from other processes, e.g. function call of exported binding
+- Messages from subscriptions, e.g. child process terminating
+
+More specifically:
+
+1. A process is notified to execute some expression via call or cast message
+2. Evaluation of that expression may change that process's state, e.g. add new
+   subscriptions (i.e. callbacks) for that running process.
+3. Event loop checks if there is "pending work" (i.e. subscriptions). If not,
+   process exits.
+4. Otherwise, process continues running, polling for subscribed events. When a
+   event fires, loop again from (1).
+
+The =Process= implements this logic, driving an Lemma Lang interpreter via an
+event-loop. The messages to event loop are themselves are sourced from
+subscriptions of the process, or some initial expression.
+
+It has two main events that drive a process: *Call*, which are request /
+response evaluations of S-expressions, and *Cast*, which are fire-and-forget
+evaluations.
+
+** Lifecycle of Process Execution
+
+Model Scenarios:
+
+1. A client shell process is spawned, which is used by the connected client to
+   interact with rest of runtime.
+2. An echo process is spawned, listening for request messages (calls) from other
+   processes and responding with contents of request.
+3. A fire-and-forget process is spawned in via an S-expression by another
+   process, which waits for spawned process to terminate.
+
+TODO: Illustrate examples
+
+*** Example 1: Client Shell Process
+
+1. Runtime kernel is notified to spawn a client shell process - i.e. there is a
+   new client connection
+2. Kernel spawns new process that has a subscription representing stream of
+   S-expressions from client connection.
+3. When connected client sends a message, that is delivered as a *Call* message
+   to process's event loop, which contains message contents and a channel for
+   sending responses over.
+4. The event loop dequeues the Call message, and evaluates expression in the
+   Lisp interpreter. The evaluation may change the state of process, e.g. setup
+   new subscriptions.
+5. The event loop checks if there will be more messages, or if process was
+   flagged for shutdown. Otherwise, repeat from step 3.
+6. If process shuts down, the runtime kernel is notified, and handle is cleaned up.
+
+*** Example 2: Echo Process
+
+The following is the mechanisim for request / response between processes via
+=Call= message
+
+1. A running client shell process issues =spawn= with an S-expression that
+   starts the echo process.
+2. The runtime kernel receives the =spawn=, and creates a new process to run the
+   expression in.
+3. The new process receives the spawn expression as a TBD (call or cast?), and
+   evaluates the expression in the process's interpreter.
+4. The evaluation adds a new subscription for a globally bound =echo= function
+   via =export= keyword. The =export= call also updates a global map of bindings.
+5. The client shell process can =import= the new =echo= function, which defines
+   an =echo= function in its namespace
+6. The client shell process evaluates a call to new =echo=, which routes a
+   =Call= message via runtime's global binding table to the spawned echo process
+   with =echo= export.
+7. The echo process receives a =Call= messsage via it's export subscription,
+   which calls the function in local interpreter, and returns result via
+   sender channel for response.
+8. The response is received via response channel on the client shell process
+
+*** Example 3: Fire-and-Forget Process
+
+The following is the mechanism for one-shot fire-and-forget triggered by a
+process to off-load work to another process with another event loop and interpreter
+
+TODO:
+- Cover how parent process receives results from child process
+- Cover how parent process can receive messages during execution of child
+  process to process mailbox, and =send= and =recv= calls, before child process
+  terminates.
 
