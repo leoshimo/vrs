@@ -1,22 +1,33 @@
 #![allow(dead_code)] // TODO: Remove me
 
 //! Runtime Processes
+use super::subscription::{self, Subscription, SubscriptionHandle, SubscriptionId};
 use super::v2::{Error, Result};
+use std::collections::HashMap;
 use tokio::sync::{mpsc, oneshot};
+use tracing::error;
 
 /// Spawn a new process
 pub(crate) fn spawn() -> ProcessHandle {
+    spawn_with_sub(None)
+}
+
+// TODO: Add builder API
+/// Spawn a process w/ given subscription
+pub(crate) fn spawn_with_sub(sub: Option<Subscription>) -> ProcessHandle {
     let (msg_tx, mut msg_rx) = mpsc::channel(32);
     let handle = ProcessHandle { msg_tx };
     let weak_handle = handle.clone().downgrade();
     tokio::spawn(async move {
         let mut proc = Process::new(weak_handle);
+        if let Some(sub) = sub {
+            proc.add_subscription(sub);
+        }
         while let Some(msg) = msg_rx.recv().await {
             proc.handle_msg(msg).await;
         }
         Ok::<(), Error>(())
     });
-
     handle
 }
 
@@ -61,9 +72,7 @@ impl ProcessHandle {
 impl WeakProcessHandle {
     /// Upgrade into process handle
     pub(crate) fn upgrade(&self) -> Option<ProcessHandle> {
-        self.msg_tx
-            .upgrade()
-            .and_then(|msg_tx| Some(ProcessHandle { msg_tx }))
+        self.msg_tx.upgrade().map(|msg_tx| ProcessHandle { msg_tx })
     }
 }
 
@@ -71,21 +80,28 @@ impl WeakProcessHandle {
 pub enum Message {
     Call(lemma::Form, oneshot::Sender<Result<lemma::Form>>),
     Cast(lemma::Form),
+    AddSubscription(subscription::Subscription),
 }
 
 /// A process that runs within the runtime
 pub(crate) struct Process<'a> {
-    /// Environment of interpreter
-    env: lemma::Env<'a>,
     /// The weak process handle that this process may handoff to external tasks
     handle: WeakProcessHandle,
+    /// Environment of interpreter
+    env: lemma::Env<'a>,
+    /// Handles to subscriptions for this process
+    subscriptions: HashMap<SubscriptionId, SubscriptionHandle>,
+    /// The next subscription ID to assign
+    next_sub_id: usize,
 }
 
 impl Process<'_> {
     pub(crate) fn new(handle: WeakProcessHandle) -> Self {
         Self {
-            env: lemma::lang::std_env(),
             handle,
+            env: lemma::lang::std_env(),
+            subscriptions: HashMap::new(),
+            next_sub_id: 0,
         }
     }
 
@@ -98,12 +114,32 @@ impl Process<'_> {
             Message::Cast(f) => {
                 let _ = self.eval(&f);
             }
+            Message::AddSubscription(s) => self.add_subscription(s),
         }
     }
 
     /// Evaluate given form in process's environment
     fn eval(&mut self, form: &lemma::Form) -> Result<lemma::Form> {
         Ok(lemma::eval(form, &mut self.env)?)
+    }
+
+    /// Add a new subscription to this process
+    fn add_subscription(&mut self, sub: Subscription) {
+        let id = SubscriptionId::from(self.next_sub_id);
+        self.next_sub_id = self.next_sub_id.wrapping_add(1);
+        self.subscriptions
+            .insert(id, subscription::start(id, sub, self.handle.clone()));
+    }
+
+    /// Remove a subscription from this process
+    fn remove_subscription(&mut self, id: SubscriptionId) {
+        match self.subscriptions.remove(&id) {
+            Some(sub) => sub.abort(),
+            None => {
+                // TODO - Report errors?
+                error!("No subscription found for subscription id {id}");
+            }
+        }
     }
 }
 
