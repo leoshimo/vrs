@@ -200,6 +200,9 @@ impl Process<'_> {
 
     /// Mark process for shutdown
     fn shutdown(&mut self) {
+        if self.is_shutdown {
+            return;
+        }
         self.subscriptions.drain().for_each(|(_id, s)| s.abort());
         self.is_shutdown = true
     }
