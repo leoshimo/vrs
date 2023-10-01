@@ -2,22 +2,33 @@
 
 //! Runtime Kernel Task
 use super::{
-    process::{self, ProcessHandle, ProcessId, ProcessSet},
+    process::{self, ProcessHandle, ProcessId, ProcessResult, ProcessSet},
     subscription::Subscription,
 };
 use crate::runtime::v2::{Error, Result};
 use crate::Connection;
 use std::collections::HashMap;
 use tokio::sync::{mpsc, oneshot};
-use tracing::debug;
+use tracing::{debug, info};
 
 /// Starts the kernel task
 pub(crate) fn start() -> KernelHandle {
     let (msg_tx, mut msg_rx) = mpsc::channel(32);
     tokio::spawn(async move {
         let mut kernel = Kernel::new();
-        while let Some(msg) = msg_rx.recv().await {
-            kernel.handle_msg(msg).await?;
+        loop {
+            tokio::select! {
+                msg = msg_rx.recv() => match msg {
+                    Some(msg) => kernel.handle_msg(msg).await?,
+                    None => {
+                        info!("Kernel handle dropped - terminating");
+                        break;
+                    }
+                },
+                Some(Ok(result)) = kernel.proc_set.join_next() => {
+                    kernel.handle_msg(Message::ProcEnded(result)).await?;
+                }
+            }
         }
         Ok::<(), Error>(())
     });
@@ -66,6 +77,7 @@ pub enum Message {
     ListProcesses(oneshot::Sender<Vec<ProcessId>>),
     SpawnProc(Option<Connection>, oneshot::Sender<ProcessId>),
     GetProc(ProcessId, oneshot::Sender<Option<ProcessHandle>>),
+    ProcEnded(ProcessResult),
 }
 
 /// The runtime kernel task
@@ -97,6 +109,7 @@ impl Kernel {
                 let _ = rx.send(self.get_proc(&id));
                 Ok(())
             }
+            Message::ProcEnded(result) => self.clean_proc(result),
         }
     }
 
@@ -123,16 +136,28 @@ impl Kernel {
     fn get_proc(&self, id: &ProcessId) -> Option<ProcessHandle> {
         self.procs.get(id).cloned()
     }
+
+    /// Cleanup process that terminated with given result
+    fn clean_proc(&mut self, result: ProcessResult) -> Result<()> {
+        match self.procs.remove(&result.proc_id) {
+            Some(_) => Ok(()),
+            None => Err(Error::UnexpectedProcessResult),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{connection::tests::conn_fixture, Client};
     use lemma::{parse as p, Form};
+    use std::time::Duration;
+    use tokio::time::{sleep, timeout};
+    use tracing_test::traced_test;
 
     use super::*;
 
     #[tokio::test]
+    #[traced_test]
     async fn kernel_init() {
         let k = start();
         assert_eq!(
@@ -140,9 +165,48 @@ mod tests {
             0,
             "Should not have any processes on init"
         );
+
+        assert!(!logs_contain("ERROR"));
     }
 
     #[tokio::test]
+    #[traced_test]
+    async fn kernel_proc_lifecycle() {
+        let k = start();
+
+        let pid = k
+            .spawn_proc(None)
+            .await
+            .expect("Kernel should spawn new process");
+
+        assert!(
+            k.list_processes().await.unwrap().contains(&pid),
+            "Kernel should have new process"
+        );
+
+        let proc = k
+            .get_proc(pid)
+            .await
+            .expect("Kernel should respond")
+            .expect("Handle should be Some");
+        proc.shutdown().await.unwrap();
+
+        timeout(Duration::from_millis(5), async {
+            loop {
+                if !k.list_processes().await.unwrap().contains(&pid) {
+                    break;
+                }
+                sleep(Duration::from_millis(1)).await
+            }
+        })
+        .await
+        .expect("Kernel should be notified that process terminating and update state");
+
+        assert!(!logs_contain("ERROR"));
+    }
+
+    #[tokio::test]
+    #[traced_test]
     async fn kernel_proc_for_conn() {
         let (local, remote) = conn_fixture();
         let mut client = Client::new(remote);
@@ -177,5 +241,7 @@ mod tests {
             proc.call(p("msg").unwrap()).await.unwrap(),
             Form::string("Hello world")
         );
+
+        assert!(!logs_contain("ERROR"));
     }
 }

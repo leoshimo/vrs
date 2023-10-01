@@ -14,6 +14,9 @@ pub enum Error {
     #[error("Failed to message process - {0}")]
     FailedToMessageProcess(#[from] tokio::sync::mpsc::error::SendError<process::Message>),
 
+    #[error("Received unexpected process result")]
+    UnexpectedProcessResult,
+
     #[error("Evaluation failed - {0}")]
     EvaluationError(#[from] lemma::Error),
 }

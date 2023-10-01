@@ -9,7 +9,14 @@ use tokio::task::JoinSet;
 use tracing::{debug, error};
 
 /// Process set
-pub(crate) type ProcessSet = JoinSet<Result<()>>;
+pub(crate) type ProcessSet = JoinSet<ProcessResult>;
+
+/// The end status of process
+#[derive(Debug)]
+pub struct ProcessResult {
+    /// The ID the result is for
+    pub proc_id: ProcessId,
+}
 
 /// Spawn a new process
 pub(crate) fn spawn(id: ProcessId, proc_set: &mut ProcessSet) -> ProcessHandle {
@@ -24,7 +31,7 @@ pub(crate) fn spawn(id: ProcessId, proc_set: &mut ProcessSet) -> ProcessHandle {
                 break;
             }
         }
-        Ok::<(), Error>(())
+        ProcessResult { proc_id: id }
     });
     handle
 }
