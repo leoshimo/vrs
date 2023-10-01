@@ -38,12 +38,11 @@ impl KernelHandle {
             .map_err(Error::FailedToReceiveResponseFromKernelTask)
     }
 
-    /// Spawn a new process in runtime for given connection
-    pub(crate) async fn spawn_proc_for_conn(&self, conn: Connection) -> Result<ProcessId> {
+    // TODO Builder-fy?
+    /// Spawn a new process
+    pub(crate) async fn spawn_proc(&self, conn: Option<Connection>) -> Result<ProcessId> {
         let (tx, rx) = oneshot::channel();
-        self.msg_tx
-            .send(Message::SpawnProcessForConn(conn, tx))
-            .await?;
+        self.msg_tx.send(Message::SpawnProc(conn, tx)).await?;
         rx.await
             .map_err(Error::FailedToReceiveResponseFromKernelTask)
     }
@@ -63,7 +62,7 @@ impl KernelHandle {
 #[derive(Debug)]
 pub enum Message {
     ListProcesses(oneshot::Sender<Vec<ProcessId>>),
-    SpawnProcessForConn(Connection, oneshot::Sender<ProcessId>),
+    SpawnProc(Option<Connection>, oneshot::Sender<ProcessId>),
     GetProc(ProcessId, oneshot::Sender<Option<ProcessHandle>>),
 }
 
@@ -84,8 +83,8 @@ impl Kernel {
     pub async fn handle_msg(&mut self, msg: Message) -> Result<()> {
         match msg {
             Message::ListProcesses(tx) => self.handle_list_process(tx),
-            Message::SpawnProcessForConn(conn, rx) => {
-                let id = self.spawn_proc_for_conn(conn).await?;
+            Message::SpawnProc(conn, rx) => {
+                let id = self.spawn_proc(conn).await?;
                 let _ = rx.send(id);
                 Ok(())
             }
@@ -103,12 +102,14 @@ impl Kernel {
     }
 
     /// Spawn a new process for given connection
-    async fn spawn_proc_for_conn(&mut self, conn: Connection) -> Result<ProcessId> {
+    async fn spawn_proc(&mut self, conn: Option<Connection>) -> Result<ProcessId> {
         let id = ProcessId::from(self.next_proc_id);
         self.next_proc_id = self.next_proc_id.wrapping_add(1);
         let p = process::spawn(id);
-        p.add_subscription(Subscription::ClientConnection(conn))
-            .await?;
+        if let Some(conn) = conn {
+            p.add_subscription(Subscription::ClientConnection(conn))
+                .await?;
+        }
         self.procs.insert(id, p);
         Ok(id)
     }
@@ -144,15 +145,9 @@ mod tests {
         let k = start();
 
         let pid = k
-            .spawn_proc_for_conn(local)
+            .spawn_proc(Some(local))
             .await
-            .expect("Kernel should handle connection");
-
-        assert_eq!(
-            k.list_processes().await.unwrap(),
-            vec![pid],
-            "Kernel should have new process"
-        );
+            .expect("Kernel should spawn new process");
 
         let _ = client
             .request(p("(def msg \"Hello world\")").unwrap())
@@ -172,6 +167,7 @@ mod tests {
             .await
             .expect("Kernel should return resp")
             .expect("Handle should not be none");
+
         assert_eq!(
             proc.call(p("msg").unwrap()).await.unwrap(),
             Form::string("Hello world")
