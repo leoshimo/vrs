@@ -5,14 +5,18 @@ use super::subscription::{self, Subscription, SubscriptionHandle, SubscriptionId
 use super::v2::{Error, Result};
 use std::collections::HashMap;
 use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinSet;
 use tracing::{debug, error};
 
+/// Process set
+pub(crate) type ProcessSet = JoinSet<Result<()>>;
+
 /// Spawn a new process
-pub(crate) fn spawn(id: ProcessId) -> ProcessHandle {
+pub(crate) fn spawn(id: ProcessId, proc_set: &mut ProcessSet) -> ProcessHandle {
     let (msg_tx, mut msg_rx) = mpsc::channel(32);
     let handle = ProcessHandle { id, msg_tx };
     let weak_handle = handle.clone().downgrade();
-    tokio::spawn(async move {
+    proc_set.spawn(async move {
         let mut proc = Process::new(id, weak_handle);
         while let Some(msg) = msg_rx.recv().await {
             proc.handle_msg(msg).await;
@@ -189,6 +193,7 @@ impl Process<'_> {
 
     /// Mark process for shutdown
     fn shutdown(&mut self) {
+        self.subscriptions.drain().for_each(|(_id, s)| s.abort());
         self.is_shutdown = true
     }
 }
@@ -197,13 +202,15 @@ impl Process<'_> {
 mod tests {
     use super::fixture::spawn_proc_fixture;
 
+    use crate::runtime::process::ProcessSet;
     use lemma::parse as p;
     use lemma::Form;
     use tracing_test::traced_test;
 
     #[tokio::test]
     async fn proc_call() {
-        let proc = spawn_proc_fixture();
+        let mut set = ProcessSet::new();
+        let proc = spawn_proc_fixture(&mut set);
 
         assert!(matches!(
             proc.call(p("(def echo (lambda (x) x))").unwrap())
@@ -222,7 +229,8 @@ mod tests {
 
     #[tokio::test]
     async fn proc_cast() {
-        let proc = spawn_proc_fixture();
+        let mut set = ProcessSet::new();
+        let proc = spawn_proc_fixture(&mut set);
 
         proc.call(p("(def inc (lambda (x) (+ x 1)))").unwrap())
             .await
@@ -240,7 +248,8 @@ mod tests {
 
     #[tokio::test]
     async fn proc_weak_handle_upgrade() {
-        let proc = spawn_proc_fixture();
+        let mut set = ProcessSet::new();
+        let proc = spawn_proc_fixture(&mut set);
         let weak = proc.downgrade();
 
         assert!(
@@ -251,7 +260,8 @@ mod tests {
 
     #[tokio::test]
     async fn proc_weak_handle_upgrade_after_drop() {
-        let proc = spawn_proc_fixture();
+        let mut set = ProcessSet::new();
+        let proc = spawn_proc_fixture(&mut set);
         let weak = proc.downgrade();
         drop(proc);
 
@@ -264,7 +274,8 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn proc_shutdown_via_handle_shutdown() {
-        let proc = spawn_proc_fixture();
+        let mut set = ProcessSet::new();
+        let proc = spawn_proc_fixture(&mut set);
         assert!(!proc.is_shutdown().await.unwrap());
         proc.shutdown().await.expect("Shutdown message should send");
         assert!(proc.is_shutdown().await.unwrap());
@@ -273,6 +284,7 @@ mod tests {
     // TODO: Test: that cast is nonblocking, even for long-running operations
     // TODO: Test: that killing process is not blocked by long-running operations
     // TODO: Test: Subscriptions are ignored / cancelled when process handle is dropped
+    // TODO: Test: Shutting down process aborts subscription
 }
 
 #[cfg(test)]
@@ -280,7 +292,8 @@ pub mod fixture {
     use super::*;
 
     /// Spawn a process fixture
-    pub(crate) fn spawn_proc_fixture() -> ProcessHandle {
-        spawn(ProcessId::from(1))
+    pub(crate) fn spawn_proc_fixture(proc_set: &mut ProcessSet) -> ProcessHandle {
+        // TODO: Replace usage with actuall kernel spawn (?)
+        spawn(ProcessId::from(1), proc_set)
     }
 }

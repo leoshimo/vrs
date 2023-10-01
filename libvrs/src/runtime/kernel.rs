@@ -2,13 +2,14 @@
 
 //! Runtime Kernel Task
 use super::{
-    process::{self, ProcessHandle, ProcessId},
+    process::{self, ProcessHandle, ProcessId, ProcessSet},
     subscription::Subscription,
 };
 use crate::runtime::v2::{Error, Result};
 use crate::Connection;
 use std::collections::HashMap;
 use tokio::sync::{mpsc, oneshot};
+use tracing::debug;
 
 /// Starts the kernel task
 pub(crate) fn start() -> KernelHandle {
@@ -25,6 +26,7 @@ pub(crate) fn start() -> KernelHandle {
 }
 
 /// Handle to `Kernel`
+#[derive(Clone)]
 pub(crate) struct KernelHandle {
     msg_tx: mpsc::Sender<Message>,
 }
@@ -69,6 +71,7 @@ pub enum Message {
 /// The runtime kernel task
 struct Kernel {
     procs: HashMap<ProcessId, ProcessHandle>,
+    proc_set: ProcessSet,
     next_proc_id: usize,
 }
 
@@ -76,11 +79,13 @@ impl Kernel {
     pub fn new() -> Self {
         Self {
             procs: HashMap::new(),
+            proc_set: ProcessSet::new(),
             next_proc_id: 0,
         }
     }
 
     pub async fn handle_msg(&mut self, msg: Message) -> Result<()> {
+        debug!("handle_msg - {msg:?}");
         match msg {
             Message::ListProcesses(tx) => self.handle_list_process(tx),
             Message::SpawnProc(conn, rx) => {
@@ -105,7 +110,7 @@ impl Kernel {
     async fn spawn_proc(&mut self, conn: Option<Connection>) -> Result<ProcessId> {
         let id = ProcessId::from(self.next_proc_id);
         self.next_proc_id = self.next_proc_id.wrapping_add(1);
-        let p = process::spawn(id);
+        let p = process::spawn(id, &mut self.proc_set);
         if let Some(conn) = conn {
             p.add_subscription(Subscription::ClientConnection(conn))
                 .await?;
