@@ -29,7 +29,8 @@ impl KernelHandle {
     pub(crate) async fn list_processes(&self) -> Result<Vec<ProcessState>> {
         let (tx, rx) = oneshot::channel();
         self.msg_tx.send(Message::ListProcesses(tx)).await?;
-        Ok(rx.await?)
+        rx.await
+            .map_err(Error::FailedToReceiveResponseFromKernelTask)
     }
 
     /// Spawn a new process in runtime for given connection

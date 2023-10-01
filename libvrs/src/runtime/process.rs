@@ -5,26 +5,20 @@ use super::subscription::{self, Subscription, SubscriptionHandle, SubscriptionId
 use super::v2::{Error, Result};
 use std::collections::HashMap;
 use tokio::sync::{mpsc, oneshot};
-use tracing::error;
+use tracing::{debug, error};
 
 /// Spawn a new process
 pub(crate) fn spawn() -> ProcessHandle {
-    spawn_with_sub(None)
-}
-
-// TODO: Add builder API
-/// Spawn a process w/ given subscription
-pub(crate) fn spawn_with_sub(sub: Option<Subscription>) -> ProcessHandle {
     let (msg_tx, mut msg_rx) = mpsc::channel(32);
     let handle = ProcessHandle { msg_tx };
     let weak_handle = handle.clone().downgrade();
     tokio::spawn(async move {
         let mut proc = Process::new(weak_handle);
-        if let Some(sub) = sub {
-            proc.add_subscription(sub);
-        }
         while let Some(msg) = msg_rx.recv().await {
             proc.handle_msg(msg).await;
+            if proc.is_shutdown {
+                break;
+            }
         }
         Ok::<(), Error>(())
     });
@@ -52,7 +46,8 @@ impl ProcessHandle {
     pub(crate) async fn call(&self, form: lemma::Form) -> Result<lemma::Form> {
         let (tx, rx) = oneshot::channel();
         self.msg_tx.send(Message::Call(form, tx)).await?;
-        rx.await?
+        rx.await
+            .map_err(Error::FailedToReceiveResponseFromProcessTask)?
     }
 
     /// Send a nonblocking message to process
@@ -61,10 +56,35 @@ impl ProcessHandle {
         Ok(())
     }
 
+    /// Send a message to add a subscription
+    pub(crate) async fn add_subscription(&self, sub: subscription::Subscription) -> Result<()> {
+        self.msg_tx.send(Message::AddSubscription(sub)).await?;
+        Ok(())
+    }
+
     /// Downgrade this proces handle into weak process handle that does not keep process alive
     pub(crate) fn downgrade(&self) -> WeakProcessHandle {
         WeakProcessHandle {
             msg_tx: self.msg_tx.downgrade(),
+        }
+    }
+
+    /// Trigger graceful shutdown of process in next run of event loop
+    pub(crate) async fn shutdown(&self) -> Result<()> {
+        self.msg_tx.send(Message::Shutdown).await?;
+        Ok(())
+    }
+
+    /// Check whether or not process is shutdown
+    pub(crate) async fn is_shutdown(&self) -> Result<bool> {
+        let (tx, rx) = oneshot::channel();
+        match self.msg_tx.send(Message::IsShutdown(tx)).await {
+            Ok(()) => (),
+            Err(_) => return Ok(true), // event loop is already shutdown
+        }
+        match rx.await {
+            Ok(res) => Ok(res),
+            Err(_) => Ok(true), // event loop is already shutdown
         }
     }
 }
@@ -77,14 +97,19 @@ impl WeakProcessHandle {
 }
 
 /// Messages that [Process] responds to
+#[derive(Debug)]
 pub enum Message {
     Call(lemma::Form, oneshot::Sender<Result<lemma::Form>>),
     Cast(lemma::Form),
     AddSubscription(subscription::Subscription),
+    Shutdown,
+    IsShutdown(oneshot::Sender<bool>),
 }
 
 /// A process that runs within the runtime
 pub(crate) struct Process<'a> {
+    /// Whether or not process should exit in next cycle of event loop
+    is_shutdown: bool,
     /// The weak process handle that this process may handoff to external tasks
     handle: WeakProcessHandle,
     /// Environment of interpreter
@@ -102,10 +127,12 @@ impl Process<'_> {
             env: lemma::lang::std_env(),
             subscriptions: HashMap::new(),
             next_sub_id: 0,
+            is_shutdown: false,
         }
     }
 
     pub(crate) async fn handle_msg(&mut self, msg: Message) {
+        debug!("handle_msg - {msg:?}");
         match msg {
             Message::Call(f, tx) => {
                 let res = self.eval(&f);
@@ -115,6 +142,10 @@ impl Process<'_> {
                 let _ = self.eval(&f);
             }
             Message::AddSubscription(s) => self.add_subscription(s),
+            Message::Shutdown => self.shutdown(),
+            Message::IsShutdown(rx) => {
+                let _ = rx.send(self.is_shutdown);
+            }
         }
     }
 
@@ -141,6 +172,11 @@ impl Process<'_> {
             }
         }
     }
+
+    /// Mark process for shutdown
+    fn shutdown(&mut self) {
+        self.is_shutdown = true
+    }
 }
 
 #[cfg(test)]
@@ -148,6 +184,7 @@ mod tests {
     use super::*;
     use lemma::parse as p;
     use lemma::Form;
+    use tracing_test::traced_test;
 
     #[tokio::test]
     async fn proc_call() {
@@ -207,6 +244,15 @@ mod tests {
             weak.upgrade().is_none(),
             "Upgrading weak handle after original proc handle was dropped should return None"
         );
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    async fn proc_shutdown_via_handle_shutdown() {
+        let proc = spawn();
+        assert!(!proc.is_shutdown().await.unwrap());
+        proc.shutdown().await.expect("Shutdown message should send");
+        assert!(proc.is_shutdown().await.unwrap());
     }
 
     // TODO: Test: that cast is nonblocking, even for long-running operations

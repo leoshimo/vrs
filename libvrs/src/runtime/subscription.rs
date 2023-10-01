@@ -99,6 +99,11 @@ async fn subscription_for_client_connection(mut conn: Connection, target: WeakPr
             }
         };
     }
+
+    // When conn terminates, trigger graceful shutdown
+    if let Some(target) = target.upgrade() {
+        let _ = target.shutdown().await;
+    }
 }
 
 #[cfg(test)]
@@ -111,11 +116,16 @@ mod tests {
     use lemma::{parse as p, Form};
     use tracing_test::traced_test;
 
+    // TODO: Move to integration test?
     #[tokio::test]
     #[traced_test]
     async fn client_connection_request_response() {
         let (local, remote) = conn_fixture();
-        let proc = process::spawn_with_sub(Some(Subscription::ClientConnection(local)));
+        let proc = process::spawn();
+
+        proc.add_subscription(Subscription::ClientConnection(local))
+            .await
+            .expect("Adding subscription should succeed");
         let mut remote = Client::new(remote);
 
         // Process has definitions
@@ -132,5 +142,34 @@ mod tests {
             .await
             .expect("Response should return");
         assert_eq!(resp.contents, Form::Int(0));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[traced_test]
+    async fn client_connection_drop() {
+        use std::time::Duration;
+        use tokio::time::timeout;
+
+        let (local, remote) = conn_fixture();
+        let proc = process::spawn();
+
+        proc.add_subscription(Subscription::ClientConnection(local))
+            .await
+            .expect("Adding subscription should succeed");
+
+        // Connection terminated
+        drop(remote);
+
+        // Check it eventually shuts downs
+        // Necessary, since shutdown message comes from separate task (subscription task) v.s. the is_shutdown message from this task
+        timeout(Duration::from_millis(20), async {
+            loop {
+                if proc.is_shutdown().await.unwrap() {
+                    break;
+                }
+            }
+        })
+        .await
+        .expect("Should shutdown soon");
     }
 }
