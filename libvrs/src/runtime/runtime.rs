@@ -1,6 +1,6 @@
 //! Runtime
 use super::kernel::{self, KernelHandle};
-use super::v2::Result;
+use super::v2::{ProcessId, Result};
 use crate::Connection;
 
 /// Handle to Runtime's public interface
@@ -16,7 +16,7 @@ impl Runtime {
     }
 
     /// Notify the runtime of new connection to handle
-    pub async fn handle_conn(&self, conn: Connection) -> Result<()> {
+    pub async fn handle_conn(&self, conn: Connection) -> Result<ProcessId> {
         self.kernel_task.spawn_proc_for_conn(conn).await
     }
 }

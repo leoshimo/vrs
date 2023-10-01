@@ -12,6 +12,7 @@ mod runtime;
 pub mod v2 {
     pub use super::error::Error;
     pub type Result<T> = std::result::Result<T, Error>;
+    pub(crate) use super::process::ProcessId;
     pub(crate) use super::process::WeakProcessHandle;
     pub use super::runtime::Runtime;
 }

@@ -8,12 +8,12 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error};
 
 /// Spawn a new process
-pub(crate) fn spawn() -> ProcessHandle {
+pub(crate) fn spawn(id: ProcessId) -> ProcessHandle {
     let (msg_tx, mut msg_rx) = mpsc::channel(32);
-    let handle = ProcessHandle { msg_tx };
+    let handle = ProcessHandle { id, msg_tx };
     let weak_handle = handle.clone().downgrade();
     tokio::spawn(async move {
-        let mut proc = Process::new(weak_handle);
+        let mut proc = Process::new(id, weak_handle);
         while let Some(msg) = msg_rx.recv().await {
             proc.handle_msg(msg).await;
             if proc.is_shutdown {
@@ -26,18 +26,25 @@ pub(crate) fn spawn() -> ProcessHandle {
 }
 
 /// ID assigned to [Process]
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub(crate) struct ProcessId(usize);
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub struct ProcessId(usize);
+impl From<usize> for ProcessId {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
 
 /// Handle to [Process]
 #[derive(Debug, Clone)]
-pub(crate) struct ProcessHandle {
+pub struct ProcessHandle {
+    pub id: ProcessId,
     msg_tx: mpsc::Sender<Message>,
 }
 
 /// Weak version of [ProcessHandle]
 #[derive(Debug, Clone)]
 pub(crate) struct WeakProcessHandle {
+    id: ProcessId,
     msg_tx: mpsc::WeakSender<Message>,
 }
 
@@ -65,6 +72,7 @@ impl ProcessHandle {
     /// Downgrade this proces handle into weak process handle that does not keep process alive
     pub(crate) fn downgrade(&self) -> WeakProcessHandle {
         WeakProcessHandle {
+            id: self.id,
             msg_tx: self.msg_tx.downgrade(),
         }
     }
@@ -92,7 +100,10 @@ impl ProcessHandle {
 impl WeakProcessHandle {
     /// Upgrade into process handle
     pub(crate) fn upgrade(&self) -> Option<ProcessHandle> {
-        self.msg_tx.upgrade().map(|msg_tx| ProcessHandle { msg_tx })
+        self.msg_tx.upgrade().map(|msg_tx| ProcessHandle {
+            id: self.id,
+            msg_tx,
+        })
     }
 }
 
@@ -108,6 +119,8 @@ pub enum Message {
 
 /// A process that runs within the runtime
 pub(crate) struct Process<'a> {
+    /// The unique id for process
+    id: ProcessId,
     /// Whether or not process should exit in next cycle of event loop
     is_shutdown: bool,
     /// The weak process handle that this process may handoff to external tasks
@@ -121,8 +134,9 @@ pub(crate) struct Process<'a> {
 }
 
 impl Process<'_> {
-    pub(crate) fn new(handle: WeakProcessHandle) -> Self {
+    pub(crate) fn new(id: ProcessId, handle: WeakProcessHandle) -> Self {
         Self {
+            id,
             handle,
             env: lemma::lang::std_env(),
             subscriptions: HashMap::new(),
@@ -181,14 +195,15 @@ impl Process<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::fixture::spawn_proc_fixture;
+
     use lemma::parse as p;
     use lemma::Form;
     use tracing_test::traced_test;
 
     #[tokio::test]
     async fn proc_call() {
-        let proc = spawn();
+        let proc = spawn_proc_fixture();
 
         assert!(matches!(
             proc.call(p("(def echo (lambda (x) x))").unwrap())
@@ -207,7 +222,7 @@ mod tests {
 
     #[tokio::test]
     async fn proc_cast() {
-        let proc = spawn();
+        let proc = spawn_proc_fixture();
 
         proc.call(p("(def inc (lambda (x) (+ x 1)))").unwrap())
             .await
@@ -225,7 +240,7 @@ mod tests {
 
     #[tokio::test]
     async fn proc_weak_handle_upgrade() {
-        let proc = spawn();
+        let proc = spawn_proc_fixture();
         let weak = proc.downgrade();
 
         assert!(
@@ -236,7 +251,7 @@ mod tests {
 
     #[tokio::test]
     async fn proc_weak_handle_upgrade_after_drop() {
-        let proc = spawn();
+        let proc = spawn_proc_fixture();
         let weak = proc.downgrade();
         drop(proc);
 
@@ -249,7 +264,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn proc_shutdown_via_handle_shutdown() {
-        let proc = spawn();
+        let proc = spawn_proc_fixture();
         assert!(!proc.is_shutdown().await.unwrap());
         proc.shutdown().await.expect("Shutdown message should send");
         assert!(proc.is_shutdown().await.unwrap());
@@ -258,4 +273,14 @@ mod tests {
     // TODO: Test: that cast is nonblocking, even for long-running operations
     // TODO: Test: that killing process is not blocked by long-running operations
     // TODO: Test: Subscriptions are ignored / cancelled when process handle is dropped
+}
+
+#[cfg(test)]
+pub mod fixture {
+    use super::*;
+
+    /// Spawn a process fixture
+    pub(crate) fn spawn_proc_fixture() -> ProcessHandle {
+        spawn(ProcessId::from(1))
+    }
 }

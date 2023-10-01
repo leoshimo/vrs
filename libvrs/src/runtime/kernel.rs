@@ -1,8 +1,13 @@
 #![allow(dead_code)] // TODO: Remove me
 
 //! Runtime Kernel Task
+use super::{
+    process::{self, ProcessHandle, ProcessId},
+    subscription::Subscription,
+};
 use crate::runtime::v2::{Error, Result};
 use crate::Connection;
+use std::collections::HashMap;
 use tokio::sync::{mpsc, oneshot};
 
 /// Starts the kernel task
@@ -26,7 +31,7 @@ pub(crate) struct KernelHandle {
 
 impl KernelHandle {
     /// List running processes
-    pub(crate) async fn list_processes(&self) -> Result<Vec<ProcessState>> {
+    pub(crate) async fn list_processes(&self) -> Result<Vec<ProcessId>> {
         let (tx, rx) = oneshot::channel();
         self.msg_tx.send(Message::ListProcesses(tx)).await?;
         rx.await
@@ -34,57 +39,142 @@ impl KernelHandle {
     }
 
     /// Spawn a new process in runtime for given connection
-    pub(crate) async fn spawn_proc_for_conn(&self, conn: Connection) -> Result<()> {
+    pub(crate) async fn spawn_proc_for_conn(&self, conn: Connection) -> Result<ProcessId> {
+        let (tx, rx) = oneshot::channel();
         self.msg_tx
-            .send(Message::SpawnConnectionProcess(conn))
+            .send(Message::SpawnProcessForConn(conn, tx))
             .await?;
-        Ok(())
+        rx.await
+            .map_err(Error::FailedToReceiveResponseFromKernelTask)
     }
-}
 
-///
-#[derive(Debug, PartialEq)]
-pub struct ProcessState {
-    // TBD
+    /// Get a process handle for given PID
+    pub(crate) async fn get_proc(&self, id: ProcessId) -> Result<Option<ProcessHandle>> {
+        let (tx, rx) = oneshot::channel();
+        self.msg_tx.send(Message::GetProc(id, tx)).await?;
+        let res = rx
+            .await
+            .map_err(Error::FailedToReceiveResponseFromKernelTask)?;
+        Ok(res)
+    }
 }
 
 /// Messages for [Kernel]
 #[derive(Debug)]
 pub enum Message {
-    /// List active processes
-    ListProcesses(oneshot::Sender<Vec<ProcessState>>),
-    /// Spawn a process to handle communciation with given channel
-    SpawnConnectionProcess(Connection),
+    ListProcesses(oneshot::Sender<Vec<ProcessId>>),
+    SpawnProcessForConn(Connection, oneshot::Sender<ProcessId>),
+    GetProc(ProcessId, oneshot::Sender<Option<ProcessHandle>>),
 }
 
 /// The runtime kernel task
-struct Kernel {}
+struct Kernel {
+    procs: HashMap<ProcessId, ProcessHandle>,
+    next_proc_id: usize,
+}
 
 impl Kernel {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            procs: HashMap::new(),
+            next_proc_id: 0,
+        }
     }
 
     pub async fn handle_msg(&mut self, msg: Message) -> Result<()> {
         match msg {
-            Message::ListProcesses(tx) => self.handle_list_process(tx).await,
-            Message::SpawnConnectionProcess(_conn) => todo!(),
+            Message::ListProcesses(tx) => self.handle_list_process(tx),
+            Message::SpawnProcessForConn(conn, rx) => {
+                let id = self.spawn_proc_for_conn(conn).await?;
+                let _ = rx.send(id);
+                Ok(())
+            }
+            Message::GetProc(id, rx) => {
+                let _ = rx.send(self.get_proc(&id));
+                Ok(())
+            }
         }
     }
 
-    async fn handle_list_process(&self, resp_tx: oneshot::Sender<Vec<ProcessState>>) -> Result<()> {
-        let _ = resp_tx.send(vec![]); // Can fail if kernel task is shutting down
+    fn handle_list_process(&self, resp_tx: oneshot::Sender<Vec<ProcessId>>) -> Result<()> {
+        let result = self.procs.keys().copied().collect();
+        let _ = resp_tx.send(result); // Can fail if kernel task is shutting down
         Ok(())
+    }
+
+    /// Spawn a new process for given connection
+    async fn spawn_proc_for_conn(&mut self, conn: Connection) -> Result<ProcessId> {
+        let id = ProcessId::from(self.next_proc_id);
+        self.next_proc_id = self.next_proc_id.wrapping_add(1);
+        let p = process::spawn(id);
+        p.add_subscription(Subscription::ClientConnection(conn))
+            .await?;
+        self.procs.insert(id, p);
+        Ok(id)
+    }
+
+    /// Retrieve the process handle for given id
+    fn get_proc(&self, id: &ProcessId) -> Option<ProcessHandle> {
+        self.procs.get(id).cloned()
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::{connection::tests::conn_fixture, Client};
+    use lemma::{parse as p, Form};
+
     use super::*;
 
     #[tokio::test]
     async fn kernel_init() {
         let k = start();
-        assert_eq!(k.list_processes().await.unwrap(), vec![]);
+        assert_eq!(
+            k.list_processes().await.unwrap().len(),
+            0,
+            "Should not have any processes on init"
+        );
+    }
+
+    #[tokio::test]
+    async fn kernel_proc_for_conn() {
+        let (local, remote) = conn_fixture();
+        let mut client = Client::new(remote);
+
+        let k = start();
+
+        let pid = k
+            .spawn_proc_for_conn(local)
+            .await
+            .expect("Kernel should handle connection");
+
+        assert_eq!(
+            k.list_processes().await.unwrap(),
+            vec![pid],
+            "Kernel should have new process"
+        );
+
+        let _ = client
+            .request(p("(def msg \"Hello world\")").unwrap())
+            .await
+            .expect("Client should send request");
+
+        // Verify via client
+        let resp = client
+            .request(p("msg").unwrap())
+            .await
+            .expect("Client should send request");
+        assert_eq!(resp.contents, Form::string("Hello world"));
+
+        // Verify via proc
+        let proc = k
+            .get_proc(pid)
+            .await
+            .expect("Kernel should return resp")
+            .expect("Handle should not be none");
+        assert_eq!(
+            proc.call(p("msg").unwrap()).await.unwrap(),
+            Form::string("Hello world")
+        );
     }
 }

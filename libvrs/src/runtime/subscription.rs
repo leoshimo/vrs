@@ -111,7 +111,7 @@ mod tests {
 
     use super::*;
     use crate::connection::tests::conn_fixture;
-    use crate::runtime::process;
+    use crate::runtime::process::fixture::spawn_proc_fixture;
     use crate::Client;
     use lemma::{parse as p, Form};
     use tracing_test::traced_test;
@@ -121,7 +121,7 @@ mod tests {
     #[traced_test]
     async fn client_connection_request_response() {
         let (local, remote) = conn_fixture();
-        let proc = process::spawn();
+        let proc = spawn_proc_fixture();
 
         proc.add_subscription(Subscription::ClientConnection(local))
             .await
@@ -151,7 +151,7 @@ mod tests {
         use tokio::time::timeout;
 
         let (local, remote) = conn_fixture();
-        let proc = process::spawn();
+        let proc = spawn_proc_fixture();
 
         proc.add_subscription(Subscription::ClientConnection(local))
             .await
