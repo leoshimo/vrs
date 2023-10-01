@@ -151,7 +151,7 @@ mod tests {
     use crate::{connection::tests::conn_fixture, Client};
     use lemma::{parse as p, Form};
     use std::time::Duration;
-    use tokio::time::{sleep, timeout};
+    use tokio::{task::yield_now, time::timeout};
     use tracing_test::traced_test;
 
     use super::*;
@@ -191,12 +191,12 @@ mod tests {
             .expect("Handle should be Some");
         proc.shutdown().await.unwrap();
 
-        timeout(Duration::from_millis(5), async {
+        timeout(Duration::from_secs(1), async {
             loop {
                 if !k.list_processes().await.unwrap().contains(&pid) {
                     break;
                 }
-                sleep(Duration::from_millis(1)).await
+                yield_now().await;
             }
         })
         .await

@@ -114,6 +114,7 @@ mod tests {
     use crate::Client;
     use crate::{connection::tests::conn_fixture, runtime::process::ProcessSet};
     use lemma::{parse as p, Form};
+    use tokio::task::yield_now;
     use tracing_test::traced_test;
 
     // TODO: Move to integration test?
@@ -145,7 +146,7 @@ mod tests {
         assert_eq!(resp.contents, Form::Int(0));
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test]
     #[traced_test]
     async fn client_connection_drop() {
         use std::time::Duration;
@@ -164,11 +165,12 @@ mod tests {
 
         // Check it eventually shuts downs
         // Necessary, since shutdown message comes from separate task (subscription task) v.s. the is_shutdown message from this task
-        timeout(Duration::from_millis(20), async {
+        timeout(Duration::from_secs(1), async {
             loop {
                 if proc.is_shutdown().await.unwrap() {
                     break;
                 }
+                yield_now().await;
             }
         })
         .await

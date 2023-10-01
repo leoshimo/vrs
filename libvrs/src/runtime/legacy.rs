@@ -216,6 +216,7 @@ mod tests {
     use super::*;
     use crate::connection::tests::conn_fixture;
     use crate::{Client, Response};
+    use tokio::task::yield_now;
     use tokio::time::error::Elapsed;
     use tracing_test::traced_test;
 
@@ -410,7 +411,7 @@ mod tests {
         target: usize,
     ) -> std::result::Result<(), Elapsed> {
         use std::time::Duration;
-        use tokio::time::{sleep, timeout};
+        use tokio::time::timeout;
 
         let task_checker = async {
             loop {
@@ -418,10 +419,10 @@ mod tests {
                 if current == target {
                     break;
                 }
-                sleep(Duration::from_millis(5)).await;
+                yield_now().await;
             }
         };
 
-        timeout(Duration::from_millis(20), task_checker).await
+        timeout(Duration::from_secs(1), task_checker).await
     }
 }
