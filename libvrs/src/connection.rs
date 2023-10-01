@@ -82,4 +82,17 @@ pub mod tests {
         let (local, remote) = tokio::net::UnixStream::pair().unwrap();
         (Connection::new(local), Connection::new(remote))
     }
+
+    /// Test that dropping one end of connection results in other end returning `None` on `recv` call
+    #[tokio::test]
+    async fn drop_remote() {
+        let (mut local, remote) = conn_fixture();
+
+        drop(remote);
+
+        assert!(
+            local.recv().await.is_none(),
+            "Dropped connection should return None"
+        );
+    }
 }
