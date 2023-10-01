@@ -1,3 +1,5 @@
+#![allow(dead_code)] // TODO: Remove me
+
 //! Runtime Kernel Task
 use crate::runtime::v2::{Error, Result};
 use crate::Connection;
@@ -39,7 +41,7 @@ impl KernelHandle {
     }
 }
 
-/// A snapshot of process state managed by kernel task
+///
 #[derive(Debug, PartialEq)]
 pub struct ProcessState {
     // TBD

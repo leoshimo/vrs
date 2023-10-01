@@ -1,5 +1,6 @@
+#![allow(dead_code)] // TODO: Remove me
+
 //! Runtime Processes
-use super::namespace::Namespace;
 use super::v2::{Error, Result};
 use tokio::sync::{mpsc, oneshot};
 
@@ -28,37 +29,53 @@ pub(crate) struct ProcessHandle {
 }
 
 impl ProcessHandle {
-    /// Evalate given expression in process
-    pub(crate) async fn eval_form(&self, form: lemma::Form) -> Result<lemma::Form> {
+    /// Send a blocking message to process, and get the result of evaluation
+    pub(crate) async fn call(&self, form: lemma::Form) -> Result<lemma::Form> {
         let (tx, rx) = oneshot::channel();
-        self.msg_tx.send(Message::EvaluateForm(form, tx)).await?;
+        self.msg_tx.send(Message::Call(form, tx)).await?;
         rx.await?
+    }
+
+    /// Send a nonblocking message to process
+    pub(crate) async fn cast(&self, form: lemma::Form) -> Result<()> {
+        self.msg_tx.send(Message::Cast(form)).await?;
+        Ok(())
     }
 }
 
 pub enum Message {
-    EvaluateForm(lemma::Form, oneshot::Sender<Result<lemma::Form>>),
+    Call(lemma::Form, oneshot::Sender<Result<lemma::Form>>),
+    Cast(lemma::Form),
 }
 
 /// A process that runs within the runtime
 pub(crate) struct Process<'a> {
-    ns: Namespace<'a>,
+    /// Environment of interpreter
+    env: lemma::Env<'a>,
 }
 
 impl Process<'_> {
     pub(crate) fn new() -> Self {
         Self {
-            ns: Namespace::new(),
+            env: lemma::lang::std_env(),
         }
     }
 
     pub(crate) async fn handle_msg(&mut self, msg: Message) {
         match msg {
-            Message::EvaluateForm(f, tx) => {
-                let res = self.ns.eval(&f);
+            Message::Call(f, tx) => {
+                let res = self.eval(&f);
                 let _ = tx.send(res);
             }
+            Message::Cast(f) => {
+                let _ = self.eval(&f);
+            }
         }
+    }
+
+    /// Evaluate given form in process's environment
+    fn eval(&mut self, form: &lemma::Form) -> Result<lemma::Form> {
+        Ok(lemma::eval(form, &mut self.env)?)
     }
 }
 
@@ -69,21 +86,42 @@ mod tests {
     use lemma::Form;
 
     #[tokio::test]
-    async fn proc_eval_form() {
+    async fn proc_call() {
         let proc = spawn();
 
         assert!(matches!(
-            proc.eval_form(p("(def echo (lambda (x) x))").unwrap())
+            proc.call(p("(def echo (lambda (x) x))").unwrap())
                 .await
                 .unwrap(),
             Form::Lambda(_)
         ));
 
         assert_eq!(
-            proc.eval_form(p("(echo \"Hello world\")").unwrap())
+            proc.call(p("(echo \"Hello world\")").unwrap())
                 .await
                 .unwrap(),
             Form::string("Hello world")
         );
     }
+
+    #[tokio::test]
+    async fn proc_cast() {
+        let proc = spawn();
+
+        proc.call(p("(def inc (lambda (x) (+ x 1)))").unwrap())
+            .await
+            .unwrap();
+
+        assert!(matches!(
+            proc.cast(p("(def count 0)").unwrap()).await,
+            Ok(())
+        ));
+        assert!(matches!(
+            proc.cast(p("(def count (inc count))").unwrap()).await,
+            Ok(())
+        ));
+    }
+
+    // TODO: Test that cast is nonblocking, even for long-running operations
+    // TODO: Test that killing process is not blocked by long-running operations
 }
