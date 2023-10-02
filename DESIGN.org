@@ -272,3 +272,34 @@ TODO:
   process to process mailbox, and =send= and =recv= calls, before child process
   terminates.
 
+
+* Process-to-Process Communication
+
+Two flavors:
+- Runtime Linking of Symbols
+- Message Passing over Mailbox
+
+Linking can be used for lazy export and import of symbols. The underlying
+messaging structure between processes is hidden.
+
+Messaging can be used for sending arbitrary data to a process's input
+mailbox. The sending process must acquire an explicit handle to destination
+process, and receiving process must explicitly "read" from mailbox.
+
+** Runtime Linking
+
+Runtime Linking is used for dynamic, lazy linking of symbols between processes.
+
+At a high level:
+
+1. Process A calls =export= to expose a function to the global namespace. This
+   messages the kernel task to update the runtime linker's symbol tables.
+2. Process B calls =import= to import a function to local namespace. This
+   messages the kernel task to query the runtime linker's symbol table.
+3. The runtime linker returns a callable handle that is bound to a specific
+   process's exported symbol (i.e. Process A's export). The callable handle
+   wraps a message dispatch to Process A.
+4. Process B updates local namespace, binding callable handle to a symbol.
+4. Process B calls the imported symbol - which evaluates in local namespace,
+   which calls the handle, which messages Process A, which returns the result of
+   evaluation over callable handle's response channel.
