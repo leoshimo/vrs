@@ -6,7 +6,6 @@ use vrs::{connection::Error, Client, Connection, Response, Runtime};
 #[traced_test]
 async fn runtime_simple() {
     let runtime = Runtime::new();
-
     let (local, remote) = Connection::pair().unwrap();
     let mut remote = Client::new(remote);
 
@@ -74,3 +73,5 @@ async fn runtime_remote_request_multi() {
         "evaluating a jibberish underined symbol should return :err"
     );
 }
+
+// TODO: Test that each connection's process namespace is separate

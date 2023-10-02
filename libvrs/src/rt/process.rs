@@ -190,17 +190,15 @@ impl Process<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::fixture::spawn_proc_fixture;
-
-    use crate::rt::process::ProcessSet;
+    use super::*;
     use lemma::parse as p;
     use lemma::Form;
     use tracing_test::traced_test;
 
     #[tokio::test]
     async fn proc_call() {
-        let mut set = ProcessSet::new();
-        let proc = spawn_proc_fixture(&mut set);
+        let mut proc_set = ProcessSet::new();
+        let proc = spawn(ProcessId::from(1), &mut proc_set);
 
         assert!(matches!(
             proc.call(p("(def echo (lambda (x) x))").unwrap())
@@ -219,8 +217,8 @@ mod tests {
 
     #[tokio::test]
     async fn proc_weak_handle_upgrade() {
-        let mut set = ProcessSet::new();
-        let proc = spawn_proc_fixture(&mut set);
+        let mut proc_set = ProcessSet::new();
+        let proc = spawn(ProcessId::from(1), &mut proc_set);
         let weak = proc.downgrade();
 
         assert!(
@@ -231,8 +229,8 @@ mod tests {
 
     #[tokio::test]
     async fn proc_weak_handle_upgrade_after_drop() {
-        let mut set = ProcessSet::new();
-        let proc = spawn_proc_fixture(&mut set);
+        let mut proc_set = ProcessSet::new();
+        let proc = spawn(ProcessId::from(1), &mut proc_set);
         let weak = proc.downgrade();
         drop(proc);
 
@@ -245,8 +243,8 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn proc_shutdown_via_handle_shutdown() {
-        let mut set = ProcessSet::new();
-        let proc = spawn_proc_fixture(&mut set);
+        let mut proc_set = ProcessSet::new();
+        let proc = spawn(ProcessId::from(1), &mut proc_set);
         assert!(!proc.is_shutdown().await.unwrap());
         proc.shutdown().await.expect("Shutdown message should send");
         assert!(proc.is_shutdown().await.unwrap());
@@ -256,15 +254,4 @@ mod tests {
     // TODO: Test: that killing process is not blocked by long-running operations
     // TODO: Test: Subscriptions are ignored / cancelled when process handle is dropped
     // TODO: Test: Shutting down process aborts subscription
-}
-
-#[cfg(test)]
-pub mod fixture {
-    use super::*;
-
-    /// Spawn a process fixture
-    pub(crate) fn spawn_proc_fixture(proc_set: &mut ProcessSet) -> ProcessHandle {
-        // TODO: Use kernel to spawn processes for tests?
-        spawn(ProcessId::from(1), proc_set)
-    }
 }

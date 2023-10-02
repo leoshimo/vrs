@@ -53,7 +53,7 @@ impl KernelHandle {
 
     // TODO Builder-fy?
     /// Spawn a new process
-    pub(crate) async fn spawn_proc(&self, conn: Option<Connection>) -> Result<ProcessId> {
+    pub(crate) async fn spawn_proc(&self, conn: Option<Connection>) -> Result<ProcessHandle> {
         let (tx, rx) = oneshot::channel();
         self.msg_tx.send(Message::SpawnProc(conn, tx)).await?;
         rx.await
@@ -75,7 +75,7 @@ impl KernelHandle {
 #[derive(Debug)]
 pub enum Message {
     ListProcesses(oneshot::Sender<Vec<ProcessId>>),
-    SpawnProc(Option<Connection>, oneshot::Sender<ProcessId>),
+    SpawnProc(Option<Connection>, oneshot::Sender<ProcessHandle>),
     GetProc(ProcessId, oneshot::Sender<Option<ProcessHandle>>),
     ProcEnded(ProcessResult),
 }
@@ -103,8 +103,8 @@ impl Kernel {
         match msg {
             Message::ListProcesses(tx) => self.handle_list_process(tx),
             Message::SpawnProc(conn, rx) => {
-                let id = self.spawn_proc(conn).await?;
-                let _ = rx.send(id);
+                let p = self.spawn_proc(conn).await?;
+                let _ = rx.send(p);
                 Ok(())
             }
             Message::GetProc(id, rx) => {
@@ -122,7 +122,7 @@ impl Kernel {
     }
 
     /// Spawn a new process for given connection
-    async fn spawn_proc(&mut self, conn: Option<Connection>) -> Result<ProcessId> {
+    async fn spawn_proc(&mut self, conn: Option<Connection>) -> Result<ProcessHandle> {
         let id = ProcessId::from(self.next_proc_id);
         info!("spawn_proc {id:?}");
 
@@ -132,9 +132,9 @@ impl Kernel {
             p.add_subscription(Subscription::ClientConnection(conn))
                 .await?;
         }
-        self.procs.insert(id, p);
+        self.procs.insert(id, p.clone());
 
-        Ok(id)
+        Ok(p)
     }
 
     /// Retrieve the process handle for given id
@@ -180,10 +180,11 @@ mod tests {
     async fn kernel_proc_lifecycle() {
         let k = start();
 
-        let pid = k
+        let proc = k
             .spawn_proc(None)
             .await
             .expect("Kernel should spawn new process");
+        let pid = proc.id;
 
         assert!(
             k.list_processes().await.unwrap().contains(&pid),
@@ -219,10 +220,11 @@ mod tests {
 
         let k = start();
 
-        let pid = k
+        let proc = k
             .spawn_proc(Some(local))
             .await
             .expect("Kernel should spawn new process");
+        let pid = proc.id;
 
         let _ = client
             .request(p("(def msg \"Hello world\")").unwrap())

@@ -115,8 +115,7 @@ async fn subscription_for_client_connection(mut conn: Connection, target: WeakPr
 mod tests {
 
     use super::*;
-    use crate::rt::process::{fixture::spawn_proc_fixture, ProcessSet};
-    use crate::{Client, Connection};
+    use crate::{rt::kernel, Client, Connection};
     use lemma::{parse as p, Form};
     use tokio::task::yield_now;
     use tracing_test::traced_test;
@@ -125,8 +124,8 @@ mod tests {
     #[traced_test]
     async fn client_connection_request_response() {
         let (local, remote) = Connection::pair().unwrap();
-        let mut proc_set = ProcessSet::new();
-        let proc = spawn_proc_fixture(&mut proc_set);
+        let k = kernel::start();
+        let proc = k.spawn_proc(None).await.unwrap();
 
         proc.add_subscription(Subscription::ClientConnection(local))
             .await
@@ -156,8 +155,8 @@ mod tests {
         use tokio::time::timeout;
 
         let (local, remote) = Connection::pair().unwrap();
-        let mut proc_set = ProcessSet::new();
-        let proc = spawn_proc_fixture(&mut proc_set);
+        let k = kernel::start();
+        let proc = k.spawn_proc(None).await.unwrap();
 
         proc.add_subscription(Subscription::ClientConnection(local))
             .await
