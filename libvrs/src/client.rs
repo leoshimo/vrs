@@ -1,8 +1,7 @@
 //! Headless client implementation for vrs runtime
 use std::collections::HashMap;
 
-use crate::connection::{Connection, Message};
-use crate::message::{Request, Response};
+use crate::connection::{Connection, Message, Request, Response};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
@@ -167,11 +166,11 @@ async fn run(mut evloop: EventLoop, mut evloop_rx: mpsc::Receiver<Event>) {
 mod test {
     use super::*;
     use crate::client::Message;
-    use crate::connection::tests::conn_fixture;
+    use crate::connection::Connection;
 
     #[tokio::test(flavor = "multi_thread")]
     async fn handle_request_response() {
-        let (local, mut remote) = conn_fixture();
+        let (local, mut remote) = Connection::pair().unwrap();
 
         // Remote echos back requests
         tokio::spawn(async move {
@@ -218,7 +217,7 @@ mod test {
         use std::time::Duration;
         use tokio::time::timeout;
 
-        let (local, mut remote) = conn_fixture();
+        let (local, mut remote) = Connection::pair().unwrap();
 
         // Remote drops `remote` after first request
         tokio::spawn(async move {

@@ -66,7 +66,7 @@ pub fn eval_lambda_call_vals(lambda: &Lambda, arg_vals: &[Form], env: &mut Env) 
         )));
     }
 
-    // TODO: Lexical scope instead of Dynamic scope?
+    // TODO: Lexical scope?
     let mut lambda_env = Env::extend(env);
     for (param, val) in lambda.params.iter().zip(arg_vals) {
         lambda_env.bind(param, val.clone());
@@ -86,7 +86,6 @@ fn eval_special_form(
     env: &mut Env<'_>,
 ) -> std::result::Result<Form, Error> {
     debug!("eval_special_form - {:?}", sp_form,);
-    // TODO: Lexical binding?
     (sp_form.func)(arg_forms, env)
 }
 

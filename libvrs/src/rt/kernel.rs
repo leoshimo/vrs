@@ -1,5 +1,4 @@
-#![allow(dead_code)] // TODO: Remove me
-
+#![allow(dead_code)] // Remove after Process Forking + Kernel Symbol Exports
 //! Runtime Kernel Task
 use super::{
     process::{self, ProcessHandle, ProcessId, ProcessResult, ProcessSet},
@@ -11,7 +10,7 @@ use std::collections::HashMap;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, info};
 
-/// Starts the kernel task
+/// Starts the kernel task, which manages processes on runtime
 pub(crate) fn start() -> KernelHandle {
     let (msg_tx, mut msg_rx) = mpsc::channel(32);
 
@@ -155,7 +154,7 @@ impl Kernel {
 
 #[cfg(test)]
 mod tests {
-    use crate::{connection::tests::conn_fixture, Client};
+    use crate::{Client, Connection};
     use lemma::{parse as p, Form};
     use std::time::Duration;
     use tokio::{task::yield_now, time::timeout};
@@ -215,7 +214,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn kernel_proc_for_conn() {
-        let (local, remote) = conn_fixture();
+        let (local, remote) = Connection::pair().unwrap();
         let mut client = Client::new(remote);
 
         let k = start();

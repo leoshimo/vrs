@@ -2,7 +2,6 @@
 
 use std::os::fd::AsRawFd;
 
-use crate::message::{Request, Response};
 use bytes::{BufMut, BytesMut};
 use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -25,10 +24,45 @@ pub enum Message {
     Response(Response),
 }
 
+/// Outgoing Requests
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub struct Request {
+    /// Unique ID assigned to request
+    pub req_id: u32,
+    /// Contents of request
+    pub contents: lemma::Form,
+}
+
+/// Incoming response
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub struct Response {
+    /// Unique ID of request this response is for
+    pub req_id: u32,
+    /// Contents of response
+    pub contents: Result<lemma::Form, Error>,
+}
+
+/// Error Type
+#[derive(thiserror::Error, Debug, Deserialize, Serialize, PartialEq)]
+pub enum Error {
+    #[error("Error evaluating expression - {0}")]
+    EvaluationError(#[from] lemma::Error),
+
+    #[error("Unexpected error")]
+    UnexpectedError,
+}
+
 impl Connection {
+    /// Returns a new [Connection] over given unix stream
     pub fn new(stream: UnixStream) -> Self {
         let stream = Framed::new(stream, LengthDelimitedCodec::new());
         Connection { stream }
+    }
+
+    /// Returns a pair of [Connection] connected to one another
+    pub fn pair() -> tokio::io::Result<(Connection, Connection)> {
+        let (local, remote) = tokio::net::UnixStream::pair()?;
+        Ok((Connection::new(local), Connection::new(remote)))
     }
 
     pub async fn send(&mut self, msg: &Message) -> Result<(), std::io::Error> {
@@ -75,18 +109,12 @@ impl std::fmt::Debug for Connection {
 
 #[cfg(test)]
 pub mod tests {
-    use super::Connection;
-
-    /// Returns a connection fixture for tests
-    pub fn conn_fixture() -> (Connection, Connection) {
-        let (local, remote) = tokio::net::UnixStream::pair().unwrap();
-        (Connection::new(local), Connection::new(remote))
-    }
+    use super::*;
 
     /// Test that dropping one end of connection results in other end returning `None` on `recv` call
     #[tokio::test]
     async fn drop_remote() {
-        let (mut local, remote) = conn_fixture();
+        let (mut local, remote) = Connection::pair().unwrap();
 
         drop(remote);
 

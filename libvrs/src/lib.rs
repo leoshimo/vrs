@@ -1,14 +1,11 @@
 use std::path::PathBuf;
 
-// TODO Use reexports instead
 pub mod client;
 pub mod connection;
-pub mod message;
 pub mod rt;
 
 pub use client::Client;
-pub use connection::Connection;
-pub use message::{Request, Response};
+pub use connection::{Connection, Request, Response};
 pub use rt::Runtime;
 
 /// The path to runtime socket

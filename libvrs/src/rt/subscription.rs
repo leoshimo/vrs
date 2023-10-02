@@ -1,9 +1,8 @@
 //! Subscriptions for processes
 use crate::{
-    connection::{Connection, Message},
-    message,
+    connection::{self, Connection, Message},
+    rt,
     rt::process::WeakProcessHandle,
-    rt::Error,
     Response,
 };
 use tokio::task::JoinHandle;
@@ -84,7 +83,7 @@ async fn subscription_for_client_connection(mut conn: Connection, target: WeakPr
                 req_id: req.req_id,
                 contents: Ok(contents),
             },
-            Err(Error::EvaluationError(e)) => Response {
+            Err(rt::Error::EvaluationError(e)) => Response {
                 req_id: req.req_id,
                 contents: Err(e.into()),
             },
@@ -92,7 +91,7 @@ async fn subscription_for_client_connection(mut conn: Connection, target: WeakPr
                 error!("Encountered error evaluating expression - {e}");
                 Response {
                     req_id: req.req_id,
-                    contents: Err(message::Error::UnexpectedError),
+                    contents: Err(connection::Error::UnexpectedError),
                 }
             }
         };
@@ -116,18 +115,16 @@ async fn subscription_for_client_connection(mut conn: Connection, target: WeakPr
 mod tests {
 
     use super::*;
-    use crate::connection::tests::conn_fixture;
     use crate::rt::process::{fixture::spawn_proc_fixture, ProcessSet};
-    use crate::Client;
+    use crate::{Client, Connection};
     use lemma::{parse as p, Form};
     use tokio::task::yield_now;
     use tracing_test::traced_test;
 
-    // TODO: Move to integration test?
     #[tokio::test]
     #[traced_test]
     async fn client_connection_request_response() {
-        let (local, remote) = conn_fixture();
+        let (local, remote) = Connection::pair().unwrap();
         let mut proc_set = ProcessSet::new();
         let proc = spawn_proc_fixture(&mut proc_set);
 
@@ -158,7 +155,7 @@ mod tests {
         use std::time::Duration;
         use tokio::time::timeout;
 
-        let (local, remote) = conn_fixture();
+        let (local, remote) = Connection::pair().unwrap();
         let mut proc_set = ProcessSet::new();
         let proc = spawn_proc_fixture(&mut proc_set);
 

@@ -1,12 +1,10 @@
-#![allow(dead_code)] // TODO: Remove me
-
 //! Runtime Processes
 use crate::rt::subscription::{self, Subscription, SubscriptionHandle, SubscriptionId};
 use crate::rt::{Error, Result};
 use std::collections::HashMap;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinSet;
-use tracing::{debug, error};
+use tracing::debug;
 
 /// Process set
 pub(crate) type ProcessSet = JoinSet<ProcessResult>;
@@ -60,18 +58,13 @@ pub(crate) struct WeakProcessHandle {
 }
 
 impl ProcessHandle {
+    // TODO(security): Should proc handle allow raw calls into process's environment? Or more controlled messages from external?
     /// Send a blocking message to process, and get the result of evaluation
     pub(crate) async fn call(&self, form: lemma::Form) -> Result<lemma::Form> {
         let (tx, rx) = oneshot::channel();
         self.msg_tx.send(Message::Call(form, tx)).await?;
         rx.await
             .map_err(Error::FailedToReceiveResponseFromProcessTask)?
-    }
-
-    /// Send a nonblocking message to process
-    pub(crate) async fn cast(&self, form: lemma::Form) -> Result<()> {
-        self.msg_tx.send(Message::Cast(form)).await?;
-        Ok(())
     }
 
     /// Send a message to add a subscription
@@ -95,6 +88,7 @@ impl ProcessHandle {
     }
 
     /// Check whether or not process is shutdown
+    #[allow(dead_code)] // TODO Replace this? Only needed for testing
     pub(crate) async fn is_shutdown(&self) -> Result<bool> {
         let (tx, rx) = oneshot::channel();
         match self.msg_tx.send(Message::IsShutdown(tx)).await {
@@ -122,7 +116,6 @@ impl WeakProcessHandle {
 #[derive(Debug)]
 pub enum Message {
     Call(lemma::Form, oneshot::Sender<Result<lemma::Form>>),
-    Cast(lemma::Form),
     AddSubscription(subscription::Subscription),
     Shutdown,
     IsShutdown(oneshot::Sender<bool>),
@@ -146,6 +139,7 @@ pub(crate) struct Process<'a> {
 
 impl Process<'_> {
     pub(crate) fn new(id: ProcessId, handle: WeakProcessHandle) -> Self {
+        debug!("proc {:?} created", id);
         Self {
             id,
             handle,
@@ -157,14 +151,11 @@ impl Process<'_> {
     }
 
     pub(crate) async fn handle_msg(&mut self, msg: Message) {
-        debug!("handle_msg - {msg:?}");
+        debug!("proc {:?} handle_msg - {:?}", self.id, msg);
         match msg {
             Message::Call(f, tx) => {
                 let res = self.eval(&f);
                 let _ = tx.send(res);
-            }
-            Message::Cast(f) => {
-                let _ = self.eval(&f);
             }
             Message::AddSubscription(s) => self.add_subscription(s),
             Message::Shutdown => self.shutdown(),
@@ -185,17 +176,6 @@ impl Process<'_> {
         self.next_sub_id = self.next_sub_id.wrapping_add(1);
         self.subscriptions
             .insert(id, subscription::start(id, sub, self.handle.clone()));
-    }
-
-    /// Remove a subscription from this process
-    fn remove_subscription(&mut self, id: SubscriptionId) {
-        match self.subscriptions.remove(&id) {
-            Some(sub) => sub.abort(),
-            None => {
-                // TODO - Report errors?
-                error!("No subscription found for subscription id {id}");
-            }
-        }
     }
 
     /// Mark process for shutdown
@@ -235,25 +215,6 @@ mod tests {
                 .unwrap(),
             Form::string("Hello world")
         );
-    }
-
-    #[tokio::test]
-    async fn proc_cast() {
-        let mut set = ProcessSet::new();
-        let proc = spawn_proc_fixture(&mut set);
-
-        proc.call(p("(def inc (lambda (x) (+ x 1)))").unwrap())
-            .await
-            .unwrap();
-
-        assert!(matches!(
-            proc.cast(p("(def count 0)").unwrap()).await,
-            Ok(())
-        ));
-        assert!(matches!(
-            proc.cast(p("(def count (inc count))").unwrap()).await,
-            Ok(())
-        ));
     }
 
     #[tokio::test]
@@ -303,7 +264,7 @@ pub mod fixture {
 
     /// Spawn a process fixture
     pub(crate) fn spawn_proc_fixture(proc_set: &mut ProcessSet) -> ProcessHandle {
-        // TODO: Replace usage with actuall kernel spawn (?)
+        // TODO: Use kernel to spawn processes for tests?
         spawn(ProcessId::from(1), proc_set)
     }
 }
