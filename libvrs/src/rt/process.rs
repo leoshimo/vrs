@@ -1,4 +1,5 @@
 //! Runtime Processes
+use crate::rt::namespace::Namespace;
 use crate::rt::subscription::{self, Subscription, SubscriptionHandle, SubscriptionId};
 use crate::rt::{Error, Result};
 use std::collections::HashMap;
@@ -129,8 +130,8 @@ pub(crate) struct Process<'a> {
     is_shutdown: bool,
     /// The weak process handle that this process may handoff to external tasks
     handle: WeakProcessHandle,
-    /// Environment of interpreter
-    env: lemma::Env<'a>,
+    /// The namespace for process
+    ns: Namespace<'a>,
     /// Handles to subscriptions for this process
     subscriptions: HashMap<SubscriptionId, SubscriptionHandle>,
     /// The next subscription ID to assign
@@ -143,7 +144,7 @@ impl Process<'_> {
         Self {
             id,
             handle,
-            env: lemma::lang::std_env(),
+            ns: Namespace::new(),
             subscriptions: HashMap::new(),
             next_sub_id: 0,
             is_shutdown: false,
@@ -167,7 +168,7 @@ impl Process<'_> {
 
     /// Evaluate given form in process's environment
     fn eval(&mut self, form: &lemma::Form) -> Result<lemma::Form> {
-        Ok(lemma::eval(form, &mut self.env)?)
+        self.ns.eval(form)
     }
 
     /// Add a new subscription to this process

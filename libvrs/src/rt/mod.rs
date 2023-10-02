@@ -1,6 +1,7 @@
 // v2 runtime
 mod error;
 mod kernel;
+mod namespace;
 mod process;
 mod subscription;
 
