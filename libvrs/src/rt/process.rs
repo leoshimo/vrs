@@ -1,8 +1,8 @@
 #![allow(dead_code)] // TODO: Remove me
 
 //! Runtime Processes
-use super::subscription::{self, Subscription, SubscriptionHandle, SubscriptionId};
-use super::v2::{Error, Result};
+use crate::rt::subscription::{self, Subscription, SubscriptionHandle, SubscriptionId};
+use crate::rt::{Error, Result};
 use std::collections::HashMap;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinSet;
@@ -212,7 +212,7 @@ impl Process<'_> {
 mod tests {
     use super::fixture::spawn_proc_fixture;
 
-    use crate::runtime::process::ProcessSet;
+    use crate::rt::process::ProcessSet;
     use lemma::parse as p;
     use lemma::Form;
     use tracing_test::traced_test;

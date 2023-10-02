@@ -1,6 +1,6 @@
 //! Runtime
 use super::kernel::{self, KernelHandle};
-use super::v2::{ProcessId, Result};
+use crate::rt::{process::ProcessId, Result};
 use crate::Connection;
 
 /// Handle to Runtime's public interface

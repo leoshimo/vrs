@@ -1,7 +1,7 @@
 //! Subscriptions for processes
-use super::v2::WeakProcessHandle;
 use crate::{
     connection::{Connection, Message},
+    rt::process::WeakProcessHandle,
     Response,
 };
 use tokio::task::JoinHandle;
@@ -110,9 +110,9 @@ async fn subscription_for_client_connection(mut conn: Connection, target: WeakPr
 mod tests {
 
     use super::*;
-    use crate::runtime::process::fixture::spawn_proc_fixture;
+    use crate::connection::tests::conn_fixture;
+    use crate::rt::process::{fixture::spawn_proc_fixture, ProcessSet};
     use crate::Client;
-    use crate::{connection::tests::conn_fixture, runtime::process::ProcessSet};
     use lemma::{parse as p, Form};
     use tokio::task::yield_now;
     use tracing_test::traced_test;

@@ -5,7 +5,7 @@ use super::{
     process::{self, ProcessHandle, ProcessId, ProcessResult, ProcessSet},
     subscription::Subscription,
 };
-use crate::runtime::v2::{Error, Result};
+use crate::rt::{Error, Result};
 use crate::Connection;
 use std::collections::HashMap;
 use tokio::sync::{mpsc, oneshot};
@@ -14,8 +14,10 @@ use tracing::{debug, info};
 /// Starts the kernel task
 pub(crate) fn start() -> KernelHandle {
     let (msg_tx, mut msg_rx) = mpsc::channel(32);
+
+    let handle = KernelHandle { msg_tx };
+    let mut kernel = Kernel::new(handle.clone());
     tokio::spawn(async move {
-        let mut kernel = Kernel::new();
         loop {
             tokio::select! {
                 msg = msg_rx.recv() => match msg {
@@ -32,8 +34,7 @@ pub(crate) fn start() -> KernelHandle {
         }
         Ok::<(), Error>(())
     });
-
-    KernelHandle { msg_tx }
+    handle
 }
 
 /// Handle to `Kernel`
@@ -82,14 +83,16 @@ pub enum Message {
 
 /// The runtime kernel task
 struct Kernel {
+    handle: KernelHandle,
     procs: HashMap<ProcessId, ProcessHandle>,
     proc_set: ProcessSet,
     next_proc_id: usize,
 }
 
 impl Kernel {
-    pub fn new() -> Self {
+    pub fn new(handle: KernelHandle) -> Self {
         Self {
+            handle,
             procs: HashMap::new(),
             proc_set: ProcessSet::new(),
             next_proc_id: 0,
