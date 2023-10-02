@@ -16,5 +16,15 @@ pub struct Response {
     /// Unique ID of request this response is for
     pub req_id: u32,
     /// Contents of response
-    pub contents: lemma::Form,
+    pub contents: Result<lemma::Form, Error>,
+}
+
+/// Error Type
+#[derive(thiserror::Error, Debug, Deserialize, Serialize, PartialEq)]
+pub enum Error {
+    #[error("Error evaluating expression - {0}")]
+    EvaluationError(#[from] lemma::Error),
+
+    #[error("Unexpected error")]
+    UnexpectedError,
 }

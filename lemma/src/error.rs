@@ -1,6 +1,7 @@
 use crate::SymbolId;
+use serde::{Deserialize, Serialize};
 
-#[derive(thiserror::Error, Debug, PartialEq, Clone)]
+#[derive(thiserror::Error, Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Error {
     #[error("Failed to lex - {0}")]
     FailedToLex(String),

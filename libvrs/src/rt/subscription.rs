@@ -1,7 +1,9 @@
 //! Subscriptions for processes
 use crate::{
     connection::{Connection, Message},
+    message,
     rt::process::WeakProcessHandle,
+    rt::Error,
     Response,
 };
 use tokio::task::JoinHandle;
@@ -68,7 +70,7 @@ async fn subscription_for_client_connection(mut conn: Connection, target: WeakPr
             Ok(Message::Request(req)) => req,
             _ => {
                 error!("Subscription received unexpected message - {msg:?}");
-                break;
+                continue;
             }
         };
 
@@ -77,21 +79,25 @@ async fn subscription_for_client_connection(mut conn: Connection, target: WeakPr
             None => break,
         };
 
-        let resp_contents = match target.call(req.contents).await {
-            Ok(r) => r,
+        let resp = match target.call(req.contents).await {
+            Ok(contents) => Response {
+                req_id: req.req_id,
+                contents: Ok(contents),
+            },
+            Err(Error::EvaluationError(e)) => Response {
+                req_id: req.req_id,
+                contents: Err(e.into()),
+            },
             Err(e) => {
-                // TODO: Propagate error to client and carry on?
                 error!("Encountered error evaluating expression - {e}");
-                break;
+                Response {
+                    req_id: req.req_id,
+                    contents: Err(message::Error::UnexpectedError),
+                }
             }
         };
 
-        let resp = Message::Response(Response {
-            req_id: req.req_id,
-            contents: resp_contents,
-        });
-
-        match conn.send(&resp).await {
+        match conn.send(&Message::Response(resp)).await {
             Ok(_) => (),
             Err(e) => {
                 error!("Error while sending response - {e}");
@@ -143,7 +149,7 @@ mod tests {
             .request(p("count").expect("Request should send"))
             .await
             .expect("Response should return");
-        assert_eq!(resp.contents, Form::Int(0));
+        assert_eq!(resp.contents, Ok(Form::Int(0)));
     }
 
     #[tokio::test]

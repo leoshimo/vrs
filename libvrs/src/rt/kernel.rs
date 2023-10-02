@@ -231,7 +231,7 @@ mod tests {
             .request(p("msg").unwrap())
             .await
             .expect("Client should send request");
-        assert_eq!(resp.contents, Form::string("Hello world"));
+        assert_eq!(resp.contents, Ok(Form::string("Hello world")));
 
         // Verify via proc
         let proc = k

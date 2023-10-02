@@ -183,7 +183,7 @@ mod test {
                     };
                     let resp = Response {
                         req_id: req.req_id,
-                        contents: lemma::Form::String(format!("reply {}", message)),
+                        contents: Ok(lemma::Form::String(format!("reply {}", message))),
                     };
                     remote
                         .send(&Message::Response(resp))
@@ -198,19 +198,19 @@ mod test {
             .request(lemma::Form::string("one"))
             .await
             .expect("Should receive reply");
-        assert_eq!(req.contents, lemma::Form::string("reply one"));
+        assert_eq!(req.contents, Ok(lemma::Form::string("reply one")));
 
         let req = client
             .request(lemma::Form::string("two"))
             .await
             .expect("Should receive reply");
-        assert_eq!(req.contents, lemma::Form::string("reply two"));
+        assert_eq!(req.contents, Ok(lemma::Form::string("reply two")));
 
         let req = client
             .request(lemma::Form::string("three"))
             .await
             .expect("Should receive reply");
-        assert_eq!(req.contents, lemma::Form::string("reply three"));
+        assert_eq!(req.contents, Ok(lemma::Form::string("reply three")));
     }
 
     #[tokio::test(flavor = "multi_thread")]
