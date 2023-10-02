@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use tokio::net::UnixListener;
-use tracing::debug;
+use tracing::info;
 use vrs::connection::Connection;
 use vrs::Runtime;
 
@@ -21,7 +21,7 @@ async fn main() -> Result<()> {
         .with_context(|| format!("Failed to start listener at {}", path.display()))?;
 
     while let Ok((conn, _addr)) = listener.accept().await {
-        debug!("Connected to client: {:?}", conn);
+        info!("Connected to client: {:?}", conn);
         let conn = Connection::new(conn);
         runtime.handle_conn(conn).await?;
     }

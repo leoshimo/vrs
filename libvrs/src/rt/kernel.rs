@@ -125,6 +125,8 @@ impl Kernel {
     /// Spawn a new process for given connection
     async fn spawn_proc(&mut self, conn: Option<Connection>) -> Result<ProcessId> {
         let id = ProcessId::from(self.next_proc_id);
+        info!("spawn_proc {id:?}");
+
         self.next_proc_id = self.next_proc_id.wrapping_add(1);
         let p = process::spawn(id, &mut self.proc_set);
         if let Some(conn) = conn {
@@ -132,6 +134,7 @@ impl Kernel {
                 .await?;
         }
         self.procs.insert(id, p);
+
         Ok(id)
     }
 
@@ -142,6 +145,7 @@ impl Kernel {
 
     /// Cleanup process that terminated with given result
     fn clean_proc(&mut self, result: ProcessResult) -> Result<()> {
+        info!("clean_proc {:?}", result.proc_id);
         match self.procs.remove(&result.proc_id) {
             Some(_) => Ok(()),
             None => Err(Error::UnexpectedProcessResult),
