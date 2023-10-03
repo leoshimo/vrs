@@ -1,12 +1,9 @@
-// v2 runtime
 mod error;
 mod kernel;
 mod namespace;
 mod process;
-mod subscription;
-
-#[allow(clippy::module_inception)]
 mod runtime;
+mod subscription;
 
 pub use error::Error;
 pub type Result<T> = std::result::Result<T, Error>;
