@@ -1,6 +1,6 @@
 //! A fiber of execution that can be cooperatively scheduled via yielding.
 use super::Inst;
-use crate::Form;
+use crate::{Form, SymbolId};
 
 #[derive(Debug)]
 pub struct Fiber {
@@ -31,6 +31,10 @@ pub enum FiberError {
     /// A fiber that is already running was asked to start
     #[error("Fiber is already running")]
     AlreadyRunning,
+
+    /// Setting undefined symbol
+    #[error("Undefined symbol - {0}")]
+    UndefinedSymbol(SymbolId),
 }
 
 /// Result type for fiber ops

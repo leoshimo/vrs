@@ -59,6 +59,13 @@ impl Form {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SymbolId(String);
 
+impl SymbolId {
+    /// Returns inner ID as string slice
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Identifier for Keyword
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct KeywordId(String);
