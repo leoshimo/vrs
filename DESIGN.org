@@ -272,8 +272,7 @@ TODO:
   process to process mailbox, and =send= and =recv= calls, before child process
   terminates.
 
-
-* Process-to-Process Communication
+* Process-to-Process Communication (Deprecated)
 
 Two flavors:
 - Runtime Linking of Symbols
@@ -303,3 +302,126 @@ At a high level:
 4. Process B calls the imported symbol - which evaluates in local namespace,
    which calls the handle, which messages Process A, which returns the result of
    evaluation over callable handle's response channel.
+
+* Process, Bytecode, and Fibers (A Sketch)
+
+TL;DR - to take advantage of tokio's cooperative multitasking model, the
+programs written in Lemma must itself allow for pausing and resuming execution
+of instruction when there is a call to yield for.
+
+** Fiber
+
+A sequence of instructions that can be cooperatively scheduled. When it
+runs an instruction to yield for, control flow is returned to caller that
+initiated execution of fiber.
+
+A fiber can later be resumed when the event that fiber was paused for occurs,
+such as IO, message-passing, etc.
+
+** How Process manages a Fiber
+
+A Process is an unit in the runtime that is an active execution of a program.
+
+Internally, it manages a single Fiber that it initializes with the Lemma
+expression representing the spawned program.
+
+A high-level sketch looks like:
+
+#+begin_src rust
+tokio::spawn(async move {
+    let proc = Process::new(program);
+    proc.start();                               // calls fiber.start()
+    while proc.is_running() {
+        tokio::select! {
+            // =next_event(proc)= completes when an future that proc is waiting
+            // for completes, e.g. resume paused fiber for messages, IO, etc
+            // Fiber execution should be resumed.
+            event = next_event(proc) if proc.is_waiting() => {
+                proc.resume(event);             // calls fiber.resume()
+            },
+            // Message from runtime or other processes.
+            msg = msg_rx.recv() => match msg {
+                Kill => /* snip */,
+                Eval => /* snip */,
+                /* snip */
+            }
+        }
+    }
+    Ok(proc.state)
+};
+#+end_src
+
+*** Scenario: A Simple Process is Started
+
+Suppose a program (or native execution) spawns a new process, e.g. =(spawn (+ 1 2))=:
+
+1. A new tokio task for process event loop is started
+2. The event loop's =Process= is initialized with expression =(+ 1 2)=
+3. The process's =Fiber= fiber is kickstarted in =proc.start()=
+4. The fiber evaluates bytecode for =(+ 1 2)=, which completes with result =3=
+5. At this point, fiber has completed execution, so =proc.is_running()= returns =false=
+6. The tokio task returns with the state of process, e.g. =Complete(ProcResult(3))=
+
+*** Scenario: A Process that Yields for Message
+
+Suppose we have a program like =(recv)= that is waiting for a message
+
+1. The process is started as steps 1-3 from previous example
+2. This time, =fiber.start()= call returns a signal that the fiber yielded,
+   instead of completing with result, e.g. =Yielded(Event::RecvMessage)=
+3. =proc.is_running()= is still true (fiber has not completed), so the while
+   loop runs.
+4. Tokio polls on =next_event(proc)=, which is a hook to be signaled for an
+   event fiber is interested for - in this case receiving a new message in
+   process mailbox.
+5. Suppose another process messages this process, which is received through the
+   =msg_rx= channel. This updates =Process= object's mailbox. NOTE: This does
+   not resume fiber yet.
+6. The loop is executed again, and =select!= polls both futures. This time, the
+   =next_event(proc)= is used to return event message, destructively updating =Process=.
+7. The fiber is resumed, and the process terminates with result of message it received.
+
+Addendum - note that =next_event(proc)= itself can be used to implement timeouts
+for =recv= - e.g. the future can emit a event for recv timing out because a
+message didn't arrive in time.
+
+The =recv= is an symbol bound to native function that returns a signal that
+yields, restoring control flow to caller that initiated evaluation.
+
+#+begin_src rust
+/// Binding Implementation for recv
+pub fn recv_stub(env: &Env, ...) -> Result<BindingResult> {
+    Ok(Form::Signal(Command::RecvMessage))
+}
+#+end_src
+
+
+*** Scenario: A Process that Yields for Async IO
+
+Suppose we have a program like =(read "afile.txt")=
+
+1. The process starts, starting fiber, which immediately yields for IO.
+2. The while loop is entered, selecting on two futures
+3. =next_event(proc)= returns a future backed by Async IO callback to satisfy
+   the file read command
+4. When the IO is ready, the branch completes, and fiber is resumed.
+
+*** Scenario: A REPL Process for Client Connection
+
+It is nice to have a REPL environment.
+
+An idea is to hook into =proc.start()= and =proc.resume()= to be ALWAYS yield
+immediately.
+
+The implementation of =next_event(proc)= will await on data from client
+connection, and resume the fiber with a single execution to evaluate (?)
+
+*** Scenario: How =spawn= works
+
+In the Lemma interpreter environment, the =Process= will bind a symbol for
+=spawn= that returns a signal to yield for some external command to be
+processed, like =recv=
+
+This is a key point - the spawn request is fufilled in the body of
+=next_event(proc)=, which sees that process is waiting for another process to be
+spawned, kicks off spawning, then returns =:ok= signal back to resume fiber.
