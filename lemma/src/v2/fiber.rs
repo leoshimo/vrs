@@ -1,6 +1,6 @@
 //! A fiber of execution that can be cooperatively scheduled via yielding.
-use crate::Form;
 use super::Inst;
+use crate::Form;
 
 #[derive(Debug)]
 pub struct Fiber {
@@ -56,8 +56,8 @@ fn run(f: &mut Fiber) {
             Inst::PushConst(form) => {
                 f.stack.push(form);
             }
+            _ => todo!("unimplemented instruction"), // TODO: Remove me
         }
-
 
         if f.is_done() {
             let res = f.stack.pop().expect("Stack should contain result");
@@ -130,5 +130,4 @@ mod tests {
         start(&mut f).expect("should start");
         assert_eq!(f.status, Status::Completed(Ok(Form::string("Hi"))));
     }
-
 }
