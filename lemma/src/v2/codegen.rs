@@ -1,5 +1,5 @@
 //! Compiler for Lemma Form AST
-use super::Form;
+use crate::Form;
 use serde::{Deserialize, Serialize};
 
 // TODO: Compact bytecode repr
@@ -19,24 +19,37 @@ pub type Result<T> = std::result::Result<T, CompileError>;
 /// Compile expression
 pub fn compile(f: &Form) -> Result<Vec<Inst>> {
     match f {
-        Form::Int(_) | Form::String(_) => {
-            Ok(vec![
-                Inst::PushConst(f.clone())
-            ])
-        }
+        Form::Symbol(_s) => todo!(),
+        Form::List(_l) => todo!(),
+        _ => Ok(vec![
+            Inst::PushConst(f.clone())
+        ])
     }
-
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use super::Inst::*;
+    use crate::parse;
 
     #[test]
     fn compile_self_evaluating() {
+        assert_eq!(compile(&Form::Int(10)), Ok(vec![
+            PushConst(Form::Int(10)),
+        ]));
         assert_eq!(compile(&Form::string("Hello")), Ok(vec![
             PushConst(Form::string("Hello")),
         ]));
     }
+
+    #[test]
+    fn compile_begin() {
+
+    }
+
+    fn f(expr: &str) -> Form {
+        parse(expr).expect("expr should be valid form")
+    }
+
 }

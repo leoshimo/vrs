@@ -1,5 +1,5 @@
 //! A fiber of execution that can be cooperatively scheduled via yielding.
-use super::Form;
+use crate::Form;
 use super::Inst;
 
 #[derive(Debug)]
