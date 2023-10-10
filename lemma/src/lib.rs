@@ -4,6 +4,7 @@ mod eval;
 mod form;
 mod lex;
 mod parse;
+mod v2;
 
 pub mod lang;
 
