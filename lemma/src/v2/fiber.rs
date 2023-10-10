@@ -49,16 +49,19 @@ pub fn start(f: &mut Fiber) -> Result<()> {
 fn run(f: &mut Fiber) {
     f.status = Status::Running;
     while f.status == Status::Running {
-        let inst = f.next_inst().clone();
+        let inst = f.inst().clone(); // TODO: Use by ref until values need cloning
+        f.top_mut().ip += 1;
+
         match inst {
             Inst::PushConst(form) => {
                 f.stack.push(form);
             }
-            Inst::Ret => {
-                let res = f.stack.pop().expect("Stack should contain result");
-                f.status = Status::Completed(Ok(res));
-                break;
-            }
+        }
+
+
+        if f.is_done() {
+            let res = f.stack.pop().expect("Stack should contain result");
+            f.status = Status::Completed(Ok(res));
         }
     }
 }
@@ -73,15 +76,29 @@ impl Fiber {
         }
     }
 
-    /// Get the next instruction, incrementing the instruction pointer
-    pub(crate) fn next_inst(&mut self) -> &Inst {
-        let top = self.cframes.last_mut().expect("Fiber has no callframes!");
-        let inst = &top
+    /// Reference to top of callstack
+    fn top(&self) -> &CallFrame {
+        self.cframes.last().expect("Fiber has no callframes!")
+    }
+
+    /// Reference to top of callstack
+    fn top_mut(&mut self) -> &mut CallFrame {
+        self.cframes.last_mut().expect("Fiber has no callframes!")
+    }
+
+    /// Get the current instruction
+    fn inst(&self) -> &Inst {
+        let top = self.top();
+        let inst = top
             .code
             .get(top.ip)
             .expect("Callstack executing outside bytecode length");
-        top.ip += 1;
         inst
+    }
+
+    /// Whether or not fiber has executed last instruction
+    fn is_done(&self) -> bool {
+        self.cframes.len() == 1 && self.cframes.last().unwrap().is_done()
     }
 }
 
@@ -89,6 +106,11 @@ impl CallFrame {
     /// Create a new callframe for executing given bytecode from start
     pub fn from_bytecode(code: Vec<Inst>) -> Self {
         Self { ip: 0, code }
+    }
+
+    /// Whether or not call frame should return (i.e. on last call frame execution)
+    pub fn is_done(&self) -> bool {
+        self.ip == self.code.len()
     }
 }
 
@@ -100,14 +122,13 @@ mod tests {
 
     #[test]
     fn fiber_load_const_return() {
-        let mut f = Fiber::from_bytecode(vec![PushConst(Int(5)), Ret]);
+        let mut f = Fiber::from_bytecode(vec![PushConst(Int(5))]);
         start(&mut f).expect("should start");
         assert_eq!(f.status, Status::Completed(Ok(Int(5))));
 
-        let mut f = Fiber::from_bytecode(vec![PushConst(Form::string("Hi")), Ret]);
+        let mut f = Fiber::from_bytecode(vec![PushConst(Form::string("Hi"))]);
         start(&mut f).expect("should start");
         assert_eq!(f.status, Status::Completed(Ok(Form::string("Hi"))));
     }
 
-    // TODO: Test: Report exceeding callstack bytecode OR popping off callstack is... propagated maybe?
 }

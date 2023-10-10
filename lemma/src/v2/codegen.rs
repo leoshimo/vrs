@@ -2,12 +2,41 @@
 use super::Form;
 use serde::{Deserialize, Serialize};
 
-// TODO: Smaller size
+// TODO: Compact bytecode repr
 /// Bytecode instructions
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Inst {
     /// Push constant form onto stack
     PushConst(Form),
-    /// Unwinds call frame, pushing current TOS to stack as result
-    Ret,
+}
+
+/// Errors during compilation
+#[derive(thiserror::Error, Debug, PartialEq)]
+pub enum CompileError {}
+
+pub type Result<T> = std::result::Result<T, CompileError>;
+
+/// Compile expression
+pub fn compile(f: &Form) -> Result<Vec<Inst>> {
+    match f {
+        Form::Int(_) | Form::String(_) => {
+            Ok(vec![
+                Inst::PushConst(f.clone())
+            ])
+        }
+    }
+
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use super::Inst::*;
+
+    #[test]
+    fn compile_self_evaluating() {
+        assert_eq!(compile(&Form::string("Hello")), Ok(vec![
+            PushConst(Form::string("Hello")),
+        ]));
+    }
 }
