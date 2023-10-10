@@ -4,10 +4,7 @@ mod codegen;
 mod fiber;
 mod form;
 
-pub(crate) use codegen::Opcode;
+pub(crate) use codegen::Inst;
 pub(crate) use form::Form;
 
-pub use fiber::{
-    Fiber,
-    resume,
-};
+pub use fiber::{start, Fiber};
