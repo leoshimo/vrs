@@ -1,6 +1,6 @@
 //! Forms in Lemma
 
-use crate::{v2::Env, v2::Inst, Error, Result};
+use crate::{Env, Inst, Error, Result};
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, rc::Rc};
 

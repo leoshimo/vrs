@@ -1,48 +1,119 @@
-#![allow(dead_code)]
-/// The Lemma environment that has all bindings
-use crate::{Form, NativeFunc, SymbolId};
-use std::collections::HashMap;
+use crate::{Form, SymbolId};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+use super::fiber::FiberError;
+
+/// An environment of bindings
 #[derive(Debug, Default)]
-pub struct Env<'a> {
+pub struct Env {
     bindings: HashMap<SymbolId, Form>,
-    parent: Option<&'a Env<'a>>,
+    parent: Option<Rc<RefCell<Env>>>,
 }
 
-impl Env<'_> {
-    pub fn new() -> Self {
-        Self {
-            bindings: HashMap::new(),
-            parent: None,
-        }
-    }
-
-    /// Resolve a given symbol ID to the value in this environment
-    pub fn resolve(&self, symbol: &SymbolId) -> Option<&Form> {
-        if let Some(value) = self.bindings.get(symbol) {
-            Some(value)
-        } else if let Some(value) = self.parent.and_then(|p| p.resolve(symbol)) {
-            Some(value)
-        } else {
-            None
-        }
-    }
-
-    /// Bind a given symbol to given form
-    pub fn bind(&mut self, symbol: &SymbolId, value: Form) {
+impl Env {
+    /// Define a new symbol with given value in current environment
+    pub fn define(&mut self, symbol: &SymbolId, value: Form) {
         self.bindings.insert(symbol.clone(), value);
     }
 
-    /// Shorthand to `bind` a `SpecialForm`
-    pub fn bind_native(&mut self, sp_form: NativeFunc) {
-        self.bind(&sp_form.symbol.clone(), Form::NativeFunc(sp_form));
+    /// Get value for symbol
+    pub fn get(&self, symbol: &SymbolId) -> Option<Form> {
+        match self.bindings.get(symbol) {
+            Some(v) => Some(v.clone()),
+            None => self
+                .parent
+                .as_ref()
+                .and_then(|p| p.borrow().get(symbol).clone()),
+        }
     }
 
-    /// Create a new environment existing existing one
-    pub(crate) fn extend<'a>(env: &'a Env<'a>) -> Env<'a> {
-        Env {
+    /// Set value of symbol in lexical scope
+    pub fn set(&mut self, symbol: &SymbolId, value: Form) -> Result<(), FiberError> {
+        if let Some(b) = self.bindings.get_mut(symbol) {
+            *b = value;
+            return Ok(());
+        }
+
+        if let Some(ref p) = self.parent {
+            p.borrow_mut().set(symbol, value)?;
+            return Ok(());
+        }
+
+        Err(FiberError::UndefinedSymbol(symbol.clone()))
+    }
+
+    /// Extend an existing environment with given env as parent
+    pub fn extend(parent: &Rc<RefCell<Env>>) -> Self {
+        Self {
             bindings: HashMap::new(),
-            parent: Some(env),
+            parent: Some(Rc::clone(parent)),
         }
     }
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+
+//     #[test]
+//     fn get_undefined() {
+//         let env = Env::default();
+//         assert_eq!(env.get(&SymbolId::from("x")), None)
+//     }
+
+//     #[test]
+//     fn define_get() {
+//         let mut env = Env::default();
+//         env.define(&SymbolId::from("x"), Form::Int(0));
+//         assert_eq!(env.get(&SymbolId::from("x")), Some(Form::Int(0)));
+//     }
+
+//     #[test]
+//     fn set_defined() {
+//         let mut env = Env::default();
+//         let sym = SymbolId::from("x");
+//         env.define(&sym, Form::Int(0));
+//         assert_eq!(env.set(&sym, Form::string("one")), Ok(()));
+//         assert_eq!(
+//             env.get(&sym),
+//             Some(Form::string("one")),
+//             "Should get new value"
+//         );
+//     }
+
+//     #[test]
+//     fn set_undefined() {
+//         let mut env = Env::default();
+//         assert_eq!(
+//             env.set(&SymbolId::from("x"), Form::Int(1)),
+//             Err(FiberError::UndefinedSymbol(SymbolId::from("x")))
+//         );
+
+//         let child = Env::extend(&parent);
+//         assert_eq!(
+//             child.get(&sym),
+//             Some(Form::string("parent")),
+//             "should be parent scope's value"
+//         );
+//     }
+
+//     #[test]
+//     fn set_parent() {
+//         let parent = Rc::new(RefCell::new(Env::default()));
+//         let sym = SymbolId::from("x");
+//         parent.borrow_mut().define(&sym, Form::string("parent"));
+
+//         let mut child = Env::extend(&parent);
+//         assert_eq!(
+//             child.set(&sym, Form::string("updated")),
+//             Ok(()),
+//             "set from child scope should succeed"
+//         );
+//         assert_eq!(child.get(&sym), Some(Form::string("updated")),);
+//         assert_eq!(
+//             parent.borrow().get(&sym),
+//             Some(Form::string("updated")),
+//             "get should retrieve updated value"
+//         );
+//     }
+// }

@@ -1,6 +1,5 @@
 mod error;
 mod kernel;
-mod namespace;
 mod process;
 mod runtime;
 mod subscription;
