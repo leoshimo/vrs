@@ -35,14 +35,16 @@ pub fn compile(f: &Form) -> Result<Vec<Inst>> {
                 "Empty list expression".to_string(),
             ))?;
 
-            match first {
-                Form::Symbol(s) => match s.as_str() {
-                    "def" => compile_def(args),
-                    "lambda" => compile_lambda(args),
-                    _ => compile_func_call(s, args),
-                },
-                _ => todo!(),
+            // special forms
+            if let Form::Symbol(s) = first {
+                match s.as_str() {
+                    "def" => return compile_def(args),
+                    "lambda" => return compile_lambda(args),
+                    _ => (),
+                }
             }
+
+            compile_func_call(first, args)
         }
         Form::Symbol(s) => Ok(vec![Inst::LoadSym(s.clone())]),
         _ => Ok(vec![Inst::PushConst(f.clone())]),
@@ -86,16 +88,18 @@ fn compile_lambda(args: &[Form]) -> Result<Vec<Inst>> {
 }
 
 /// Compile function calls
-fn compile_func_call(func: &SymbolId, args: &[Form]) -> Result<Vec<Inst>> {
+fn compile_func_call(func: &Form, args: &[Form]) -> Result<Vec<Inst>> {
     let mut bytecode = vec![];
     let nargs = args.len();
+
+    let func_code = compile(func)?;
     let arg_code = args
         .iter()
         .map(compile)
         .collect::<Result<Vec<_>>>()?
         .concat();
 
-    bytecode.push(Inst::LoadSym(func.clone()));
+    bytecode.extend(func_code);
     bytecode.extend(arg_code);
     bytecode.push(Inst::CallFunc(nargs));
 
@@ -199,6 +203,20 @@ mod tests {
                 LoadSym(SymbolId::from("four")),
                 CallFunc(0),
                 CallFunc(2),
+                CallFunc(1),
+            ])
+        );
+    }
+
+    #[test]
+    fn compile_func_call_lambda() {
+        assert_eq!(
+            compile(&f("((lambda (x) x) 10)")),
+            Ok(vec![
+                PushConst(Form::List(vec![Form::symbol("x")])),
+                PushConst(Form::Bytecode(vec![LoadSym(SymbolId::from("x")),])),
+                MakeFunc,
+                PushConst(Form::Int(10)),
                 CallFunc(1),
             ])
         );
