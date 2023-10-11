@@ -234,6 +234,15 @@ mod tests {
     #[test]
     fn compile_func_call_lambda() {
         assert_eq!(
+            compile(&f("((lambda () \"hello\"))")),
+            Ok(vec![
+                PushConst(Form::List(vec![])),
+                PushConst(Form::Bytecode(vec![PushConst(Form::string("hello")),])),
+                MakeFunc,
+                CallFunc(0),
+            ])
+        );
+        assert_eq!(
             compile(&f("((lambda (x) x) 10)")),
             Ok(vec![
                 PushConst(Form::List(vec![Form::symbol("x")])),
