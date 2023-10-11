@@ -16,6 +16,12 @@ pub enum Inst {
     MakeFunc,
     /// Call func by popping N forms and function object off stack, and pushing result
     CallFunc(usize),
+    /// Pop the top of the stack
+    PopTop,
+    /// Start a new scope in environment
+    BeginScope,
+    /// End active scope
+    EndScope,
 }
 
 /// Errors during compilation
@@ -40,6 +46,7 @@ pub fn compile(f: &Form) -> Result<Vec<Inst>> {
                 match s.as_str() {
                     "def" => return compile_def(args),
                     "lambda" => return compile_lambda(args),
+                    "begin" => return compile_begin(args),
                     _ => (),
                 }
             }
@@ -104,6 +111,22 @@ fn compile_func_call(func: &Form, args: &[Form]) -> Result<Vec<Inst>> {
     bytecode.push(Inst::CallFunc(nargs));
 
     Ok(bytecode)
+}
+
+/// Compile builtin begin
+fn compile_begin(args: &[Form]) -> Result<Vec<Inst>> {
+    let mut bc = vec![Inst::BeginScope];
+    let mut is_first = true;
+    for a in args {
+        if is_first {
+            is_first = false;
+        } else {
+            bc.push(Inst::PopTop); // discard result from previous call
+        }
+        bc.extend(compile(a)?);
+    }
+    bc.push(Inst::EndScope);
+    Ok(bc)
 }
 
 #[cfg(test)]
@@ -220,6 +243,26 @@ mod tests {
                 CallFunc(1),
             ])
         );
+    }
+
+    #[test]
+    fn compile_begin() {
+        assert_eq!(
+            compile(&f("(begin 1 2 3 4 5)")),
+            Ok(vec![
+                BeginScope,
+                PushConst(Form::Int(1)),
+                PopTop,
+                PushConst(Form::Int(2)),
+                PopTop,
+                PushConst(Form::Int(3)),
+                PopTop,
+                PushConst(Form::Int(4)),
+                PopTop,
+                PushConst(Form::Int(5)),
+                EndScope,
+            ])
+        )
     }
 
     /// Convenience for creating Forms from strs

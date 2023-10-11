@@ -115,6 +115,9 @@ fn run(f: &mut Fiber) {
                 f.stack.push(Form::Lambda(Lambda { params, code }));
             }
             Inst::CallFunc(_) => todo!(),
+            Inst::PopTop => todo!(),
+            Inst::BeginScope => todo!(),
+            Inst::EndScope => todo!(),
         }
 
         if f.status == Status::Running && f.no_more_inst() {
@@ -234,9 +237,7 @@ mod tests {
     fn make_func() {
         let mut f = Fiber::from_bytecode(vec![
             PushConst(Form::List(vec![Form::symbol("x")])),
-            PushConst(Form::Bytecode(vec![
-                LoadSym(SymbolId::from("x"))
-            ])),
+            PushConst(Form::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
             MakeFunc,
         ]);
 
@@ -246,9 +247,7 @@ mod tests {
             f.status,
             Status::Completed(Ok(Form::Lambda(Lambda {
                 params: vec![SymbolId::from("x")],
-                code: vec![
-                    LoadSym(SymbolId::from("x"))
-                ],
+                code: vec![LoadSym(SymbolId::from("x"))],
             }))),
             "A function object was created"
         );
