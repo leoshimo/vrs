@@ -14,6 +14,8 @@ pub enum Inst {
     StoreSym(SymbolId),
     /// Pop parameter list and function body from stack, and pushes a new function onto stack
     MakeFunc,
+    /// Call func by popping N forms and function object off stack, and pushing result
+    CallFunc(usize),
 }
 
 /// Errors during compilation
@@ -37,7 +39,7 @@ pub fn compile(f: &Form) -> Result<Vec<Inst>> {
                 Form::Symbol(s) => match s.as_str() {
                     "def" => compile_def(args),
                     "lambda" => compile_lambda(args),
-                    _ => todo!(),
+                    _ => compile_func_call(s, args),
                 },
                 _ => todo!(),
             }
@@ -81,6 +83,23 @@ fn compile_lambda(args: &[Form]) -> Result<Vec<Inst>> {
         Inst::PushConst(Form::Bytecode(bytecode)),
         Inst::MakeFunc,
     ])
+}
+
+/// Compile function calls
+fn compile_func_call(func: &SymbolId, args: &[Form]) -> Result<Vec<Inst>> {
+    let mut bytecode = vec![];
+    let nargs = args.len();
+    let arg_code = args
+        .iter()
+        .map(compile)
+        .collect::<Result<Vec<_>>>()?
+        .concat();
+
+    bytecode.push(Inst::LoadSym(func.clone()));
+    bytecode.extend(arg_code);
+    bytecode.push(Inst::CallFunc(nargs));
+
+    Ok(bytecode)
 }
 
 #[cfg(test)]
@@ -143,6 +162,44 @@ mod tests {
                     MakeFunc,
                 ])),
                 MakeFunc
+            ])
+        );
+    }
+
+    #[test]
+    fn compile_func_call() {
+        assert_eq!(
+            compile(&f("(echo \"Hello world\")")),
+            Ok(vec![
+                LoadSym(SymbolId::from("echo")),
+                PushConst(Form::string("Hello world")),
+                CallFunc(1)
+            ])
+        );
+
+        assert_eq!(
+            compile(&f("(+ 1 2 3 4 5)")),
+            Ok(vec![
+                LoadSym(SymbolId::from("+")),
+                PushConst(Form::Int(1)),
+                PushConst(Form::Int(2)),
+                PushConst(Form::Int(3)),
+                PushConst(Form::Int(4)),
+                PushConst(Form::Int(5)),
+                CallFunc(5)
+            ])
+        );
+
+        assert_eq!(
+            compile(&f("(one (two 3 (four)))")),
+            Ok(vec![
+                LoadSym(SymbolId::from("one")),
+                LoadSym(SymbolId::from("two")),
+                PushConst(Form::Int(3)),
+                LoadSym(SymbolId::from("four")),
+                CallFunc(0),
+                CallFunc(2),
+                CallFunc(1),
             ])
         );
     }

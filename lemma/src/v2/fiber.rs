@@ -114,6 +114,7 @@ fn run(f: &mut Fiber) {
 
                 f.stack.push(Form::Lambda(Lambda { params, code }));
             }
+            Inst::CallFunc(_) => todo!(),
         }
 
         if f.status == Status::Running && f.no_more_inst() {
