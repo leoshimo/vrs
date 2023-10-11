@@ -124,12 +124,24 @@ mod tests {
 
     #[test]
     fn compile_lambda() {
-        let bytecode = Form::Bytecode(compile(&Form::symbol("x")).unwrap());
         assert_eq!(
             compile(&f("(lambda (x) x)")),
             Ok(vec![
                 PushConst(Form::List(vec![Form::symbol("x")])),
-                PushConst(bytecode),
+                PushConst(Form::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+                MakeFunc
+            ])
+        );
+
+        assert_eq!(
+            compile(&f("(lambda (x) (lambda () x))")),
+            Ok(vec![
+                PushConst(Form::List(vec![Form::symbol("x")])),
+                PushConst(Form::Bytecode(vec![
+                    PushConst(Form::List(vec![])),
+                    PushConst(Form::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+                    MakeFunc,
+                ])),
                 MakeFunc
             ])
         );
