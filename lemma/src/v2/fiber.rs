@@ -36,6 +36,10 @@ pub enum FiberError {
     /// Setting undefined symbol
     #[error("Undefined symbol - {0}")]
     UndefinedSymbol(SymbolId),
+
+    /// Unexpected state on stack
+    #[error("Unexpected stack state - {0}")]
+    UnexpectedStack(String),
 }
 
 /// Result type for fiber ops
@@ -62,19 +66,23 @@ fn run(f: &mut Fiber) {
             Inst::PushConst(form) => {
                 f.stack.push(form);
             }
-            Inst::StoreSym(s) => {
-                let value = f
-                    .stack
-                    .last()
-                    .expect("Expected value on stack for variable"); // TODO: Capture as fiber error
-                f.env.define(&s, value.clone());
-            }
-            Inst::LoadSym(_s) => {
-                todo!()
-            }
+            Inst::StoreSym(s) => match f.stack.last() {
+                Some(value) => f.env.define(&s, value.clone()),
+                None => {
+                    f.status = Status::Completed(Err(FiberError::UnexpectedStack(
+                        "Expected stack to be nonempty".to_string(),
+                    )))
+                }
+            },
+            Inst::LoadSym(s) => match f.env.get(&s) {
+                Some(value) => f.stack.push(value.clone()),
+                None => {
+                    f.status = Status::Completed(Err(FiberError::UndefinedSymbol(s)));
+                }
+            },
         }
 
-        if f.is_done() {
+        if f.status == Status::Running && f.no_more_inst() {
             let res = f.stack.pop().expect("Stack should contain result");
             f.status = Status::Completed(Ok(res));
         }
@@ -113,7 +121,7 @@ impl Fiber {
     }
 
     /// Whether or not fiber has executed last instruction
-    fn is_done(&self) -> bool {
+    fn no_more_inst(&self) -> bool {
         self.cframes.len() == 1 && self.cframes.last().unwrap().is_done()
     }
 }
@@ -135,6 +143,7 @@ mod tests {
     use super::Form::*;
     use super::Inst::*;
     use super::*;
+    use assert_matches::assert_matches;
 
     #[test]
     fn fiber_load_const_return() {
@@ -167,5 +176,25 @@ mod tests {
         );
     }
 
-    // TODO: Store / Load symbol w/ function scopes
+    #[test]
+    fn load_symbol() {
+        let mut f = Fiber::from_bytecode(vec![LoadSym(SymbolId::from("x"))]);
+        f.env.define(&SymbolId::from("x"), Form::string("hi"));
+
+        start(&mut f).unwrap();
+        assert_eq!(f.status, Status::Completed(Ok(Form::string("hi"))));
+    }
+
+    #[test]
+    fn load_symbol_undefined() {
+        let mut f = Fiber::from_bytecode(vec![LoadSym(SymbolId::from("x"))]);
+
+        start(&mut f).unwrap();
+        assert_matches!(
+            f.status,
+            Status::Completed(Err(FiberError::UndefinedSymbol(_)))
+        );
+    }
+
+    // TODO: Store / Load symbol w/ lexical scopes
 }
