@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 /// The Lemma environment that has all bindings
 use crate::{Form, NativeFunc, SymbolId};
 use std::collections::HashMap;

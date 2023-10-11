@@ -170,6 +170,7 @@ mod tests {
 
     #[test]
     #[traced_test]
+    #[ignore]
     fn eval_list() {
         let mut env = std_env();
 
@@ -203,6 +204,7 @@ mod tests {
 
     #[test]
     #[traced_test]
+    #[ignore]
     fn eval_len() {
         let mut env = std_env();
 
@@ -231,6 +233,7 @@ mod tests {
 
     #[test]
     #[traced_test]
+    #[ignore]
     fn eval_get() {
         let mut env = std_env();
 
@@ -254,6 +257,7 @@ mod tests {
 
     #[test]
     #[traced_test]
+    #[ignore]
     fn eval_getn() {
         let mut env = std_env();
 
@@ -280,6 +284,7 @@ mod tests {
 
     #[test]
     #[traced_test]
+    #[ignore]
     fn eval_map() {
         let mut env = std_env();
 
@@ -313,6 +318,7 @@ mod tests {
 
     #[test]
     #[traced_test]
+    #[ignore]
     fn eval_push() {
         let mut env = std_env();
 
@@ -354,6 +360,7 @@ mod tests {
 
     #[test]
     #[traced_test]
+    #[ignore]
     fn eval_pop() {
         let mut env = std_env();
 

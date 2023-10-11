@@ -1,6 +1,6 @@
 //! Forms in Lemma
 
-use crate::{Env, Result};
+use crate::{Env, Result, v2::Inst};
 use serde::{Deserialize, Serialize};
 
 /// Forms that can be evaluated
@@ -28,7 +28,7 @@ impl std::fmt::Debug for Form {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Lambda {
     pub params: Vec<SymbolId>,
-    pub body: Vec<Form>,
+    pub code: Vec<Inst>,
 }
 
 /// A function that evaluates special forms
