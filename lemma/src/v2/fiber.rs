@@ -133,7 +133,7 @@ impl Fiber {
         Fiber {
             stack: vec![],
             cframes: vec![CallFrame::from_bytecode(bytecode)],
-            env: Env::new(),
+            env: Env::default(),
             status: Status::New,
         }
     }
