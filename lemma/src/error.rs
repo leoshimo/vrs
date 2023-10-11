@@ -15,12 +15,12 @@ pub enum Error {
     #[error("Missing procedure")]
     MissingProcedure,
 
-    #[error("Not a procedure - {0}")]
-    NotAProcedure(crate::Form),
-
     #[error("Undefined symbol - {0}")]
     UndefinedSymbol(SymbolId),
 
     #[error("Unexpected arguments - {0}")]
     UnexpectedArguments(String),
+
+    #[error("Invalid form to expr - {0}")]
+    InvalidFormToExpr(String),
 }

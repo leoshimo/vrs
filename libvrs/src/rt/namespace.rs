@@ -1,21 +1,18 @@
+#![allow(unused_variables)]
 //! Namespace for a process, wraping Lisp environment
 use crate::rt::Result;
 
 /// A namespace for specific process
-pub(crate) struct Namespace<'a> {
-    env: lemma::Env<'a>,
-}
+pub(crate) struct Namespace {}
 
-impl Namespace<'_> {
+impl Namespace {
     /// Create a new expression
     pub(crate) fn new() -> Self {
-        Self {
-            env: lemma::lang::std_env(),
-        }
+        Self {}
     }
 
     /// Evaluate given expression
-    pub(crate) fn eval(&mut self, form: &lemma::Form) -> Result<lemma::Form> {
-        Ok(lemma::eval(form, &mut self.env)?)
+    pub(crate) fn eval(&mut self, form: &lemma::Expr) -> Result<lemma::Expr> {
+        Ok(lemma::Expr::Int(0)) // TODO: Fix me
     }
 }

@@ -10,8 +10,7 @@ pub mod lang;
 
 pub use env::Env;
 pub use error::Error;
-pub use eval::eval;
-pub use eval::eval_expr;
+pub use form::Expr;
 pub use form::Form;
 pub use form::KeywordId;
 pub use form::Lambda;

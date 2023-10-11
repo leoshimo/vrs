@@ -123,7 +123,11 @@ fn run(f: &mut Fiber) {
                     Err(e) => break Status::Completed(Err(e)),
                 };
 
-                f.stack.push(Form::Lambda(Lambda { params, code }));
+                f.stack.push(Form::Lambda(Lambda {
+                    params,
+                    code,
+                    env: Rc::clone(&f.top().env),
+                }));
             }
             Inst::CallFunc(nargs) => {
                 let args = (0..nargs)
@@ -147,7 +151,7 @@ fn run(f: &mut Fiber) {
                     }
                 };
 
-                let mut fn_env = Env::extend(&f.top().env); // TODO: should use parent scope!
+                let mut fn_env = Env::extend(&lambda.env);
                 for (s, arg) in lambda.params.iter().zip(args) {
                     fn_env.define(s, arg);
                 }
@@ -297,40 +301,22 @@ mod tests {
 
         start(&mut f).unwrap();
 
-        assert_eq!(
+        assert_matches!(
             f.status,
-            Status::Completed(Ok(Form::Lambda(Lambda {
-                params: vec![SymbolId::from("x")],
-                code: vec![LoadSym(SymbolId::from("x"))],
-            }))),
+            Status::Completed(Ok(Form::Lambda(l))) if l.params == vec![SymbolId::from("x")] && l.code == vec![LoadSym(SymbolId::from("x"))],
             "A function object was created"
         );
     }
 
     #[test]
     #[traced_test]
-    fn call_func_bare() {
-        // ((lambda () "hello"))
-        let mut f = Fiber::from_bytecode(vec![
-            PushConst(Form::Lambda(Lambda {
-                params: vec![],
-                code: vec![PushConst(Form::string("hello"))],
-            })),
-            CallFunc(0),
-        ]);
-
-        start(&mut f).unwrap();
-        assert_eq!(f.status, Status::Completed(Ok(Form::string("hello"))));
-    }
-
-    #[test]
-    #[traced_test]
-    fn call_func_direct() {
-        // ((lambda (x) x) "hello")
+    fn call_func() {
+        let env = Env::default();
         let mut f = Fiber::from_bytecode(vec![
             PushConst(Form::Lambda(Lambda {
                 params: vec![SymbolId::from("x")],
                 code: vec![LoadSym(SymbolId::from("x"))],
+                env: Rc::new(RefCell::new(env)),
             })),
             PushConst(Form::string("hello")),
             CallFunc(1),
@@ -340,5 +326,56 @@ mod tests {
         assert_eq!(f.status, Status::Completed(Ok(Form::string("hello"))));
     }
 
+    #[test]
+    fn call_func_lambda() {
+        // ((lambda (x) x) "hello")
+        let mut f = Fiber::from_bytecode(vec![
+            PushConst(Form::List(vec![Form::symbol("x")])),
+            PushConst(Form::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+            MakeFunc,
+            PushConst(Form::string("hello")),
+            CallFunc(1),
+        ]);
+        start(&mut f).unwrap();
+        assert_eq!(f.status, Status::Completed(Ok(Form::string("hello"))));
+    }
+
+    #[test]
+    fn call_func_nested() {
+        // (((lambda () (lambda (x) x))) "hello")
+        let mut f = Fiber::from_bytecode(vec![
+            PushConst(Form::List(vec![])),
+            PushConst(Form::Bytecode(vec![
+                PushConst(Form::List(vec![Form::symbol("x")])),
+                PushConst(Form::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+                MakeFunc,
+            ])),
+            MakeFunc,
+            CallFunc(0),
+            PushConst(Form::string("hello")),
+            CallFunc(1),
+        ]);
+        start(&mut f).unwrap();
+        assert_eq!(f.status, Status::Completed(Ok(Form::string("hello"))));
+
+        // (((lambda (x) (lambda () x)) "hello"))
+        let mut f = Fiber::from_bytecode(vec![
+            PushConst(Form::List(vec![Form::symbol("x")])),
+            PushConst(Form::Bytecode(vec![
+                PushConst(Form::List(vec![])),
+                PushConst(Form::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+                MakeFunc,
+            ])),
+            MakeFunc,
+            PushConst(Form::string("hello")),
+            CallFunc(1),
+            CallFunc(0),
+        ]);
+        start(&mut f).unwrap();
+        assert_eq!(f.status, Status::Completed(Ok(Form::string("hello"))));
+    }
+
+    // TODO: (((lambda () (lambda () "nested"))))
+    // TODO: Define + call function via block
     // TODO: Store / Load symbol w/ lexical scopes
 }

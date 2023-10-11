@@ -30,7 +30,7 @@ pub struct Request {
     /// Unique ID assigned to request
     pub req_id: u32,
     /// Contents of request
-    pub contents: lemma::Form,
+    pub contents: lemma::Expr,
 }
 
 /// Incoming response
@@ -39,7 +39,7 @@ pub struct Response {
     /// Unique ID of request this response is for
     pub req_id: u32,
     /// Contents of response
-    pub contents: Result<lemma::Form, Error>,
+    pub contents: Result<lemma::Expr, Error>,
 }
 
 /// Error Type

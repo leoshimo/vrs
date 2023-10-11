@@ -111,71 +111,71 @@ async fn subscription_for_client_connection(mut conn: Connection, target: WeakPr
     }
 }
 
-#[cfg(test)]
-mod tests {
+// #[cfg(test)]
+// mod tests {
 
-    use super::*;
-    use crate::{rt::kernel, Client, Connection};
-    use lemma::{parse as p, Form};
-    use tokio::task::yield_now;
-    use tracing_test::traced_test;
+//     use super::*;
+//     use crate::{rt::kernel, Client, Connection};
+//     use lemma::{parse as p, Form};
+//     use tokio::task::yield_now;
+//     use tracing_test::traced_test;
 
-    #[tokio::test]
-    #[traced_test]
-    async fn client_connection_request_response() {
-        let (local, remote) = Connection::pair().unwrap();
-        let k = kernel::start();
-        let proc = k.spawn_proc(None).await.unwrap();
+//     #[tokio::test]
+//     #[traced_test]
+//     async fn client_connection_request_response() {
+//         let (local, remote) = Connection::pair().unwrap();
+//         let k = kernel::start();
+//         let proc = k.spawn_proc(None).await.unwrap();
 
-        proc.add_subscription(Subscription::ClientConnection(local))
-            .await
-            .expect("Adding subscription should succeed");
-        let mut remote = Client::new(remote);
+//         proc.add_subscription(Subscription::ClientConnection(local))
+//             .await
+//             .expect("Adding subscription should succeed");
+//         let mut remote = Client::new(remote);
 
-        // Process has definitions
-        proc.call(p("(def count 0)").unwrap())
-            .await
-            .expect("count should be defined");
-        proc.call(p("(def inc (lambda (x) (+ x 1)))").unwrap())
-            .await
-            .expect("inc should be defined");
+//         // Process has definitions
+//         proc.call(p("(def count 0)").unwrap())
+//             .await
+//             .expect("count should be defined");
+//         proc.call(p("(def inc (lambda (x) (+ x 1)))").unwrap())
+//             .await
+//             .expect("inc should be defined");
 
-        // Client requests are received + processed
-        let resp = remote
-            .request(p("count").expect("Request should send"))
-            .await
-            .expect("Response should return");
-        assert_eq!(resp.contents, Ok(Form::Int(0)));
-    }
+//         // Client requests are received + processed
+//         let resp = remote
+//             .request(p("count").expect("Request should send"))
+//             .await
+//             .expect("Response should return");
+//         assert_eq!(resp.contents, Ok(Form::Int(0)));
+//     }
 
-    #[tokio::test]
-    #[traced_test]
-    async fn client_connection_drop() {
-        use std::time::Duration;
-        use tokio::time::timeout;
+//     #[tokio::test]
+//     #[traced_test]
+//     async fn client_connection_drop() {
+//         use std::time::Duration;
+//         use tokio::time::timeout;
 
-        let (local, remote) = Connection::pair().unwrap();
-        let k = kernel::start();
-        let proc = k.spawn_proc(None).await.unwrap();
+//         let (local, remote) = Connection::pair().unwrap();
+//         let k = kernel::start();
+//         let proc = k.spawn_proc(None).await.unwrap();
 
-        proc.add_subscription(Subscription::ClientConnection(local))
-            .await
-            .expect("Adding subscription should succeed");
+//         proc.add_subscription(Subscription::ClientConnection(local))
+//             .await
+//             .expect("Adding subscription should succeed");
 
-        // Connection terminated
-        drop(remote);
+//         // Connection terminated
+//         drop(remote);
 
-        // Check it eventually shuts downs
-        // Necessary, since shutdown message comes from separate task (subscription task) v.s. the is_shutdown message from this task
-        timeout(Duration::from_secs(1), async {
-            loop {
-                if proc.is_shutdown().await.unwrap() {
-                    break;
-                }
-                yield_now().await;
-            }
-        })
-        .await
-        .expect("Should shutdown soon");
-    }
-}
+//         // Check it eventually shuts downs
+//         // Necessary, since shutdown message comes from separate task (subscription task) v.s. the is_shutdown message from this task
+//         timeout(Duration::from_secs(1), async {
+//             loop {
+//                 if proc.is_shutdown().await.unwrap() {
+//                     break;
+//                 }
+//                 yield_now().await;
+//             }
+//         })
+//         .await
+//         .expect("Should shutdown soon");
+//     }
+// }

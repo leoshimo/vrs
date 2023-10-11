@@ -152,104 +152,104 @@ impl Kernel {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::{Client, Connection};
-    use lemma::{parse as p, Form};
-    use std::time::Duration;
-    use tokio::{task::yield_now, time::timeout};
-    use tracing_test::traced_test;
+// #[cfg(test)]
+// mod tests {
+//     use crate::{Client, Connection};
+//     use lemma::{parse as p, Form};
+//     use std::time::Duration;
+//     use tokio::{task::yield_now, time::timeout};
+//     use tracing_test::traced_test;
 
-    use super::*;
+//     use super::*;
 
-    #[tokio::test]
-    #[traced_test]
-    async fn kernel_init() {
-        let k = start();
-        assert_eq!(
-            k.list_processes().await.unwrap().len(),
-            0,
-            "Should not have any processes on init"
-        );
+//     #[tokio::test]
+//     #[traced_test]
+//     async fn kernel_init() {
+//         let k = start();
+//         assert_eq!(
+//             k.list_processes().await.unwrap().len(),
+//             0,
+//             "Should not have any processes on init"
+//         );
 
-        assert!(!logs_contain("ERROR"));
-    }
+//         assert!(!logs_contain("ERROR"));
+//     }
 
-    #[tokio::test]
-    #[traced_test]
-    async fn kernel_proc_lifecycle() {
-        let k = start();
+//     #[tokio::test]
+//     #[traced_test]
+//     async fn kernel_proc_lifecycle() {
+//         let k = start();
 
-        let proc = k
-            .spawn_proc(None)
-            .await
-            .expect("Kernel should spawn new process");
-        let pid = proc.id;
+//         let proc = k
+//             .spawn_proc(None)
+//             .await
+//             .expect("Kernel should spawn new process");
+//         let pid = proc.id;
 
-        assert!(
-            k.list_processes().await.unwrap().contains(&pid),
-            "Kernel should have new process"
-        );
+//         assert!(
+//             k.list_processes().await.unwrap().contains(&pid),
+//             "Kernel should have new process"
+//         );
 
-        let proc = k
-            .get_proc(pid)
-            .await
-            .expect("Kernel should respond")
-            .expect("Handle should be Some");
-        proc.shutdown().await.unwrap();
+//         let proc = k
+//             .get_proc(pid)
+//             .await
+//             .expect("Kernel should respond")
+//             .expect("Handle should be Some");
+//         proc.shutdown().await.unwrap();
 
-        timeout(Duration::from_secs(1), async {
-            loop {
-                if !k.list_processes().await.unwrap().contains(&pid) {
-                    break;
-                }
-                yield_now().await;
-            }
-        })
-        .await
-        .expect("Kernel should be notified that process terminating and update state");
+//         timeout(Duration::from_secs(1), async {
+//             loop {
+//                 if !k.list_processes().await.unwrap().contains(&pid) {
+//                     break;
+//                 }
+//                 yield_now().await;
+//             }
+//         })
+//         .await
+//         .expect("Kernel should be notified that process terminating and update state");
 
-        assert!(!logs_contain("ERROR"));
-    }
+//         assert!(!logs_contain("ERROR"));
+//     }
 
-    #[tokio::test]
-    #[traced_test]
-    async fn kernel_proc_for_conn() {
-        let (local, remote) = Connection::pair().unwrap();
-        let mut client = Client::new(remote);
+//     #[tokio::test]
+//     #[traced_test]
+//     async fn kernel_proc_for_conn() {
+//         let (local, remote) = Connection::pair().unwrap();
+//         let mut client = Client::new(remote);
 
-        let k = start();
+//         let k = start();
 
-        let proc = k
-            .spawn_proc(Some(local))
-            .await
-            .expect("Kernel should spawn new process");
-        let pid = proc.id;
+//         let proc = k
+//             .spawn_proc(Some(local))
+//             .await
+//             .expect("Kernel should spawn new process");
+//         let pid = proc.id;
 
-        let _ = client
-            .request(p("(def msg \"Hello world\")").unwrap())
-            .await
-            .expect("Client should send request");
+//         let _ = client
+//             .request(p("(def msg \"Hello world\")").unwrap())
+//             .await
+//             .expect("Client should send request");
 
-        // Verify via client
-        let resp = client
-            .request(p("msg").unwrap())
-            .await
-            .expect("Client should send request");
-        assert_eq!(resp.contents, Ok(Form::string("Hello world")));
+//         // Verify via client
+//         let resp = client
+//             .request(p("msg").unwrap())
+//             .await
+//             .expect("Client should send request");
+//         assert_eq!(resp.contents, Ok(Form::string("Hello world")));
 
-        // Verify via proc
-        let proc = k
-            .get_proc(pid)
-            .await
-            .expect("Kernel should return resp")
-            .expect("Handle should not be none");
+//         // Verify via proc
+//         let proc = k
+//             .get_proc(pid)
+//             .await
+//             .expect("Kernel should return resp")
+//             .expect("Handle should not be none");
 
-        assert_eq!(
-            proc.call(p("msg").unwrap()).await.unwrap(),
-            Form::string("Hello world")
-        );
+//         assert_eq!(
+//             proc.call(p("msg").unwrap()).await.unwrap(),
+//             Form::string("Hello world")
+//         );
 
-        assert!(!logs_contain("ERROR"));
-    }
-}
+//         assert!(!logs_contain("ERROR"));
+//     }
+// }

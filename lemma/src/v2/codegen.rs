@@ -1,10 +1,9 @@
 //! Compiler for Lemma Form AST
 use crate::{Form, SymbolId};
-use serde::{Deserialize, Serialize};
 
 // TODO: Compact bytecode repr
 /// Bytecode instructions
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Inst {
     /// Push constant form onto stack
     PushConst(Form),
@@ -249,6 +248,40 @@ mod tests {
                 PushConst(Form::Bytecode(vec![LoadSym(SymbolId::from("x")),])),
                 MakeFunc,
                 PushConst(Form::Int(10)),
+                CallFunc(1),
+            ])
+        );
+    }
+
+    #[test]
+    fn compile_func_call_nested() {
+        assert_eq!(
+            compile(&f("(((lambda (x) (lambda () x)) \"hello\"))")),
+            Ok(vec![
+                PushConst(Form::List(vec![Form::symbol("x")])),
+                PushConst(Form::Bytecode(vec![
+                    PushConst(Form::List(vec![])),
+                    PushConst(Form::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+                    MakeFunc
+                ])),
+                MakeFunc,
+                PushConst(Form::string("hello")),
+                CallFunc(1),
+                CallFunc(0),
+            ])
+        );
+        assert_eq!(
+            compile(&f("(((lambda () (lambda (x) x))) \"hello\")")),
+            Ok(vec![
+                PushConst(Form::List(vec![])),
+                PushConst(Form::Bytecode(vec![
+                    PushConst(Form::List(vec![Form::symbol("x")])),
+                    PushConst(Form::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+                    MakeFunc
+                ])),
+                MakeFunc,
+                CallFunc(0),
+                PushConst(Form::string("hello")),
                 CallFunc(1),
             ])
         );

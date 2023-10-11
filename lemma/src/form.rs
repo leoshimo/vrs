@@ -1,10 +1,24 @@
 //! Forms in Lemma
 
-use crate::{v2::Inst, Env, Result};
+use crate::{v2::Env, v2::Inst, Error, Result};
 use serde::{Deserialize, Serialize};
+use std::{cell::RefCell, rc::Rc};
 
 /// Forms that can be evaluated
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum Expr {
+    Nil,
+    Bool(bool),
+    Int(i32),
+    String(String),
+    Symbol(SymbolId),
+    Keyword(KeywordId),
+    List(Vec<Expr>),
+}
+
+// TODO: Should be renamed w/ Sexpr above
+/// Values, which includes many forms
+#[derive(Clone, PartialEq)]
 pub enum Form {
     Nil,
     Bool(bool),
@@ -13,10 +27,52 @@ pub enum Form {
     Symbol(SymbolId),
     Keyword(KeywordId),
     List(Vec<Form>),
-    Lambda(Lambda),
     Bytecode(Vec<Inst>),
-    #[serde(skip)]
+    Lambda(Lambda),
     NativeFunc(NativeFunc),
+}
+
+impl From<Expr> for Form {
+    fn from(value: Expr) -> Self {
+        match value {
+            Expr::Nil => Form::Nil,
+            Expr::Bool(b) => Form::Bool(b),
+            Expr::Int(i) => Form::Int(i),
+            Expr::String(s) => Form::String(s),
+            Expr::Symbol(s) => Form::Symbol(s),
+            Expr::Keyword(k) => Form::Keyword(k),
+            Expr::List(l) => Form::List(l.into_iter().map(|e| e.into()).collect()),
+        }
+    }
+}
+
+impl TryFrom<Form> for Expr {
+    type Error = Error;
+
+    fn try_from(value: Form) -> std::result::Result<Self, Self::Error> {
+        match value {
+            Form::Nil => Ok(Expr::Nil),
+            Form::Bool(b) => Ok(Expr::Bool(b)),
+            Form::Int(i) => Ok(Expr::Int(i)),
+            Form::String(s) => Ok(Expr::String(s)),
+            Form::Symbol(s) => Ok(Expr::Symbol(s)),
+            Form::Keyword(k) => Ok(Expr::Keyword(k)),
+            Form::List(l) => Ok(Expr::List(
+                l.into_iter()
+                    .map(|e| e.try_into())
+                    .collect::<Result<Vec<_>>>()?,
+            )),
+            Form::Bytecode(_) => Err(Error::InvalidFormToExpr(
+                "bytecode are not exprs".to_string(),
+            )),
+            Form::Lambda(_) => Err(Error::InvalidFormToExpr(
+                "lambdas are not exprs".to_string(),
+            )),
+            Form::NativeFunc(_) => Err(Error::InvalidFormToExpr(
+                "nativefns are not exprs".to_string(),
+            )),
+        }
+    }
 }
 
 impl std::fmt::Debug for Form {
@@ -26,10 +82,17 @@ impl std::fmt::Debug for Form {
 }
 
 /// A function as a value
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Lambda {
     pub params: Vec<SymbolId>,
     pub code: Vec<Inst>,
+    pub env: Rc<RefCell<Env>>,
+}
+
+impl PartialEq for Lambda {
+    fn eq(&self, other: &Self) -> bool {
+        self.params == other.params && self.code == other.code && Rc::ptr_eq(&self.env, &other.env)
+    }
 }
 
 /// A function that evaluates special forms
@@ -104,6 +167,32 @@ impl std::fmt::Display for Form {
             ),
             Form::NativeFunc(s) => write!(f, "<nativefn {}>", s.symbol),
             Form::Bytecode(_) => write!(f, "<bytecode>"),
+        }
+    }
+}
+
+impl std::fmt::Display for Expr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Expr::Nil => write!(f, "nil"),
+            Expr::Bool(b) => write!(f, "{}", if *b { "true" } else { "false" }),
+            Expr::Int(i) => write!(f, "{}", i),
+            Expr::String(s) => write!(f, "\"{}\"", s),
+            Expr::Keyword(k) => write!(f, "{}", k),
+            Expr::Symbol(s) => write!(f, "{}", s),
+            Expr::List(l) => match &l[..] {
+                [quote, form] if quote == &Expr::Symbol(SymbolId::from("quote")) => {
+                    write!(f, "'{}", form)
+                }
+                _ => write!(
+                    f,
+                    "({})",
+                    l.iter()
+                        .map(|e| e.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                ),
+            },
         }
     }
 }
