@@ -1,11 +1,13 @@
 //! A fiber of execution that can be cooperatively scheduled via yielding.
+use tracing::debug;
+
 use super::{Env, Inst};
 use crate::{Form, Lambda, SymbolId};
+use std::{cell::RefCell, rc::Rc};
 
 #[derive(Debug)]
 pub struct Fiber {
     cframes: Vec<CallFrame>,
-    env: Env,
     stack: Vec<Form>,
     status: Status,
 }
@@ -24,6 +26,7 @@ pub enum Status {
 struct CallFrame {
     ip: usize,
     code: Vec<Inst>,
+    env: Rc<RefCell<Env>>,
 }
 
 /// Errors encountered during execution of expression
@@ -62,19 +65,27 @@ fn run(f: &mut Fiber) {
         let inst = f.inst().clone(); // TODO(opt): Defer cloning until args need cloning
         f.top_mut().ip += 1;
 
+        // TODO: Add fiber debug flag
+        debug!(
+            "frame {} ip {}: {:?}",
+            f.cframes.len() - 1,
+            f.top().ip,
+            inst
+        );
+
         match inst {
             Inst::PushConst(form) => {
                 f.stack.push(form);
             }
             Inst::StoreSym(s) => match f.stack.last() {
-                Some(value) => f.env.define(&s, value.clone()),
+                Some(value) => f.top().env.borrow_mut().define(&s, value.clone()),
                 None => {
                     break Status::Completed(Err(FiberError::UnexpectedStack(
                         "Expected stack to be nonempty".to_string(),
                     )))
                 }
             },
-            Inst::LoadSym(s) => match f.env.get(&s) {
+            Inst::LoadSym(s) => match f.top().env.clone().borrow().get(&s) {
                 Some(value) => f.stack.push(value.clone()),
                 None => {
                     break Status::Completed(Err(FiberError::UndefinedSymbol(s)));
@@ -114,15 +125,50 @@ fn run(f: &mut Fiber) {
 
                 f.stack.push(Form::Lambda(Lambda { params, code }));
             }
-            Inst::CallFunc(_) => todo!(),
+            Inst::CallFunc(nargs) => {
+                let args = (0..nargs)
+                    .map(|_| {
+                        f.stack.pop().ok_or(FiberError::UnexpectedStack(
+                            "Missing expected {nargs} args".to_string(),
+                        ))
+                    })
+                    .rev()
+                    .collect::<Result<Vec<_>>>();
+                let args = match args {
+                    Ok(a) => a,
+                    Err(e) => break Status::Completed(Err(e)),
+                };
+                let lambda = match f.stack.pop() {
+                    Some(Form::Lambda(l)) => l,
+                    _ => {
+                        break Status::Completed(Err(FiberError::UnexpectedStack(
+                            "Missing function object".to_string(),
+                        )))
+                    }
+                };
+
+                let mut fn_env = Env::extend(&f.top().env); // TODO: should use parent scope!
+                for (s, arg) in lambda.params.iter().zip(args) {
+                    fn_env.define(s, arg);
+                }
+
+                f.cframes
+                    .push(CallFrame::from_bytecode(fn_env, lambda.code));
+            }
             Inst::PopTop => todo!(),
             Inst::BeginScope => todo!(),
             Inst::EndScope => todo!(),
         }
 
-        if f.status == Status::Running && f.no_more_inst() {
-            let res = f.stack.pop().expect("Stack should contain result");
-            break Status::Completed(Ok(res));
+        // end of func
+        if f.status == Status::Running {
+            while f.cframes.len() > 1 && f.top().is_done() {
+                f.cframes.pop();
+            }
+            if f.at_end() {
+                let res = f.stack.pop().expect("Stack should contain result");
+                break Status::Completed(Ok(res));
+            }
         }
     };
 }
@@ -132,8 +178,7 @@ impl Fiber {
     pub fn from_bytecode(bytecode: Vec<Inst>) -> Self {
         Fiber {
             stack: vec![],
-            cframes: vec![CallFrame::from_bytecode(bytecode)],
-            env: Env::default(),
+            cframes: vec![CallFrame::from_bytecode(Env::default(), bytecode)],
             status: Status::New,
         }
     }
@@ -158,16 +203,20 @@ impl Fiber {
         inst
     }
 
-    /// Whether or not fiber has executed last instruction
-    fn no_more_inst(&self) -> bool {
+    /// Exhausted all call frames
+    fn at_end(&self) -> bool {
         self.cframes.len() == 1 && self.cframes.last().unwrap().is_done()
     }
 }
 
 impl CallFrame {
     /// Create a new callframe for executing given bytecode from start
-    pub fn from_bytecode(code: Vec<Inst>) -> Self {
-        Self { ip: 0, code }
+    pub fn from_bytecode(env: Env, code: Vec<Inst>) -> Self {
+        Self {
+            ip: 0,
+            env: Rc::new(RefCell::new(env)),
+            code,
+        }
     }
 
     /// Whether or not call frame should return (i.e. on last call frame execution)
@@ -181,6 +230,7 @@ mod tests {
     use super::Inst::*;
     use super::*;
     use assert_matches::assert_matches;
+    use tracing_test::traced_test;
 
     #[test]
     fn fiber_load_const_return() {
@@ -194,6 +244,7 @@ mod tests {
     }
 
     #[test]
+    #[traced_test]
     fn store_symbol() {
         // fiber for (def x 5)
         let mut f =
@@ -202,7 +253,7 @@ mod tests {
         start(&mut f).expect("should start");
 
         assert_eq!(
-            f.env.get(&SymbolId::from("x")),
+            f.top().env.borrow().get(&SymbolId::from("x")),
             Some(Form::Int(5)),
             "symbol should be defined in env"
         );
@@ -216,7 +267,10 @@ mod tests {
     #[test]
     fn load_symbol() {
         let mut f = Fiber::from_bytecode(vec![LoadSym(SymbolId::from("x"))]);
-        f.env.define(&SymbolId::from("x"), Form::string("hi"));
+        f.top()
+            .env
+            .borrow_mut()
+            .define(&SymbolId::from("x"), Form::string("hi"));
 
         start(&mut f).unwrap();
         assert_eq!(f.status, Status::Completed(Ok(Form::string("hi"))));
@@ -251,6 +305,39 @@ mod tests {
             }))),
             "A function object was created"
         );
+    }
+
+    #[test]
+    #[traced_test]
+    fn call_func_bare() {
+        // ((lambda () "hello"))
+        let mut f = Fiber::from_bytecode(vec![
+            PushConst(Form::Lambda(Lambda {
+                params: vec![],
+                code: vec![PushConst(Form::string("hello"))],
+            })),
+            CallFunc(0),
+        ]);
+
+        start(&mut f).unwrap();
+        assert_eq!(f.status, Status::Completed(Ok(Form::string("hello"))));
+    }
+
+    #[test]
+    #[traced_test]
+    fn call_func_direct() {
+        // ((lambda (x) x) "hello")
+        let mut f = Fiber::from_bytecode(vec![
+            PushConst(Form::Lambda(Lambda {
+                params: vec![SymbolId::from("x")],
+                code: vec![LoadSym(SymbolId::from("x"))],
+            })),
+            PushConst(Form::string("hello")),
+            CallFunc(1),
+        ]);
+
+        start(&mut f).unwrap();
+        assert_eq!(f.status, Status::Completed(Ok(Form::string("hello"))));
     }
 
     // TODO: Store / Load symbol w/ lexical scopes
