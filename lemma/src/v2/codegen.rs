@@ -74,9 +74,11 @@ fn compile_lambda(args: &[Form]) -> Result<Vec<Inst>> {
         }
     };
 
+    let bytecode = compile(body)?;
+
     Ok(vec![
         Inst::PushConst(param.clone()),
-        Inst::PushConst(body.clone()),
+        Inst::PushConst(Form::Bytecode(bytecode)),
         Inst::MakeFunc,
     ])
 }
@@ -122,11 +124,12 @@ mod tests {
 
     #[test]
     fn compile_lambda() {
+        let bytecode = Form::Bytecode(compile(&Form::symbol("x")).unwrap());
         assert_eq!(
             compile(&f("(lambda (x) x)")),
             Ok(vec![
                 PushConst(Form::List(vec![Form::symbol("x")])),
-                PushConst(Form::symbol("x")),
+                PushConst(bytecode),
                 MakeFunc
             ])
         );

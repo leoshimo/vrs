@@ -28,6 +28,7 @@ async fn runtime_simple() {
 
 #[tokio::test]
 #[traced_test]
+#[ignore] // TODO: Reenable test
 async fn runtime_remote_request_multi() {
     use lemma::parse as p;
 

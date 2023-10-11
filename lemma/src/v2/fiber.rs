@@ -1,6 +1,6 @@
 //! A fiber of execution that can be cooperatively scheduled via yielding.
 use super::{Env, Inst};
-use crate::{Form, SymbolId};
+use crate::{Form, Lambda, SymbolId};
 
 #[derive(Debug)]
 pub struct Fiber {
@@ -58,7 +58,7 @@ pub fn start(f: &mut Fiber) -> Result<()> {
 fn run(f: &mut Fiber) {
     f.status = Status::Running;
 
-    while f.status == Status::Running {
+    f.status = loop {
         let inst = f.inst().clone(); // TODO: Use by ref until values need cloning
         f.top_mut().ip += 1;
 
@@ -69,7 +69,7 @@ fn run(f: &mut Fiber) {
             Inst::StoreSym(s) => match f.stack.last() {
                 Some(value) => f.env.define(&s, value.clone()),
                 None => {
-                    f.status = Status::Completed(Err(FiberError::UnexpectedStack(
+                    break Status::Completed(Err(FiberError::UnexpectedStack(
                         "Expected stack to be nonempty".to_string(),
                     )))
                 }
@@ -77,17 +77,50 @@ fn run(f: &mut Fiber) {
             Inst::LoadSym(s) => match f.env.get(&s) {
                 Some(value) => f.stack.push(value.clone()),
                 None => {
-                    f.status = Status::Completed(Err(FiberError::UndefinedSymbol(s)));
+                    break Status::Completed(Err(FiberError::UndefinedSymbol(s)));
                 }
             },
-            Inst::MakeFunc => todo!(),
+            Inst::MakeFunc => {
+                // TODO: Refactor? Break makes error prop verbose
+                let code = match f.stack.pop() {
+                    Some(Form::Bytecode(b)) => b,
+                    _ => {
+                        break Status::Completed(Err(FiberError::UnexpectedStack(
+                            "Missing function bytecode".to_string(),
+                        )))
+                    }
+                };
+                let params = match f.stack.pop() {
+                    Some(Form::List(p)) => p,
+                    _ => {
+                        break Status::Completed(Err(FiberError::UnexpectedStack(
+                            "Missing parameter list".to_string(),
+                        )))
+                    }
+                };
+                let params = params
+                    .into_iter()
+                    .map(|f| match f {
+                        Form::Symbol(s) => Ok(s),
+                        _ => Err(FiberError::UnexpectedStack(
+                            "Unexpected parameter list".to_string(),
+                        )),
+                    })
+                    .collect::<Result<Vec<_>>>();
+                let params = match params {
+                    Ok(p) => p,
+                    Err(e) => break Status::Completed(Err(e)),
+                };
+
+                f.stack.push(Form::Lambda(Lambda { params, code }));
+            }
         }
 
         if f.status == Status::Running && f.no_more_inst() {
             let res = f.stack.pop().expect("Stack should contain result");
-            f.status = Status::Completed(Ok(res));
+            break Status::Completed(Ok(res));
         }
-    }
+    };
 }
 
 impl Fiber {
@@ -141,16 +174,17 @@ impl CallFrame {
 
 #[cfg(test)]
 mod tests {
-    use super::Form::*;
+    use crate::v2::codegen::compile;
+
     use super::Inst::*;
     use super::*;
     use assert_matches::assert_matches;
 
     #[test]
     fn fiber_load_const_return() {
-        let mut f = Fiber::from_bytecode(vec![PushConst(Int(5))]);
+        let mut f = Fiber::from_bytecode(vec![PushConst(Form::Int(5))]);
         start(&mut f).expect("should start");
-        assert_eq!(f.status, Status::Completed(Ok(Int(5))));
+        assert_eq!(f.status, Status::Completed(Ok(Form::Int(5))));
 
         let mut f = Fiber::from_bytecode(vec![PushConst(Form::string("Hi"))]);
         start(&mut f).expect("should start");
@@ -194,6 +228,27 @@ mod tests {
         assert_matches!(
             f.status,
             Status::Completed(Err(FiberError::UndefinedSymbol(_)))
+        );
+    }
+
+    #[test]
+    fn make_func() {
+        let bytecode = compile(&Form::symbol("x")).unwrap();
+        let mut f = Fiber::from_bytecode(vec![
+            PushConst(Form::List(vec![Form::symbol("x")])),
+            PushConst(Form::Bytecode(bytecode.clone())),
+            MakeFunc,
+        ]);
+
+        start(&mut f).unwrap();
+
+        assert_eq!(
+            f.status,
+            Status::Completed(Ok(Form::Lambda(Lambda {
+                params: vec![SymbolId::from("x")],
+                code: bytecode,
+            }))),
+            "A function object was created"
         );
     }
 

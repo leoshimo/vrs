@@ -1,6 +1,6 @@
 //! Forms in Lemma
 
-use crate::{Env, Result, v2::Inst};
+use crate::{v2::Inst, Env, Result};
 use serde::{Deserialize, Serialize};
 
 /// Forms that can be evaluated
@@ -14,6 +14,7 @@ pub enum Form {
     Keyword(KeywordId),
     List(Vec<Form>),
     Lambda(Lambda),
+    Bytecode(Vec<Inst>),
     #[serde(skip)]
     NativeFunc(NativeFunc),
 }
@@ -102,6 +103,7 @@ impl std::fmt::Display for Form {
                     .join(" ")
             ),
             Form::NativeFunc(s) => write!(f, "<nativefn {}>", s.symbol),
+            Form::Bytecode(_) => write!(f, "<bytecode>"),
         }
     }
 }

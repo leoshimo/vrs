@@ -89,6 +89,7 @@ pub fn lang_type(arg_forms: &[Form], env: &mut Env) -> Result<Form> {
         Form::List(_) => Form::keyword("list"),
         Form::Lambda(_) => Form::keyword("lambda"),
         Form::NativeFunc(_) => Form::keyword("nativefn"),
+        Form::Bytecode(_) => todo!(),
     })
 }
 
@@ -96,8 +97,8 @@ pub fn lang_type(arg_forms: &[Form], env: &mut Env) -> Result<Form> {
 mod tests {
 
     use super::*;
+    use crate::eval_expr;
     use crate::lang::std_env;
-    use crate::{eval_expr};
     use tracing_test::traced_test;
 
     #[test]
