@@ -1,10 +1,11 @@
 //! A fiber of execution that can be cooperatively scheduled via yielding.
-use super::Inst;
+use super::{Env, Inst};
 use crate::{Form, SymbolId};
 
 #[derive(Debug)]
 pub struct Fiber {
     cframes: Vec<CallFrame>,
+    env: Env,
     stack: Vec<Form>,
     status: Status,
 }
@@ -52,6 +53,7 @@ pub fn start(f: &mut Fiber) -> Result<()> {
 /// Run the fiber until it completes or yields
 fn run(f: &mut Fiber) {
     f.status = Status::Running;
+
     while f.status == Status::Running {
         let inst = f.inst().clone(); // TODO: Use by ref until values need cloning
         f.top_mut().ip += 1;
@@ -60,7 +62,16 @@ fn run(f: &mut Fiber) {
             Inst::PushConst(form) => {
                 f.stack.push(form);
             }
-            _ => todo!("unimplemented instruction"), // TODO: Remove me
+            Inst::StoreSym(s) => {
+                let value = f
+                    .stack
+                    .last()
+                    .expect("Expected value on stack for variable"); // TODO: Capture as fiber error
+                f.env.define(&s, value.clone());
+            }
+            Inst::LoadSym(_s) => {
+                todo!()
+            }
         }
 
         if f.is_done() {
@@ -76,6 +87,7 @@ impl Fiber {
         Fiber {
             stack: vec![],
             cframes: vec![CallFrame::from_bytecode(bytecode)],
+            env: Env::new(),
             status: Status::New,
         }
     }
@@ -134,4 +146,26 @@ mod tests {
         start(&mut f).expect("should start");
         assert_eq!(f.status, Status::Completed(Ok(Form::string("Hi"))));
     }
+
+    #[test]
+    fn store_symbol() {
+        // fiber for (def x 5)
+        let mut f =
+            Fiber::from_bytecode(vec![PushConst(Form::Int(5)), StoreSym(SymbolId::from("x"))]);
+
+        start(&mut f).expect("should start");
+
+        assert_eq!(
+            f.env.get(&SymbolId::from("x")),
+            Some(Form::Int(5)),
+            "symbol should be defined in env"
+        );
+        assert_eq!(
+            f.status,
+            Status::Completed(Ok(Form::Int(5))),
+            "should complete with value of stored symbol"
+        );
+    }
+
+    // TODO: Store / Load symbol w/ function scopes
 }
