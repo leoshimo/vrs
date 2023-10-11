@@ -6,8 +6,6 @@ mod lex;
 mod parse;
 mod v2;
 
-pub mod lang;
-
 pub use env::Env;
 pub use error::Error;
 pub use form::Expr;
