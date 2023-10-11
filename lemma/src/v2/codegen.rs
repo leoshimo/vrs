@@ -12,6 +12,8 @@ pub enum Inst {
     LoadSym(SymbolId),
     /// Pop TOS and store value as given symbol
     StoreSym(SymbolId),
+    /// Pop parameter list and function body from stack, and pushes a new function onto stack
+    MakeFunc,
 }
 
 /// Errors during compilation
@@ -34,6 +36,7 @@ pub fn compile(f: &Form) -> Result<Vec<Inst>> {
             match first {
                 Form::Symbol(s) => match s.as_str() {
                     "def" => compile_def(args),
+                    "lambda" => compile_lambda(args),
                     _ => todo!(),
                 },
                 _ => todo!(),
@@ -58,6 +61,24 @@ fn compile_def(args: &[Form]) -> Result<Vec<Inst>> {
     let mut inst = compile(value)?;
     inst.push(Inst::StoreSym(symbol.clone()));
     Ok(inst)
+}
+
+/// Compile special form lambda
+fn compile_lambda(args: &[Form]) -> Result<Vec<Inst>> {
+    let (param, body) = match args {
+        [param, body] => (param, body),
+        _ => {
+            return Err(CompileError::InvalidExpression(
+                "lambda expects a parameter list and body expression as arguments".to_string(),
+            ))
+        }
+    };
+
+    Ok(vec![
+        Inst::PushConst(param.clone()),
+        Inst::PushConst(body.clone()),
+        Inst::MakeFunc,
+    ])
 }
 
 #[cfg(test)]
@@ -96,6 +117,18 @@ mod tests {
         assert_eq!(
             compile(&f("(def x 5)")),
             Ok(vec![PushConst(Form::Int(5)), StoreSym(SymbolId::from("x")),])
+        );
+    }
+
+    #[test]
+    fn compile_lambda() {
+        assert_eq!(
+            compile(&f("(lambda (x) x)")),
+            Ok(vec![
+                PushConst(Form::List(vec![Form::symbol("x")])),
+                PushConst(Form::symbol("x")),
+                MakeFunc
+            ])
         );
     }
 

@@ -80,6 +80,7 @@ fn run(f: &mut Fiber) {
                     f.status = Status::Completed(Err(FiberError::UndefinedSymbol(s)));
                 }
             },
+            Inst::MakeFunc => todo!(),
         }
 
         if f.status == Status::Running && f.no_more_inst() {
