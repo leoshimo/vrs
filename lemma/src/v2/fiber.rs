@@ -59,7 +59,7 @@ fn run(f: &mut Fiber) {
     f.status = Status::Running;
 
     f.status = loop {
-        let inst = f.inst().clone(); // TODO: Use by ref until values need cloning
+        let inst = f.inst().clone(); // TODO(opt): Defer cloning until args need cloning
         f.top_mut().ip += 1;
 
         match inst {
@@ -81,7 +81,7 @@ fn run(f: &mut Fiber) {
                 }
             },
             Inst::MakeFunc => {
-                // TODO: Refactor? Break makes error prop verbose
+                // TODO(ref): Break makes error prop verbose
                 let code = match f.stack.pop() {
                     Some(Form::Bytecode(b)) => b,
                     _ => {
@@ -175,8 +175,6 @@ impl CallFrame {
 
 #[cfg(test)]
 mod tests {
-    use crate::v2::codegen::compile;
-
     use super::Inst::*;
     use super::*;
     use assert_matches::assert_matches;
@@ -234,10 +232,11 @@ mod tests {
 
     #[test]
     fn make_func() {
-        let bytecode = compile(&Form::symbol("x")).unwrap();
         let mut f = Fiber::from_bytecode(vec![
             PushConst(Form::List(vec![Form::symbol("x")])),
-            PushConst(Form::Bytecode(bytecode.clone())),
+            PushConst(Form::Bytecode(vec![
+                LoadSym(SymbolId::from("x"))
+            ])),
             MakeFunc,
         ]);
 
@@ -247,7 +246,9 @@ mod tests {
             f.status,
             Status::Completed(Ok(Form::Lambda(Lambda {
                 params: vec![SymbolId::from("x")],
-                code: bytecode,
+                code: vec![
+                    LoadSym(SymbolId::from("x"))
+                ],
             }))),
             "A function object was created"
         );
