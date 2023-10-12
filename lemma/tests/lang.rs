@@ -1,4 +1,5 @@
-//! Tests for evaluation API
+//! Tests for implementation of language
+
 use assert_matches::assert_matches;
 use lemma::fiber::{self, Fiber, Status};
 use lemma::{Error, NativeFn, SymbolId, Val};
