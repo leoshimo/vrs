@@ -215,7 +215,6 @@ fn adder() {
             (def add2 (make-addr 2))
             (add2 40))
     "#;
-
     let mut f = Fiber::from_expr(prog).unwrap();
 
     // TODO: Replace with real add?
@@ -231,37 +230,39 @@ fn adder() {
     assert!(f.is_stack_empty());
 }
 
-//     #[test]
-//     #[ignore]
-//     fn eval_quote() {
-//         let mut env = std_env();
-
-//         assert_eq!(
-//             eval_expr("(quote (one :two three))", &mut env),
-//             Ok(Form::List(vec![
-//                 Form::symbol("one"),
-//                 Form::keyword("two"),
-//                 Form::symbol("three"),
-//             ]))
-//         );
-
-//         assert_eq!(
-//             eval_expr("(quote (lambda (x) x))", &mut env),
-//             Ok(Form::List(vec![
-//                 Form::symbol("lambda"),
-//                 Form::List(vec![Form::symbol("x")]),
-//                 Form::symbol("x"),
-//             ]))
-//         );
-
-//         assert!(
-//             matches!(
-//                 eval_expr("((quote (lambda (x) x)) 5)", &mut env),
-//                 Err(Error::NotAProcedure(_))
-//             ),
-//             "A quoted operation does not recursively evaluate without explicit call to eval"
-//         );
-//     }
+#[test]
+fn eval_quote() {
+    {
+        let mut f = Fiber::from_expr("(quote (one :two three))").unwrap();
+        assert_eq!(
+            *fiber::start(&mut f).unwrap().unwrap(),
+            Val::List(vec![
+                Val::symbol("one"),
+                Val::keyword("two"),
+                Val::symbol("three"),
+            ])
+        );
+    }
+    {
+        let mut f = Fiber::from_expr("(quote (lambda (x) x))").unwrap();
+        assert_eq!(
+            *fiber::start(&mut f).unwrap().unwrap(),
+            Val::List(vec![
+                Val::symbol("lambda"),
+                Val::List(vec![Val::symbol("x")]),
+                Val::symbol("x"),
+            ])
+        );
+    }
+    {
+        let mut f = Fiber::from_expr("((quote (lambda (x) x)) 5)").unwrap();
+        assert_matches!(
+            fiber::start(&mut f).unwrap(),
+            Status::Completed(Err(Error::UnexpectedStack(s))) if s == "Missing function object",
+            "Quoted expressions don't evaluate inner forms - no function yet"
+        );
+    }
+}
 
 //     #[test]
 //     #[traced_test]
