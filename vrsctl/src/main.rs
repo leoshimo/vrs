@@ -46,7 +46,7 @@ fn cli() -> clap::Command {
 /// Run a single request
 async fn run_cmd(mut client: Client, cmd: &str) -> Result<()> {
     let f = lemma::parse(cmd)?;
-    let resp = client.request(f.try_into()?).await?;
+    let resp = client.request(f).await?;
     match resp.contents {
         Ok(c) => println!("{}", c),
         Err(e) => eprintln!("{}", e),
@@ -86,7 +86,7 @@ async fn run_file(mut client: Client, file: &str) -> Result<()> {
 
         line.clear();
 
-        match client.request(f.try_into()?).await {
+        match client.request(f).await {
             Ok(resp) => match resp.contents {
                 Ok(c) => println!("{}", c),
                 Err(e) => eprintln!("{}", e),
@@ -125,7 +125,7 @@ async fn run_repl(mut client: Client) -> Result<()> {
                         continue;
                     }
                 };
-                match client.request(f.try_into()?).await {
+                match client.request(f).await {
                     Ok(resp) => match resp.contents {
                         Ok(c) => println!("{}", c),
                         Err(e) => eprintln!("{}", e),

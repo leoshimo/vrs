@@ -1,6 +1,6 @@
 //! Parser for Lemma
-use crate::form::KeywordId;
 use crate::lex::{lex, Token};
+use crate::types::KeywordId;
 use crate::{Error, Result};
 use crate::{Form, SymbolId};
 

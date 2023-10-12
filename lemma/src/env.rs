@@ -1,4 +1,4 @@
-use crate::{Form, SymbolId};
+use crate::{SymbolId, Val};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use super::fiber::FiberError;
@@ -6,18 +6,18 @@ use super::fiber::FiberError;
 /// An environment of bindings
 #[derive(Debug, Default)]
 pub struct Env {
-    bindings: HashMap<SymbolId, Form>,
+    bindings: HashMap<SymbolId, Val>,
     parent: Option<Rc<RefCell<Env>>>,
 }
 
 impl Env {
     /// Define a new symbol with given value in current environment
-    pub fn define(&mut self, symbol: &SymbolId, value: Form) {
+    pub fn define(&mut self, symbol: &SymbolId, value: Val) {
         self.bindings.insert(symbol.clone(), value);
     }
 
     /// Get value for symbol
-    pub fn get(&self, symbol: &SymbolId) -> Option<Form> {
+    pub fn get(&self, symbol: &SymbolId) -> Option<Val> {
         match self.bindings.get(symbol) {
             Some(v) => Some(v.clone()),
             None => self
@@ -28,7 +28,7 @@ impl Env {
     }
 
     /// Set value of symbol in lexical scope
-    pub fn set(&mut self, symbol: &SymbolId, value: Form) -> Result<(), FiberError> {
+    pub fn set(&mut self, symbol: &SymbolId, value: Val) -> Result<(), FiberError> {
         if let Some(b) = self.bindings.get_mut(symbol) {
             *b = value;
             return Ok(());

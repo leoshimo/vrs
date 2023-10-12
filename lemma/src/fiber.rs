@@ -2,13 +2,13 @@
 use tracing::debug;
 
 use super::{Env, Inst};
-use crate::{Form, Lambda, SymbolId};
+use crate::{Lambda, SymbolId, Val};
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Debug)]
 pub struct Fiber {
     cframes: Vec<CallFrame>,
-    stack: Vec<Form>,
+    stack: Vec<Val>,
     status: Status,
 }
 
@@ -18,7 +18,7 @@ pub enum Status {
     New,
     Running,
     Yielded,
-    Completed(Result<Form>),
+    Completed(Result<Val>),
 }
 
 /// Single call frame
@@ -94,7 +94,7 @@ fn run(f: &mut Fiber) {
             Inst::MakeFunc => {
                 // TODO(ref): Break makes error prop verbose
                 let code = match f.stack.pop() {
-                    Some(Form::Bytecode(b)) => b,
+                    Some(Val::Bytecode(b)) => b,
                     _ => {
                         break Status::Completed(Err(FiberError::UnexpectedStack(
                             "Missing function bytecode".to_string(),
@@ -102,7 +102,7 @@ fn run(f: &mut Fiber) {
                     }
                 };
                 let params = match f.stack.pop() {
-                    Some(Form::List(p)) => p,
+                    Some(Val::List(p)) => p,
                     _ => {
                         break Status::Completed(Err(FiberError::UnexpectedStack(
                             "Missing parameter list".to_string(),
@@ -112,7 +112,7 @@ fn run(f: &mut Fiber) {
                 let params = params
                     .into_iter()
                     .map(|f| match f {
-                        Form::Symbol(s) => Ok(s),
+                        Val::Symbol(s) => Ok(s),
                         _ => Err(FiberError::UnexpectedStack(
                             "Unexpected parameter list".to_string(),
                         )),
@@ -123,7 +123,7 @@ fn run(f: &mut Fiber) {
                     Err(e) => break Status::Completed(Err(e)),
                 };
 
-                f.stack.push(Form::Lambda(Lambda {
+                f.stack.push(Val::Lambda(Lambda {
                     params,
                     code,
                     env: Rc::clone(&f.top().env),
@@ -143,7 +143,7 @@ fn run(f: &mut Fiber) {
                     Err(e) => break Status::Completed(Err(e)),
                 };
                 let lambda = match f.stack.pop() {
-                    Some(Form::Lambda(l)) => l,
+                    Some(Val::Lambda(l)) => l,
                     _ => {
                         break Status::Completed(Err(FiberError::UnexpectedStack(
                             "Missing function object".to_string(),
@@ -238,13 +238,13 @@ mod tests {
 
     #[test]
     fn fiber_load_const_return() {
-        let mut f = Fiber::from_bytecode(vec![PushConst(Form::Int(5))]);
+        let mut f = Fiber::from_bytecode(vec![PushConst(Val::Int(5))]);
         start(&mut f).expect("should start");
-        assert_eq!(f.status, Status::Completed(Ok(Form::Int(5))));
+        assert_eq!(f.status, Status::Completed(Ok(Val::Int(5))));
 
-        let mut f = Fiber::from_bytecode(vec![PushConst(Form::string("Hi"))]);
+        let mut f = Fiber::from_bytecode(vec![PushConst(Val::string("Hi"))]);
         start(&mut f).expect("should start");
-        assert_eq!(f.status, Status::Completed(Ok(Form::string("Hi"))));
+        assert_eq!(f.status, Status::Completed(Ok(Val::string("Hi"))));
     }
 
     #[test]
@@ -252,18 +252,18 @@ mod tests {
     fn store_symbol() {
         // fiber for (def x 5)
         let mut f =
-            Fiber::from_bytecode(vec![PushConst(Form::Int(5)), StoreSym(SymbolId::from("x"))]);
+            Fiber::from_bytecode(vec![PushConst(Val::Int(5)), StoreSym(SymbolId::from("x"))]);
 
         start(&mut f).expect("should start");
 
         assert_eq!(
             f.top().env.borrow().get(&SymbolId::from("x")),
-            Some(Form::Int(5)),
+            Some(Val::Int(5)),
             "symbol should be defined in env"
         );
         assert_eq!(
             f.status,
-            Status::Completed(Ok(Form::Int(5))),
+            Status::Completed(Ok(Val::Int(5))),
             "should complete with value of stored symbol"
         );
     }
@@ -274,10 +274,10 @@ mod tests {
         f.top()
             .env
             .borrow_mut()
-            .define(&SymbolId::from("x"), Form::string("hi"));
+            .define(&SymbolId::from("x"), Val::string("hi"));
 
         start(&mut f).unwrap();
-        assert_eq!(f.status, Status::Completed(Ok(Form::string("hi"))));
+        assert_eq!(f.status, Status::Completed(Ok(Val::string("hi"))));
     }
 
     #[test]
@@ -294,8 +294,8 @@ mod tests {
     #[test]
     fn make_func() {
         let mut f = Fiber::from_bytecode(vec![
-            PushConst(Form::List(vec![Form::symbol("x")])),
-            PushConst(Form::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+            PushConst(Val::List(vec![Val::symbol("x")])),
+            PushConst(Val::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
             MakeFunc,
         ]);
 
@@ -303,7 +303,7 @@ mod tests {
 
         assert_matches!(
             f.status,
-            Status::Completed(Ok(Form::Lambda(l))) if l.params == vec![SymbolId::from("x")] && l.code == vec![LoadSym(SymbolId::from("x"))],
+            Status::Completed(Ok(Val::Lambda(l))) if l.params == vec![SymbolId::from("x")] && l.code == vec![LoadSym(SymbolId::from("x"))],
             "A function object was created"
         );
     }
@@ -313,66 +313,66 @@ mod tests {
     fn call_func() {
         let env = Env::default();
         let mut f = Fiber::from_bytecode(vec![
-            PushConst(Form::Lambda(Lambda {
+            PushConst(Val::Lambda(Lambda {
                 params: vec![SymbolId::from("x")],
                 code: vec![LoadSym(SymbolId::from("x"))],
                 env: Rc::new(RefCell::new(env)),
             })),
-            PushConst(Form::string("hello")),
+            PushConst(Val::string("hello")),
             CallFunc(1),
         ]);
 
         start(&mut f).unwrap();
-        assert_eq!(f.status, Status::Completed(Ok(Form::string("hello"))));
+        assert_eq!(f.status, Status::Completed(Ok(Val::string("hello"))));
     }
 
     #[test]
     fn call_func_lambda() {
         // ((lambda (x) x) "hello")
         let mut f = Fiber::from_bytecode(vec![
-            PushConst(Form::List(vec![Form::symbol("x")])),
-            PushConst(Form::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+            PushConst(Val::List(vec![Val::symbol("x")])),
+            PushConst(Val::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
             MakeFunc,
-            PushConst(Form::string("hello")),
+            PushConst(Val::string("hello")),
             CallFunc(1),
         ]);
         start(&mut f).unwrap();
-        assert_eq!(f.status, Status::Completed(Ok(Form::string("hello"))));
+        assert_eq!(f.status, Status::Completed(Ok(Val::string("hello"))));
     }
 
     #[test]
     fn call_func_nested() {
         // (((lambda () (lambda (x) x))) "hello")
         let mut f = Fiber::from_bytecode(vec![
-            PushConst(Form::List(vec![])),
-            PushConst(Form::Bytecode(vec![
-                PushConst(Form::List(vec![Form::symbol("x")])),
-                PushConst(Form::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+            PushConst(Val::List(vec![])),
+            PushConst(Val::Bytecode(vec![
+                PushConst(Val::List(vec![Val::symbol("x")])),
+                PushConst(Val::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
                 MakeFunc,
             ])),
             MakeFunc,
             CallFunc(0),
-            PushConst(Form::string("hello")),
+            PushConst(Val::string("hello")),
             CallFunc(1),
         ]);
         start(&mut f).unwrap();
-        assert_eq!(f.status, Status::Completed(Ok(Form::string("hello"))));
+        assert_eq!(f.status, Status::Completed(Ok(Val::string("hello"))));
 
         // (((lambda (x) (lambda () x)) "hello"))
         let mut f = Fiber::from_bytecode(vec![
-            PushConst(Form::List(vec![Form::symbol("x")])),
-            PushConst(Form::Bytecode(vec![
-                PushConst(Form::List(vec![])),
-                PushConst(Form::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+            PushConst(Val::List(vec![Val::symbol("x")])),
+            PushConst(Val::Bytecode(vec![
+                PushConst(Val::List(vec![])),
+                PushConst(Val::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
                 MakeFunc,
             ])),
             MakeFunc,
-            PushConst(Form::string("hello")),
+            PushConst(Val::string("hello")),
             CallFunc(1),
             CallFunc(0),
         ]);
         start(&mut f).unwrap();
-        assert_eq!(f.status, Status::Completed(Ok(Form::string("hello"))));
+        assert_eq!(f.status, Status::Completed(Ok(Val::string("hello"))));
     }
 
     // TODO: (((lambda () (lambda () "nested"))))

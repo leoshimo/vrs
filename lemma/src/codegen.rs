@@ -1,12 +1,12 @@
 //! Compiler for Lemma Form AST
-use crate::{Form, SymbolId};
+use crate::{SymbolId, Val};
 
 // TODO: Compact bytecode repr
 /// Bytecode instructions
 #[derive(Debug, Clone, PartialEq)]
 pub enum Inst {
     /// Push constant form onto stack
-    PushConst(Form),
+    PushConst(Val),
     /// Push value bound to given symbol onto stack
     LoadSym(SymbolId),
     /// Pop TOS and store value as given symbol
@@ -32,16 +32,16 @@ pub enum CompileError {
 
 pub type Result<T> = std::result::Result<T, CompileError>;
 
-/// Compile expression
-pub fn compile(f: &Form) -> Result<Vec<Inst>> {
-    match f {
-        Form::List(l) => {
+/// Compile a value to bytecode representation
+pub fn compile(v: &Val) -> Result<Vec<Inst>> {
+    match v {
+        Val::List(l) => {
             let (first, args) = l.split_first().ok_or(CompileError::InvalidExpression(
                 "Empty list expression".to_string(),
             ))?;
 
             // special forms
-            if let Form::Symbol(s) = first {
+            if let Val::Symbol(s) = first {
                 match s.as_str() {
                     "def" => return compile_def(args),
                     "lambda" => return compile_lambda(args),
@@ -52,15 +52,15 @@ pub fn compile(f: &Form) -> Result<Vec<Inst>> {
 
             compile_func_call(first, args)
         }
-        Form::Symbol(s) => Ok(vec![Inst::LoadSym(s.clone())]),
-        _ => Ok(vec![Inst::PushConst(f.clone())]),
+        Val::Symbol(s) => Ok(vec![Inst::LoadSym(s.clone())]),
+        _ => Ok(vec![Inst::PushConst(v.clone())]),
     }
 }
 
 /// Compile special form builtin def
-fn compile_def(args: &[Form]) -> Result<Vec<Inst>> {
+fn compile_def(args: &[Val]) -> Result<Vec<Inst>> {
     let (symbol, value) = match args {
-        [Form::Symbol(symbol), value] => (symbol, value),
+        [Val::Symbol(symbol), value] => (symbol, value),
         _ => {
             return Err(CompileError::InvalidExpression(
                 "def accepts one symbol and one form as arguments".to_string(),
@@ -74,7 +74,7 @@ fn compile_def(args: &[Form]) -> Result<Vec<Inst>> {
 }
 
 /// Compile special form lambda
-fn compile_lambda(args: &[Form]) -> Result<Vec<Inst>> {
+fn compile_lambda(args: &[Val]) -> Result<Vec<Inst>> {
     let (param, body) = match args {
         [param, body] => (param, body),
         _ => {
@@ -88,13 +88,13 @@ fn compile_lambda(args: &[Form]) -> Result<Vec<Inst>> {
 
     Ok(vec![
         Inst::PushConst(param.clone()),
-        Inst::PushConst(Form::Bytecode(bytecode)),
+        Inst::PushConst(Val::Bytecode(bytecode)),
         Inst::MakeFunc,
     ])
 }
 
 /// Compile function calls
-fn compile_func_call(func: &Form, args: &[Form]) -> Result<Vec<Inst>> {
+fn compile_func_call(func: &Val, args: &[Val]) -> Result<Vec<Inst>> {
     let mut bytecode = vec![];
     let nargs = args.len();
 
@@ -113,7 +113,7 @@ fn compile_func_call(func: &Form, args: &[Form]) -> Result<Vec<Inst>> {
 }
 
 /// Compile builtin begin
-fn compile_begin(args: &[Form]) -> Result<Vec<Inst>> {
+fn compile_begin(args: &[Val]) -> Result<Vec<Inst>> {
     let mut bc = vec![Inst::BeginScope];
     let mut is_first = true;
     for a in args {
@@ -136,17 +136,17 @@ mod tests {
 
     #[test]
     fn compile_self_evaluating() {
-        assert_eq!(compile(&Form::Int(10)), Ok(vec![PushConst(Form::Int(10)),]));
+        assert_eq!(compile(&Val::Int(10)), Ok(vec![PushConst(Val::Int(10)),]));
         assert_eq!(
-            compile(&Form::string("Hello")),
-            Ok(vec![PushConst(Form::string("Hello")),])
+            compile(&Val::string("Hello")),
+            Ok(vec![PushConst(Val::string("Hello")),])
         );
     }
 
     #[test]
     fn compile_symbol() {
         assert_eq!(
-            compile(&Form::symbol("x")),
+            compile(&Val::symbol("x")),
             Ok(vec![LoadSym(SymbolId::from("x"))])
         );
     }
@@ -163,7 +163,7 @@ mod tests {
     fn compile_def() {
         assert_eq!(
             compile(&f("(def x 5)")),
-            Ok(vec![PushConst(Form::Int(5)), StoreSym(SymbolId::from("x")),])
+            Ok(vec![PushConst(Val::Int(5)), StoreSym(SymbolId::from("x")),])
         );
     }
 
@@ -172,8 +172,8 @@ mod tests {
         assert_eq!(
             compile(&f("(lambda (x) x)")),
             Ok(vec![
-                PushConst(Form::List(vec![Form::symbol("x")])),
-                PushConst(Form::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+                PushConst(Val::List(vec![Val::symbol("x")])),
+                PushConst(Val::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
                 MakeFunc
             ])
         );
@@ -181,10 +181,10 @@ mod tests {
         assert_eq!(
             compile(&f("(lambda (x) (lambda () x))")),
             Ok(vec![
-                PushConst(Form::List(vec![Form::symbol("x")])),
-                PushConst(Form::Bytecode(vec![
-                    PushConst(Form::List(vec![])),
-                    PushConst(Form::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+                PushConst(Val::List(vec![Val::symbol("x")])),
+                PushConst(Val::Bytecode(vec![
+                    PushConst(Val::List(vec![])),
+                    PushConst(Val::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
                     MakeFunc,
                 ])),
                 MakeFunc
@@ -198,7 +198,7 @@ mod tests {
             compile(&f("(echo \"Hello world\")")),
             Ok(vec![
                 LoadSym(SymbolId::from("echo")),
-                PushConst(Form::string("Hello world")),
+                PushConst(Val::string("Hello world")),
                 CallFunc(1)
             ])
         );
@@ -207,11 +207,11 @@ mod tests {
             compile(&f("(+ 1 2 3 4 5)")),
             Ok(vec![
                 LoadSym(SymbolId::from("+")),
-                PushConst(Form::Int(1)),
-                PushConst(Form::Int(2)),
-                PushConst(Form::Int(3)),
-                PushConst(Form::Int(4)),
-                PushConst(Form::Int(5)),
+                PushConst(Val::Int(1)),
+                PushConst(Val::Int(2)),
+                PushConst(Val::Int(3)),
+                PushConst(Val::Int(4)),
+                PushConst(Val::Int(5)),
                 CallFunc(5)
             ])
         );
@@ -221,7 +221,7 @@ mod tests {
             Ok(vec![
                 LoadSym(SymbolId::from("one")),
                 LoadSym(SymbolId::from("two")),
-                PushConst(Form::Int(3)),
+                PushConst(Val::Int(3)),
                 LoadSym(SymbolId::from("four")),
                 CallFunc(0),
                 CallFunc(2),
@@ -235,8 +235,8 @@ mod tests {
         assert_eq!(
             compile(&f("((lambda () \"hello\"))")),
             Ok(vec![
-                PushConst(Form::List(vec![])),
-                PushConst(Form::Bytecode(vec![PushConst(Form::string("hello")),])),
+                PushConst(Val::List(vec![])),
+                PushConst(Val::Bytecode(vec![PushConst(Val::string("hello")),])),
                 MakeFunc,
                 CallFunc(0),
             ])
@@ -244,10 +244,10 @@ mod tests {
         assert_eq!(
             compile(&f("((lambda (x) x) 10)")),
             Ok(vec![
-                PushConst(Form::List(vec![Form::symbol("x")])),
-                PushConst(Form::Bytecode(vec![LoadSym(SymbolId::from("x")),])),
+                PushConst(Val::List(vec![Val::symbol("x")])),
+                PushConst(Val::Bytecode(vec![LoadSym(SymbolId::from("x")),])),
                 MakeFunc,
-                PushConst(Form::Int(10)),
+                PushConst(Val::Int(10)),
                 CallFunc(1),
             ])
         );
@@ -258,14 +258,14 @@ mod tests {
         assert_eq!(
             compile(&f("(((lambda (x) (lambda () x)) \"hello\"))")),
             Ok(vec![
-                PushConst(Form::List(vec![Form::symbol("x")])),
-                PushConst(Form::Bytecode(vec![
-                    PushConst(Form::List(vec![])),
-                    PushConst(Form::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+                PushConst(Val::List(vec![Val::symbol("x")])),
+                PushConst(Val::Bytecode(vec![
+                    PushConst(Val::List(vec![])),
+                    PushConst(Val::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
                     MakeFunc
                 ])),
                 MakeFunc,
-                PushConst(Form::string("hello")),
+                PushConst(Val::string("hello")),
                 CallFunc(1),
                 CallFunc(0),
             ])
@@ -273,15 +273,15 @@ mod tests {
         assert_eq!(
             compile(&f("(((lambda () (lambda (x) x))) \"hello\")")),
             Ok(vec![
-                PushConst(Form::List(vec![])),
-                PushConst(Form::Bytecode(vec![
-                    PushConst(Form::List(vec![Form::symbol("x")])),
-                    PushConst(Form::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+                PushConst(Val::List(vec![])),
+                PushConst(Val::Bytecode(vec![
+                    PushConst(Val::List(vec![Val::symbol("x")])),
+                    PushConst(Val::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
                     MakeFunc
                 ])),
                 MakeFunc,
                 CallFunc(0),
-                PushConst(Form::string("hello")),
+                PushConst(Val::string("hello")),
                 CallFunc(1),
             ])
         );
@@ -293,22 +293,22 @@ mod tests {
             compile(&f("(begin 1 2 3 4 5)")),
             Ok(vec![
                 BeginScope,
-                PushConst(Form::Int(1)),
+                PushConst(Val::Int(1)),
                 PopTop,
-                PushConst(Form::Int(2)),
+                PushConst(Val::Int(2)),
                 PopTop,
-                PushConst(Form::Int(3)),
+                PushConst(Val::Int(3)),
                 PopTop,
-                PushConst(Form::Int(4)),
+                PushConst(Val::Int(4)),
                 PopTop,
-                PushConst(Form::Int(5)),
+                PushConst(Val::Int(5)),
                 EndScope,
             ])
         )
     }
 
-    /// Convenience for creating Forms from strs
-    fn f(expr: &str) -> Form {
-        parse(expr).expect("expr should be valid form")
+    /// Convenience for creating Val from expressions
+    fn f(expr: &str) -> Val {
+        parse(expr).expect("expr should be valid form").into()
     }
 }

@@ -60,7 +60,7 @@ pub(crate) struct WeakProcessHandle {
 impl ProcessHandle {
     // TODO(security): Should proc handle allow raw calls into process's environment? Or more controlled messages from external?
     /// Send a blocking message to process, and get the result of evaluation
-    pub(crate) async fn call(&self, form: lemma::Expr) -> Result<lemma::Expr> {
+    pub(crate) async fn call(&self, form: lemma::Form) -> Result<lemma::Form> {
         let (tx, rx) = oneshot::channel();
         self.msg_tx.send(Message::Call(form, tx)).await?;
         rx.await
@@ -115,7 +115,7 @@ impl WeakProcessHandle {
 /// Messages that [Process] responds to
 #[derive(Debug)]
 pub enum Message {
-    Call(lemma::Expr, oneshot::Sender<Result<lemma::Expr>>),
+    Call(lemma::Form, oneshot::Sender<Result<lemma::Form>>),
     AddSubscription(subscription::Subscription),
     Shutdown,
     IsShutdown(oneshot::Sender<bool>),
@@ -163,10 +163,10 @@ impl Process {
     }
 
     /// Evaluate given form in process's environment
-    fn eval(&mut self, _form: &lemma::Expr) -> Result<lemma::Expr> {
+    fn eval(&mut self, _form: &lemma::Form) -> Result<lemma::Form> {
         // TODO: Implement me!
         // self.ns.eval(form)
-        Ok(lemma::Expr::Nil)
+        Ok(lemma::Form::Nil)
     }
 
     /// Add a new subscription to this process

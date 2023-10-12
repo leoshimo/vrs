@@ -29,7 +29,7 @@ impl Client {
     }
 
     /// Dispatch a request
-    pub async fn request(&mut self, contents: lemma::Expr) -> Result<Response, Error> {
+    pub async fn request(&mut self, contents: lemma::Form) -> Result<Response, Error> {
         debug!("send request contents = {:?}", contents);
         let (resp_tx, resp_rx) = oneshot::channel();
         let ev = Event::SendRequest { contents, resp_tx };
@@ -67,7 +67,7 @@ pub enum Error {
 pub enum Event {
     /// Event for sending request to remote
     SendRequest {
-        contents: lemma::Expr,
+        contents: lemma::Form,
         resp_tx: oneshot::Sender<Response>,
     },
     /// Event when receiving response from remote
