@@ -264,6 +264,33 @@ fn eval_quote() {
     }
 }
 
+#[test]
+fn eval_defn() {
+    let prog = r#"(begin
+        (def count 0)
+        (defn inc (x)
+            (set count (+ count x))
+            count)
+        (inc 1)
+        (inc 2)
+        (inc 3)
+        (inc 4)
+        (inc 5)
+    )
+    "#;
+    let mut f = Fiber::from_expr(prog).unwrap();
+    // TODO: Replace with real add?
+    f.bind(NativeFn {
+        symbol: SymbolId::from("+"),
+        func: |x| match x {
+            [Val::Int(a), Val::Int(b)] => Ok(Val::Int(a + b)),
+            _ => panic!("only supports ints"),
+        },
+    });
+
+    assert_eq!(*fiber::start(&mut f).unwrap().unwrap(), Val::Int(15),);
+}
+
 //     #[test]
 //     #[traced_test]
 //     #[ignore]

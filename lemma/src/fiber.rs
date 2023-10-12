@@ -60,14 +60,14 @@ fn run(f: &mut Fiber) -> &Status {
             f.cframes.len() - 1,
             f.top().ip,
             inst,
-            f.stack
+            f.stack,
         );
 
         match inst {
             Inst::PushConst(form) => {
                 f.stack.push(form);
             }
-            Inst::StoreSym(s) => match f.stack.last() {
+            Inst::DefSym(s) => match f.stack.last() {
                 Some(value) => f.top().env.borrow_mut().define(&s, value.clone()),
                 None => {
                     break Status::Completed(Err(Error::UnexpectedStack(
@@ -75,7 +75,19 @@ fn run(f: &mut Fiber) -> &Status {
                     )))
                 }
             },
-            Inst::LoadSym(s) => match f.top().env.clone().borrow().get(&s) {
+            Inst::SetSym(s) => match f.stack.last() {
+                Some(value) => {
+                    if let Err(e) = f.top().env.borrow_mut().set(&s, value.clone()) {
+                        break Status::Completed(Err(e));
+                    }
+                }
+                None => {
+                    break Status::Completed(Err(Error::UnexpectedStack(
+                        "Expected stack to be nonempty".to_string(),
+                    )))
+                }
+            },
+            Inst::GetSym(s) => match f.top().env.clone().borrow().get(&s) {
                 Some(value) => f.stack.push(value.clone()),
                 None => {
                     break Status::Completed(Err(Error::UndefinedSymbol(s)));
@@ -281,10 +293,9 @@ mod tests {
 
     #[test]
     #[traced_test]
-    fn store_symbol() {
+    fn def_symbol() {
         // fiber for (def x 5)
-        let mut f =
-            Fiber::from_bytecode(vec![PushConst(Val::Int(5)), StoreSym(SymbolId::from("x"))]);
+        let mut f = Fiber::from_bytecode(vec![PushConst(Val::Int(5)), DefSym(SymbolId::from("x"))]);
 
         start(&mut f).expect("should start");
 
@@ -305,8 +316,8 @@ mod tests {
 
     #[test]
     #[traced_test]
-    fn load_symbol() {
-        let mut f = Fiber::from_bytecode(vec![LoadSym(SymbolId::from("x"))]);
+    fn get_symbol() {
+        let mut f = Fiber::from_bytecode(vec![GetSym(SymbolId::from("x"))]);
         f.top()
             .env
             .borrow_mut()
@@ -318,8 +329,39 @@ mod tests {
 
     #[test]
     #[traced_test]
-    fn load_symbol_undefined() {
-        let mut f = Fiber::from_bytecode(vec![LoadSym(SymbolId::from("x"))]);
+    fn get_symbol_undefined() {
+        let mut f = Fiber::from_bytecode(vec![GetSym(SymbolId::from("x"))]);
+
+        start(&mut f).unwrap();
+        assert_matches!(f.status, Status::Completed(Err(Error::UndefinedSymbol(_))));
+
+        assert!(!logs_contain("ERROR"));
+        assert!(!logs_contain("WARN"));
+    }
+
+    #[test]
+    #[traced_test]
+    fn set_symbol() {
+        let mut f = Fiber::from_bytecode(vec![
+            PushConst(Val::string("updated")),
+            SetSym(SymbolId::from("x")),
+        ]);
+        f.top()
+            .env
+            .borrow_mut()
+            .define(&SymbolId::from("x"), Val::string("original"));
+
+        start(&mut f).unwrap();
+        assert_eq!(f.status, Status::Completed(Ok(Val::string("updated"))));
+    }
+
+    #[test]
+    #[traced_test]
+    fn set_symbol_undefined() {
+        let mut f = Fiber::from_bytecode(vec![
+            PushConst(Val::string("value")),
+            SetSym(SymbolId::from("x")),
+        ]);
 
         start(&mut f).unwrap();
         assert_matches!(f.status, Status::Completed(Err(Error::UndefinedSymbol(_))));
@@ -333,7 +375,7 @@ mod tests {
     fn make_func() {
         let mut f = Fiber::from_bytecode(vec![
             PushConst(Val::List(vec![Val::symbol("x")])),
-            PushConst(Val::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+            PushConst(Val::Bytecode(vec![GetSym(SymbolId::from("x"))])),
             MakeFunc,
         ]);
 
@@ -341,7 +383,7 @@ mod tests {
 
         assert_matches!(
             f.status,
-            Status::Completed(Ok(Val::Lambda(l))) if l.params == vec![SymbolId::from("x")] && l.code == vec![LoadSym(SymbolId::from("x"))],
+            Status::Completed(Ok(Val::Lambda(l))) if l.params == vec![SymbolId::from("x")] && l.code == vec![GetSym(SymbolId::from("x"))],
             "A function object was created"
         );
 
@@ -356,7 +398,7 @@ mod tests {
         let mut f = Fiber::from_bytecode(vec![
             PushConst(Val::Lambda(Lambda {
                 params: vec![SymbolId::from("x")],
-                code: vec![LoadSym(SymbolId::from("x"))],
+                code: vec![GetSym(SymbolId::from("x"))],
                 env: Rc::new(RefCell::new(env)),
             })),
             PushConst(Val::string("hello")),
@@ -376,7 +418,7 @@ mod tests {
         // ((lambda (x) x) "hello")
         let mut f = Fiber::from_bytecode(vec![
             PushConst(Val::List(vec![Val::symbol("x")])),
-            PushConst(Val::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+            PushConst(Val::Bytecode(vec![GetSym(SymbolId::from("x"))])),
             MakeFunc,
             PushConst(Val::string("hello")),
             CallFunc(1),
@@ -396,7 +438,7 @@ mod tests {
             PushConst(Val::List(vec![])),
             PushConst(Val::Bytecode(vec![
                 PushConst(Val::List(vec![Val::symbol("x")])),
-                PushConst(Val::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+                PushConst(Val::Bytecode(vec![GetSym(SymbolId::from("x"))])),
                 MakeFunc,
             ])),
             MakeFunc,
@@ -412,7 +454,7 @@ mod tests {
             PushConst(Val::List(vec![Val::symbol("x")])),
             PushConst(Val::Bytecode(vec![
                 PushConst(Val::List(vec![])),
-                PushConst(Val::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+                PushConst(Val::Bytecode(vec![GetSym(SymbolId::from("x"))])),
                 MakeFunc,
             ])),
             MakeFunc,

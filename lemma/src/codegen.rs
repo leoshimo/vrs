@@ -8,9 +8,11 @@ pub enum Inst {
     /// Push constant form onto stack
     PushConst(Val),
     /// Push value bound to given symbol onto stack
-    LoadSym(SymbolId),
+    GetSym(SymbolId),
     /// Pop TOS and store value as given symbol
-    StoreSym(SymbolId),
+    DefSym(SymbolId),
+    /// Set given symbol to value popped from TOS
+    SetSym(SymbolId),
     /// Pop parameter list and function body from stack, and pushes a new function onto stack
     MakeFunc,
     /// Call func by popping N forms and function object off stack, and pushing result
@@ -30,9 +32,11 @@ pub fn compile(v: &Val) -> Result<Vec<Inst>> {
             // special forms
             if let Val::Symbol(s) = first {
                 match s.as_str() {
-                    "def" => return compile_def(args),
-                    "lambda" => return compile_lambda(args),
                     "begin" => return compile_begin(args),
+                    "def" => return compile_def(args),
+                    "set" => return compile_set(args),
+                    "defn" => return compile_defn(args),
+                    "lambda" => return compile_lambda(args),
                     "quote" => return compile_quote(args),
                     _ => (),
                 }
@@ -40,7 +44,7 @@ pub fn compile(v: &Val) -> Result<Vec<Inst>> {
 
             compile_func_call(first, args)
         }
-        Val::Symbol(s) => Ok(vec![Inst::LoadSym(s.clone())]),
+        Val::Symbol(s) => Ok(vec![Inst::GetSym(s.clone())]),
         _ => Ok(vec![Inst::PushConst(v.clone())]),
     }
 }
@@ -57,7 +61,50 @@ fn compile_def(args: &[Val]) -> Result<Vec<Inst>> {
     };
 
     let mut inst = compile(value)?;
-    inst.push(Inst::StoreSym(symbol.clone()));
+    inst.push(Inst::DefSym(symbol.clone()));
+    Ok(inst)
+}
+
+/// Compile special form builtin set
+fn compile_set(args: &[Val]) -> Result<Vec<Inst>> {
+    let (symbol, value) = match args {
+        [Val::Symbol(symbol), value] => (symbol, value),
+        _ => {
+            return Err(Error::InvalidExpression(
+                "def accepts one symbol and one form as arguments".to_string(),
+            ))
+        }
+    };
+
+    let mut inst = compile(value)?;
+    inst.push(Inst::SetSym(symbol.clone()));
+    Ok(inst)
+}
+
+// TODO: Replace with a macro
+/// Compile defn
+fn compile_defn(args: &[Val]) -> Result<Vec<Inst>> {
+    let (name, params, body) = match args {
+        [name, params, body @ ..] if !body.is_empty() => (name, params, body),
+        _ => {
+            return Err(Error::InvalidExpression(
+                "defn expects at least three arguments with nonempty body".to_string(),
+            ))
+        }
+    };
+    let inst = compile(&Val::List(vec![
+        Val::symbol("def"),
+        name.clone(),
+        Val::List(vec![
+            Val::symbol("lambda"),
+            params.clone(),
+            Val::List(
+                std::iter::once(Val::symbol("begin"))
+                    .chain(body.iter().cloned())
+                    .collect(),
+            ),
+        ]),
+    ]))?;
     Ok(inst)
 }
 
@@ -153,7 +200,7 @@ mod tests {
     fn compile_symbol() {
         assert_eq!(
             compile(&Val::symbol("x")),
-            Ok(vec![LoadSym(SymbolId::from("x"))])
+            Ok(vec![GetSym(SymbolId::from("x"))])
         );
     }
 
@@ -169,7 +216,7 @@ mod tests {
     fn compile_def() {
         assert_eq!(
             compile(&f("(def x 5)")),
-            Ok(vec![PushConst(Val::Int(5)), StoreSym(SymbolId::from("x")),])
+            Ok(vec![PushConst(Val::Int(5)), DefSym(SymbolId::from("x")),])
         );
     }
 
@@ -179,7 +226,7 @@ mod tests {
             compile(&f("(lambda (x) x)")),
             Ok(vec![
                 PushConst(Val::List(vec![Val::symbol("x")])),
-                PushConst(Val::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+                PushConst(Val::Bytecode(vec![GetSym(SymbolId::from("x"))])),
                 MakeFunc
             ])
         );
@@ -190,7 +237,7 @@ mod tests {
                 PushConst(Val::List(vec![Val::symbol("x")])),
                 PushConst(Val::Bytecode(vec![
                     PushConst(Val::List(vec![])),
-                    PushConst(Val::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+                    PushConst(Val::Bytecode(vec![GetSym(SymbolId::from("x"))])),
                     MakeFunc,
                 ])),
                 MakeFunc
@@ -203,7 +250,7 @@ mod tests {
         assert_eq!(
             compile(&f("(echo \"Hello world\")")),
             Ok(vec![
-                LoadSym(SymbolId::from("echo")),
+                GetSym(SymbolId::from("echo")),
                 PushConst(Val::string("Hello world")),
                 CallFunc(1)
             ])
@@ -212,7 +259,7 @@ mod tests {
         assert_eq!(
             compile(&f("(+ 1 2 3 4 5)")),
             Ok(vec![
-                LoadSym(SymbolId::from("+")),
+                GetSym(SymbolId::from("+")),
                 PushConst(Val::Int(1)),
                 PushConst(Val::Int(2)),
                 PushConst(Val::Int(3)),
@@ -225,10 +272,10 @@ mod tests {
         assert_eq!(
             compile(&f("(one (two 3 (four)))")),
             Ok(vec![
-                LoadSym(SymbolId::from("one")),
-                LoadSym(SymbolId::from("two")),
+                GetSym(SymbolId::from("one")),
+                GetSym(SymbolId::from("two")),
                 PushConst(Val::Int(3)),
-                LoadSym(SymbolId::from("four")),
+                GetSym(SymbolId::from("four")),
                 CallFunc(0),
                 CallFunc(2),
                 CallFunc(1),
@@ -251,7 +298,7 @@ mod tests {
             compile(&f("((lambda (x) x) 10)")),
             Ok(vec![
                 PushConst(Val::List(vec![Val::symbol("x")])),
-                PushConst(Val::Bytecode(vec![LoadSym(SymbolId::from("x")),])),
+                PushConst(Val::Bytecode(vec![GetSym(SymbolId::from("x")),])),
                 MakeFunc,
                 PushConst(Val::Int(10)),
                 CallFunc(1),
@@ -267,7 +314,7 @@ mod tests {
                 PushConst(Val::List(vec![Val::symbol("x")])),
                 PushConst(Val::Bytecode(vec![
                     PushConst(Val::List(vec![])),
-                    PushConst(Val::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+                    PushConst(Val::Bytecode(vec![GetSym(SymbolId::from("x"))])),
                     MakeFunc
                 ])),
                 MakeFunc,
@@ -282,7 +329,7 @@ mod tests {
                 PushConst(Val::List(vec![])),
                 PushConst(Val::Bytecode(vec![
                     PushConst(Val::List(vec![Val::symbol("x")])),
-                    PushConst(Val::Bytecode(vec![LoadSym(SymbolId::from("x"))])),
+                    PushConst(Val::Bytecode(vec![GetSym(SymbolId::from("x"))])),
                     MakeFunc
                 ])),
                 MakeFunc,
