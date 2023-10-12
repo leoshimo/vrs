@@ -1,5 +1,5 @@
 //! A fiber of execution that can be cooperatively scheduled via yielding.
-use tracing::debug;
+use tracing::{debug, warn};
 
 use super::{Env, Inst};
 use crate::{Lambda, SymbolId, Val};
@@ -171,6 +171,9 @@ fn run(f: &mut Fiber) {
             }
             if f.at_end() {
                 let res = f.stack.pop().expect("Stack should contain result");
+                if !f.stack.is_empty() {
+                    warn!("Fiber terminated with nonempty stack {:?}", f.stack);
+                }
                 break Status::Completed(Ok(res));
             }
         }
@@ -237,6 +240,7 @@ mod tests {
     use tracing_test::traced_test;
 
     #[test]
+    #[traced_test]
     fn fiber_load_const_return() {
         let mut f = Fiber::from_bytecode(vec![PushConst(Val::Int(5))]);
         start(&mut f).expect("should start");
@@ -245,6 +249,9 @@ mod tests {
         let mut f = Fiber::from_bytecode(vec![PushConst(Val::string("Hi"))]);
         start(&mut f).expect("should start");
         assert_eq!(f.status, Status::Completed(Ok(Val::string("Hi"))));
+
+        assert!(!logs_contain("ERROR"));
+        assert!(!logs_contain("WARN"));
     }
 
     #[test]
@@ -266,9 +273,13 @@ mod tests {
             Status::Completed(Ok(Val::Int(5))),
             "should complete with value of stored symbol"
         );
+
+        assert!(!logs_contain("ERROR"));
+        assert!(!logs_contain("WARN"));
     }
 
     #[test]
+    #[traced_test]
     fn load_symbol() {
         let mut f = Fiber::from_bytecode(vec![LoadSym(SymbolId::from("x"))]);
         f.top()
@@ -281,6 +292,7 @@ mod tests {
     }
 
     #[test]
+    #[traced_test]
     fn load_symbol_undefined() {
         let mut f = Fiber::from_bytecode(vec![LoadSym(SymbolId::from("x"))]);
 
@@ -289,9 +301,13 @@ mod tests {
             f.status,
             Status::Completed(Err(FiberError::UndefinedSymbol(_)))
         );
+
+        assert!(!logs_contain("ERROR"));
+        assert!(!logs_contain("WARN"));
     }
 
     #[test]
+    #[traced_test]
     fn make_func() {
         let mut f = Fiber::from_bytecode(vec![
             PushConst(Val::List(vec![Val::symbol("x")])),
@@ -306,6 +322,9 @@ mod tests {
             Status::Completed(Ok(Val::Lambda(l))) if l.params == vec![SymbolId::from("x")] && l.code == vec![LoadSym(SymbolId::from("x"))],
             "A function object was created"
         );
+
+        assert!(!logs_contain("ERROR"));
+        assert!(!logs_contain("WARN"));
     }
 
     #[test]
@@ -324,9 +343,13 @@ mod tests {
 
         start(&mut f).unwrap();
         assert_eq!(f.status, Status::Completed(Ok(Val::string("hello"))));
+
+        assert!(!logs_contain("ERROR"));
+        assert!(!logs_contain("WARN"));
     }
 
     #[test]
+    #[traced_test]
     fn call_func_lambda() {
         // ((lambda (x) x) "hello")
         let mut f = Fiber::from_bytecode(vec![
@@ -338,9 +361,13 @@ mod tests {
         ]);
         start(&mut f).unwrap();
         assert_eq!(f.status, Status::Completed(Ok(Val::string("hello"))));
+
+        assert!(!logs_contain("ERROR"));
+        assert!(!logs_contain("WARN"));
     }
 
     #[test]
+    #[traced_test]
     fn call_func_nested() {
         // (((lambda () (lambda (x) x))) "hello")
         let mut f = Fiber::from_bytecode(vec![
@@ -373,6 +400,9 @@ mod tests {
         ]);
         start(&mut f).unwrap();
         assert_eq!(f.status, Status::Completed(Ok(Val::string("hello"))));
+
+        assert!(!logs_contain("ERROR"));
+        assert!(!logs_contain("WARN"));
     }
 
     // TODO: (((lambda () (lambda () "nested"))))
