@@ -162,6 +162,7 @@ async fn run(mut evloop: EventLoop, mut evloop_rx: mpsc::Receiver<Event>) {
     }
 }
 
+// TODO: Reenable tests
 // #[cfg(test)]
 // mod test {
 //     use super::*;

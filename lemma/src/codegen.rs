@@ -1,5 +1,5 @@
 //! Compiler for Lemma Form AST
-use crate::{SymbolId, Val};
+use crate::{Error, Result, SymbolId, Val};
 
 // TODO: Compact bytecode repr
 /// Bytecode instructions
@@ -17,26 +17,13 @@ pub enum Inst {
     CallFunc(usize),
     /// Pop the top of the stack
     PopTop,
-    /// Start a new scope in environment
-    BeginScope,
-    /// End active scope
-    EndScope,
 }
-
-/// Errors during compilation
-#[derive(thiserror::Error, Debug, PartialEq)]
-pub enum CompileError {
-    #[error("Invalid expression - {0}")]
-    InvalidExpression(String),
-}
-
-pub type Result<T> = std::result::Result<T, CompileError>;
 
 /// Compile a value to bytecode representation
 pub fn compile(v: &Val) -> Result<Vec<Inst>> {
     match v {
         Val::List(l) => {
-            let (first, args) = l.split_first().ok_or(CompileError::InvalidExpression(
+            let (first, args) = l.split_first().ok_or(Error::InvalidExpression(
                 "Empty list expression".to_string(),
             ))?;
 
@@ -62,7 +49,7 @@ fn compile_def(args: &[Val]) -> Result<Vec<Inst>> {
     let (symbol, value) = match args {
         [Val::Symbol(symbol), value] => (symbol, value),
         _ => {
-            return Err(CompileError::InvalidExpression(
+            return Err(Error::InvalidExpression(
                 "def accepts one symbol and one form as arguments".to_string(),
             ))
         }
@@ -78,7 +65,7 @@ fn compile_lambda(args: &[Val]) -> Result<Vec<Inst>> {
     let (param, body) = match args {
         [param, body] => (param, body),
         _ => {
-            return Err(CompileError::InvalidExpression(
+            return Err(Error::InvalidExpression(
                 "lambda expects a parameter list and body expression as arguments".to_string(),
             ))
         }
@@ -114,18 +101,23 @@ fn compile_func_call(func: &Val, args: &[Val]) -> Result<Vec<Inst>> {
 
 /// Compile builtin begin
 fn compile_begin(args: &[Val]) -> Result<Vec<Inst>> {
-    let mut bc = vec![Inst::BeginScope];
+    // Compile to anonymous lambda MakeFunc + CallFunc
+    let mut inner = vec![];
     let mut is_first = true;
     for a in args {
         if is_first {
             is_first = false;
         } else {
-            bc.push(Inst::PopTop); // discard result from previous call
+            inner.push(Inst::PopTop); // discard result from previous call
         }
-        bc.extend(compile(a)?);
+        inner.extend(compile(a)?);
     }
-    bc.push(Inst::EndScope);
-    Ok(bc)
+    Ok(vec![
+        Inst::PushConst(Val::List(vec![])),
+        Inst::PushConst(Val::Bytecode(inner)),
+        Inst::MakeFunc,
+        Inst::CallFunc(0),
+    ])
 }
 
 #[cfg(test)]
@@ -155,7 +147,7 @@ mod tests {
     fn compile_empty_list() {
         assert!(matches!(
             compile(&f("()")),
-            Err(CompileError::InvalidExpression(_))
+            Err(Error::InvalidExpression(_))
         ))
     }
 
@@ -292,17 +284,20 @@ mod tests {
         assert_eq!(
             compile(&f("(begin 1 2 3 4 5)")),
             Ok(vec![
-                BeginScope,
-                PushConst(Val::Int(1)),
-                PopTop,
-                PushConst(Val::Int(2)),
-                PopTop,
-                PushConst(Val::Int(3)),
-                PopTop,
-                PushConst(Val::Int(4)),
-                PopTop,
-                PushConst(Val::Int(5)),
-                EndScope,
+                PushConst(Val::List(vec![])),
+                PushConst(Val::Bytecode(vec![
+                    PushConst(Val::Int(1)),
+                    PopTop,
+                    PushConst(Val::Int(2)),
+                    PopTop,
+                    PushConst(Val::Int(3)),
+                    PopTop,
+                    PushConst(Val::Int(4)),
+                    PopTop,
+                    PushConst(Val::Int(5)),
+                ])),
+                MakeFunc,
+                CallFunc(0),
             ])
         )
     }

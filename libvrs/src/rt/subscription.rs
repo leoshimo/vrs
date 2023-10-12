@@ -111,6 +111,7 @@ async fn subscription_for_client_connection(mut conn: Connection, target: WeakPr
     }
 }
 
+// TODO: Reenable tests
 // #[cfg(test)]
 // mod tests {
 

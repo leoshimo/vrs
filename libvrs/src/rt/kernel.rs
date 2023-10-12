@@ -152,6 +152,7 @@ impl Kernel {
     }
 }
 
+// TODO: Reenable tests
 // #[cfg(test)]
 // mod tests {
 //     use crate::{Client, Connection};

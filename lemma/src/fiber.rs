@@ -2,7 +2,7 @@
 use tracing::{debug, warn};
 
 use super::{Env, Inst};
-use crate::{Lambda, SymbolId, Val};
+use crate::{compile, parse, Error, Lambda, Result, Val};
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Debug)]
@@ -21,6 +21,15 @@ pub enum Status {
     Completed(Result<Val>),
 }
 
+impl Status {
+    pub fn unwrap(&self) -> &Val {
+        match self {
+            Status::Completed(v) => v.as_ref().unwrap(),
+            _ => panic!("Status is not completed!"),
+        }
+    }
+}
+
 /// Single call frame
 #[derive(Debug)]
 struct CallFrame {
@@ -29,38 +38,17 @@ struct CallFrame {
     env: Rc<RefCell<Env>>,
 }
 
-/// Errors encountered during execution of expression
-#[derive(thiserror::Error, Debug, PartialEq)]
-pub enum FiberError {
-    /// A fiber that is already running was asked to start
-    #[error("Fiber is already running")]
-    AlreadyRunning,
-
-    /// Setting undefined symbol
-    #[error("Undefined symbol - {0}")]
-    UndefinedSymbol(SymbolId),
-
-    /// Unexpected state on stack
-    #[error("Unexpected stack state - {0}")]
-    UnexpectedStack(String),
-}
-
-/// Result type for fiber ops
-pub type Result<T> = std::result::Result<T, FiberError>;
-
 /// Start execution of a fiber
-pub fn start(f: &mut Fiber) -> Result<()> {
+pub fn start(f: &mut Fiber) -> Result<&Status> {
     if f.status != Status::New {
-        return Err(FiberError::AlreadyRunning);
+        return Err(Error::AlreadyRunning);
     }
-    run(f);
-    Ok(())
+    Ok(run(f))
 }
 
 /// Run the fiber until it completes or yields
-fn run(f: &mut Fiber) {
+fn run(f: &mut Fiber) -> &Status {
     f.status = Status::Running;
-
     f.status = loop {
         let inst = f.inst().clone(); // TODO(opt): Defer cloning until args need cloning
         f.top_mut().ip += 1;
@@ -80,7 +68,7 @@ fn run(f: &mut Fiber) {
             Inst::StoreSym(s) => match f.stack.last() {
                 Some(value) => f.top().env.borrow_mut().define(&s, value.clone()),
                 None => {
-                    break Status::Completed(Err(FiberError::UnexpectedStack(
+                    break Status::Completed(Err(Error::UnexpectedStack(
                         "Expected stack to be nonempty".to_string(),
                     )))
                 }
@@ -88,7 +76,7 @@ fn run(f: &mut Fiber) {
             Inst::LoadSym(s) => match f.top().env.clone().borrow().get(&s) {
                 Some(value) => f.stack.push(value.clone()),
                 None => {
-                    break Status::Completed(Err(FiberError::UndefinedSymbol(s)));
+                    break Status::Completed(Err(Error::UndefinedSymbol(s)));
                 }
             },
             Inst::MakeFunc => {
@@ -96,7 +84,7 @@ fn run(f: &mut Fiber) {
                 let code = match f.stack.pop() {
                     Some(Val::Bytecode(b)) => b,
                     _ => {
-                        break Status::Completed(Err(FiberError::UnexpectedStack(
+                        break Status::Completed(Err(Error::UnexpectedStack(
                             "Missing function bytecode".to_string(),
                         )))
                     }
@@ -104,7 +92,7 @@ fn run(f: &mut Fiber) {
                 let params = match f.stack.pop() {
                     Some(Val::List(p)) => p,
                     _ => {
-                        break Status::Completed(Err(FiberError::UnexpectedStack(
+                        break Status::Completed(Err(Error::UnexpectedStack(
                             "Missing parameter list".to_string(),
                         )))
                     }
@@ -113,7 +101,7 @@ fn run(f: &mut Fiber) {
                     .into_iter()
                     .map(|f| match f {
                         Val::Symbol(s) => Ok(s),
-                        _ => Err(FiberError::UnexpectedStack(
+                        _ => Err(Error::UnexpectedStack(
                             "Unexpected parameter list".to_string(),
                         )),
                     })
@@ -132,7 +120,7 @@ fn run(f: &mut Fiber) {
             Inst::CallFunc(nargs) => {
                 let args = (0..nargs)
                     .map(|_| {
-                        f.stack.pop().ok_or(FiberError::UnexpectedStack(
+                        f.stack.pop().ok_or(Error::UnexpectedStack(
                             "Missing expected {nargs} args".to_string(),
                         ))
                     })
@@ -145,7 +133,7 @@ fn run(f: &mut Fiber) {
                 let lambda = match f.stack.pop() {
                     Some(Val::Lambda(l)) => l,
                     _ => {
-                        break Status::Completed(Err(FiberError::UnexpectedStack(
+                        break Status::Completed(Err(Error::UnexpectedStack(
                             "Missing function object".to_string(),
                         )))
                     }
@@ -161,13 +149,11 @@ fn run(f: &mut Fiber) {
             }
             Inst::PopTop => {
                 if f.stack.pop().is_none() {
-                    break Status::Completed(Err(FiberError::UnexpectedStack(
+                    break Status::Completed(Err(Error::UnexpectedStack(
                         "Attempting to pop empty stack".to_string(),
                     )));
                 }
             }
-            Inst::BeginScope => todo!(),
-            Inst::EndScope => todo!(),
         }
 
         // end of func
@@ -184,6 +170,8 @@ fn run(f: &mut Fiber) {
             }
         }
     };
+
+    &f.status
 }
 
 impl Fiber {
@@ -194,6 +182,23 @@ impl Fiber {
             cframes: vec![CallFrame::from_bytecode(Env::default(), bytecode)],
             status: Status::New,
         }
+    }
+
+    /// Create a new fiber from value
+    pub fn from_val(val: &Val) -> Result<Self> {
+        let bytecode = compile(val)?;
+        Ok(Fiber::from_bytecode(bytecode))
+    }
+
+    /// Create a new fiber from given expressino
+    pub fn from_expr(expr: &str) -> Result<Self> {
+        let val: Val = parse(expr)?.into();
+        Fiber::from_val(&val)
+    }
+
+    /// Check if stack is empty
+    pub fn is_stack_empty(&self) -> bool {
+        self.stack.is_empty()
     }
 
     /// Reference to top of callstack
@@ -242,6 +247,7 @@ impl CallFrame {
 mod tests {
     use super::Inst::*;
     use super::*;
+    use crate::SymbolId;
     use assert_matches::assert_matches;
     use tracing_test::traced_test;
 
@@ -303,10 +309,7 @@ mod tests {
         let mut f = Fiber::from_bytecode(vec![LoadSym(SymbolId::from("x"))]);
 
         start(&mut f).unwrap();
-        assert_matches!(
-            f.status,
-            Status::Completed(Err(FiberError::UndefinedSymbol(_)))
-        );
+        assert_matches!(f.status, Status::Completed(Err(Error::UndefinedSymbol(_))));
 
         assert!(!logs_contain("ERROR"));
         assert!(!logs_contain("WARN"));
@@ -435,16 +438,9 @@ mod tests {
 
         start(&mut f).unwrap();
 
-        assert_matches!(
-            f.status,
-            Status::Completed(Err(FiberError::UnexpectedStack(_)))
-        );
+        assert_matches!(f.status, Status::Completed(Err(Error::UnexpectedStack(_))));
 
         assert!(!logs_contain("ERROR"));
         assert!(!logs_contain("WARN"));
     }
-
-    // TODO: (((lambda () (lambda () "nested"))))
-    // TODO: Define + call function via block
-    // TODO: Store / Load symbol w/ lexical scopes
 }

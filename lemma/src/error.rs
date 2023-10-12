@@ -23,4 +23,15 @@ pub enum Error {
 
     #[error("Invalid form to expr - {0}")]
     InvalidFormToExpr(String),
+
+    /// A fiber that is already running was asked to start
+    #[error("Fiber is already running")]
+    AlreadyRunning,
+
+    /// Unexpected state on stack
+    #[error("Unexpected stack state - {0}")]
+    UnexpectedStack(String),
+
+    #[error("Invalid expression - {0}")]
+    InvalidExpression(String),
 }

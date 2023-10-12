@@ -1,7 +1,5 @@
-use crate::{SymbolId, Val};
+use crate::{Error, SymbolId, Val};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
-
-use super::fiber::FiberError;
 
 /// An environment of bindings
 #[derive(Debug, Default)]
@@ -28,7 +26,7 @@ impl Env {
     }
 
     /// Set value of symbol in lexical scope
-    pub fn set(&mut self, symbol: &SymbolId, value: Val) -> Result<(), FiberError> {
+    pub fn set(&mut self, symbol: &SymbolId, value: Val) -> Result<(), Error> {
         if let Some(b) = self.bindings.get_mut(symbol) {
             *b = value;
             return Ok(());
@@ -39,7 +37,7 @@ impl Env {
             return Ok(());
         }
 
-        Err(FiberError::UndefinedSymbol(symbol.clone()))
+        Err(Error::UndefinedSymbol(symbol.clone()))
     }
 
     /// Extend an existing environment with given env as parent
@@ -51,6 +49,7 @@ impl Env {
     }
 }
 
+// TODO: Reenable tests
 // #[cfg(test)]
 // mod tests {
 //     use super::*;

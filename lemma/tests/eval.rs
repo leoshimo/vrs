@@ -1,148 +1,201 @@
 //! Tests for evaluation API
-// TODO: Revive tests
+use assert_matches::assert_matches;
+use lemma::fiber::{self, Fiber, Status};
+use lemma::{Error, SymbolId, Val};
 
-mod builtin {}
+#[test]
+fn booleans() {
+    let mut f = Fiber::from_expr("true").unwrap();
+    assert_eq!(*fiber::start(&mut f).unwrap().unwrap(), Val::Bool(true));
 
-// #[cfg(test)]
-// mod tests {
+    let mut f = Fiber::from_expr("false").unwrap();
+    assert_eq!(*fiber::start(&mut f).unwrap().unwrap(), Val::Bool(false));
 
-//     use super::*;
-//     use crate::Form as F;
+    assert!(f.is_stack_empty());
+}
+
+#[test]
+fn int() {
+    let mut f = Fiber::from_expr("5").unwrap();
+    assert_eq!(*fiber::start(&mut f).unwrap().unwrap(), Val::Int(5));
+
+    assert!(f.is_stack_empty());
+}
+
+#[test]
+fn string() {
+    let mut f = Fiber::from_expr("\"hello\"").unwrap();
+    assert_eq!(
+        *fiber::start(&mut f).unwrap().unwrap(),
+        Val::string("hello")
+    );
+
+    assert!(f.is_stack_empty());
+}
+
+#[test]
+fn symbols() {
+    let prog = r#"
+             (begin (def greeting "Hello world")
+                    greeting)
+        "#;
+    let mut f = Fiber::from_expr(prog).unwrap();
+    assert_eq!(
+        *fiber::start(&mut f).unwrap().unwrap(),
+        Val::string("Hello world")
+    );
+
+    assert!(f.is_stack_empty());
+}
+
+#[test]
+fn symbols_undefined() {
+    let mut f = Fiber::from_expr("greeting").unwrap();
+    assert_matches!(
+        *fiber::start(&mut f).unwrap(),
+        Status::Completed(Err(Error::UndefinedSymbol(_)))
+    );
+
+    assert!(f.is_stack_empty());
+}
+
+#[test]
+fn func_def_call() {
+    let prog = r#"
+             (begin (def echo (lambda (x) x))
+                    (echo "Hello world"))
+        "#;
+    let mut f = Fiber::from_expr(prog).unwrap();
+    assert_eq!(
+        *fiber::start(&mut f).unwrap().unwrap(),
+        Val::string("Hello world")
+    );
+
+    assert!(f.is_stack_empty());
+}
+
+#[test]
+fn begin_block() {
+    let mut f = Fiber::from_expr("(begin 1 2 3 4 5)").unwrap();
+    let status = fiber::start(&mut f).unwrap();
+
+    assert_eq!(*status, Status::Completed(Ok(Val::Int(5))));
+    assert!(f.is_stack_empty());
+}
+
+#[test]
+fn begin_block_nested() {
+    let mut f = Fiber::from_expr("(begin 1 (begin 2 (begin 3 (begin 4 (begin 5)))))").unwrap();
+
+    let status = fiber::start(&mut f).unwrap();
+    assert_eq!(*status, Status::Completed(Ok(Val::Int(5))));
+    assert!(f.is_stack_empty());
+}
+
+#[test]
+fn lexical_scope_vars() {
+    let prog = r#"
+             (begin (def scope :lexical)
+                    (def get-scope (lambda () scope))
+                    (begin
+                        (def scope :dynamic)
+                        (get-scope)  # should be lexical
+                    ))
+        "#;
+    let mut f = Fiber::from_expr(prog).unwrap();
+    assert_eq!(
+        *fiber::start(&mut f).unwrap().unwrap(),
+        Val::keyword("lexical")
+    );
+
+    assert!(f.is_stack_empty());
+}
+
+#[test]
+fn lexical_scope_funcs() {
+    let prog = r#"
+             (begin (def get-scope (lambda () :lexical))
+                    (def calls-get-scope (lambda () (get-scope)))
+                    (begin
+                        (def get-scope (lambda () :dynamic))
+                        (calls-get-scope)  # should be lexical
+                    ))
+        "#;
+    let mut f = Fiber::from_expr(prog).unwrap();
+    assert_eq!(
+        *fiber::start(&mut f).unwrap().unwrap(),
+        Val::keyword("lexical")
+    );
+
+    assert!(f.is_stack_empty());
+}
+
+#[test]
+fn lambda() {
+    let prog = "(lambda (x) x)";
+    let mut f = Fiber::from_expr(prog).unwrap();
+    assert_matches!(
+        fiber::start(&mut f).unwrap().unwrap(),
+        Val::Lambda(l) if l.params == vec![SymbolId::from("x")]
+    );
+
+    assert!(f.is_stack_empty());
+}
+
+#[test]
+fn lambda_func_call() {
+    let prog = "((lambda (x) x) :echo)";
+    let mut f = Fiber::from_expr(prog).unwrap();
+    assert_eq!(
+        *fiber::start(&mut f).unwrap().unwrap(),
+        Val::keyword("echo")
+    );
+
+    assert!(f.is_stack_empty());
+}
+
+#[test]
+fn lambda_nested() {
+    let prog = r#"
+         (((lambda () (lambda (x) x))) 10)
+    "#;
+    let mut f = Fiber::from_expr(prog).unwrap();
+    assert_eq!(*fiber::start(&mut f).unwrap().unwrap(), Val::Int(10));
+}
+
+#[test]
+fn def() {
+    let mut f = Fiber::from_expr("(def x 5)").unwrap();
+    assert_eq!(*fiber::start(&mut f).unwrap().unwrap(), Val::Int(5));
+
+    assert!(f.is_stack_empty());
+}
+
+#[test]
+fn def_lambda() {
+    let prog = r#"(def echo (lambda (x) x))"#;
+    let mut f = Fiber::from_expr(prog).unwrap();
+    assert_matches!(
+        fiber::start(&mut f).unwrap().unwrap(),
+        Val::Lambda(l) if l.params == vec![SymbolId::from("x")]
+    );
+
+    assert!(f.is_stack_empty());
+}
+
+#[test]
+fn nested_func_call() {
+    let prog = r#"
+             (begin (def echo (lambda (x) x))
+                    (echo (echo (echo (echo "hi")))))
+        "#;
+    let mut f = Fiber::from_expr(prog).unwrap();
+    assert_eq!(*fiber::start(&mut f).unwrap().unwrap(), Val::string("hi"));
+
+    assert!(f.is_stack_empty());
+}
 
 //     #[test]
-//     #[ignore]
-//     fn eval_bool() {
-//         let mut env = Env::new();
-//         assert_eq!(eval_expr("true", &mut env), Ok(F::Bool(true)));
-//         assert_eq!(eval_expr("false", &mut env), Ok(F::Bool(false)));
-//     }
-
-//     #[test]
-//     #[ignore]
-//     fn eval_int() {
-//         let mut env = Env::new();
-//         assert_eq!(eval_expr("5", &mut env), Ok(F::Int(5)));
-//     }
-
-//     #[test]
-//     #[ignore]
-//     fn eval_string() {
-//         let mut env = Env::new();
-//         assert_eq!(eval_expr("\"Hello\"", &mut env), Ok(F::string("Hello")));
-//     }
-
-//     /// Eval symbols
-//     #[test]
-//     #[ignore]
-//     fn eval_symbols() {
-//         let mut env = Env::new();
-//         env.bind(&SymbolId::from("greeting"), F::string("hello world"));
-
-//         assert_eq!(
-//             eval_expr("greeting", &mut env),
-//             Ok(F::string("hello world"))
-//         );
-
-//         assert!(matches!(
-//             eval_expr("undefined", &mut env),
-//             Err(Error::UndefinedSymbol(_))
-//         ));
-//     }
-
-//     /// Eval list
-//     #[test]
-//     #[ignore]
-//     fn eval_list_empty() {
-//         let mut env = Env::new();
-//         assert_eq!(eval_expr("()", &mut env), Err(Error::MissingProcedure),);
-//     }
-
-//     /// Eval functions
-//     #[test]
-//     #[ignore]
-//     fn eval_function() {
-//         // let mut env = Env::new();
-//         // env.bind(
-//         //     &SymbolId::from("echo"),
-//         //     F::Lambda(Lambda {
-//         //         params: vec![SymbolId::from("x")],
-//         //         body: vec![Form::symbol("x")],
-//         //     }),
-//         // );
-
-//         // assert!(matches!(eval_expr("echo", &mut env), Ok(F::Lambda(_)),));
-
-//         // assert_eq!(eval_expr("(echo 10)", &mut env), Ok(F::Int(10)));
-//     }
-
-//     /// Eval special forms
-//     #[test]
-//     #[ignore]
-//     fn eval_special_form() {
-//         let mut env = Env::new();
-//         env.bind_native(NativeFunc {
-//             symbol: SymbolId::from("quote"),
-//             func: |arg_forms, _env| Ok(arg_forms[0].clone()),
-//         });
-
-//         assert!(matches!(
-//             eval_expr("quote", &mut env),
-//             Ok(F::NativeFunc(l)) if l.symbol == SymbolId::from("quote"),
-//         ));
-
-//         assert_eq!(
-//             eval_expr("(quote (1 2 3))", &mut env),
-//             Ok(F::List(vec![F::Int(1), F::Int(2), F::Int(3),]))
-//         );
-//     }
-// }
-// use crate::eval::eval;
-// use crate::{Env, Error, Form, Result};
-//     use super::*;
-//     use crate::eval_expr;
-//     use crate::lang::std_env;
-//     use tracing_test::traced_test;
-
-//     #[test]
-//     #[traced_test]
-//     #[ignore]
-//     fn eval_lambda() {
-//         let mut env = std_env();
-
-//         assert!(
-//             matches!(eval_expr("lambda", &mut env), Ok(Form::NativeFunc(_))),
-//             "lambda symbol should be defined"
-//         );
-
-//         // assert!(
-//         //     matches!(
-//         //         eval_expr(
-//         //             "(lambda (x y) 10)",
-//         //             &mut env
-//         //         ),
-//         //         Ok(Form::Lambda(Lambda { params, .. })) if params == vec![SymbolId::from("x"), SymbolId::from("y")]
-//         //     ),
-//         //     "lambda special form returns a lambda value"
-//         // );
-
-//         // ((lambda (x) x) 5) => 5
-//         assert_eq!(eval_expr("((lambda (x) x) 5)", &mut env), Ok(Form::Int(5)));
-
-//         // ((lambda () (lambda (x) x)))
-//         assert!(matches!(
-//             eval_expr("((lambda () (lambda (x) x)))", &mut env),
-//             Ok(Form::Lambda(_))
-//         ));
-
-//         // (((lambda () (lambda (x) x))) 10) => 10
-//         assert_eq!(
-//             eval_expr("(((lambda () (lambda (x) x))) 10)", &mut env),
-//             Ok(Form::Int(10))
-//         );
-//     }
-
-//     #[test]
-//     #[traced_test]
 //     #[ignore]
 //     fn eval_quote() {
 //         let mut env = std_env();
@@ -187,62 +240,6 @@ mod builtin {}
 //             Ok(Form::Int(5))
 //         );
 //     }
-
-//     #[test]
-//     #[traced_test]
-//     #[ignore]
-//     fn eval_def_vals() {
-//         {
-//             let mut env = std_env();
-//             assert_eq!(eval_expr("(def x 10)", &mut env), Ok(Form::Int(10)));
-//         }
-
-//         {
-//             let mut env = std_env();
-//             assert_eq!(
-//                 eval_expr("(def x \"hello\")", &mut env),
-//                 Ok(Form::string("hello"))
-//             );
-//         }
-
-//         {
-//             // def + eval
-//             let mut env = std_env();
-//             assert_eq!(
-//                 eval_expr("(def x \"hello\")", &mut env),
-//                 Ok(Form::string("hello"))
-//             );
-
-//             assert_eq!(
-//                 eval_expr("x", &mut env),
-//                 Ok(Form::string("hello")),
-//                 "x should evaluate to def value"
-//             );
-//         }
-//     }
-
-//     #[test]
-//     #[traced_test]
-//     #[ignore]
-//     fn eval_def_func() {
-//         let mut env = std_env();
-
-//         assert!(matches!(
-//             eval_expr("(def echo (lambda (x) x))", &mut env),
-//             Ok(Form::Lambda(_))
-//         ));
-
-//         assert_eq!(
-//             eval_expr("(echo \"hello\")", &mut env),
-//             Ok(Form::string("hello"))
-//         );
-
-//         assert_eq!(
-//             eval_expr("(echo (echo \"hello\"))", &mut env),
-//             Ok(Form::string("hello"))
-//         );
-//     }
-
 //     #[test]
 //     #[traced_test]
 //     #[ignore]
