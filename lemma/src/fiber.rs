@@ -159,7 +159,13 @@ fn run(f: &mut Fiber) {
                 f.cframes
                     .push(CallFrame::from_bytecode(fn_env, lambda.code));
             }
-            Inst::PopTop => todo!(),
+            Inst::PopTop => {
+                if f.stack.pop().is_none() {
+                    break Status::Completed(Err(FiberError::UnexpectedStack(
+                        "Attempting to pop empty stack".to_string(),
+                    )));
+                }
+            }
             Inst::BeginScope => todo!(),
             Inst::EndScope => todo!(),
         }
@@ -400,6 +406,39 @@ mod tests {
         ]);
         start(&mut f).unwrap();
         assert_eq!(f.status, Status::Completed(Ok(Val::string("hello"))));
+
+        assert!(!logs_contain("ERROR"));
+        assert!(!logs_contain("WARN"));
+    }
+
+    #[test]
+    #[traced_test]
+    fn pop_top() {
+        let mut f = Fiber::from_bytecode(vec![
+            PushConst(Val::string("this")),
+            PushConst(Val::string("not this")),
+            PopTop,
+        ]);
+
+        start(&mut f).unwrap();
+
+        assert_eq!(f.status, Status::Completed(Ok(Val::string("this"))));
+
+        assert!(!logs_contain("ERROR"));
+        assert!(!logs_contain("WARN"));
+    }
+
+    #[test]
+    #[traced_test]
+    fn pop_top_empty() {
+        let mut f = Fiber::from_bytecode(vec![PopTop]);
+
+        start(&mut f).unwrap();
+
+        assert_matches!(
+            f.status,
+            Status::Completed(Err(FiberError::UnexpectedStack(_)))
+        );
 
         assert!(!logs_contain("ERROR"));
         assert!(!logs_contain("WARN"));
