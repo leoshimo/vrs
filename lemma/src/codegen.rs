@@ -33,6 +33,7 @@ pub fn compile(v: &Val) -> Result<Vec<Inst>> {
                     "def" => return compile_def(args),
                     "lambda" => return compile_lambda(args),
                     "begin" => return compile_begin(args),
+                    "quote" => return compile_quote(args),
                     _ => (),
                 }
             }
@@ -78,6 +79,19 @@ fn compile_lambda(args: &[Val]) -> Result<Vec<Inst>> {
         Inst::PushConst(Val::Bytecode(bytecode)),
         Inst::MakeFunc,
     ])
+}
+
+/// Compile quote special forms
+fn compile_quote(args: &[Val]) -> Result<Vec<Inst>> {
+    let v = match args {
+        [v] => v,
+        _ => {
+            return Err(Error::InvalidExpression(
+                "quote expects a single argument".to_string(),
+            ))
+        }
+    };
+    Ok(vec![Inst::PushConst(v.clone())])
 }
 
 /// Compile function calls
@@ -300,6 +314,37 @@ mod tests {
                 CallFunc(0),
             ])
         )
+    }
+
+    #[test]
+    fn compile_quote() {
+        assert_eq!(
+            compile(&f("(quote (one :two three))")),
+            Ok(vec![PushConst(Val::List(vec![
+                Val::symbol("one"),
+                Val::keyword("two"),
+                Val::symbol("three"),
+            ]))]),
+            "functions and symbols should not be evaluated"
+        );
+
+        assert_eq!(
+            compile(&f("'(one :two three)")),
+            Ok(vec![PushConst(Val::List(vec![
+                Val::symbol("one"),
+                Val::keyword("two"),
+                Val::symbol("three"),
+            ]))]),
+        );
+
+        assert_eq!(
+            compile(&f("(quote (lambda (x) x))")),
+            Ok(vec![PushConst(Val::List(vec![
+                Val::symbol("lambda"),
+                Val::List(vec![Val::symbol("x")]),
+                Val::symbol("x"),
+            ]))]),
+        );
     }
 
     /// Convenience for creating Val from expressions
