@@ -195,7 +195,6 @@ fn nested_func_call() {
 }
 
 #[test]
-#[tracing_test::traced_test]
 fn native_bindings() {
     let prog = r#"(native-first :one :two :three)"#;
     let mut f = Fiber::from_expr(prog).unwrap();
@@ -205,6 +204,30 @@ fn native_bindings() {
     });
 
     assert_eq!(*fiber::start(&mut f).unwrap().unwrap(), Val::keyword("one"));
+    assert!(f.is_stack_empty());
+}
+
+#[test]
+fn adder() {
+    let prog = r#"
+        (begin
+            (def make-addr (lambda (x) (lambda (y) (+ y x))))
+            (def add2 (make-addr 2))
+            (add2 40))
+    "#;
+
+    let mut f = Fiber::from_expr(prog).unwrap();
+
+    // TODO: Replace with real add?
+    f.bind(NativeFn {
+        symbol: SymbolId::from("+"),
+        func: |x| match x {
+            [Val::Int(a), Val::Int(b)] => Ok(Val::Int(a + b)),
+            _ => panic!("only supports ints"),
+        },
+    });
+
+    assert_eq!(*fiber::start(&mut f).unwrap().unwrap(), Val::Int(42));
     assert!(f.is_stack_empty());
 }
 
