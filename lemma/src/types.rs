@@ -33,7 +33,7 @@ pub enum Form {
 }
 
 /// A function object that closes over environment it was created in
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Lambda {
     pub params: Vec<SymbolId>,
     pub code: Vec<Inst>,
@@ -174,6 +174,19 @@ impl std::fmt::Display for SymbolId {
 impl std::fmt::Display for KeywordId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, ":{}", self.0)
+    }
+}
+
+impl std::fmt::Debug for Lambda {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // don't blow the stack via env
+        let params = self
+            .params
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
+        write!(f, "Form::Lambda({} ...)", params)
     }
 }
 
