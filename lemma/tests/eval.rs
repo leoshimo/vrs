@@ -1,7 +1,7 @@
 //! Tests for evaluation API
 use assert_matches::assert_matches;
 use lemma::fiber::{self, Fiber, Status};
-use lemma::{Error, SymbolId, Val};
+use lemma::{Error, NativeFn, SymbolId, Val};
 
 #[test]
 fn booleans() {
@@ -191,7 +191,20 @@ fn nested_func_call() {
         "#;
     let mut f = Fiber::from_expr(prog).unwrap();
     assert_eq!(*fiber::start(&mut f).unwrap().unwrap(), Val::string("hi"));
+    assert!(f.is_stack_empty());
+}
 
+#[test]
+#[tracing_test::traced_test]
+fn native_bindings() {
+    let prog = r#"(native-first :one :two :three)"#;
+    let mut f = Fiber::from_expr(prog).unwrap();
+    f.bind(NativeFn {
+        symbol: SymbolId::from("native-first"),
+        func: |x| Ok(x[0].clone()),
+    });
+
+    assert_eq!(*fiber::start(&mut f).unwrap().unwrap(), Val::keyword("one"));
     assert!(f.is_stack_empty());
 }
 

@@ -2,7 +2,7 @@
 use tracing::{debug, warn};
 
 use super::{Env, Inst};
-use crate::{compile, parse, Error, Lambda, Result, Val};
+use crate::{compile, parse, Error, Lambda, NativeFn, Result, Val};
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Debug)]
@@ -10,6 +10,7 @@ pub struct Fiber {
     cframes: Vec<CallFrame>,
     stack: Vec<Val>,
     status: Status,
+    global: Rc<RefCell<Env>>,
 }
 
 /// Status for a fiber
@@ -49,16 +50,17 @@ pub fn start(f: &mut Fiber) -> Result<&Status> {
 /// Run the fiber until it completes or yields
 fn run(f: &mut Fiber) -> &Status {
     f.status = Status::Running;
-    f.status = loop {
+    f.status = 'outer: loop {
         let inst = f.inst().clone(); // TODO(opt): Defer cloning until args need cloning
         f.top_mut().ip += 1;
 
-        // TODO: Add fiber debug flag
+        // TODO(dev): Add fiber debug flag
         debug!(
-            "frame {} ip {}: {:?}",
+            "frame {} ip {}: \n\t{:?}\n\t{:?}",
             f.cframes.len() - 1,
             f.top().ip,
-            inst
+            inst,
+            f.stack
         );
 
         match inst {
@@ -118,34 +120,41 @@ fn run(f: &mut Fiber) -> &Status {
                 }));
             }
             Inst::CallFunc(nargs) => {
-                let args = (0..nargs)
-                    .map(|_| {
-                        f.stack.pop().ok_or(Error::UnexpectedStack(
-                            "Missing expected {nargs} args".to_string(),
+                let mut args = vec![];
+                for _ in 0..nargs {
+                    let v = match f.stack.pop() {
+                        Some(v) => v,
+                        None => {
+                            break 'outer Status::Completed(Err(Error::UnexpectedStack(
+                                "Missing expected {nargs} args".to_string(),
+                            )))
+                        }
+                    };
+                    args.push(v);
+                }
+                let args = args.into_iter().rev();
+                match f.stack.pop() {
+                    Some(Val::NativeFn(n)) => match (n.func)(&args.collect::<Vec<_>>()) {
+                        Ok(v) => f.stack.push(v),
+                        Err(e) => break Status::Completed(Err(e)),
+                    },
+                    Some(Val::Lambda(l)) => {
+                        let mut fn_env = Env::extend(&l.env);
+                        for (s, arg) in l.params.iter().zip(args) {
+                            fn_env.define(s, arg);
+                        }
+
+                        f.cframes.push(CallFrame::from_bytecode(
+                            Rc::new(RefCell::new(fn_env)),
+                            l.code,
                         ))
-                    })
-                    .rev()
-                    .collect::<Result<Vec<_>>>();
-                let args = match args {
-                    Ok(a) => a,
-                    Err(e) => break Status::Completed(Err(e)),
-                };
-                let lambda = match f.stack.pop() {
-                    Some(Val::Lambda(l)) => l,
+                    }
                     _ => {
                         break Status::Completed(Err(Error::UnexpectedStack(
                             "Missing function object".to_string(),
                         )))
                     }
                 };
-
-                let mut fn_env = Env::extend(&lambda.env);
-                for (s, arg) in lambda.params.iter().zip(args) {
-                    fn_env.define(s, arg);
-                }
-
-                f.cframes
-                    .push(CallFrame::from_bytecode(fn_env, lambda.code));
             }
             Inst::PopTop => {
                 if f.stack.pop().is_none() {
@@ -177,10 +186,12 @@ fn run(f: &mut Fiber) -> &Status {
 impl Fiber {
     /// Create a new fiber from given bytecode
     pub fn from_bytecode(bytecode: Vec<Inst>) -> Self {
+        let global = Rc::new(RefCell::new(Env::default()));
         Fiber {
             stack: vec![],
-            cframes: vec![CallFrame::from_bytecode(Env::default(), bytecode)],
+            cframes: vec![CallFrame::from_bytecode(Rc::clone(&global), bytecode)],
             status: Status::New,
+            global,
         }
     }
 
@@ -199,6 +210,12 @@ impl Fiber {
     /// Check if stack is empty
     pub fn is_stack_empty(&self) -> bool {
         self.stack.is_empty()
+    }
+
+    /// Bind native function to global environment
+    pub fn bind(&mut self, nativefn: NativeFn) -> &mut Self {
+        self.global.borrow_mut().bind(nativefn);
+        self
     }
 
     /// Reference to top of callstack
@@ -229,12 +246,8 @@ impl Fiber {
 
 impl CallFrame {
     /// Create a new callframe for executing given bytecode from start
-    pub fn from_bytecode(env: Env, code: Vec<Inst>) -> Self {
-        Self {
-            ip: 0,
-            env: Rc::new(RefCell::new(env)),
-            code,
-        }
+    pub fn from_bytecode(env: Rc<RefCell<Env>>, code: Vec<Inst>) -> Self {
+        Self { ip: 0, env, code }
     }
 
     /// Whether or not call frame should return (i.e. on last call frame execution)
