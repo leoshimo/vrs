@@ -14,7 +14,7 @@ pub use parse::parse;
 pub use types::Form;
 pub use types::KeywordId;
 pub use types::Lambda;
-pub use types::NativeFunc;
+pub use types::NativeFn;
 pub use types::SymbolId;
 pub use types::Val;
 

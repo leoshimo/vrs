@@ -16,7 +16,7 @@ pub enum Val {
     List(Vec<Val>),
     Bytecode(Vec<Inst>),
     Lambda(Lambda),
-    NativeFunc(NativeFunc),
+    NativeFn(NativeFn),
 }
 
 /// Forms are parsed expression that can be evaluated or be converted to [Val]
@@ -42,9 +42,9 @@ pub struct Lambda {
 
 /// A native founction bound to given symbol
 #[derive(Debug, Clone, PartialEq)]
-pub struct NativeFunc {
+pub struct NativeFn {
     pub symbol: SymbolId,
-    pub func: fn(&[Val], &mut Env) -> Result<Val>,
+    pub func: fn(&[Val]) -> Result<Val>,
 }
 
 /// Identifier for Symbol
@@ -133,7 +133,7 @@ impl std::fmt::Display for Val {
                     .collect::<Vec<_>>()
                     .join(" ")
             ),
-            Val::NativeFunc(s) => write!(f, "<nativefn {}>", s.symbol),
+            Val::NativeFn(s) => write!(f, "<nativefn {}>", s.symbol),
             Val::Bytecode(_) => write!(f, "<bytecode>"),
         }
     }
@@ -213,7 +213,7 @@ impl TryFrom<Val> for Form {
             Val::Lambda(_) => Err(Error::InvalidFormToExpr(
                 "lambdas are not exprs".to_string(),
             )),
-            Val::NativeFunc(_) => Err(Error::InvalidFormToExpr(
+            Val::NativeFn(_) => Err(Error::InvalidFormToExpr(
                 "nativefns are not exprs".to_string(),
             )),
         }
