@@ -5,6 +5,14 @@ use super::{Env, Inst};
 use crate::{compile, parse, Error, Lambda, NativeFn, Result, Val};
 use std::{cell::RefCell, rc::Rc};
 
+// TODO: Revisit Fiber API Surface
+// - start should return Result<???>
+// - run should return Result<???>
+// - Status can be pruned
+// - run loop can be refactored
+
+// TODO: Refactor - Fiber Internals for `run`
+
 #[derive(Debug)]
 pub struct Fiber {
     cframes: Vec<CallFrame>,
@@ -217,6 +225,11 @@ impl Fiber {
     pub fn from_expr(expr: &str) -> Result<Self> {
         let val: Val = parse(expr)?.into();
         Fiber::from_val(&val)
+    }
+
+    /// Retrieve status of fiber
+    pub fn status(&self) -> &Status {
+        &self.status
     }
 
     /// Check if stack is empty
