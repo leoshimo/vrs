@@ -1,4 +1,4 @@
-# vrs
+# vrs - vrs runtime system
 
 [![Rust](https://github.com/leoshimo/vrs/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/leoshimo/vrs/actions/workflows/rust.yml)
 
