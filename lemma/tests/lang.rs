@@ -1,37 +1,54 @@
 //! Tests for implementation of language
 
 use assert_matches::assert_matches;
-use lemma::fiber::{self, Fiber, Status};
-use lemma::{Error, NativeFn, SymbolId, Val};
+use lemma::fiber::{Fiber, State};
+use lemma::{Error, NativeFn, Result, SymbolId, Val};
+
+// Convenience to eval top-level expr
+fn eval_expr(e: &str) -> Result<Val> {
+    let mut f = Fiber::from_expr(e)?;
+
+    // TODO: Replace with real add?
+    f.bind(NativeFn {
+        symbol: SymbolId::from("+"),
+        func: |x| match x {
+            [Val::Int(a), Val::Int(b)] => Ok(Val::Int(a + b)),
+            _ => panic!("only supports ints"),
+        },
+    });
+    f.bind(NativeFn {
+        symbol: SymbolId::from("echo_args"),
+        func: |x| Ok(Val::List(x.to_vec())),
+    });
+
+    // TODO: Think about ergonomics here
+    f.start();
+    let res = match f.state() {
+        State::Completed(res) => res,
+        s => panic!("fiber is not complete - {s:?}"),
+    };
+
+    if !f.is_stack_empty() {
+        panic!("fiber completed with nonempty stack");
+    }
+
+    res.clone()
+}
 
 #[test]
 fn booleans() {
-    let mut f = Fiber::from_expr("true").unwrap();
-    assert_eq!(*fiber::start(&mut f).unwrap().unwrap(), Val::Bool(true));
-
-    let mut f = Fiber::from_expr("false").unwrap();
-    assert_eq!(*fiber::start(&mut f).unwrap().unwrap(), Val::Bool(false));
-
-    assert!(f.is_stack_empty());
+    assert_eq!(eval_expr("true").unwrap(), Val::Bool(true));
+    assert_eq!(eval_expr("false").unwrap(), Val::Bool(false));
 }
 
 #[test]
 fn int() {
-    let mut f = Fiber::from_expr("5").unwrap();
-    assert_eq!(*fiber::start(&mut f).unwrap().unwrap(), Val::Int(5));
-
-    assert!(f.is_stack_empty());
+    assert_eq!(eval_expr("5").unwrap(), Val::Int(5));
 }
 
 #[test]
 fn string() {
-    let mut f = Fiber::from_expr("\"hello\"").unwrap();
-    assert_eq!(
-        *fiber::start(&mut f).unwrap().unwrap(),
-        Val::string("hello")
-    );
-
-    assert!(f.is_stack_empty());
+    assert_eq!(eval_expr("\"hello\"").unwrap(), Val::string("hello"));
 }
 
 #[test]
@@ -40,24 +57,12 @@ fn symbols() {
              (begin (def greeting "Hello world")
                     greeting)
         "#;
-    let mut f = Fiber::from_expr(prog).unwrap();
-    assert_eq!(
-        *fiber::start(&mut f).unwrap().unwrap(),
-        Val::string("Hello world")
-    );
-
-    assert!(f.is_stack_empty());
+    assert_eq!(eval_expr(prog).unwrap(), Val::string("Hello world"));
 }
 
 #[test]
 fn symbols_undefined() {
-    let mut f = Fiber::from_expr("greeting").unwrap();
-    assert_matches!(
-        *fiber::start(&mut f).unwrap(),
-        Status::Completed(Err(Error::UndefinedSymbol(_)))
-    );
-
-    assert!(f.is_stack_empty());
+    assert_matches!(eval_expr("greeting"), Err(Error::UndefinedSymbol(_)));
 }
 
 #[test]
@@ -66,31 +71,20 @@ fn func_def_call() {
              (begin (def echo (lambda (x) x))
                     (echo "Hello world"))
         "#;
-    let mut f = Fiber::from_expr(prog).unwrap();
-    assert_eq!(
-        *fiber::start(&mut f).unwrap().unwrap(),
-        Val::string("Hello world")
-    );
-
-    assert!(f.is_stack_empty());
+    assert_eq!(eval_expr(prog).unwrap(), Val::string("Hello world"));
 }
 
 #[test]
 fn begin_block() {
-    let mut f = Fiber::from_expr("(begin 1 2 3 4 5)").unwrap();
-    let status = fiber::start(&mut f).unwrap();
-
-    assert_eq!(*status, Status::Completed(Ok(Val::Int(5))));
-    assert!(f.is_stack_empty());
+    assert_eq!(eval_expr("(begin 1 2 3 4 5)").unwrap(), Val::Int(5));
 }
 
 #[test]
 fn begin_block_nested() {
-    let mut f = Fiber::from_expr("(begin 1 (begin 2 (begin 3 (begin 4 (begin 5)))))").unwrap();
-
-    let status = fiber::start(&mut f).unwrap();
-    assert_eq!(*status, Status::Completed(Ok(Val::Int(5))));
-    assert!(f.is_stack_empty());
+    assert_eq!(
+        eval_expr("(begin 1 (begin 2 (begin 3 (begin 4 (begin 5)))))").unwrap(),
+        Val::Int(5)
+    );
 }
 
 #[test]
@@ -103,13 +97,7 @@ fn lexical_scope_vars() {
                         (get-scope)  # should be lexical
                     ))
         "#;
-    let mut f = Fiber::from_expr(prog).unwrap();
-    assert_eq!(
-        *fiber::start(&mut f).unwrap().unwrap(),
-        Val::keyword("lexical")
-    );
-
-    assert!(f.is_stack_empty());
+    assert_eq!(eval_expr(prog).unwrap(), Val::keyword("lexical"));
 }
 
 #[test]
@@ -122,37 +110,22 @@ fn lexical_scope_funcs() {
                         (calls-get-scope)  # should be lexical
                     ))
         "#;
-    let mut f = Fiber::from_expr(prog).unwrap();
-    assert_eq!(
-        *fiber::start(&mut f).unwrap().unwrap(),
-        Val::keyword("lexical")
-    );
-
-    assert!(f.is_stack_empty());
+    assert_eq!(eval_expr(prog).unwrap(), Val::keyword("lexical"));
 }
 
 #[test]
 fn lambda() {
     let prog = "(lambda (x) x)";
-    let mut f = Fiber::from_expr(prog).unwrap();
     assert_matches!(
-        fiber::start(&mut f).unwrap().unwrap(),
+    eval_expr(prog).unwrap(),
         Val::Lambda(l) if l.params == vec![SymbolId::from("x")]
     );
-
-    assert!(f.is_stack_empty());
 }
 
 #[test]
 fn lambda_func_call() {
     let prog = "((lambda (x) x) :echo)";
-    let mut f = Fiber::from_expr(prog).unwrap();
-    assert_eq!(
-        *fiber::start(&mut f).unwrap().unwrap(),
-        Val::keyword("echo")
-    );
-
-    assert!(f.is_stack_empty());
+    assert_eq!(eval_expr(prog).unwrap(), Val::keyword("echo"));
 }
 
 #[test]
@@ -160,28 +133,21 @@ fn lambda_nested() {
     let prog = r#"
          (((lambda () (lambda (x) x))) 10)
     "#;
-    let mut f = Fiber::from_expr(prog).unwrap();
-    assert_eq!(*fiber::start(&mut f).unwrap().unwrap(), Val::Int(10));
+    assert_eq!(eval_expr(prog).unwrap(), Val::Int(10));
 }
 
 #[test]
 fn def() {
-    let mut f = Fiber::from_expr("(def x 5)").unwrap();
-    assert_eq!(*fiber::start(&mut f).unwrap().unwrap(), Val::Int(5));
-
-    assert!(f.is_stack_empty());
+    assert_eq!(eval_expr("(def x 5)").unwrap(), Val::Int(5));
 }
 
 #[test]
 fn def_lambda() {
     let prog = r#"(def echo (lambda (x) x))"#;
-    let mut f = Fiber::from_expr(prog).unwrap();
     assert_matches!(
-        fiber::start(&mut f).unwrap().unwrap(),
+        eval_expr(prog).unwrap(),
         Val::Lambda(l) if l.params == vec![SymbolId::from("x")]
     );
-
-    assert!(f.is_stack_empty());
 }
 
 #[test]
@@ -190,22 +156,19 @@ fn nested_func_call() {
              (begin (def echo (lambda (x) x))
                     (echo (echo (echo (echo "hi")))))
         "#;
-    let mut f = Fiber::from_expr(prog).unwrap();
-    assert_eq!(*fiber::start(&mut f).unwrap().unwrap(), Val::string("hi"));
-    assert!(f.is_stack_empty());
+    assert_eq!(eval_expr(prog).unwrap(), Val::string("hi"));
 }
 
 #[test]
 fn native_bindings() {
-    let prog = r#"(native-first :one :two :three)"#;
-    let mut f = Fiber::from_expr(prog).unwrap();
-    f.bind(NativeFn {
-        symbol: SymbolId::from("native-first"),
-        func: |x| Ok(x[0].clone()),
-    });
-
-    assert_eq!(*fiber::start(&mut f).unwrap().unwrap(), Val::keyword("one"));
-    assert!(f.is_stack_empty());
+    assert_eq!(
+        eval_expr("(echo_args :one \"two\" '(:three))").unwrap(),
+        Val::List(vec![
+            Val::keyword("one"),
+            Val::string("two"),
+            Val::List(vec![Val::keyword("three")]),
+        ])
+    );
 }
 
 #[test]
@@ -216,27 +179,14 @@ fn adder() {
             (def add2 (make-addr 2))
             (add2 40))
     "#;
-    let mut f = Fiber::from_expr(prog).unwrap();
-
-    // TODO: Replace with real add?
-    f.bind(NativeFn {
-        symbol: SymbolId::from("+"),
-        func: |x| match x {
-            [Val::Int(a), Val::Int(b)] => Ok(Val::Int(a + b)),
-            _ => panic!("only supports ints"),
-        },
-    });
-
-    assert_eq!(*fiber::start(&mut f).unwrap().unwrap(), Val::Int(42));
-    assert!(f.is_stack_empty());
+    assert_eq!(eval_expr(prog).unwrap(), Val::Int(42));
 }
 
 #[test]
 fn eval_quote() {
     {
-        let mut f = Fiber::from_expr("(quote (one :two three))").unwrap();
         assert_eq!(
-            *fiber::start(&mut f).unwrap().unwrap(),
+            eval_expr("(quote (one :two three))").unwrap(),
             Val::List(vec![
                 Val::symbol("one"),
                 Val::keyword("two"),
@@ -245,9 +195,8 @@ fn eval_quote() {
         );
     }
     {
-        let mut f = Fiber::from_expr("(quote (lambda (x) x))").unwrap();
         assert_eq!(
-            *fiber::start(&mut f).unwrap().unwrap(),
+            eval_expr("(quote (lambda (x) x))").unwrap(),
             Val::List(vec![
                 Val::symbol("lambda"),
                 Val::List(vec![Val::symbol("x")]),
@@ -256,10 +205,9 @@ fn eval_quote() {
         );
     }
     {
-        let mut f = Fiber::from_expr("((quote (lambda (x) x)) 5)").unwrap();
         assert_matches!(
-            fiber::start(&mut f).unwrap(),
-            Status::Completed(Err(Error::UnexpectedStack(s))) if s == "Missing function object",
+            eval_expr("((quote (lambda (x) x)) 5)"),
+            Err(Error::UnexpectedStack(s)) if s == "Missing function object",
             "Quoted expressions don't evaluate inner forms - no function yet"
         );
     }
@@ -279,17 +227,8 @@ fn eval_defn() {
         (inc 5)
     )
     "#;
-    let mut f = Fiber::from_expr(prog).unwrap();
-    // TODO: Replace with real add?
-    f.bind(NativeFn {
-        symbol: SymbolId::from("+"),
-        func: |x| match x {
-            [Val::Int(a), Val::Int(b)] => Ok(Val::Int(a + b)),
-            _ => panic!("only supports ints"),
-        },
-    });
 
-    assert_eq!(*fiber::start(&mut f).unwrap().unwrap(), Val::Int(15),);
+    assert_eq!(eval_expr(prog).unwrap(), Val::Int(15),);
 }
 
 //     #[test]
