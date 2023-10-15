@@ -11,12 +11,13 @@ pub struct Fiber {
     cframes: Vec<CallFrame>,
     stack: Vec<Val>,
     global: Rc<RefCell<Env>>,
+    is_yielding: bool,
 }
 
 /// Result from fiber execution
 #[derive(Debug, PartialEq)]
 pub enum FiberState {
-    Idle,
+    Yield(Val),
     Done(Val),
 }
 
@@ -28,6 +29,7 @@ impl Fiber {
             stack: vec![],
             cframes: vec![CallFrame::from_bytecode(Rc::clone(&global), bytecode)],
             global,
+            is_yielding: false,
         }
     }
 
@@ -45,6 +47,18 @@ impl Fiber {
 
     /// Start execution of a fiber
     pub fn resume(&mut self) -> Result<FiberState> {
+        run(self)
+    }
+
+    /// Resume a yielded fiber
+    pub fn resume_from_yield(&mut self, v: Val) -> Result<FiberState> {
+        if !self.is_yielding {
+            return Err(Error::UnexpectedResume(
+                "resuming a nonyielding fiber".to_string(),
+            ));
+        }
+        self.is_yielding = false;
+        self.stack.push(v);
         run(self)
     }
 
@@ -106,6 +120,21 @@ impl CallFrame {
 /// Run the fiber until it completes or yields
 fn run(f: &mut Fiber) -> Result<FiberState> {
     loop {
+        if f.is_yielding {
+            let res = f.stack.pop().ok_or(Error::UnexpectedStack(
+                "Stack should contain result for terminated fiber".to_string(),
+            ))?;
+            return Ok(FiberState::Yield(res));
+        } else if f.at_end() {
+            let res = f.stack.pop().ok_or(Error::UnexpectedStack(
+                "Stack should contain result for terminated fiber".to_string(),
+            ))?;
+            if !f.stack.is_empty() {
+                warn!("Fiber terminated with nonempty stack {:?}", f.stack);
+            }
+            return Ok(FiberState::Done(res));
+        }
+
         let inst = f.inst()?.clone(); // TODO(opt): Defer cloning until args need cloning
         f.top_mut().ip += 1;
 
@@ -222,25 +251,14 @@ fn run(f: &mut Fiber) -> Result<FiberState> {
                 }
             }
             Inst::JumpBck(back) => f.top_mut().ip -= back,
+            Inst::YieldTop => f.is_yielding = true,
         }
 
         // Implicit returns - Pop completed frames except root
         while f.cframes.len() > 1 && f.top().is_done() {
             f.cframes.pop();
         }
-
-        if f.at_end() {
-            break;
-        }
     }
-
-    let res = f.stack.pop().ok_or(Error::UnexpectedStack(
-        "Stack should contain result for terminated fiber".to_string(),
-    ))?;
-    if !f.stack.is_empty() {
-        warn!("Fiber terminated with nonempty stack {:?}", f.stack);
-    }
-    Ok(FiberState::Done(res))
 }
 
 /// Defines true values
@@ -537,5 +555,16 @@ mod tests {
         ]);
 
         assert_eq!(f.resume().unwrap(), Done(Val::Int(1)));
+    }
+
+    #[test]
+    #[traced_test]
+    fn yield_iter() {
+        let mut f = Fiber::from_bytecode(vec![PushConst(Val::string("before")), YieldTop]);
+        assert_eq!(f.resume().unwrap(), Yield(Val::string("before")));
+        assert_eq!(
+            f.resume_from_yield(Val::string("after")).unwrap(),
+            Done(Val::string("after"))
+        );
     }
 }

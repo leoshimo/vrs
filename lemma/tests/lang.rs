@@ -24,7 +24,7 @@ fn eval_expr(e: &str) -> Result<Val> {
     // TODO: Think about ergonomics here
     let res = match f.resume()? {
         FiberState::Done(res) => res,
-        FiberState::Idle => panic!("fiber is not complete"),
+        FiberState::Yield(_) => panic!("fiber is not complete"),
     };
 
     if !f.is_stack_empty() {

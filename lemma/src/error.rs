@@ -38,4 +38,7 @@ pub enum Error {
 
     #[error("Invalid expression - {0}")]
     InvalidExpression(String),
+
+    #[error("Unexpected resume of fiber - {0}")]
+    UnexpectedResume(String),
 }

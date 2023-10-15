@@ -25,6 +25,8 @@ pub enum Inst {
     JumpBck(usize),
     /// Conditional Jump forward N inst
     PopJumpFwdIfTrue(usize),
+    /// Yield TOS as value
+    YieldTop,
 }
 
 /// Compile a value to bytecode representation

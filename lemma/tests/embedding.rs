@@ -23,8 +23,8 @@ fn fiber_empty_bytecode() {
     let mut f = Fiber::from_bytecode(vec![]);
     assert_matches!(
         f.resume(),
-        Err(Error::NoMoreBytecode),
-        "Executing empty bytecode panics"
+        Err(Error::UnexpectedStack(_)),
+        "Executing empty bytecode panics, since there is nothing to return"
     );
 }
 
