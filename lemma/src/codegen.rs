@@ -201,7 +201,7 @@ fn compile_if(args: &[Val]) -> Result<Vec<Inst>> {
     let t_code = compile(t)?;
     let f_code = compile(f)?;
 
-    bc.push(Inst::PopJumpFwdIfTrue(f_code.len()));
+    bc.push(Inst::PopJumpFwdIfTrue(f_code.len() + 1));
     bc.extend(f_code);
     bc.push(Inst::JumpFwd(t_code.len()));
     bc.extend(t_code);
@@ -428,7 +428,7 @@ mod tests {
             compile(&f("(if true \"true\" \"false\")")),
             Ok(vec![
                 PushConst(Val::Bool(true)),
-                PopJumpFwdIfTrue(1),
+                PopJumpFwdIfTrue(2),
                 PushConst(Val::string("false")),
                 JumpFwd(1),
                 PushConst(Val::string("true")),
