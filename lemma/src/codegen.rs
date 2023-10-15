@@ -47,6 +47,7 @@ pub fn compile(v: &Val) -> Result<Vec<Inst>> {
                     "lambda" => return compile_lambda(args),
                     "quote" => return compile_quote(args),
                     "if" => return compile_if(args),
+                    "yield" => return compile_yield(args),
                     _ => (),
                 }
             }
@@ -211,6 +212,22 @@ fn compile_if(args: &[Val]) -> Result<Vec<Inst>> {
     bc.extend(t_code);
 
     Ok(bc)
+}
+
+/// Compile yield statement
+fn compile_yield(args: &[Val]) -> std::result::Result<Vec<Inst>, Error> {
+    let v = match args {
+        [] => &Val::Nil,
+        [v] => v,
+        _ => {
+            return Err(Error::InvalidExpression(
+                "yield accepts zero or one argument".to_string(),
+            ))
+        }
+    };
+    let mut inst = compile(v)?;
+    inst.push(Inst::YieldTop);
+    Ok(inst)
 }
 
 #[cfg(test)]
@@ -438,6 +455,30 @@ mod tests {
                 PushConst(Val::string("true")),
             ])
         )
+    }
+
+    #[test]
+    fn compile_yield() {
+        assert_eq!(
+            compile(&f("(yield)")),
+            Ok(vec![PushConst(Val::Nil), YieldTop,])
+        );
+
+        assert_eq!(
+            compile(&f("(yield 10)")),
+            Ok(vec![PushConst(Val::Int(10)), YieldTop,])
+        );
+
+        assert_eq!(
+            compile(&f("(yield ((lambda () 10)))")),
+            Ok(vec![
+                PushConst(Val::List(vec![])),
+                PushConst(Val::Bytecode(vec![PushConst(Val::Int(10))])),
+                MakeFunc,
+                CallFunc(0),
+                YieldTop,
+            ])
+        );
     }
 
     /// Convenience for creating Val from expressions
