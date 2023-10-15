@@ -212,7 +212,7 @@ fn run(f: &mut Fiber) -> Result<FiberState> {
                     ));
                 }
             }
-            Inst::JumpFwd(offset) => f.top_mut().ip += offset,
+            Inst::JumpFwd(fwd) => f.top_mut().ip += fwd,
             Inst::PopJumpFwdIfTrue(offset) => {
                 let v = f.stack.pop().ok_or(Error::UnexpectedStack(
                     "Expected conditional expression on stack".to_string(),
@@ -221,6 +221,7 @@ fn run(f: &mut Fiber) -> Result<FiberState> {
                     f.top_mut().ip += offset;
                 }
             }
+            Inst::JumpBck(back) => f.top_mut().ip -= back,
         }
 
         // Implicit returns - Pop completed frames except root
@@ -517,5 +518,24 @@ mod tests {
 
         assert!(!logs_contain("ERROR"));
         assert!(!logs_contain("WARN"));
+    }
+
+    #[test]
+    #[traced_test]
+    fn jump_back() {
+        let mut f = Fiber::from_bytecode(vec![
+            PushConst(Val::Int(0)),
+            DefSym(SymbolId::from("x")),
+            PopTop,
+            GetSym(SymbolId::from("x")),
+            PopJumpFwdIfTrue(4), // termination
+            PushConst(Val::Int(1)),
+            SetSym(SymbolId::from("x")),
+            PopTop,
+            JumpBck(6), // loop back to getsym
+            GetSym(SymbolId::from("x")),
+        ]);
+
+        assert_eq!(f.resume().unwrap(), Done(Val::Int(1)));
     }
 }

@@ -21,6 +21,8 @@ pub enum Inst {
     PopTop,
     /// Jump forward N inst
     JumpFwd(usize),
+    /// Jump backward N inst
+    JumpBck(usize),
     /// Conditional Jump forward N inst
     PopJumpFwdIfTrue(usize),
 }
