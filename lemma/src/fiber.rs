@@ -213,7 +213,14 @@ fn run(f: &mut Fiber) -> Result<FiberState> {
                 }
             }
             Inst::JumpFwd(offset) => f.top_mut().ip += offset,
-            Inst::PopJumpFwdIfTrue(_) => todo!(),
+            Inst::PopJumpFwdIfTrue(offset) => {
+                let v = f.stack.pop().ok_or(Error::UnexpectedStack(
+                    "Expected conditional expression on stack".to_string(),
+                ))?;
+                if is_true(v)? {
+                    f.top_mut().ip += offset;
+                }
+            }
         }
 
         // Implicit returns - Pop completed frames except root
@@ -233,6 +240,23 @@ fn run(f: &mut Fiber) -> Result<FiberState> {
         warn!("Fiber terminated with nonempty stack {:?}", f.stack);
     }
     Ok(FiberState::Done(res))
+}
+
+/// Defines true values
+fn is_true(v: Val) -> Result<bool> {
+    let cond = match v {
+        Val::Nil => false,
+        Val::Bool(b) => b,
+        Val::Int(i) => i != 0,
+        Val::String(s) => !s.is_empty(),
+        Val::List(l) => !l.is_empty(),
+        v => {
+            return Err(Error::UnexpectedArguments(format!(
+                "Value is not a valid condition - {v}"
+            )))
+        }
+    };
+    Ok(cond)
 }
 
 #[cfg(test)]
@@ -461,5 +485,37 @@ mod tests {
         assert!(!logs_contain("WARN"));
     }
 
-    // TODO: Test pop jump
+    #[test]
+    #[traced_test]
+    fn pop_jump_fwd_true() {
+        let mut f = Fiber::from_bytecode(vec![
+            PushConst(Val::Bool(true)),
+            PopJumpFwdIfTrue(2),
+            PushConst(Val::string("notthis")),
+            JumpFwd(1),
+            PushConst(Val::string("this")),
+        ]);
+
+        assert_eq!(f.resume().unwrap(), Done(Val::string("this")));
+
+        assert!(!logs_contain("ERROR"));
+        assert!(!logs_contain("WARN"));
+    }
+
+    #[test]
+    #[traced_test]
+    fn pop_jump_fwd_false() {
+        let mut f = Fiber::from_bytecode(vec![
+            PushConst(Val::Bool(false)),
+            PopJumpFwdIfTrue(2),
+            PushConst(Val::string("this")),
+            JumpFwd(1),
+            PushConst(Val::string("notthis")),
+        ]);
+
+        assert_eq!(f.resume().unwrap(), Done(Val::string("this")));
+
+        assert!(!logs_contain("ERROR"));
+        assert!(!logs_contain("WARN"));
+    }
 }
