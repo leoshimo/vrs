@@ -19,10 +19,10 @@ pub enum Inst {
     CallFunc(usize),
     /// Pop the top of the stack
     PopTop,
-    /// Relative jump
-    Jump(usize),
-    /// Conditional Relative Jump
-    PopJumpIfTrue(usize),
+    /// Jump forward N inst
+    JumpFwd(usize),
+    /// Conditional Jump forward N inst
+    PopJumpFwdIfTrue(usize),
 }
 
 /// Compile a value to bytecode representation
@@ -201,9 +201,9 @@ fn compile_if(args: &[Val]) -> Result<Vec<Inst>> {
     let t_code = compile(t)?;
     let f_code = compile(f)?;
 
-    bc.push(Inst::PopJumpIfTrue(f_code.len()));
+    bc.push(Inst::PopJumpFwdIfTrue(f_code.len()));
     bc.extend(f_code);
-    bc.push(Inst::Jump(t_code.len()));
+    bc.push(Inst::JumpFwd(t_code.len()));
     bc.extend(t_code);
 
     Ok(bc)
@@ -428,9 +428,9 @@ mod tests {
             compile(&f("(if true \"true\" \"false\")")),
             Ok(vec![
                 PushConst(Val::Bool(true)),
-                PopJumpIfTrue(1),
+                PopJumpFwdIfTrue(1),
                 PushConst(Val::string("false")),
-                Jump(1),
+                JumpFwd(1),
                 PushConst(Val::string("true")),
             ])
         )

@@ -212,8 +212,8 @@ fn run(f: &mut Fiber) -> Result<FiberState> {
                     ));
                 }
             }
-            Inst::Jump(_) => todo!(),
-            Inst::PopJumpIfTrue(_) => todo!(),
+            Inst::JumpFwd(offset) => f.top_mut().ip += offset,
+            Inst::PopJumpFwdIfTrue(_) => todo!(),
         }
 
         // Implicit returns - Pop completed frames except root
@@ -441,4 +441,25 @@ mod tests {
         assert!(!logs_contain("ERROR"));
         assert!(!logs_contain("WARN"));
     }
+
+    #[test]
+    #[traced_test]
+    fn jump_fwd() {
+        let mut f = Fiber::from_bytecode(vec![
+            PushConst(Val::string("this")),
+            JumpFwd(5),
+            PushConst(Val::string("notthis")),
+            PushConst(Val::string("notthis")),
+            PushConst(Val::string("notthis")),
+            PushConst(Val::string("notthis")),
+            PushConst(Val::string("notthis")),
+        ]);
+
+        assert_eq!(f.resume().unwrap(), Done(Val::string("this")));
+
+        assert!(!logs_contain("ERROR"));
+        assert!(!logs_contain("WARN"));
+    }
+
+    // TODO: Test pop jump
 }
