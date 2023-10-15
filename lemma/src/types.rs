@@ -7,16 +7,28 @@ use std::{cell::RefCell, rc::Rc};
 /// All values in VM that can be manipulated
 #[derive(Debug, Clone, PartialEq)]
 pub enum Val {
+    /// No value
     Nil,
+    /// True or false
     Bool(bool),
+    /// Integers
     Int(i32),
+    /// Strings
     String(String),
+    /// Named slots for values
     Symbol(SymbolId),
+    /// Unique strings
     Keyword(KeywordId),
+    /// Lists
     List(Vec<Val>),
-    Bytecode(Vec<Inst>),
+    /// A callable function object
     Lambda(Lambda),
+    /// A callable native function object
     NativeFn(NativeFn),
+    /// Like keywords, but cannot be created in Lemma. For signaling from native bindings
+    Signal(SignalId),
+    /// Compiled bytecode sequence
+    Bytecode(Vec<Inst>),
 }
 
 /// Forms are parsed expression that can be evaluated or be converted to [Val]
@@ -55,6 +67,10 @@ pub struct SymbolId(String);
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct KeywordId(String);
 
+/// Identifier for signals
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct SignalId(i32);
+
 impl Form {
     /// Shorhand for constructing [Form::String]
     pub fn string(s: &str) -> Self {
@@ -86,6 +102,11 @@ impl Val {
     /// Shorthand for creating [Val::Keyword]
     pub fn keyword(id: &str) -> Self {
         Self::Keyword(KeywordId::from(id))
+    }
+
+    /// Shorthand for creating signals
+    pub fn signal(id: i32) -> Self {
+        Self::Signal(SignalId(id))
     }
 }
 
@@ -135,6 +156,7 @@ impl std::fmt::Display for Val {
             ),
             Val::NativeFn(s) => write!(f, "<nativefn {}>", s.symbol),
             Val::Bytecode(_) => write!(f, "<bytecode>"),
+            Val::Signal(s) => write!(f, "<signal {}>", s.0),
         }
     }
 }
@@ -228,6 +250,9 @@ impl TryFrom<Val> for Form {
             )),
             Val::NativeFn(_) => Err(Error::InvalidFormToExpr(
                 "nativefns are not exprs".to_string(),
+            )),
+            Val::Signal(_) => Err(Error::InvalidFormToExpr(
+                "signals are not exprs".to_string(),
             )),
         }
     }
