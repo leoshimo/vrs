@@ -12,7 +12,7 @@ pub use codegen::Inst;
 pub use env::Env;
 pub use error::Error;
 pub use fiber::Fiber;
-pub use fiber::State;
+pub use fiber::FiberState;
 pub use parse::parse;
 pub use types::Form;
 pub use types::KeywordId;

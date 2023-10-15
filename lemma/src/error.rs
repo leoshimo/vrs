@@ -28,6 +28,10 @@ pub enum Error {
     #[error("Fiber is already running")]
     AlreadyRunning,
 
+    /// Executed past end of fiber
+    #[error("Exceeded fiber instructions")]
+    NoMoreBytecode,
+
     /// Unexpected state on stack
     #[error("Unexpected stack state - {0}")]
     UnexpectedStack(String),

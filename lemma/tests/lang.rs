@@ -1,7 +1,7 @@
 //! Tests for implementation of language
 
 use assert_matches::assert_matches;
-use lemma::fiber::{Fiber, State};
+use lemma::fiber::{Fiber, FiberState};
 use lemma::{Error, NativeFn, Result, SymbolId, Val};
 
 // Convenience to eval top-level expr
@@ -22,17 +22,16 @@ fn eval_expr(e: &str) -> Result<Val> {
     });
 
     // TODO: Think about ergonomics here
-    f.start();
-    let res = match f.state() {
-        State::Completed(res) => res,
-        s => panic!("fiber is not complete - {s:?}"),
+    let res = match f.resume()? {
+        FiberState::Done(res) => res,
+        FiberState::Idle => panic!("fiber is not complete"),
     };
 
     if !f.is_stack_empty() {
         panic!("fiber completed with nonempty stack");
     }
 
-    res.clone()
+    Ok(res)
 }
 
 #[test]
