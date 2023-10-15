@@ -212,6 +212,8 @@ fn run(f: &mut Fiber) -> Result<FiberState> {
                     ));
                 }
             }
+            Inst::Jump(_) => todo!(),
+            Inst::PopJumpIfTrue(_) => todo!(),
         }
 
         // Implicit returns - Pop completed frames except root

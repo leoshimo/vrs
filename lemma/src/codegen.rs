@@ -19,6 +19,10 @@ pub enum Inst {
     CallFunc(usize),
     /// Pop the top of the stack
     PopTop,
+    /// Relative jump
+    Jump(usize),
+    /// Conditional Relative Jump
+    PopJumpIfTrue(usize),
 }
 
 /// Compile a value to bytecode representation
@@ -38,6 +42,7 @@ pub fn compile(v: &Val) -> Result<Vec<Inst>> {
                     "defn" => return compile_defn(args),
                     "lambda" => return compile_lambda(args),
                     "quote" => return compile_quote(args),
+                    "if" => return compile_if(args),
                     _ => (),
                 }
             }
@@ -179,6 +184,29 @@ fn compile_begin(args: &[Val]) -> Result<Vec<Inst>> {
         Inst::MakeFunc,
         Inst::CallFunc(0),
     ])
+}
+
+/// Compile if
+fn compile_if(args: &[Val]) -> Result<Vec<Inst>> {
+    let (cond, t, f) = match args {
+        [c, t, f] => (c, t, f),
+        _ => {
+            return Err(Error::InvalidExpression(
+                "if expects three arguments".to_string(),
+            ))
+        }
+    };
+
+    let mut bc = compile(cond)?;
+    let t_code = compile(t)?;
+    let f_code = compile(f)?;
+
+    bc.push(Inst::PopJumpIfTrue(f_code.len()));
+    bc.extend(f_code);
+    bc.push(Inst::Jump(t_code.len()));
+    bc.extend(t_code);
+
+    Ok(bc)
 }
 
 #[cfg(test)]
@@ -392,6 +420,20 @@ mod tests {
                 Val::symbol("x"),
             ]))]),
         );
+    }
+
+    #[test]
+    fn compile_if() {
+        assert_eq!(
+            compile(&f("(if true \"true\" \"false\")")),
+            Ok(vec![
+                PushConst(Val::Bool(true)),
+                PopJumpIfTrue(1),
+                PushConst(Val::string("false")),
+                Jump(1),
+                PushConst(Val::string("true")),
+            ])
+        )
     }
 
     /// Convenience for creating Val from expressions
