@@ -230,6 +230,98 @@ fn eval_defn() {
     assert_eq!(eval_expr(prog).unwrap(), Val::Int(15),);
 }
 
+// TODO(test): Test using def referencing var in parent scope, e.g. (def count (+ count 1)) w/ sequence in eval_defn
+
+#[test]
+fn eval_if() {
+    assert_eq!(
+        eval_expr("(if true \"true\" \"false\")").unwrap(),
+        Val::string("true")
+    );
+
+    assert_eq!(
+        eval_expr("(if false \"true\" \"false\")").unwrap(),
+        Val::string("false")
+    );
+}
+
+#[test]
+fn eval_if_cond_symbol() {
+    let t_prog = r#"
+        (begin
+            (def is_true true)
+            (if is_true "got true" "got false")
+        )
+    "#;
+    assert_eq!(eval_expr(t_prog), Ok(Val::string("got true")));
+
+    let f_prog = r#"
+        (begin
+            (def is_false false)
+            (if is_false "got true" "got false")
+        )
+    "#;
+    assert_eq!(eval_expr(f_prog), Ok(Val::string("got false")));
+}
+
+#[test]
+fn eval_if_cond_lambda() {
+    let t_prog = r#"
+        (begin
+            (def is_true (lambda () true))
+            (if (is_true) "got true" "got false")
+        )
+    "#;
+    assert_eq!(eval_expr(t_prog), Ok(Val::string("got true")));
+
+    let f_prog = r#"
+        (begin
+            (def is_false (lambda () false))
+            (if (is_false) "got true" "got false")
+        )
+    "#;
+    assert_eq!(eval_expr(f_prog), Ok(Val::string("got false")));
+}
+
+#[test]
+fn eval_if_body_begin() {
+    let t_prog = r#"
+        (begin 
+            (def n 0)
+            (if true
+                (begin
+                    (set n (+ n 1))
+                    (set n (+ n 1))
+                    (set n (+ n 1))
+                    n)
+                (begin
+                    (set n (+ n 2))
+                    (set n (+ n 2))
+                    (set n (+ n 2))
+                    n)))
+    "#;
+    assert_eq!(eval_expr(t_prog), Ok(Val::Int(3)));
+
+    let f_prog = r#"
+        (begin 
+            (def n 0)
+            (if false
+                (begin
+                    (set n (+ n 1))
+                    (set n (+ n 2))
+                    (set n (+ n 3))
+                    n)
+                (begin
+                    (set n (+ n 2))
+                    (set n (+ n 2))
+                    (set n (+ n 2))
+                    n)))
+    "#;
+    assert_eq!(eval_expr(f_prog), Ok(Val::Int(6)));
+}
+
+// TODO: Test - if with blocks
+
 //     #[test]
 //     #[traced_test]
 //     #[ignore]
@@ -241,62 +333,6 @@ fn eval_defn() {
 //         assert_eq!(
 //             eval_expr("(eval (quote ((lambda (x) x) 5)))", &mut env),
 //             Ok(Form::Int(5))
-//         );
-//     }
-//     #[test]
-//     #[traced_test]
-//     #[ignore]
-//     fn eval_if() {
-//         let mut env = std_env();
-
-//         assert_eq!(
-//             eval_expr("(if true \"true\" \"false\")", &mut env),
-//             Ok(Form::string("true"))
-//         );
-
-//         assert_eq!(
-//             eval_expr("(if false \"true\" \"false\")", &mut env),
-//             Ok(Form::string("false"))
-//         );
-//     }
-
-//     #[test]
-//     #[traced_test]
-//     #[ignore]
-//     fn eval_if_with_symbols() {
-//         let mut env = std_env();
-
-//         eval_expr("(def is_true true)", &mut env).unwrap();
-//         eval_expr("(def is_false false)", &mut env).unwrap();
-
-//         assert_eq!(
-//             eval_expr("(if is_true \"true\" \"false\")", &mut env),
-//             Ok(Form::string("true"))
-//         );
-
-//         assert_eq!(
-//             eval_expr("(if is_false \"true\" \"false\")", &mut env),
-//             Ok(Form::string("false"))
-//         );
-//     }
-
-//     #[test]
-//     #[traced_test]
-//     #[ignore]
-//     fn eval_if_with_lambda() {
-//         let mut env = std_env();
-
-//         eval_expr("(def is_true (lambda () true))", &mut env).unwrap();
-//         eval_expr("(def is_false (lambda () false))", &mut env).unwrap();
-
-//         assert_eq!(
-//             eval_expr("(if (is_true) \"true\" \"false\")", &mut env),
-//             Ok(Form::string("true"))
-//         );
-
-//         assert_eq!(
-//             eval_expr("(if (is_false) \"true\" \"false\")", &mut env),
-//             Ok(Form::string("false"))
 //         );
 //     }
 
