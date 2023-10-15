@@ -47,6 +47,12 @@ impl Fiber {
 
     /// Start execution of a fiber
     pub fn resume(&mut self) -> Result<FiberState> {
+        // TODO: Better safeguards for resume vs resume_from_yield
+        if self.is_yielding {
+            return Err(Error::UnexpectedResume(
+                "resuming a yielding fiber without value".to_string(),
+            ));
+        }
         run(self)
     }
 
@@ -559,12 +565,44 @@ mod tests {
 
     #[test]
     #[traced_test]
-    fn yield_iter() {
+    fn yield_once() {
         let mut f = Fiber::from_bytecode(vec![PushConst(Val::string("before")), YieldTop]);
         assert_eq!(f.resume().unwrap(), Yield(Val::string("before")));
         assert_eq!(
             f.resume_from_yield(Val::string("after")).unwrap(),
             Done(Val::string("after"))
         );
+    }
+
+    #[test]
+    #[traced_test]
+    fn yield_infinite() {
+        let mut f = Fiber::from_bytecode(vec![
+            PushConst(Val::Int(0)),
+            DefSym(SymbolId::from("x")),
+            PopTop,
+            GetSym(SymbolId::from("+")),
+            GetSym(SymbolId::from("x")),
+            PushConst(Val::Int(1)),
+            CallFunc(2),
+            SetSym(SymbolId::from("x")),
+            YieldTop,
+            PopTop,
+            JumpBck(8),
+        ]);
+
+        f.bind(NativeFn {
+            symbol: SymbolId::from("+"),
+            func: |x| match x {
+                [Val::Int(a), Val::Int(b)] => Ok(Val::Int(a + b)),
+                _ => panic!("only supports ints"),
+            },
+        });
+
+        assert_eq!(f.resume().unwrap(), Yield(Val::Int(1)));
+        assert_eq!(f.resume_from_yield(Val::Nil).unwrap(), Yield(Val::Int(2)));
+        assert_eq!(f.resume_from_yield(Val::Nil).unwrap(), Yield(Val::Int(3)));
+        assert_eq!(f.resume_from_yield(Val::Nil).unwrap(), Yield(Val::Int(4)));
+        assert_eq!(f.resume_from_yield(Val::Nil).unwrap(), Yield(Val::Int(5)));
     }
 }
