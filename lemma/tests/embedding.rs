@@ -1,7 +1,7 @@
 //! Tests for embedding in host application
 
 use assert_matches::assert_matches;
-use lemma::{Error, Fiber, FiberState, Inst, Val};
+use lemma::{Error, Fiber, FiberState, Inst, NativeFn, NativeFnVal, SymbolId, Val};
 use FiberState::*;
 
 #[test]
@@ -48,10 +48,10 @@ fn fiber_yielding() {
         )
     "#;
     let mut f = Fiber::from_expr(prog).unwrap();
-    f.bind(lemma::NativeFn {
-        symbol: lemma::SymbolId::from("+"),
+    f.bind(NativeFn {
+        symbol: SymbolId::from("+"),
         func: |x| match x {
-            [Val::Int(a), Val::Int(b)] => Ok(Val::Int(a + b)),
+            [Val::Int(a), Val::Int(b)] => Ok(NativeFnVal::Return(Val::Int(a + b))),
             _ => panic!("only supports ints"),
         },
     });
@@ -79,10 +79,10 @@ fn fiber_yielding_by_arg() {
         )
     "#;
     let mut f = Fiber::from_expr(prog).unwrap();
-    f.bind(lemma::NativeFn {
-        symbol: lemma::SymbolId::from("+"),
+    f.bind(NativeFn {
+        symbol: SymbolId::from("+"),
         func: |x| match x {
-            [Val::Int(a), Val::Int(b)] => Ok(Val::Int(a + b)),
+            [Val::Int(a), Val::Int(b)] => Ok(NativeFnVal::Return(Val::Int(a + b))),
             _ => panic!("only supports ints"),
         },
     });
@@ -107,6 +107,27 @@ fn fiber_yielding_by_arg() {
     assert_eq!(
         f.resume_from_yield(Val::Int(5)).unwrap(),
         Yield(Val::Int(15))
+    );
+}
+
+#[test]
+fn fiber_yielding_native_binding() {
+    let mut f = Fiber::from_expr("(echo_yield :one :two)").unwrap();
+    f.bind(NativeFn {
+        symbol: SymbolId::from("echo_yield"),
+        func: |x| Ok(NativeFnVal::Yield(Val::Signal(42, x.to_vec()))),
+    });
+
+    assert_eq!(
+        f.resume().unwrap(),
+        Yield(Val::Signal(
+            42,
+            vec![Val::keyword("one"), Val::keyword("two"),]
+        ))
+    );
+    assert_eq!(
+        f.resume_from_yield(Val::string("Hello world")).unwrap(),
+        Done(Val::string("Hello world")),
     );
 }
 

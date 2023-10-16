@@ -25,8 +25,8 @@ pub enum Val {
     Lambda(Lambda),
     /// A callable native function object
     NativeFn(NativeFn),
-    /// Like keywords, but cannot be created in Lemma. For signaling from native bindings
-    Signal(SignalId),
+    /// Special values for yield signals from native functinos
+    Signal(SignalId, Vec<Val>),
     /// Compiled bytecode sequence
     Bytecode(Vec<Inst>),
 }
@@ -56,7 +56,14 @@ pub struct Lambda {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NativeFn {
     pub symbol: SymbolId,
-    pub func: fn(&[Val]) -> Result<Val>,
+    pub func: fn(&[Val]) -> Result<NativeFnVal>,
+}
+
+/// Result of a native function value, which can yield with a
+#[derive(Debug, Clone, PartialEq)]
+pub enum NativeFnVal {
+    Return(Val),
+    Yield(Val),
 }
 
 /// Identifier for Symbol
@@ -68,8 +75,7 @@ pub struct SymbolId(String);
 pub struct KeywordId(String);
 
 /// Identifier for signals
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct SignalId(i32);
+pub type SignalId = i32;
 
 impl Form {
     /// Shorhand for constructing [Form::String]
@@ -105,8 +111,8 @@ impl Val {
     }
 
     /// Shorthand for creating signals
-    pub fn signal(id: i32) -> Self {
-        Self::Signal(SignalId(id))
+    pub fn signal(id: i32, values: Vec<Val>) -> Self {
+        Self::Signal(id, values)
     }
 }
 
@@ -156,7 +162,7 @@ impl std::fmt::Display for Val {
             ),
             Val::NativeFn(s) => write!(f, "<nativefn {}>", s.symbol),
             Val::Bytecode(_) => write!(f, "<bytecode>"),
-            Val::Signal(s) => write!(f, "<signal {}>", s.0),
+            Val::Signal(s, _) => write!(f, "<signal {s}>"),
         }
     }
 }
@@ -251,7 +257,7 @@ impl TryFrom<Val> for Form {
             Val::NativeFn(_) => Err(Error::InvalidFormToExpr(
                 "nativefns are not exprs".to_string(),
             )),
-            Val::Signal(_) => Err(Error::InvalidFormToExpr(
+            Val::Signal(_, _) => Err(Error::InvalidFormToExpr(
                 "signals are not exprs".to_string(),
             )),
         }

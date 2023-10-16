@@ -2,7 +2,7 @@
 
 use assert_matches::assert_matches;
 use lemma::fiber::{Fiber, FiberState};
-use lemma::{Error, NativeFn, Result, SymbolId, Val};
+use lemma::{Error, NativeFn, NativeFnVal, Result, SymbolId, Val};
 
 // Convenience to eval top-level expr
 fn eval_expr(e: &str) -> Result<Val> {
@@ -12,13 +12,13 @@ fn eval_expr(e: &str) -> Result<Val> {
     f.bind(NativeFn {
         symbol: SymbolId::from("+"),
         func: |x| match x {
-            [Val::Int(a), Val::Int(b)] => Ok(Val::Int(a + b)),
+            [Val::Int(a), Val::Int(b)] => Ok(NativeFnVal::Return(Val::Int(a + b))),
             _ => panic!("only supports ints"),
         },
     });
     f.bind(NativeFn {
         symbol: SymbolId::from("echo_args"),
-        func: |x| Ok(Val::List(x.to_vec())),
+        func: |x| Ok(NativeFnVal::Return(Val::List(x.to_vec()))),
     });
 
     // TODO: Think about ergonomics here

@@ -18,6 +18,7 @@ pub use types::Form;
 pub use types::KeywordId;
 pub use types::Lambda;
 pub use types::NativeFn;
+pub use types::NativeFnVal;
 pub use types::SymbolId;
 pub use types::Val;
 

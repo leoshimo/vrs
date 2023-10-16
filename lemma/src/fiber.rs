@@ -2,7 +2,7 @@
 use tracing::{debug, warn};
 
 use super::{Env, Inst};
-use crate::{compile, parse, Error, Lambda, NativeFn, Result, Val};
+use crate::{compile, parse, Error, Lambda, NativeFn, NativeFnVal, Result, Val};
 use std::{cell::RefCell, rc::Rc};
 
 /// A single, cooperativly scheduled sequence of execution
@@ -221,7 +221,13 @@ fn run(f: &mut Fiber) -> Result<FiberState> {
                 match f.stack.pop() {
                     Some(Val::NativeFn(n)) => {
                         let v = (n.func)(&args.collect::<Vec<_>>())?;
-                        f.stack.push(v);
+                        match v {
+                            NativeFnVal::Return(v) => f.stack.push(v),
+                            NativeFnVal::Yield(v) => {
+                                f.stack.push(v);
+                                f.is_yielding = true;
+                            }
+                        }
                     }
                     Some(Val::Lambda(l)) => {
                         let mut fn_env = Env::extend(&l.env);
@@ -594,7 +600,7 @@ mod tests {
         f.bind(NativeFn {
             symbol: SymbolId::from("+"),
             func: |x| match x {
-                [Val::Int(a), Val::Int(b)] => Ok(Val::Int(a + b)),
+                [Val::Int(a), Val::Int(b)] => Ok(NativeFnVal::Return(Val::Int(a + b))),
                 _ => panic!("only supports ints"),
             },
         });
