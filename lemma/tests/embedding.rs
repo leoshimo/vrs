@@ -163,4 +163,52 @@ fn fiber_looping_yield() {
     );
 }
 
+#[test]
+fn fiber_conn_send_recv_sim() {
+    // program representing client REPL loop
+    let prog = r#"
+        (loop (send_conn (eval (recv_conn))))
+    "#;
+
+    let mut f = Fiber::from_expr(prog).unwrap();
+    f.bind(NativeFn {
+        symbol: SymbolId::from("recv_conn"),
+        func: |_| {
+            Ok(NativeFnVal::Yield(Val::signal(
+                0,
+                vec![Val::keyword("recv_conn")],
+            )))
+        },
+    });
+    f.bind(NativeFn {
+        symbol: SymbolId::from("send_conn"),
+        func: |args| {
+            Ok(NativeFnVal::Yield(Val::signal(
+                1,
+                std::iter::once(Val::keyword("send_conn"))
+                    .chain(args.iter().cloned())
+                    .collect(),
+            )))
+        },
+    });
+    f.bind(NativeFn {
+        symbol: SymbolId::from("+"),
+        func: |x| match x {
+            [Val::Int(a), Val::Int(b)] => Ok(NativeFnVal::Return(Val::Int(a + b))),
+            _ => panic!("only supports ints"),
+        },
+    });
+
+    assert_eq!(
+        f.resume().unwrap(),
+        Yield(Val::signal(0, vec![Val::keyword("recv_conn")])),
+    );
+    assert_eq!(
+        f.resume_from_yield(Val::List(vec![Val::symbol("+"), Val::Int(1), Val::Int(2),]))
+            .unwrap(),
+        Yield(Val::signal(1, vec![Val::keyword("send_conn"), Val::Int(3)])),
+        "Should receive send_conn signal w/ eval-ed expr"
+    );
+}
+
 // TODO: Test error propagation when fiber is already running
