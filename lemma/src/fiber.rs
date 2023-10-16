@@ -253,7 +253,7 @@ fn run(f: &mut Fiber) -> Result<FiberState> {
                 let bc = compile(&val)?;
                 let cur_env = &f.top().env;
                 f.cframes
-                    .push(CallFrame::from_bytecode(Rc::clone(&cur_env), bc));
+                    .push(CallFrame::from_bytecode(Rc::clone(cur_env), bc));
             }
             Inst::PopTop => {
                 if f.stack.pop().is_none() {
