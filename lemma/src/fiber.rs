@@ -666,4 +666,37 @@ mod tests {
         ]);
         assert_matches!(f.resume(), Err(Error::UndefinedSymbol(_)));
     }
+
+    #[test]
+    #[traced_test]
+    fn yield_loop() {
+        let mut f = Fiber::from_bytecode(vec![
+            PushConst(Val::string("hi")),
+            YieldTop,
+            PopTop,
+            JumpBck(4),
+        ]);
+
+        assert_eq!(f.resume().unwrap(), Yield(Val::string("hi")));
+        assert!(f.is_stack_empty());
+
+        assert_eq!(
+            f.resume_from_yield(Val::Nil).unwrap(),
+            Yield(Val::string("hi"))
+        );
+        assert_eq!(
+            f.resume_from_yield(Val::Nil).unwrap(),
+            Yield(Val::string("hi"))
+        );
+        assert_eq!(
+            f.resume_from_yield(Val::Nil).unwrap(),
+            Yield(Val::string("hi"))
+        );
+        assert_eq!(
+            f.resume_from_yield(Val::Nil).unwrap(),
+            Yield(Val::string("hi"))
+        );
+
+        assert!(f.is_stack_empty());
+    }
 }

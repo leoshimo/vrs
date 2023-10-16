@@ -131,4 +131,36 @@ fn fiber_yielding_native_binding() {
     );
 }
 
+#[test]
+fn fiber_looping_yield() {
+    let prog = r#"
+        (begin
+            (def x 0)
+            (loop (set x (+ x (yield x)))))
+    "#;
+
+    let mut f = Fiber::from_expr(&prog).unwrap();
+    f.bind(NativeFn {
+        symbol: SymbolId::from("+"),
+        func: |x| match x {
+            [Val::Int(a), Val::Int(b)] => Ok(NativeFnVal::Return(Val::Int(a + b))),
+            _ => panic!("only supports ints"),
+        },
+    });
+
+    assert_eq!(f.resume().unwrap(), Yield(Val::Int(0)));
+    assert_eq!(
+        f.resume_from_yield(Val::Int(1)).unwrap(),
+        Yield(Val::Int(1))
+    );
+    assert_eq!(
+        f.resume_from_yield(Val::Int(2)).unwrap(),
+        Yield(Val::Int(3))
+    );
+    assert_eq!(
+        f.resume_from_yield(Val::Int(3)).unwrap(),
+        Yield(Val::Int(6))
+    );
+}
+
 // TODO: Test error propagation when fiber is already running

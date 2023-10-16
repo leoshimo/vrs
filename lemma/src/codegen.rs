@@ -52,10 +52,10 @@ pub fn compile(v: &Val) -> Result<Vec<Inst>> {
                     "set" => return compile_set(args),
                     "eval" => return compile_eval(args),
                     "yield" => return compile_yield(args),
+                    "loop" => return compile_loop(args),
                     _ => (),
                 }
             }
-
             compile_func_call(first, args)
         }
         Val::Symbol(s) => Ok(vec![Inst::GetSym(s.clone())]),
@@ -289,6 +289,14 @@ fn compile_yield(args: &[Val]) -> std::result::Result<Vec<Inst>, Error> {
     };
     let mut inst = compile(v)?;
     inst.push(Inst::YieldTop);
+    Ok(inst)
+}
+
+/// Compile loop expr
+fn compile_loop(args: &[Val]) -> std::result::Result<Vec<Inst>, Error> {
+    let mut inst = compile_begin(args)?;
+    inst.push(Inst::PopTop);
+    inst.push(Inst::JumpBck(inst.len() + 1));
     Ok(inst)
 }
 
@@ -600,6 +608,21 @@ mod tests {
             Ok(vec![
                 PushConst(Val::List(vec![Val::symbol("+"), Val::Int(1), Val::Int(2),])),
                 Eval,
+            ])
+        );
+    }
+
+    #[test]
+    fn compile_loop() {
+        assert_eq!(
+            compile(&f("(loop (+ 1 2))")),
+            Ok(vec![
+                GetSym(SymbolId::from("+")),
+                PushConst(Val::Int(1)),
+                PushConst(Val::Int(2)),
+                CallFunc(2),
+                PopTop,
+                JumpBck(6),
             ])
         );
     }
