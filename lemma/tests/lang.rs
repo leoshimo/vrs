@@ -87,24 +87,43 @@ fn begin_block_nested() {
 }
 
 #[test]
+fn begin_no_scope() {
+    let prog = r#"
+        (begin
+            (def x :before)
+            (def get-x (lambda () x))
+            (begin
+                (def x :after)
+                (get-x)         # should be :after
+            )
+        )"#;
+    assert_eq!(
+        eval_expr(prog).unwrap(),
+        Val::keyword("after"),
+        "begin should not create a new environment"
+    );
+}
+
+#[test]
 fn lexical_scope_vars() {
     let prog = r#"
-             (begin (def scope :lexical)
-                    (def get-scope (lambda () scope))
-                    (begin
-                        (def scope :dynamic)
-                        (get-scope)  # should be lexical
-                    ))
-        "#;
+        (let ()
+            (def scope :lexical)
+            (def get-scope (lambda () scope))
+            (let ()
+                (def scope :dynamic)
+                (get-scope)  # should be lexical
+            )
+        )"#;
     assert_eq!(eval_expr(prog).unwrap(), Val::keyword("lexical"));
 }
 
 #[test]
 fn lexical_scope_funcs() {
     let prog = r#"
-             (begin (def get-scope (lambda () :lexical))
+             (let () (def get-scope (lambda () :lexical))
                     (def calls-get-scope (lambda () (get-scope)))
-                    (begin
+                    (let ()
                         (def get-scope (lambda () :dynamic))
                         (calls-get-scope)  # should be lexical
                     ))
@@ -320,6 +339,29 @@ fn eval_if_body_begin() {
     assert_eq!(eval_expr(f_prog), Ok(Val::Int(6)));
 }
 
+#[test]
+fn eval_let() {
+    let prog = r#"
+        (let ((a 40)
+            (b 2))
+            (+ a b))
+    "#;
+
+    assert_eq!(eval_expr(prog), Ok(Val::Int(42)));
+}
+
+#[test]
+fn eval_let_nested() {
+    let prog = r#"
+        (let ((a 10))
+            (let ((b (+ a 20)))
+                (let ((c (+ (+ a b) 30)))
+                    (def d 40)
+                    (+ c d))))
+    "#;
+    assert_eq!(eval_expr(prog), Ok(Val::Int(110)));
+}
+
 // TODO: Test - if with blocks
 
 //     #[test]
@@ -378,7 +420,6 @@ fn eval_if_body_begin() {
 //         );
 //     }
 
-mod list {}
 //     use super::*;
 //     use crate::eval_expr;
 //     use crate::lang::std_env;
@@ -598,7 +639,6 @@ mod list {}
 //         assert_eq!(eval_expr("lst", &mut env), Ok(Form::List(vec![])));
 //     }
 
-mod math {}
 //     use super::*;
 //     use crate::eval_expr;
 //     use crate::lang::std_env;

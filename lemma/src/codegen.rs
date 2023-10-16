@@ -42,11 +42,12 @@ pub fn compile(v: &Val) -> Result<Vec<Inst>> {
                 match s.as_str() {
                     "begin" => return compile_begin(args),
                     "def" => return compile_def(args),
-                    "set" => return compile_set(args),
                     "defn" => return compile_defn(args),
-                    "lambda" => return compile_lambda(args),
-                    "quote" => return compile_quote(args),
                     "if" => return compile_if(args),
+                    "lambda" => return compile_lambda(args),
+                    "let" => return compile_let(args),
+                    "quote" => return compile_quote(args),
+                    "set" => return compile_set(args),
                     "yield" => return compile_yield(args),
                     _ => (),
                 }
@@ -170,25 +171,68 @@ fn compile_func_call(func: &Val, args: &[Val]) -> Result<Vec<Inst>> {
     Ok(bytecode)
 }
 
+/// Compile builtin let
+fn compile_let(args: &[Val]) -> Result<Vec<Inst>> {
+    let (bindings, body) = match args.split_first() {
+        Some((Val::List(bindings), body)) => (bindings, body),
+        _ => {
+            return Err(Error::InvalidExpression(
+                "let expects binding list and body expression as args".to_string(),
+            ))
+        }
+    };
+
+    let mut params: Vec<Val> = vec![]; /* get first symbol in each binding pair */
+    let mut args: Vec<Val> = vec![]; /* get second symbol in each thing */
+    for b in bindings {
+        let pair = match b {
+            Val::List(pair) => pair,
+            _ => {
+                return Err(Error::InvalidExpression(
+                    "non-list in let bindings".to_string(),
+                ))
+            }
+        };
+        match &pair[..] {
+            [sym, val] => {
+                params.push(sym.clone());
+                args.push(val.clone());
+            }
+            _ => {
+                return Err(Error::InvalidExpression(
+                    "pair in let bindings must contain one symbol and one expression".to_string(),
+                ))
+            }
+        }
+    }
+
+    let mut body_block = vec![Val::symbol("begin")];
+    body_block.extend(body.iter().cloned());
+
+    let mut lambda = vec![Val::List(vec![
+        Val::symbol("lambda"),
+        Val::List(params),
+        Val::List(body_block),
+    ])];
+    lambda.extend(args);
+
+    compile(&Val::List(lambda))
+}
+
 /// Compile builtin begin
 fn compile_begin(args: &[Val]) -> Result<Vec<Inst>> {
     // Compile to anonymous lambda MakeFunc + CallFunc
-    let mut inner = vec![];
+    let mut inst = vec![];
     let mut is_first = true;
     for a in args {
         if is_first {
             is_first = false;
         } else {
-            inner.push(Inst::PopTop); // discard result from previous call
+            inst.push(Inst::PopTop); // discard result from previous call
         }
-        inner.extend(compile(a)?);
+        inst.extend(compile(a)?);
     }
-    Ok(vec![
-        Inst::PushConst(Val::List(vec![])),
-        Inst::PushConst(Val::Bytecode(inner)),
-        Inst::MakeFunc,
-        Inst::CallFunc(0),
-    ])
+    Ok(inst)
 }
 
 /// Compile if
@@ -394,20 +438,15 @@ mod tests {
         assert_eq!(
             compile(&f("(begin 1 2 3 4 5)")),
             Ok(vec![
-                PushConst(Val::List(vec![])),
-                PushConst(Val::Bytecode(vec![
-                    PushConst(Val::Int(1)),
-                    PopTop,
-                    PushConst(Val::Int(2)),
-                    PopTop,
-                    PushConst(Val::Int(3)),
-                    PopTop,
-                    PushConst(Val::Int(4)),
-                    PopTop,
-                    PushConst(Val::Int(5)),
-                ])),
-                MakeFunc,
-                CallFunc(0),
+                PushConst(Val::Int(1)),
+                PopTop,
+                PushConst(Val::Int(2)),
+                PopTop,
+                PushConst(Val::Int(3)),
+                PopTop,
+                PushConst(Val::Int(4)),
+                PopTop,
+                PushConst(Val::Int(5)),
             ])
         )
     }
@@ -479,6 +518,47 @@ mod tests {
                 YieldTop,
             ])
         );
+    }
+
+    #[test]
+    fn compile_let() {
+        assert_eq!(
+            compile(&f("(let () 10)")),
+            Ok(vec![
+                PushConst(Val::List(vec![])),
+                PushConst(Val::Bytecode(vec![PushConst(Val::Int(10))])),
+                MakeFunc,
+                CallFunc(0)
+            ])
+        );
+
+        let prog = r#"
+            (let ((a 10)
+                  (b (+ 1 2)))
+                 (+ a b)
+                 :ok)
+        "#;
+        assert_eq!(
+            compile(&f(prog)),
+            Ok(vec![
+                PushConst(Val::List(vec![Val::symbol("a"), Val::symbol("b")])),
+                PushConst(Val::Bytecode(vec![
+                    GetSym(SymbolId::from("+")),
+                    GetSym(SymbolId::from("a")),
+                    GetSym(SymbolId::from("b")),
+                    CallFunc(2),
+                    PopTop,
+                    PushConst(Val::keyword("ok"))
+                ])),
+                MakeFunc,
+                PushConst(Val::Int(10)),
+                GetSym(SymbolId::from("+")),
+                PushConst(Val::Int(1)),
+                PushConst(Val::Int(2)),
+                CallFunc(2),
+                CallFunc(2),
+            ])
+        )
     }
 
     /// Convenience for creating Val from expressions
