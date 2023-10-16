@@ -246,6 +246,15 @@ fn run(f: &mut Fiber) -> Result<FiberState> {
                     }
                 };
             }
+            Inst::Eval => {
+                let val = f.stack.pop().ok_or(Error::UnexpectedStack(
+                    "Did not find form to eval on stack".to_string(),
+                ))?;
+                let bc = compile(&val)?;
+                let cur_env = &f.top().env;
+                f.cframes
+                    .push(CallFrame::from_bytecode(Rc::clone(&cur_env), bc));
+            }
             Inst::PopTop => {
                 if f.stack.pop().is_none() {
                     return Err(Error::UnexpectedStack(
@@ -610,5 +619,51 @@ mod tests {
         assert_eq!(f.resume_from_yield(Val::Nil).unwrap(), Yield(Val::Int(3)));
         assert_eq!(f.resume_from_yield(Val::Nil).unwrap(), Yield(Val::Int(4)));
         assert_eq!(f.resume_from_yield(Val::Nil).unwrap(), Yield(Val::Int(5)));
+    }
+
+    #[test]
+    #[traced_test]
+    fn eval() {
+        let mut f = Fiber::from_bytecode(vec![PushConst(Val::Int(42)), Eval]);
+        assert_eq!(f.resume().unwrap(), Done(Val::Int(42)));
+
+        let mut f = Fiber::from_bytecode(vec![
+            PushConst(Val::List(vec![
+                Val::symbol("quote"),
+                Val::List(vec![
+                    Val::keyword("a"),
+                    Val::keyword("b"),
+                    Val::keyword("c"),
+                ]),
+            ])),
+            Eval,
+        ]);
+
+        assert_eq!(
+            f.resume().unwrap(),
+            Done(Val::List(vec![
+                Val::keyword("a"),
+                Val::keyword("b"),
+                Val::keyword("c"),
+            ]))
+        );
+    }
+
+    #[test]
+    #[traced_test]
+    fn eval_error() {
+        let mut f = Fiber::from_bytecode(vec![PushConst(Val::symbol("jibberish")), Eval]);
+        assert_matches!(f.resume(), Err(Error::UndefinedSymbol(_)));
+
+        let mut f = Fiber::from_bytecode(vec![
+            PushConst(Val::List(vec![
+                Val::symbol("nonexisting"),
+                Val::keyword("a"),
+                Val::keyword("b"),
+                Val::keyword("c"),
+            ])),
+            Eval,
+        ]);
+        assert_matches!(f.resume(), Err(Error::UndefinedSymbol(_)));
     }
 }

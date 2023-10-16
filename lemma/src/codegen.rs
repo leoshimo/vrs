@@ -27,6 +27,8 @@ pub enum Inst {
     PopJumpFwdIfTrue(usize),
     /// Yield TOS as value
     YieldTop,
+    /// Evaluate TOS and push value back onto stack
+    Eval,
 }
 
 /// Compile a value to bytecode representation
@@ -48,6 +50,7 @@ pub fn compile(v: &Val) -> Result<Vec<Inst>> {
                     "let" => return compile_let(args),
                     "quote" => return compile_quote(args),
                     "set" => return compile_set(args),
+                    "eval" => return compile_eval(args),
                     "yield" => return compile_yield(args),
                     _ => (),
                 }
@@ -150,6 +153,21 @@ fn compile_quote(args: &[Val]) -> Result<Vec<Inst>> {
         }
     };
     Ok(vec![Inst::PushConst(v.clone())])
+}
+
+fn compile_eval(args: &[Val]) -> std::result::Result<Vec<Inst>, Error> {
+    let v = match args {
+        [v] => v,
+        _ => {
+            return Err(Error::InvalidExpression(
+                "eval expects one argument".to_string(),
+            ))
+        }
+    };
+
+    let mut bc = compile(v)?;
+    bc.push(Inst::Eval);
+    Ok(bc)
 }
 
 /// Compile function calls
@@ -559,6 +577,31 @@ mod tests {
                 CallFunc(2),
             ])
         )
+    }
+
+    #[test]
+    fn compile_eval() {
+        assert_eq!(
+            compile(&f("(eval 42)")),
+            Ok(vec![PushConst(Val::Int(42)), Eval,])
+        );
+        assert_eq!(
+            compile(&f("(eval (+ 1 2))")),
+            Ok(vec![
+                GetSym(SymbolId::from("+")),
+                PushConst(Val::Int(1)),
+                PushConst(Val::Int(2)),
+                CallFunc(2),
+                Eval,
+            ])
+        );
+        assert_eq!(
+            compile(&f("(eval '(+ 1 2))")),
+            Ok(vec![
+                PushConst(Val::List(vec![Val::symbol("+"), Val::Int(1), Val::Int(2),])),
+                Eval,
+            ])
+        );
     }
 
     /// Convenience for creating Val from expressions
