@@ -77,7 +77,7 @@ pub struct SymbolId(String);
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct KeywordId(String);
 
-/// Trait alias for host defined type in Val
+/// Trait alias for host defined type in Val (until unstable trait_alias)
 pub trait Extern:
     std::fmt::Display + std::fmt::Debug + std::cmp::PartialEq + std::clone::Clone
 {
