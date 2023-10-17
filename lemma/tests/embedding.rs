@@ -237,8 +237,9 @@ fn fiber_conn_recv_peval_sim() {
     );
 
     assert_eq!(
-        f.resume_from_yield(parse("x").unwrap().into()).unwrap(),
-        Yield(Val::signal(1, vec![Val::keyword("send_conn"), Val::Int(3)])),
+        f.resume_from_yield(parse("(set x (+ x x))").unwrap().into())
+            .unwrap(),
+        Yield(Val::signal(1, vec![Val::keyword("send_conn"), Val::Int(6)])),
         "Environment should be preserved after error"
     );
 }
