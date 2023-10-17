@@ -7,15 +7,6 @@ use lemma::{Error, NativeFn, NativeFnVal, Result, SymbolId, Val};
 // Convenience to eval top-level expr
 fn eval_expr(e: &str) -> Result<Val> {
     let mut f = Fiber::from_expr(e)?;
-
-    // TODO: Replace with real add?
-    f.bind(NativeFn {
-        symbol: SymbolId::from("+"),
-        func: |_, x| match x {
-            [Val::Int(a), Val::Int(b)] => Ok(NativeFnVal::Return(Val::Int(a + b))),
-            _ => panic!("only supports ints"),
-        },
-    });
     f.bind(NativeFn {
         symbol: SymbolId::from("echo_args"),
         func: |_, x| Ok(NativeFnVal::Return(Val::List(x.to_vec()))),

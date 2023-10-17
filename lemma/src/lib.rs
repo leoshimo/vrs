@@ -1,9 +1,10 @@
 mod codegen;
-mod env;
 mod error;
 mod lex;
 mod parse;
 
+pub mod builtin;
+pub mod env;
 pub mod fiber;
 pub mod types;
 

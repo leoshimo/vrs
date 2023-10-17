@@ -1,4 +1,4 @@
-use crate::{Error, NativeFn, SymbolId, Val};
+use crate::{builtin::plus_fn, Error, NativeFn, SymbolId, Val};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 /// An environment of bindings
@@ -9,6 +9,13 @@ pub struct Env {
 }
 
 impl Env {
+    /// Create standard base env
+    pub fn standard() -> Self {
+        let mut e = Env::default();
+        e.bind(plus_fn());
+        e
+    }
+
     /// Define a new symbol with given value in current environment
     pub fn define(&mut self, symbol: &SymbolId, value: Val) {
         self.bindings.insert(symbol.clone(), value);

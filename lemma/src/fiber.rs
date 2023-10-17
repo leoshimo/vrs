@@ -24,7 +24,7 @@ pub enum FiberState {
 impl Fiber {
     /// Create a new fiber from given bytecode
     pub fn from_bytecode(bytecode: Vec<Inst>) -> Self {
-        let global = Rc::new(RefCell::new(Env::default()));
+        let global = Rc::new(RefCell::new(Env::standard()));
         Fiber {
             stack: vec![],
             cframes: vec![CallFrame::from_bytecode(Rc::clone(&global), bytecode)],
@@ -617,14 +617,6 @@ mod tests {
             PopTop,
             JumpBck(8),
         ]);
-
-        f.bind(NativeFn {
-            symbol: SymbolId::from("+"),
-            func: |_, x| match x {
-                [Val::Int(a), Val::Int(b)] => Ok(NativeFnVal::Return(Val::Int(a + b))),
-                _ => panic!("only supports ints"),
-            },
-        });
 
         assert_eq!(f.resume().unwrap(), Yield(Val::Int(1)));
         assert_eq!(f.resume_from_yield(Val::Nil).unwrap(), Yield(Val::Int(2)));

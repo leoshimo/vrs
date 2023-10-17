@@ -48,13 +48,6 @@ fn fiber_yielding() {
         )
     "#;
     let mut f = Fiber::from_expr(prog).unwrap();
-    f.bind(NativeFn {
-        symbol: SymbolId::from("+"),
-        func: |_, x| match x {
-            [Val::Int(a), Val::Int(b)] => Ok(NativeFnVal::Return(Val::Int(a + b))),
-            _ => panic!("only supports ints"),
-        },
-    });
 
     assert_eq!(f.resume().unwrap(), Yield(Val::Int(0)));
     assert_eq!(f.resume_from_yield(Val::Nil).unwrap(), Yield(Val::Int(1)));
@@ -79,13 +72,6 @@ fn fiber_yielding_by_arg() {
         )
     "#;
     let mut f = Fiber::from_expr(prog).unwrap();
-    f.bind(NativeFn {
-        symbol: SymbolId::from("+"),
-        func: |_, x| match x {
-            [Val::Int(a), Val::Int(b)] => Ok(NativeFnVal::Return(Val::Int(a + b))),
-            _ => panic!("only supports ints"),
-        },
-    });
 
     assert_eq!(f.resume().unwrap(), Yield(Val::Int(0)));
     assert_eq!(
@@ -140,13 +126,6 @@ fn fiber_looping_yield() {
     "#;
 
     let mut f = Fiber::from_expr(prog).unwrap();
-    f.bind(NativeFn {
-        symbol: SymbolId::from("+"),
-        func: |_, x| match x {
-            [Val::Int(a), Val::Int(b)] => Ok(NativeFnVal::Return(Val::Int(a + b))),
-            _ => panic!("only supports ints"),
-        },
-    });
 
     assert_eq!(f.resume().unwrap(), Yield(Val::Int(0)));
     assert_eq!(
@@ -208,13 +187,6 @@ fn fiber_conn_recv_peval_sim() {
                 Ok(FiberState::Yield(v)) => Ok(NativeFnVal::Yield(v)),
                 Err(e) => Ok(NativeFnVal::Return(Val::Error(e))),
             }
-        },
-    });
-    f.bind(NativeFn {
-        symbol: SymbolId::from("+"),
-        func: |_, x| match x {
-            [Val::Int(a), Val::Int(b)] => Ok(NativeFnVal::Return(Val::Int(a + b))),
-            _ => panic!("only supports ints"),
         },
     });
 
