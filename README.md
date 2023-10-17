@@ -28,11 +28,12 @@ Focus on key areas, such as security and performance, are deferred for the time 
 - `vrsctl`: A CLI client for interacting with runtime
 - `lemma`: Embedded Lisp dialect and environment
 
-## Debugging
+## Logging
 
-Use `RUST_LOG` to configure logging level:
+Set `RUST_LOG` to configure logging level. Default is `info`
 
 ```sh
+# logging level to debug
 $ RUST_LOG=debug cargo run --bin vrsd
 ```
 
