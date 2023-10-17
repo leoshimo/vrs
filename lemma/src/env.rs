@@ -1,4 +1,4 @@
-use crate::{builtin::plus_fn, Error, NativeFn, SymbolId, Val};
+use crate::{builtin, Error, NativeFn, SymbolId, Val};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 /// An environment of bindings
@@ -12,7 +12,8 @@ impl Env {
     /// Create standard base env
     pub fn standard() -> Self {
         let mut e = Env::default();
-        e.bind(plus_fn());
+        e.bind(builtin::plus_fn());
+        e.bind(builtin::peval_fn());
         e
     }
 

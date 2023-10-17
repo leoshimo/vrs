@@ -353,6 +353,21 @@ fn eval_let_nested() {
     assert_eq!(eval_expr(prog), Ok(Val::Int(110)));
 }
 
+#[test]
+fn eval_peval() {
+    assert_eq!(
+        eval_expr("(eval (+ x x))"),
+        Err(Error::UndefinedSymbol(SymbolId::from("x"))),
+        "eval propagates errors at top-level"
+    );
+
+    assert_eq!(
+        eval_expr("(peval '(+ x x))"),
+        Ok(Val::Error(Error::UndefinedSymbol(SymbolId::from("x")))),
+        "peval propagates error as a value"
+    );
+}
+
 // TODO: Test - if with blocks
 
 //     #[test]
