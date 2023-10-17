@@ -1,4 +1,4 @@
-# vrs - vrs runtime system
+# VRS
 
 [![Rust](https://github.com/leoshimo/vrs/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/leoshimo/vrs/actions/workflows/rust.yml)
 
@@ -6,8 +6,8 @@
 
 ## What is this?
 
-VRS Runtime System is a WIP personal software runtime, inspired by Emacs,
-Erlang, Unix, Plan 9, and Hypermedia systems.
+VRS is a WIP personal software runtime, inspired by Emacs, Erlang, Unix, Plan 9,
+and Hypermedia systems.
 
 The goal is to bundle my favorite ideas from each of those systems into one
 software runtime to make building software joyful (for me).
