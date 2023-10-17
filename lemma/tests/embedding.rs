@@ -1,7 +1,7 @@
 //! Tests for embedding in host application
 
 use assert_matches::assert_matches;
-use lemma::{Error, Fiber, FiberState, Inst, NativeFn, NativeFnVal, SymbolId, Val};
+use lemma::{parse, Error, Fiber, FiberState, Inst, NativeFn, NativeFnVal, SymbolId, Val};
 use FiberState::*;
 
 #[test]
@@ -50,7 +50,7 @@ fn fiber_yielding() {
     let mut f = Fiber::from_expr(prog).unwrap();
     f.bind(NativeFn {
         symbol: SymbolId::from("+"),
-        func: |x| match x {
+        func: |_, x| match x {
             [Val::Int(a), Val::Int(b)] => Ok(NativeFnVal::Return(Val::Int(a + b))),
             _ => panic!("only supports ints"),
         },
@@ -81,7 +81,7 @@ fn fiber_yielding_by_arg() {
     let mut f = Fiber::from_expr(prog).unwrap();
     f.bind(NativeFn {
         symbol: SymbolId::from("+"),
-        func: |x| match x {
+        func: |_, x| match x {
             [Val::Int(a), Val::Int(b)] => Ok(NativeFnVal::Return(Val::Int(a + b))),
             _ => panic!("only supports ints"),
         },
@@ -115,7 +115,7 @@ fn fiber_yielding_native_binding() {
     let mut f = Fiber::from_expr("(echo_yield :one :two)").unwrap();
     f.bind(NativeFn {
         symbol: SymbolId::from("echo_yield"),
-        func: |x| Ok(NativeFnVal::Yield(Val::Signal(42, x.to_vec()))),
+        func: |_, x| Ok(NativeFnVal::Yield(Val::Signal(42, x.to_vec()))),
     });
 
     assert_eq!(
@@ -139,10 +139,10 @@ fn fiber_looping_yield() {
             (loop (set x (+ x (yield x)))))
     "#;
 
-    let mut f = Fiber::from_expr(&prog).unwrap();
+    let mut f = Fiber::from_expr(prog).unwrap();
     f.bind(NativeFn {
         symbol: SymbolId::from("+"),
-        func: |x| match x {
+        func: |_, x| match x {
             [Val::Int(a), Val::Int(b)] => Ok(NativeFnVal::Return(Val::Int(a + b))),
             _ => panic!("only supports ints"),
         },
@@ -164,16 +164,16 @@ fn fiber_looping_yield() {
 }
 
 #[test]
-fn fiber_conn_send_recv_sim() {
+fn fiber_conn_recv_peval_sim() {
     // program representing client REPL loop
     let prog = r#"
-        (loop (send_conn (eval (recv_conn))))
+        (loop (send_conn (peval (recv_conn))))
     "#;
 
     let mut f = Fiber::from_expr(prog).unwrap();
     f.bind(NativeFn {
         symbol: SymbolId::from("recv_conn"),
-        func: |_| {
+        func: |_, _| {
             Ok(NativeFnVal::Yield(Val::signal(
                 0,
                 vec![Val::keyword("recv_conn")],
@@ -182,7 +182,7 @@ fn fiber_conn_send_recv_sim() {
     });
     f.bind(NativeFn {
         symbol: SymbolId::from("send_conn"),
-        func: |args| {
+        func: |_, args| {
             Ok(NativeFnVal::Yield(Val::signal(
                 1,
                 std::iter::once(Val::keyword("send_conn"))
@@ -192,8 +192,27 @@ fn fiber_conn_send_recv_sim() {
         },
     });
     f.bind(NativeFn {
+        symbol: SymbolId::from("peval"),
+        func: |f, args| {
+            let v = match args {
+                [v] => v,
+                _ => {
+                    return Err(Error::InvalidExpression(
+                        "peval expects one argument".to_string(),
+                    ))
+                }
+            };
+            let mut f = Fiber::from_val(v)?.with_env(f.env());
+            match f.resume() {
+                Ok(FiberState::Done(v)) => Ok(NativeFnVal::Return(v)),
+                Ok(FiberState::Yield(v)) => Ok(NativeFnVal::Yield(v)),
+                Err(e) => Ok(NativeFnVal::Return(Val::Error(e))),
+            }
+        },
+    });
+    f.bind(NativeFn {
         symbol: SymbolId::from("+"),
-        func: |x| match x {
+        func: |_, x| match x {
             [Val::Int(a), Val::Int(b)] => Ok(NativeFnVal::Return(Val::Int(a + b))),
             _ => panic!("only supports ints"),
         },
@@ -202,13 +221,52 @@ fn fiber_conn_send_recv_sim() {
     assert_eq!(
         f.resume().unwrap(),
         Yield(Val::signal(0, vec![Val::keyword("recv_conn")])),
+        "Should yield for recv_conn"
     );
+
     assert_eq!(
-        f.resume_from_yield(Val::List(vec![Val::symbol("+"), Val::Int(1), Val::Int(2),]))
+        f.resume_from_yield(parse("(def x (+ 1 2))").unwrap().into())
             .unwrap(),
         Yield(Val::signal(1, vec![Val::keyword("send_conn"), Val::Int(3)])),
         "Should receive send_conn signal w/ eval-ed expr"
     );
-}
+    assert_eq!(
+        f.resume_from_yield(Val::Nil).unwrap(),
+        Yield(Val::signal(0, vec![Val::keyword("recv_conn")])),
+        "Should yield for recv_conn again"
+    );
 
-// TODO: Test error propagation when fiber is already running
+    assert_eq!(
+        f.resume_from_yield(parse("x").unwrap().into()).unwrap(),
+        Yield(Val::signal(1, vec![Val::keyword("send_conn"), Val::Int(3)])),
+        "Should receive send_conn signal w/ eval-ed expr"
+    );
+    assert_eq!(
+        f.resume_from_yield(Val::Nil).unwrap(),
+        Yield(Val::signal(0, vec![Val::keyword("recv_conn")])),
+        "Should yield for recv_conn again"
+    );
+
+    assert_eq!(
+        f.resume_from_yield(Val::symbol("jibberish")).unwrap(),
+        Yield(Val::signal(
+            1,
+            vec![
+                Val::keyword("send_conn"),
+                Val::Error(Error::UndefinedSymbol(SymbolId::from("jibberish")))
+            ]
+        )),
+        "Error should return error as a value via pcall"
+    );
+    assert_eq!(
+        f.resume_from_yield(Val::Nil).unwrap(),
+        Yield(Val::signal(0, vec![Val::keyword("recv_conn")])),
+        "Should yield for recv_conn again"
+    );
+
+    assert_eq!(
+        f.resume_from_yield(parse("x").unwrap().into()).unwrap(),
+        Yield(Val::signal(1, vec![Val::keyword("send_conn"), Val::Int(3)])),
+        "Environment should be preserved after error"
+    );
+}

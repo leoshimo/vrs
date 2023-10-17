@@ -45,6 +45,13 @@ impl Fiber {
         Fiber::from_val(&val)
     }
 
+    /// Set root environment of fiber
+    pub fn with_env(mut self, env: Rc<RefCell<Env>>) -> Self {
+        self.global = Rc::clone(&env);
+        self.top_mut().env = env;
+        self
+    }
+
     /// Start execution of a fiber
     pub fn resume(&mut self) -> Result<FiberState> {
         // TODO: Better safeguards for resume vs resume_from_yield
@@ -77,6 +84,11 @@ impl Fiber {
     pub fn bind(&mut self, nativefn: NativeFn) -> &mut Self {
         self.global.borrow_mut().bind(nativefn);
         self
+    }
+
+    /// Get current stack's environment
+    pub fn env(&self) -> Rc<RefCell<Env>> {
+        Rc::clone(&self.top().env)
     }
 
     /// Reference to top of callstack
@@ -220,7 +232,7 @@ fn run(f: &mut Fiber) -> Result<FiberState> {
 
                 match f.stack.pop() {
                     Some(Val::NativeFn(n)) => {
-                        let v = (n.func)(&args.collect::<Vec<_>>())?;
+                        let v = (n.func)(f, &args.collect::<Vec<_>>())?;
                         match v {
                             NativeFnVal::Return(v) => f.stack.push(v),
                             NativeFnVal::Yield(v) => {
@@ -608,7 +620,7 @@ mod tests {
 
         f.bind(NativeFn {
             symbol: SymbolId::from("+"),
-            func: |x| match x {
+            func: |_, x| match x {
                 [Val::Int(a), Val::Int(b)] => Ok(NativeFnVal::Return(Val::Int(a + b))),
                 _ => panic!("only supports ints"),
             },

@@ -11,14 +11,14 @@ fn eval_expr(e: &str) -> Result<Val> {
     // TODO: Replace with real add?
     f.bind(NativeFn {
         symbol: SymbolId::from("+"),
-        func: |x| match x {
+        func: |_, x| match x {
             [Val::Int(a), Val::Int(b)] => Ok(NativeFnVal::Return(Val::Int(a + b))),
             _ => panic!("only supports ints"),
         },
     });
     f.bind(NativeFn {
         symbol: SymbolId::from("echo_args"),
-        func: |x| Ok(NativeFnVal::Return(Val::List(x.to_vec()))),
+        func: |_, x| Ok(NativeFnVal::Return(Val::List(x.to_vec()))),
     });
 
     // TODO: Think about ergonomics here

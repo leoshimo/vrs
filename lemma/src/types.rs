@@ -1,6 +1,6 @@
 //! Types in Lisp virtual machine
 use crate::codegen::Inst;
-use crate::{Env, Error, Result};
+use crate::{Env, Error, Fiber, Result};
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, rc::Rc};
 
@@ -29,6 +29,8 @@ pub enum Val {
     Signal(SignalId, Vec<Val>),
     /// Compiled bytecode sequence
     Bytecode(Vec<Inst>),
+    /// Error as a value
+    Error(Error),
 }
 
 /// Forms are parsed expression that can be evaluated or be converted to [Val]
@@ -56,7 +58,7 @@ pub struct Lambda {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NativeFn {
     pub symbol: SymbolId,
-    pub func: fn(&[Val]) -> Result<NativeFnVal>,
+    pub func: fn(&Fiber, &[Val]) -> Result<NativeFnVal>,
 }
 
 /// Result of a native function value, which can yield with a
@@ -163,6 +165,7 @@ impl std::fmt::Display for Val {
             Val::NativeFn(s) => write!(f, "<nativefn {}>", s.symbol),
             Val::Bytecode(_) => write!(f, "<bytecode>"),
             Val::Signal(s, _) => write!(f, "<signal {s}>"),
+            Val::Error(e) => write!(f, "<error {e}>"),
         }
     }
 }
@@ -260,6 +263,7 @@ impl TryFrom<Val> for Form {
             Val::Signal(_, _) => Err(Error::InvalidFormToExpr(
                 "signals are not exprs".to_string(),
             )),
+            Val::Error(_) => Err(Error::InvalidFormToExpr("errors are not exprs".to_string())),
         }
     }
 }
