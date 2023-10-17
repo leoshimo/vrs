@@ -1,8 +1,24 @@
 //! Tests for embedding in host application
 
 use assert_matches::assert_matches;
-use lemma::{parse, Error, Fiber, FiberState, Inst, NativeFn, NativeFnVal, SymbolId, Val};
+use lemma::{parse, Error, FiberState, Inst, NativeFn, NativeFnVal, SymbolId};
 use FiberState::*;
+
+type Fiber = lemma::Fiber<Ext>;
+type Val = lemma::Val<Ext>;
+
+#[derive(Debug, Clone, PartialEq)]
+enum Ext {
+    SendConn(Vec<Val>),
+    RecvConn,
+    EchoYield(Vec<Val>),
+}
+
+impl std::fmt::Display for Ext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<Ext {:?}>", self)
+    }
+}
 
 #[test]
 fn fiber_simple() {
@@ -38,7 +54,7 @@ fn fiber_invalid_bytecode() {
 fn fiber_yielding() {
     // An infinitely increasing counter increasing by one each iteration
     let prog = r#"
-        (begin 
+        (begin
             (def x 0)
             (defn yielding_add ()
                 (yield x)
@@ -63,7 +79,7 @@ fn fiber_yielding() {
 fn fiber_yielding_by_arg() {
     // An infinitely increasing counter increasing by yield-ed value
     let prog = r#"
-        (begin 
+        (begin
             (def x 0)
             (defn yielding_add ()
                 (set x (+ x (yield x)))
@@ -101,15 +117,15 @@ fn fiber_yielding_native_binding() {
     let mut f = Fiber::from_expr("(echo_yield :one :two)").unwrap();
     f.bind(NativeFn {
         symbol: SymbolId::from("echo_yield"),
-        func: |_, x| Ok(NativeFnVal::Yield(Val::Signal(42, x.to_vec()))),
+        func: |_, x| Ok(NativeFnVal::Yield(Val::Extern(Ext::EchoYield(x.to_vec())))),
     });
 
     assert_eq!(
         f.resume().unwrap(),
-        Yield(Val::Signal(
-            42,
-            vec![Val::keyword("one"), Val::keyword("two"),]
-        ))
+        Yield(Val::Extern(Ext::EchoYield(vec![
+            Val::keyword("one"),
+            Val::keyword("two"),
+        ])))
     );
     assert_eq!(
         f.resume_from_yield(Val::string("Hello world")).unwrap(),
@@ -152,75 +168,55 @@ fn fiber_conn_recv_peval_sim() {
     let mut f = Fiber::from_expr(prog).unwrap();
     f.bind(NativeFn {
         symbol: SymbolId::from("recv_conn"),
-        func: |_, _| {
-            Ok(NativeFnVal::Yield(Val::signal(
-                0,
-                vec![Val::keyword("recv_conn")],
-            )))
-        },
+        func: |_, _| Ok(NativeFnVal::Yield(Val::Extern(Ext::RecvConn))),
     });
     f.bind(NativeFn {
         symbol: SymbolId::from("send_conn"),
         func: |_, args| {
-            Ok(NativeFnVal::Yield(Val::signal(
-                1,
-                std::iter::once(Val::keyword("send_conn"))
-                    .chain(args.iter().cloned())
-                    .collect(),
-            )))
+            Ok(NativeFnVal::Yield(Val::Extern(Ext::SendConn(
+                args.to_vec(),
+            ))))
         },
     });
 
-    assert_eq!(
-        f.resume().unwrap(),
-        Yield(Val::signal(0, vec![Val::keyword("recv_conn")])),
-        "Should yield for recv_conn"
-    );
+    assert_eq!(f.resume().unwrap(), Yield(Val::Extern(Ext::RecvConn)));
 
     assert_eq!(
         f.resume_from_yield(parse("(def x (+ 1 2))").unwrap().into())
             .unwrap(),
-        Yield(Val::signal(1, vec![Val::keyword("send_conn"), Val::Int(3)])),
+        Yield(Val::Extern(Ext::SendConn(vec![Val::Int(3)]))),
         "Should receive send_conn signal w/ eval-ed expr"
     );
     assert_eq!(
         f.resume_from_yield(Val::Nil).unwrap(),
-        Yield(Val::signal(0, vec![Val::keyword("recv_conn")])),
-        "Should yield for recv_conn again"
+        Yield(Val::Extern(Ext::RecvConn))
     );
 
     assert_eq!(
         f.resume_from_yield(parse("x").unwrap().into()).unwrap(),
-        Yield(Val::signal(1, vec![Val::keyword("send_conn"), Val::Int(3)])),
-        "Should receive send_conn signal w/ eval-ed expr"
+        Yield(Val::Extern(Ext::SendConn(vec![Val::Int(3)]))),
     );
     assert_eq!(
         f.resume_from_yield(Val::Nil).unwrap(),
-        Yield(Val::signal(0, vec![Val::keyword("recv_conn")])),
-        "Should yield for recv_conn again"
+        Yield(Val::Extern(Ext::RecvConn))
     );
 
     assert_eq!(
         f.resume_from_yield(Val::symbol("jibberish")).unwrap(),
-        Yield(Val::signal(
-            1,
-            vec![
-                Val::keyword("send_conn"),
-                Val::Error(Error::UndefinedSymbol(SymbolId::from("jibberish")))
-            ]
-        )),
+        Yield(Val::Extern(Ext::SendConn(vec![Val::Error(
+            Error::UndefinedSymbol(SymbolId::from("jibberish"))
+        )]))),
         "Error should return error as a value via pcall"
     );
     assert_eq!(
         f.resume_from_yield(Val::Nil).unwrap(),
-        Yield(Val::signal(0, vec![Val::keyword("recv_conn")])),
-        "Should yield for recv_conn again"
+        Yield(Val::Extern(Ext::RecvConn))
     );
 
     assert_eq!(
         f.resume_from_yield(parse("(set x (+ x x))").unwrap().into())
             .unwrap(),
-        Yield(Val::signal(1, vec![Val::keyword("send_conn"), Val::Int(6)])),
+        Yield(Val::Extern(Ext::SendConn(vec![Val::Int(6)]))),
         "Environment should be preserved after error"
     );
 }

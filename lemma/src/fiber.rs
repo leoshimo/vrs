@@ -2,28 +2,28 @@
 use tracing::{debug, warn};
 
 use super::{Env, Inst};
-use crate::{compile, parse, Error, Lambda, NativeFn, NativeFnVal, Result, Val};
+use crate::{compile, parse, Error, Extern, Lambda, NativeFn, NativeFnVal, Result, Val};
 use std::{cell::RefCell, rc::Rc};
 
 /// A single, cooperativly scheduled sequence of execution
 #[derive(Debug)]
-pub struct Fiber {
-    cframes: Vec<CallFrame>,
-    stack: Vec<Val>,
-    global: Rc<RefCell<Env>>,
+pub struct Fiber<T: Extern> {
+    cframes: Vec<CallFrame<T>>,
+    stack: Vec<Val<T>>,
+    global: Rc<RefCell<Env<T>>>,
     is_yielding: bool,
 }
 
 /// Result from fiber execution
 #[derive(Debug, PartialEq)]
-pub enum FiberState {
-    Yield(Val),
-    Done(Val),
+pub enum FiberState<T: Extern> {
+    Yield(Val<T>),
+    Done(Val<T>),
 }
 
-impl Fiber {
+impl<T: Extern> Fiber<T> {
     /// Create a new fiber from given bytecode
-    pub fn from_bytecode(bytecode: Vec<Inst>) -> Self {
+    pub fn from_bytecode(bytecode: Vec<Inst<T>>) -> Self {
         let global = Rc::new(RefCell::new(Env::standard()));
         Fiber {
             stack: vec![],
@@ -34,19 +34,19 @@ impl Fiber {
     }
 
     /// Create a new fiber from value
-    pub fn from_val(val: &Val) -> Result<Self> {
+    pub fn from_val(val: &Val<T>) -> Result<Self> {
         let bytecode = compile(val)?;
         Ok(Fiber::from_bytecode(bytecode))
     }
 
     /// Create a new fiber from given expressino
     pub fn from_expr(expr: &str) -> Result<Self> {
-        let val: Val = parse(expr)?.into();
+        let val: Val<T> = parse(expr)?.into();
         Fiber::from_val(&val)
     }
 
     /// Set root environment of fiber
-    pub fn with_env(mut self, env: Rc<RefCell<Env>>) -> Self {
+    pub fn with_env(mut self, env: Rc<RefCell<Env<T>>>) -> Self {
         // TODO: This is a hack for peval. Replace with builder for setting bytecode + env for new processes
         assert_eq!(
             self.cframes.len(),
@@ -59,7 +59,7 @@ impl Fiber {
     }
 
     /// Start execution of a fiber
-    pub fn resume(&mut self) -> Result<FiberState> {
+    pub fn resume(&mut self) -> Result<FiberState<T>> {
         // TODO: Better safeguards for resume vs resume_from_yield
         if self.is_yielding {
             return Err(Error::UnexpectedResume(
@@ -70,7 +70,7 @@ impl Fiber {
     }
 
     /// Resume a yielded fiber
-    pub fn resume_from_yield(&mut self, v: Val) -> Result<FiberState> {
+    pub fn resume_from_yield(&mut self, v: Val<T>) -> Result<FiberState<T>> {
         if !self.is_yielding {
             return Err(Error::UnexpectedResume(
                 "resuming a nonyielding fiber".to_string(),
@@ -87,28 +87,28 @@ impl Fiber {
     }
 
     /// Bind native function to global environment
-    pub fn bind(&mut self, nativefn: NativeFn) -> &mut Self {
+    pub fn bind(&mut self, nativefn: NativeFn<T>) -> &mut Self {
         self.global.borrow_mut().bind(nativefn);
         self
     }
 
     /// Get current stack's environment
-    pub fn env(&self) -> Rc<RefCell<Env>> {
+    pub fn env(&self) -> Rc<RefCell<Env<T>>> {
         Rc::clone(&self.top().env)
     }
 
     /// Reference to top of callstack
-    fn top(&self) -> &CallFrame {
+    fn top(&self) -> &CallFrame<T> {
         self.cframes.last().expect("Fiber has no callframes!")
     }
 
     /// Reference to top of callstack
-    fn top_mut(&mut self) -> &mut CallFrame {
+    fn top_mut(&mut self) -> &mut CallFrame<T> {
         self.cframes.last_mut().expect("Fiber has no callframes!")
     }
 
     /// Get the current instruction
-    fn inst(&self) -> Result<&Inst> {
+    fn inst(&self) -> Result<&Inst<T>> {
         let top = self.top();
         let inst = top.code.get(top.ip).ok_or(Error::NoMoreBytecode)?;
         Ok(inst)
@@ -122,15 +122,15 @@ impl Fiber {
 
 /// Single call frame of fiber
 #[derive(Debug)]
-struct CallFrame {
+struct CallFrame<T: Extern> {
     ip: usize,
-    code: Vec<Inst>,
-    env: Rc<RefCell<Env>>,
+    code: Vec<Inst<T>>,
+    env: Rc<RefCell<Env<T>>>,
 }
 
-impl CallFrame {
+impl<T: Extern> CallFrame<T> {
     /// Create a new callframe for executing given bytecode from start
-    fn from_bytecode(env: Rc<RefCell<Env>>, code: Vec<Inst>) -> Self {
+    fn from_bytecode(env: Rc<RefCell<Env<T>>>, code: Vec<Inst<T>>) -> Self {
         Self { ip: 0, env, code }
     }
 
@@ -142,7 +142,7 @@ impl CallFrame {
 
 // TODO: Refactor - Fiber Internals for `run`
 /// Run the fiber until it completes or yields
-fn run(f: &mut Fiber) -> Result<FiberState> {
+fn run<T: Extern>(f: &mut Fiber<T>) -> Result<FiberState<T>> {
     loop {
         if f.is_yielding {
             let res = f.stack.pop().ok_or(Error::UnexpectedStack(
@@ -301,7 +301,7 @@ fn run(f: &mut Fiber) -> Result<FiberState> {
 }
 
 /// Defines true values
-fn is_true(v: Val) -> Result<bool> {
+fn is_true<T: Extern>(v: Val<T>) -> Result<bool> {
     let cond = match v {
         Val::Nil => false,
         Val::Bool(b) => b,
@@ -325,6 +325,10 @@ mod tests {
     use crate::SymbolId;
     use assert_matches::assert_matches;
     use tracing_test::traced_test;
+    use void::Void;
+
+    type Fiber = super::Fiber<Void>;
+    type Val = super::Val<Void>;
 
     #[test]
     #[traced_test]
@@ -426,7 +430,7 @@ mod tests {
     #[test]
     #[traced_test]
     fn call_func() {
-        let env = Env::default();
+        let env = Env::standard();
         let mut f = Fiber::from_bytecode(vec![
             PushConst(Val::Lambda(Lambda {
                 params: vec![SymbolId::from("x")],

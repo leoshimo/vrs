@@ -1,29 +1,32 @@
-use crate::{builtin, Error, NativeFn, SymbolId, Val};
+use crate::{builtin, Error, Extern, NativeFn, SymbolId, Val};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 /// An environment of bindings
-#[derive(Debug, Default)]
-pub struct Env {
-    bindings: HashMap<SymbolId, Val>,
-    parent: Option<Rc<RefCell<Env>>>,
+#[derive(Debug)]
+pub struct Env<T: Extern> {
+    bindings: HashMap<SymbolId, Val<T>>,
+    parent: Option<Rc<RefCell<Env<T>>>>,
 }
 
-impl Env {
+impl<T: Extern> Env<T> {
     /// Create standard base env
     pub fn standard() -> Self {
-        let mut e = Env::default();
+        let mut e = Env {
+            bindings: HashMap::default(),
+            parent: None,
+        };
         e.bind(builtin::plus_fn());
         e.bind(builtin::peval_fn());
         e
     }
 
     /// Define a new symbol with given value in current environment
-    pub fn define(&mut self, symbol: &SymbolId, value: Val) {
+    pub fn define(&mut self, symbol: &SymbolId, value: Val<T>) {
         self.bindings.insert(symbol.clone(), value);
     }
 
     /// Get value for symbol
-    pub fn get(&self, symbol: &SymbolId) -> Option<Val> {
+    pub fn get(&self, symbol: &SymbolId) -> Option<Val<T>> {
         match self.bindings.get(symbol) {
             Some(v) => Some(v.clone()),
             None => self
@@ -34,7 +37,7 @@ impl Env {
     }
 
     /// Set value of symbol in lexical scope
-    pub fn set(&mut self, symbol: &SymbolId, value: Val) -> Result<(), Error> {
+    pub fn set(&mut self, symbol: &SymbolId, value: Val<T>) -> Result<(), Error> {
         if let Some(b) = self.bindings.get_mut(symbol) {
             *b = value;
             return Ok(());
@@ -49,7 +52,7 @@ impl Env {
     }
 
     /// Extend an existing environment with given env as parent
-    pub fn extend(parent: &Rc<RefCell<Env>>) -> Self {
+    pub fn extend(parent: &Rc<RefCell<Env<T>>>) -> Self {
         Self {
             bindings: HashMap::new(),
             parent: Some(Rc::clone(parent)),
@@ -57,7 +60,7 @@ impl Env {
     }
 
     /// Convenience to bind native functions
-    pub fn bind(&mut self, nativefn: NativeFn) -> &mut Self {
+    pub fn bind(&mut self, nativefn: NativeFn<T>) -> &mut Self {
         self.define(&nativefn.symbol.clone(), Val::NativeFn(nativefn));
         self
     }
@@ -66,23 +69,27 @@ impl Env {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use void::Void;
+
+    type Val = super::Val<Void>;
+    type Env = super::Env<Void>;
 
     #[test]
     fn get() {
-        let mut env = Env::default();
+        let mut env = Env::standard();
         env.define(&SymbolId::from("x"), Val::Int(0));
         assert_eq!(env.get(&SymbolId::from("x")), Some(Val::Int(0)));
     }
 
     #[test]
     fn get_undefined() {
-        let env = Env::default();
+        let env = Env::standard();
         assert_eq!(env.get(&SymbolId::from("x")), None)
     }
 
     #[test]
     fn set_defined() {
-        let mut env = Env::default();
+        let mut env = Env::standard();
         let sym = SymbolId::from("x");
         env.define(&sym, Val::Int(0));
         assert_eq!(env.set(&sym, Val::string("one")), Ok(()));
@@ -96,7 +103,7 @@ mod tests {
     #[test]
     fn set_undefined() {
         let sym = SymbolId::from("x");
-        let mut env = Env::default();
+        let mut env = Env::standard();
         assert_eq!(
             env.set(&sym, Val::Int(1)),
             Err(Error::UndefinedSymbol(SymbolId::from("x")))
@@ -106,7 +113,7 @@ mod tests {
     #[test]
     fn get_parent() {
         let sym = SymbolId::from("x");
-        let parent = Rc::new(RefCell::new(Env::default()));
+        let parent = Rc::new(RefCell::new(Env::standard()));
         parent.borrow_mut().define(&sym, Val::keyword("parent"));
 
         let child = Env::extend(&parent);
@@ -119,7 +126,7 @@ mod tests {
 
     #[test]
     fn set_parent() {
-        let parent = Rc::new(RefCell::new(Env::default()));
+        let parent = Rc::new(RefCell::new(Env::standard()));
         let sym = SymbolId::from("x");
         parent.borrow_mut().define(&sym, Val::string("parent"));
 

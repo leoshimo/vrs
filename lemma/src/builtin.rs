@@ -1,8 +1,8 @@
 //! Builtin func
-use crate::{Error, Fiber, FiberState, NativeFn, NativeFnVal, SymbolId, Val};
+use crate::{Error, Extern, Fiber, FiberState, NativeFn, NativeFnVal, SymbolId, Val};
 
 /// Native binding for `+`
-pub fn plus_fn() -> NativeFn {
+pub fn plus_fn<T: Extern>() -> NativeFn<T> {
     // TODO: Write tests for +
     // TODO: Support N operands
     NativeFn {
@@ -15,7 +15,7 @@ pub fn plus_fn() -> NativeFn {
 }
 
 /// Native binding for `peval`
-pub fn peval_fn() -> NativeFn {
+pub fn peval_fn<T: Extern>() -> NativeFn<T> {
     NativeFn {
         symbol: SymbolId::from("peval"),
         func: |f, args| {

@@ -6,7 +6,7 @@ use std::{cell::RefCell, rc::Rc};
 
 /// All values in VM that can be manipulated
 #[derive(Debug, Clone, PartialEq)]
-pub enum Val {
+pub enum Val<T: Extern> {
     /// No value
     Nil,
     /// True or false
@@ -20,17 +20,17 @@ pub enum Val {
     /// Unique strings
     Keyword(KeywordId),
     /// Lists
-    List(Vec<Val>),
+    List(Vec<Val<T>>),
     /// A callable function object
-    Lambda(Lambda),
+    Lambda(Lambda<T>),
     /// A callable native function object
-    NativeFn(NativeFn),
-    /// Special values for yield signals from native functinos
-    Signal(SignalId, Vec<Val>),
+    NativeFn(NativeFn<T>),
     /// Compiled bytecode sequence
-    Bytecode(Vec<Inst>),
+    Bytecode(Vec<Inst<T>>),
     /// Error as a value
     Error(Error),
+    /// Externally defined type as Val
+    Extern(T),
 }
 
 /// Forms are parsed expression that can be evaluated or be converted to [Val]
@@ -48,24 +48,25 @@ pub enum Form {
 
 /// A function object that closes over environment it was created in
 #[derive(Clone)]
-pub struct Lambda {
+pub struct Lambda<T: Extern> {
     pub params: Vec<SymbolId>,
-    pub code: Vec<Inst>,
-    pub env: Rc<RefCell<Env>>,
+    pub code: Vec<Inst<T>>,
+    pub env: Rc<RefCell<Env<T>>>,
 }
 
 /// A native founction bound to given symbol
+#[allow(clippy::type_complexity)]
 #[derive(Debug, Clone, PartialEq)]
-pub struct NativeFn {
+pub struct NativeFn<T: Extern> {
     pub symbol: SymbolId,
-    pub func: fn(&Fiber, &[Val]) -> Result<NativeFnVal>,
+    pub func: fn(&Fiber<T>, &[Val<T>]) -> Result<NativeFnVal<T>>,
 }
 
 /// Result of a native function value, which can yield with a
 #[derive(Debug, Clone, PartialEq)]
-pub enum NativeFnVal {
-    Return(Val),
-    Yield(Val),
+pub enum NativeFnVal<T: Extern> {
+    Return(Val<T>),
+    Yield(Val<T>),
 }
 
 /// Identifier for Symbol
@@ -76,8 +77,17 @@ pub struct SymbolId(String);
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct KeywordId(String);
 
-/// Identifier for signals
-pub type SignalId = i32;
+/// Trait alias for host defined type in Val
+pub trait Extern:
+    std::fmt::Display + std::fmt::Debug + std::cmp::PartialEq + std::clone::Clone
+{
+}
+
+/// Trait alias impl for [Extern]
+impl<T> Extern for T where
+    T: std::fmt::Display + std::fmt::Debug + std::cmp::PartialEq + std::clone::Clone
+{
+}
 
 impl Form {
     /// Shorhand for constructing [Form::String]
@@ -96,7 +106,7 @@ impl Form {
     }
 }
 
-impl Val {
+impl<T: Extern> Val<T> {
     /// Shorhand for constructing [Val::String]
     pub fn string(s: &str) -> Self {
         Self::String(String::from(s))
@@ -111,11 +121,6 @@ impl Val {
     pub fn keyword(id: &str) -> Self {
         Self::Keyword(KeywordId::from(id))
     }
-
-    /// Shorthand for creating signals
-    pub fn signal(id: i32, values: Vec<Val>) -> Self {
-        Self::Signal(id, values)
-    }
 }
 
 impl SymbolId {
@@ -125,13 +130,16 @@ impl SymbolId {
     }
 }
 
-impl PartialEq for Lambda {
+impl<T: Extern> PartialEq for Lambda<T> {
     fn eq(&self, other: &Self) -> bool {
         self.params == other.params && self.code == other.code && Rc::ptr_eq(&self.env, &other.env)
     }
 }
 
-impl std::fmt::Display for Val {
+impl<T: Extern> std::fmt::Display for Val<T>
+where
+    T: std::fmt::Display,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Val::Nil => write!(f, "nil"),
@@ -164,8 +172,8 @@ impl std::fmt::Display for Val {
             ),
             Val::NativeFn(s) => write!(f, "<nativefn {}>", s.symbol),
             Val::Bytecode(_) => write!(f, "<bytecode>"),
-            Val::Signal(s, _) => write!(f, "<signal {s}>"),
             Val::Error(e) => write!(f, "<error {e}>"),
+            Val::Extern(e) => write!(f, "<extern {e}>"),
         }
     }
 }
@@ -208,7 +216,7 @@ impl std::fmt::Display for KeywordId {
     }
 }
 
-impl std::fmt::Debug for Lambda {
+impl<T: Extern> std::fmt::Debug for Lambda<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // don't blow the stack via env
         let params = self
@@ -221,7 +229,7 @@ impl std::fmt::Debug for Lambda {
     }
 }
 
-impl From<Form> for Val {
+impl<T: Extern> From<Form> for Val<T> {
     fn from(value: Form) -> Self {
         match value {
             Form::Nil => Val::Nil,
@@ -235,10 +243,10 @@ impl From<Form> for Val {
     }
 }
 
-impl TryFrom<Val> for Form {
+impl<T: Extern> TryFrom<Val<T>> for Form {
     type Error = Error;
 
-    fn try_from(value: Val) -> std::result::Result<Self, Self::Error> {
+    fn try_from(value: Val<T>) -> std::result::Result<Self, Self::Error> {
         match value {
             Val::Nil => Ok(Form::Nil),
             Val::Bool(b) => Ok(Form::Bool(b)),
@@ -260,10 +268,10 @@ impl TryFrom<Val> for Form {
             Val::NativeFn(_) => Err(Error::InvalidFormToExpr(
                 "nativefns are not exprs".to_string(),
             )),
-            Val::Signal(_, _) => Err(Error::InvalidFormToExpr(
-                "signals are not exprs".to_string(),
-            )),
             Val::Error(_) => Err(Error::InvalidFormToExpr("errors are not exprs".to_string())),
+            Val::Extern(_) => Err(Error::InvalidFormToExpr(
+                "extern values are not exprs".to_string(),
+            )),
         }
     }
 }
@@ -294,7 +302,9 @@ impl From<&str> for KeywordId {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use void::Void;
+
+    type Val = super::Val<Void>;
 
     #[test]
     fn nil_to_string() {

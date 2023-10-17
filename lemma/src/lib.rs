@@ -15,6 +15,7 @@ pub use error::Error;
 pub use fiber::Fiber;
 pub use fiber::FiberState;
 pub use parse::parse;
+pub use types::Extern;
 pub use types::Form;
 pub use types::KeywordId;
 pub use types::Lambda;
