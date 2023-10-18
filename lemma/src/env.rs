@@ -1,11 +1,14 @@
 use crate::{builtin, Error, Extern, NativeFn, SymbolId, Val};
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 /// An environment of bindings
 #[derive(Debug)]
 pub struct Env<T: Extern> {
     bindings: HashMap<SymbolId, Val<T>>,
-    parent: Option<Rc<RefCell<Env<T>>>>,
+    parent: Option<Arc<Mutex<Env<T>>>>,
 }
 
 impl<T: Extern> Env<T> {
@@ -32,7 +35,7 @@ impl<T: Extern> Env<T> {
             None => self
                 .parent
                 .as_ref()
-                .and_then(|p| p.borrow().get(symbol).clone()),
+                .and_then(|p| p.lock().unwrap().get(symbol).clone()),
         }
     }
 
@@ -44,7 +47,7 @@ impl<T: Extern> Env<T> {
         }
 
         if let Some(ref p) = self.parent {
-            p.borrow_mut().set(symbol, value)?;
+            p.lock().unwrap().set(symbol, value)?;
             return Ok(());
         }
 
@@ -52,10 +55,10 @@ impl<T: Extern> Env<T> {
     }
 
     /// Extend an existing environment with given env as parent
-    pub fn extend(parent: &Rc<RefCell<Env<T>>>) -> Self {
+    pub fn extend(parent: &Arc<Mutex<Env<T>>>) -> Self {
         Self {
             bindings: HashMap::new(),
-            parent: Some(Rc::clone(parent)),
+            parent: Some(Arc::clone(parent)),
         }
     }
 
@@ -113,8 +116,8 @@ mod tests {
     #[test]
     fn get_parent() {
         let sym = SymbolId::from("x");
-        let parent = Rc::new(RefCell::new(Env::standard()));
-        parent.borrow_mut().define(&sym, Val::keyword("parent"));
+        let parent = Arc::new(Mutex::new(Env::standard()));
+        parent.lock().unwrap().define(&sym, Val::keyword("parent"));
 
         let child = Env::extend(&parent);
         assert_eq!(
@@ -126,9 +129,9 @@ mod tests {
 
     #[test]
     fn set_parent() {
-        let parent = Rc::new(RefCell::new(Env::standard()));
+        let parent = Arc::new(Mutex::new(Env::standard()));
         let sym = SymbolId::from("x");
-        parent.borrow_mut().define(&sym, Val::string("parent"));
+        parent.lock().unwrap().define(&sym, Val::string("parent"));
 
         let mut child = Env::extend(&parent);
         assert_eq!(
@@ -139,7 +142,7 @@ mod tests {
 
         assert_eq!(child.get(&sym), Some(Val::string("updated")),);
         assert_eq!(
-            parent.borrow().get(&sym),
+            parent.lock().unwrap().get(&sym),
             Some(Val::string("updated")),
             "get should retrieve updated value"
         );

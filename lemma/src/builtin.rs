@@ -27,7 +27,7 @@ pub fn peval_fn<T: Extern>() -> NativeFn<T> {
                     ))
                 }
             };
-            // TODO: Hack - FWIW the yield here only works if we never implement nonlocal returns
+            // TODO: Hack - This doesn't handle yields properly for nested yields, e.g. calling `recv` inside a shell repl
             let mut f = Fiber::from_val(v)?.with_env(f.env());
             match f.resume() {
                 Ok(FiberState::Done(v)) => Ok(NativeFnVal::Return(v)),

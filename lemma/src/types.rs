@@ -2,7 +2,7 @@
 use crate::codegen::Inst;
 use crate::{Env, Error, Fiber, Result};
 use serde::{Deserialize, Serialize};
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, Mutex};
 
 /// All values in VM that can be manipulated
 #[derive(Debug, Clone, PartialEq)]
@@ -51,7 +51,7 @@ pub enum Form {
 pub struct Lambda<T: Extern> {
     pub params: Vec<SymbolId>,
     pub code: Vec<Inst<T>>,
-    pub env: Rc<RefCell<Env<T>>>,
+    pub env: Arc<Mutex<Env<T>>>,
 }
 
 /// A native founction bound to given symbol
@@ -132,7 +132,7 @@ impl SymbolId {
 
 impl<T: Extern> PartialEq for Lambda<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.params == other.params && self.code == other.code && Rc::ptr_eq(&self.env, &other.env)
+        self.params == other.params && self.code == other.code && Arc::ptr_eq(&self.env, &other.env)
     }
 }
 

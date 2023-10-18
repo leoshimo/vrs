@@ -3,14 +3,14 @@ use tracing::{debug, warn};
 
 use super::{Env, Inst};
 use crate::{compile, parse, Error, Extern, Lambda, NativeFn, NativeFnVal, Result, Val};
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, Mutex};
 
 /// A single, cooperativly scheduled sequence of execution
 #[derive(Debug)]
 pub struct Fiber<T: Extern> {
     cframes: Vec<CallFrame<T>>,
     stack: Vec<Val<T>>,
-    global: Rc<RefCell<Env<T>>>,
+    global: Arc<Mutex<Env<T>>>,
     is_yielding: bool,
 }
 
@@ -24,10 +24,10 @@ pub enum FiberState<T: Extern> {
 impl<T: Extern> Fiber<T> {
     /// Create a new fiber from given bytecode
     pub fn from_bytecode(bytecode: Vec<Inst<T>>) -> Self {
-        let global = Rc::new(RefCell::new(Env::standard()));
+        let global = Arc::new(Mutex::new(Env::standard()));
         Fiber {
             stack: vec![],
-            cframes: vec![CallFrame::from_bytecode(Rc::clone(&global), bytecode)],
+            cframes: vec![CallFrame::from_bytecode(Arc::clone(&global), bytecode)],
             global,
             is_yielding: false,
         }
@@ -46,14 +46,14 @@ impl<T: Extern> Fiber<T> {
     }
 
     /// Set root environment of fiber
-    pub fn with_env(mut self, env: Rc<RefCell<Env<T>>>) -> Self {
+    pub fn with_env(mut self, env: Arc<Mutex<Env<T>>>) -> Self {
         // TODO: This is a hack for peval. Replace with builder for setting bytecode + env for new processes
         assert_eq!(
             self.cframes.len(),
             1,
             "hack to override root callstack is only avaiable to fibers at root callstack 1"
         );
-        self.global = Rc::clone(&env);
+        self.global = Arc::clone(&env);
         self.top_mut().env = env;
         self
     }
@@ -88,13 +88,13 @@ impl<T: Extern> Fiber<T> {
 
     /// Bind native function to global environment
     pub fn bind(&mut self, nativefn: NativeFn<T>) -> &mut Self {
-        self.global.borrow_mut().bind(nativefn);
+        self.global.lock().unwrap().bind(nativefn);
         self
     }
 
     /// Get current stack's environment
-    pub fn env(&self) -> Rc<RefCell<Env<T>>> {
-        Rc::clone(&self.top().env)
+    pub fn env(&self) -> Arc<Mutex<Env<T>>> {
+        Arc::clone(&self.top().env)
     }
 
     /// Reference to top of callstack
@@ -125,12 +125,12 @@ impl<T: Extern> Fiber<T> {
 struct CallFrame<T: Extern> {
     ip: usize,
     code: Vec<Inst<T>>,
-    env: Rc<RefCell<Env<T>>>,
+    env: Arc<Mutex<Env<T>>>,
 }
 
 impl<T: Extern> CallFrame<T> {
     /// Create a new callframe for executing given bytecode from start
-    fn from_bytecode(env: Rc<RefCell<Env<T>>>, code: Vec<Inst<T>>) -> Self {
+    fn from_bytecode(env: Arc<Mutex<Env<T>>>, code: Vec<Inst<T>>) -> Self {
         Self { ip: 0, env, code }
     }
 
@@ -179,20 +179,21 @@ fn run<T: Extern>(f: &mut Fiber<T>) -> Result<FiberState<T>> {
                 let value = f.stack.last().ok_or(Error::UnexpectedStack(
                     "Expected stack to be nonempty".to_string(),
                 ))?;
-                f.top().env.borrow_mut().define(&s, value.clone());
+                f.top().env.lock().unwrap().define(&s, value.clone());
             }
             Inst::SetSym(s) => {
                 let value = f.stack.last().ok_or(Error::UnexpectedStack(
                     "Expected stack to be nonempty".to_string(),
                 ))?;
-                f.top().env.borrow_mut().set(&s, value.clone())?
+                f.top().env.lock().unwrap().set(&s, value.clone())?
             }
             Inst::GetSym(s) => {
                 let value = f
                     .top()
                     .env
                     .clone()
-                    .borrow()
+                    .lock()
+                    .unwrap()
                     .get(&s)
                     .ok_or(Error::UndefinedSymbol(s))?;
                 f.stack.push(value.clone());
@@ -223,7 +224,7 @@ fn run<T: Extern>(f: &mut Fiber<T>) -> Result<FiberState<T>> {
                 f.stack.push(Val::Lambda(Lambda {
                     params,
                     code,
-                    env: Rc::clone(&f.top().env),
+                    env: Arc::clone(&f.top().env),
                 }));
             }
             Inst::CallFunc(nargs) => {
@@ -253,7 +254,7 @@ fn run<T: Extern>(f: &mut Fiber<T>) -> Result<FiberState<T>> {
                             fn_env.define(s, arg);
                         }
                         f.cframes.push(CallFrame::from_bytecode(
-                            Rc::new(RefCell::new(fn_env)),
+                            Arc::new(Mutex::new(fn_env)),
                             l.code,
                         ))
                     }
@@ -271,7 +272,7 @@ fn run<T: Extern>(f: &mut Fiber<T>) -> Result<FiberState<T>> {
                 let bc = compile(&val)?;
                 let cur_env = &f.top().env;
                 f.cframes
-                    .push(CallFrame::from_bytecode(Rc::clone(cur_env), bc));
+                    .push(CallFrame::from_bytecode(Arc::clone(cur_env), bc));
             }
             Inst::PopTop => {
                 if f.stack.pop().is_none() {
@@ -350,7 +351,7 @@ mod tests {
         let mut f = Fiber::from_bytecode(vec![PushConst(Val::Int(5)), DefSym(SymbolId::from("x"))]);
         assert_eq!(f.resume().unwrap(), Done(Val::Int(5)));
         assert_eq!(
-            f.top().env.borrow().get(&SymbolId::from("x")),
+            f.top().env.lock().unwrap().get(&SymbolId::from("x")),
             Some(Val::Int(5)),
             "symbol should be defined in env"
         );
@@ -365,7 +366,8 @@ mod tests {
         let mut f = Fiber::from_bytecode(vec![GetSym(SymbolId::from("x"))]);
         f.top()
             .env
-            .borrow_mut()
+            .lock()
+            .unwrap()
             .define(&SymbolId::from("x"), Val::string("hi"));
         assert_eq!(f.resume().unwrap(), Done(Val::string("hi")));
     }
@@ -388,7 +390,8 @@ mod tests {
         ]);
         f.top()
             .env
-            .borrow_mut()
+            .lock()
+            .unwrap()
             .define(&SymbolId::from("x"), Val::string("original"));
 
         assert_eq!(f.resume().unwrap(), Done(Val::string("updated")));
@@ -435,7 +438,7 @@ mod tests {
             PushConst(Val::Lambda(Lambda {
                 params: vec![SymbolId::from("x")],
                 code: vec![GetSym(SymbolId::from("x"))],
-                env: Rc::new(RefCell::new(env)),
+                env: Arc::new(Mutex::new(env)),
             })),
             PushConst(Val::string("hello")),
             CallFunc(1),
