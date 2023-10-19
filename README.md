@@ -23,10 +23,10 @@ Focus on key areas, such as security and performance, are deferred for the time 
 
 ## Structure
 
-- `libvrs`: The `vrs` library crate shared by runtime and clients
-- `vrsd`: A daemon runtime implementation
-- `vrsctl`: A CLI client for interacting with runtime
-- `lemma`: Embedded Lisp dialect and environment
+- `libvrs`: The `vrs` library crate shared by runtime and client implementations
+- `vrsd`: A runtime implementation as a system daemon
+- `vrsctl`: A thin CLI client over `libvrs`
+- `lemma`: Embedded Lisp Dialect and Bytecode VM
 
 ## Logging
 
