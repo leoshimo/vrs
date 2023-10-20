@@ -1,3 +1,5 @@
+use tokio::{sync::oneshot, task::JoinError};
+
 use super::{kernel, process};
 
 #[derive(Debug, thiserror::Error)]
@@ -17,6 +19,15 @@ pub enum Error {
     #[error("Received unexpected process result")]
     UnexpectedProcessResult,
 
-    #[error("Evaluation failed - {0}")]
+    #[error("Evaluation Error - {0}")]
     EvaluationError(#[from] lemma::Error),
+
+    #[error("Process Exec Error - {0}")]
+    ProcessExecError(lemma::Error),
+
+    #[error("IO failed to message process IO task")]
+    IOFailed,
+
+    #[error("Failed to join process")]
+    ProcessJoinerror(#[from] oneshot::error::RecvError),
 }
