@@ -1,4 +1,4 @@
-use tokio::{sync::oneshot, task::JoinError};
+use tokio::sync::oneshot;
 
 use super::{kernel, process};
 
@@ -29,5 +29,5 @@ pub enum Error {
     IOFailed,
 
     #[error("Failed to join process")]
-    ProcessJoinerror(#[from] oneshot::error::RecvError),
+    ProcessJoinError(#[from] oneshot::error::RecvError),
 }
