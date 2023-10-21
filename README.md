@@ -9,10 +9,11 @@
 VRS is a WIP personal software runtime, inspired by Emacs, Erlang, Unix, Plan 9,
 and Hypermedia systems.
 
-The goal is to bundle my favorite ideas from each of those systems into one
-software runtime to make building software joyful (for me).
+The intention is to incorporate great ideas from each of those systems into one,
+cohesive experience in service of my personal happiness.
 
-[Renaissance tech for renaissance people](https://web.archive.org/web/20210428062809/https://twitter.com/dhh/status/1341758748717510659)
+Core principles are simplicity and joy that allows individuals to build
+rich software - [Renaissance tech for renaissance people](https://web.archive.org/web/20210428062809/https://twitter.com/dhh/status/1341758748717510659).
 
 ## Status
 
