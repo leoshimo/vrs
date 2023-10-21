@@ -162,77 +162,76 @@ async fn run(mut evloop: EventLoop, mut evloop_rx: mpsc::Receiver<Event>) {
     }
 }
 
-// TODO: Reenable tests
-// #[cfg(test)]
-// mod test {
-//     use super::*;
-//     use crate::client::Message;
-//     use crate::connection::Connection;
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::client::Message;
+    use crate::connection::Connection;
 
-//     #[tokio::test(flavor = "multi_thread")]
-//     async fn handle_request_response() {
-//         let (local, mut remote) = Connection::pair().unwrap();
+    #[tokio::test(flavor = "multi_thread")]
+    async fn handle_request_response() {
+        let (local, mut remote) = Connection::pair().unwrap();
 
-//         // Remote echos back requests
-//         tokio::spawn(async move {
-//             while let Some(msg) = remote.recv().await {
-//                 if let Ok(Message::Request(req)) = msg {
-//                     let message = match req.contents {
-//                         lemma::Form::String(s) => s,
-//                         _ => todo!(),
-//                     };
-//                     let resp = Response {
-//                         req_id: req.req_id,
-//                         contents: Ok(lemma::Form::String(format!("reply {}", message))),
-//                     };
-//                     remote
-//                         .send(&Message::Response(resp))
-//                         .await
-//                         .expect("messsage should send");
-//                 }
-//             }
-//         });
+        // Remote echos back requests
+        tokio::spawn(async move {
+            while let Some(msg) = remote.recv().await {
+                if let Ok(Message::Request(req)) = msg {
+                    let message = match req.contents {
+                        lemma::Form::String(s) => s,
+                        _ => todo!(),
+                    };
+                    let resp = Response {
+                        req_id: req.req_id,
+                        contents: Ok(lemma::Form::String(format!("reply {}", message))),
+                    };
+                    remote
+                        .send(&Message::Response(resp))
+                        .await
+                        .expect("messsage should send");
+                }
+            }
+        });
 
-//         let mut client = Client::new(local);
-//         let req = client
-//             .request(lemma::Form::string("one"))
-//             .await
-//             .expect("Should receive reply");
-//         assert_eq!(req.contents, Ok(lemma::Form::string("reply one")));
+        let mut client = Client::new(local);
+        let req = client
+            .request(lemma::Form::string("one"))
+            .await
+            .expect("Should receive reply");
+        assert_eq!(req.contents, Ok(lemma::Form::string("reply one")));
 
-//         let req = client
-//             .request(lemma::Form::string("two"))
-//             .await
-//             .expect("Should receive reply");
-//         assert_eq!(req.contents, Ok(lemma::Form::string("reply two")));
+        let req = client
+            .request(lemma::Form::string("two"))
+            .await
+            .expect("Should receive reply");
+        assert_eq!(req.contents, Ok(lemma::Form::string("reply two")));
 
-//         let req = client
-//             .request(lemma::Form::string("three"))
-//             .await
-//             .expect("Should receive reply");
-//         assert_eq!(req.contents, Ok(lemma::Form::string("reply three")));
-//     }
+        let req = client
+            .request(lemma::Form::string("three"))
+            .await
+            .expect("Should receive reply");
+        assert_eq!(req.contents, Ok(lemma::Form::string("reply three")));
+    }
 
-//     #[tokio::test(flavor = "multi_thread")]
-//     async fn handle_conn_drop() {
-//         use std::time::Duration;
-//         use tokio::time::timeout;
+    #[tokio::test(flavor = "multi_thread")]
+    async fn handle_conn_drop() {
+        use std::time::Duration;
+        use tokio::time::timeout;
 
-//         let (local, mut remote) = Connection::pair().unwrap();
+        let (local, mut remote) = Connection::pair().unwrap();
 
-//         // Remote drops `remote` after first request
-//         tokio::spawn(async move {
-//             let _ = remote.recv().await;
-//             // remote is dropped
-//         });
+        // Remote drops `remote` after first request
+        tokio::spawn(async move {
+            let _ = remote.recv().await;
+            // remote is dropped
+        });
 
-//         let mut client = Client::new(local);
+        let mut client = Client::new(local);
 
-//         let req = client.request(lemma::Form::string("hi"));
-//         let resp = timeout(Duration::from_millis(10), req)
-//             .await
-//             .expect("Request should be notified that remote connection was dropped before timeout");
+        let req = client.request(lemma::Form::string("hi"));
+        let resp = timeout(Duration::from_millis(10), req)
+            .await
+            .expect("Request should be notified that remote connection was dropped before timeout");
 
-//         assert!(matches!(resp, Err(Error::RequestRecvError(_))));
-//     }
-// }
+        assert!(matches!(resp, Err(Error::RequestRecvError(_))));
+    }
+}
