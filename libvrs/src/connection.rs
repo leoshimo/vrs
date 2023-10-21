@@ -65,6 +65,7 @@ impl Connection {
         Ok((Connection::new(local), Connection::new(remote)))
     }
 
+    /// Send a message
     pub async fn send(&mut self, msg: &Message) -> Result<(), std::io::Error> {
         debug!("send msg={:?}", msg);
         let mut buf = BytesMut::new();
@@ -73,6 +74,7 @@ impl Connection {
         self.stream.send(buf.freeze()).await
     }
 
+    /// Receive a message
     pub async fn recv(&mut self) -> Option<Result<Message, std::io::Error>> {
         let bytes = self.stream.next().await?;
         let bytes = match bytes {
@@ -94,9 +96,51 @@ impl Connection {
         Some(Ok(msg))
     }
 
+    /// Shutdown the connection
     pub async fn shutdown(self) -> Result<(), std::io::Error> {
         debug!("shutdown {:?}", self);
         self.stream.into_inner().shutdown().await
+    }
+
+    // TODO: Should conn be generic over sent / recvd data? Right now every user is asymmetrical:
+    // - Client end always sends req, recv resp
+    // - Runtime end always recv req, send resp
+    // Overhead of having to handle all Message types:
+    // - client.rs - receiving request from runtime
+    // - process.rs - receiving response from client
+
+    /// Send a request
+    pub async fn send_req(&mut self, req: Request) -> Result<(), std::io::Error> {
+        self.send(&Message::Request(req)).await
+    }
+
+    /// Send a response
+    pub async fn send_resp(&mut self, resp: Response) -> Result<(), std::io::Error> {
+        self.send(&Message::Response(resp)).await
+    }
+
+    /// Receive a response
+    pub async fn recv_req(&mut self) -> Option<Result<Request, std::io::Error>> {
+        let msg = self.recv().await?;
+        match msg {
+            Ok(Message::Request(r)) => Some(Ok(r)),
+            Ok(Message::Response(_)) => {
+                panic!("Expected request, but received response over connection")
+            }
+            Err(e) => Some(Err(e)),
+        }
+    }
+
+    /// Receive a response
+    pub async fn recv_resp(&mut self) -> Option<Result<Response, std::io::Error>> {
+        let msg = self.recv().await?;
+        match msg {
+            Ok(Message::Response(r)) => Some(Ok(r)),
+            Ok(Message::Request(_)) => {
+                panic!("Expected response, but received request over connection")
+            }
+            Err(e) => Some(Err(e)),
+        }
     }
 }
 
