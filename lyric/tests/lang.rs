@@ -360,7 +360,7 @@ fn eval_let_nested() {
 #[test]
 fn eval_peval() {
     assert_eq!(
-        eval_expr("(eval (+ x x))"),
+        eval_expr("(eval '(+ x x))"),
         Err(Error::UndefinedSymbol(SymbolId::from("x"))),
         "eval propagates errors at top-level"
     );
