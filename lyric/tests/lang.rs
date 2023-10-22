@@ -1,12 +1,12 @@
 //! Tests for implementation of language
 
 use assert_matches::assert_matches;
-use lemma::fiber::FiberState;
-use lemma::{Error, NativeFn, NativeFnVal, Result, SymbolId};
+use lyric::fiber::FiberState;
+use lyric::{Error, NativeFn, NativeFnVal, Result, SymbolId};
 use void::Void;
 
-type Fiber = lemma::Fiber<Void>;
-type Val = lemma::Val<Void>;
+type Fiber = lyric::Fiber<Void>;
+type Val = lyric::Val<Void>;
 
 // Convenience to eval top-level expr
 fn eval_expr(e: &str) -> Result<Val> {

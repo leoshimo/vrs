@@ -117,7 +117,7 @@ async fn subscription_for_client_connection(mut conn: Connection, target: WeakPr
 
 //     use super::*;
 //     use crate::{rt::kernel, Client, Connection};
-//     use lemma::{parse as p, Form};
+//     use lyric::{parse as p, Form};
 //     use tokio::task::yield_now;
 //     use tracing_test::traced_test;
 

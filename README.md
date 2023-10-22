@@ -27,7 +27,7 @@ Focus on key areas, such as security and performance, are deferred for the time 
 - `libvrs`: The `vrs` library crate shared by runtime and client implementations
 - `vrsd`: A runtime implementation as a system daemon
 - `vrsctl`: A thin CLI client over `libvrs`
-- `lemma`: Embedded Lisp Dialect and Bytecode VM
+- `lyric`: Embedded Lisp Dialect and Bytecode VM
 
 ## Logging
 

@@ -1,4 +1,4 @@
-//! Compiler for Lemma Form AST
+//! Compiler for Lyric Form AST
 use crate::{Error, Extern, Result, SymbolId, Val};
 
 // TODO: Compact bytecode repr

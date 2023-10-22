@@ -1,4 +1,4 @@
-# Lemma
+# Lyric
 
 Lisp-dialect focused on providing uniform code and data interface for
 [vrs](https://github.com/leoshimo/vrs/).
@@ -17,6 +17,6 @@ There is a binary target that exposes a simple REPL:
 
 ```sh
 # in vrs root folder
-$ cargo run --bin lemma
+$ cargo run --bin lyric
 ```
 

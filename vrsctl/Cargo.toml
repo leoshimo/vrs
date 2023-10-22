@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 vrs = { path = "../libvrs" }
-lemma = { path = "../lemma" }
+lyric = { path = "../lyric" }
 tokio = { version = "1.32.0", features = ["full"] }
 anyhow = "1.0.75"
 tracing-subscriber = "0.3.17"

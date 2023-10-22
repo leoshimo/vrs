@@ -15,13 +15,13 @@
 //         .expect("Connection should be handled");
 
 //     let resp = remote
-//         .request(lemma::Form::string("Hello world"))
+//         .request(lyric::Form::string("Hello world"))
 //         .await
 //         .expect("Request should succeed");
 
 //     assert_eq!(
 //         resp.contents,
-//         Ok(lemma::Form::string("Hello world")),
+//         Ok(lyric::Form::string("Hello world")),
 //         "Sending request should succeed"
 //     );
 // }
@@ -30,7 +30,7 @@
 // #[traced_test]
 // #[ignore] // TODO: Reenable test
 // async fn runtime_remote_request_multi() {
-//     use lemma::parse as p;
+//     use lyric::parse as p;
 
 //     let runtime = Runtime::new();
 //     let (local, remote) = Connection::pair().unwrap();
@@ -44,7 +44,7 @@
 //     assert!(
 //         matches!(
 //             client.request(p("(def message \"Hello world\")").unwrap()).await,
-//             Ok(Response { contents, .. }) if contents == Ok(lemma::Form::string("Hello world"))
+//             Ok(Response { contents, .. }) if contents == Ok(lyric::Form::string("Hello world"))
 //         ),
 //         "defining a message binding should return its value"
 //     );
@@ -60,7 +60,7 @@
 //     assert!(
 //         matches!(
 //             client.request(p("(echo message)").unwrap()).await,
-//             Ok(Response { contents, .. }) if contents == Ok(lemma::Form::string("Hello world"))
+//             Ok(Response { contents, .. }) if contents == Ok(lyric::Form::string("Hello world"))
 //         ),
 //         "evaluating a function call passing defined argument symbols should return result"
 //     );

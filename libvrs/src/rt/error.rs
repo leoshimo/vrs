@@ -20,10 +20,10 @@ pub enum Error {
     UnexpectedProcessResult,
 
     #[error("Evaluation Error - {0}")]
-    EvaluationError(#[from] lemma::Error),
+    EvaluationError(#[from] lyric::Error),
 
     #[error("Process Exec Error - {0}")]
-    ProcessExecError(lemma::Error),
+    ProcessExecError(lyric::Error),
 
     #[error("IO failed to message process IO task")]
     IOFailed,

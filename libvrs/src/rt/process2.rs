@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use crate::rt::{Error, Result};
 use crate::{Connection, Response};
-use lemma::{FiberState, Form, NativeFn, NativeFnVal, SymbolId};
+use lyric::{FiberState, Form, NativeFn, NativeFnVal, SymbolId};
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 
@@ -14,7 +14,7 @@ pub struct ProcessHandle {
 }
 
 /// Values produced by processes
-pub type Val = lemma::Val<Extern>;
+pub type Val = lyric::Val<Extern>;
 
 /// Extern type between Fiber and hosting Process
 #[derive(Debug, Clone, PartialEq)]
@@ -28,7 +28,8 @@ pub enum Extern {
 pub enum IOCmd {
     /// Signal to notify for RecvConn IO
     RecvConn,
-    SendConn(i32, lemma::Val<Extern>),
+    /// Send value over connection for given request ID
+    SendConn(i32, lyric::Val<Extern>),
 }
 
 /// The result of process
@@ -82,11 +83,11 @@ fn create_fiber(prog: &Val) -> Result<Fiber> {
     });
     fiber.bind(NativeFn {
         symbol: SymbolId::from("send_conn"),
-        func: |_, args| -> std::result::Result<NativeFnVal<Extern>, lemma::Error> {
+        func: |_, args| -> std::result::Result<NativeFnVal<Extern>, lyric::Error> {
             let (id, val) = match args {
                 [Val::Int(id), v] => (id, v.clone()),
                 _ => {
-                    return Err(lemma::Error::InvalidExpression(
+                    return Err(lyric::Error::InvalidExpression(
                         "send_conn expects two arguments".to_string(),
                     ))
                 }
@@ -149,7 +150,7 @@ async fn handle_io(val: Val, conn: &mut Option<Connection>) -> Result<Val> {
     }
 }
 
-type Fiber = lemma::Fiber<Extern>;
+type Fiber = lyric::Fiber<Extern>;
 
 impl std::fmt::Display for Extern {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -161,7 +162,7 @@ impl std::fmt::Display for Extern {
 mod tests {
 
     use assert_matches::assert_matches;
-    use lemma::{parse, Form};
+    use lyric::{parse, Form};
 
     use crate::Request;
 
@@ -190,7 +191,7 @@ mod tests {
         let _ = spawn(parse("x").unwrap().into(), &mut procs, None).unwrap();
         assert_matches!(
             procs.join_next().await.unwrap().unwrap(),
-            Err(Error::EvaluationError(lemma::Error::UndefinedSymbol(_))),
+            Err(Error::EvaluationError(lyric::Error::UndefinedSymbol(_))),
             "processes should not share environment by default",
         );
     }

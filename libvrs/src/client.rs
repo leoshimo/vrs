@@ -29,7 +29,7 @@ impl Client {
     }
 
     /// Dispatch a request
-    pub async fn request(&mut self, contents: lemma::Form) -> Result<Response, Error> {
+    pub async fn request(&mut self, contents: lyric::Form) -> Result<Response, Error> {
         debug!("send request contents = {:?}", contents);
         let (resp_tx, resp_rx) = oneshot::channel();
         let ev = Event::SendRequest { contents, resp_tx };
@@ -67,7 +67,7 @@ pub enum Error {
 pub enum Event {
     /// Event for sending request to remote
     SendRequest {
-        contents: lemma::Form,
+        contents: lyric::Form,
         resp_tx: oneshot::Sender<Response>,
     },
     /// Event when receiving response from remote
@@ -177,12 +177,12 @@ mod test {
             while let Some(msg) = remote.recv().await {
                 if let Ok(Message::Request(req)) = msg {
                     let message = match req.contents {
-                        lemma::Form::String(s) => s,
+                        lyric::Form::String(s) => s,
                         _ => todo!(),
                     };
                     let resp = Response {
                         req_id: req.req_id,
-                        contents: Ok(lemma::Form::String(format!("reply {}", message))),
+                        contents: Ok(lyric::Form::String(format!("reply {}", message))),
                     };
                     remote
                         .send(&Message::Response(resp))
@@ -194,22 +194,22 @@ mod test {
 
         let mut client = Client::new(local);
         let req = client
-            .request(lemma::Form::string("one"))
+            .request(lyric::Form::string("one"))
             .await
             .expect("Should receive reply");
-        assert_eq!(req.contents, Ok(lemma::Form::string("reply one")));
+        assert_eq!(req.contents, Ok(lyric::Form::string("reply one")));
 
         let req = client
-            .request(lemma::Form::string("two"))
+            .request(lyric::Form::string("two"))
             .await
             .expect("Should receive reply");
-        assert_eq!(req.contents, Ok(lemma::Form::string("reply two")));
+        assert_eq!(req.contents, Ok(lyric::Form::string("reply two")));
 
         let req = client
-            .request(lemma::Form::string("three"))
+            .request(lyric::Form::string("three"))
             .await
             .expect("Should receive reply");
-        assert_eq!(req.contents, Ok(lemma::Form::string("reply three")));
+        assert_eq!(req.contents, Ok(lyric::Form::string("reply three")));
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -227,7 +227,7 @@ mod test {
 
         let mut client = Client::new(local);
 
-        let req = client.request(lemma::Form::string("hi"));
+        let req = client.request(lyric::Form::string("hi"));
         let resp = timeout(Duration::from_millis(10), req)
             .await
             .expect("Request should be notified that remote connection was dropped before timeout");

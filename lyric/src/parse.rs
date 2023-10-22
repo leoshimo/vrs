@@ -1,4 +1,4 @@
-//! Parser for Lemma
+//! Parser for Lyric
 use crate::lex::{lex, Token};
 use crate::types::KeywordId;
 use crate::{Error, Result};

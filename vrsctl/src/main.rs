@@ -45,7 +45,7 @@ fn cli() -> clap::Command {
 
 /// Run a single request
 async fn run_cmd(mut client: Client, cmd: &str) -> Result<()> {
-    let f = lemma::parse(cmd)?;
+    let f = lyric::parse(cmd)?;
     let resp = client.request(f).await?;
     match resp.contents {
         Ok(c) => println!("{}", c),
@@ -73,9 +73,9 @@ async fn run_file(mut client: Client, file: &str) -> Result<()> {
             continue;
         }
 
-        let f = match lemma::parse(&line) {
+        let f = match lyric::parse(&line) {
             Ok(f) => f,
-            Err(lemma::Error::IncompleteExpression(_)) => {
+            Err(lyric::Error::IncompleteExpression(_)) => {
                 continue;
             }
             Err(e) => {
@@ -118,7 +118,7 @@ async fn run_repl(mut client: Client) -> Result<()> {
 
                 let _ = rl.add_history_entry(line.as_str());
 
-                let f = match lemma::parse(&line) {
+                let f = match lyric::parse(&line) {
                     Ok(f) => f,
                     Err(e) => {
                         eprintln!("{}", e);

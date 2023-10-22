@@ -1,4 +1,4 @@
-//! Lexer for Lemma
+//! Lexer for Lyric
 use std::iter::Peekable;
 
 use crate::{Error, Result};

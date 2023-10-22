@@ -60,7 +60,7 @@ pub(crate) struct WeakProcessHandle {
 impl ProcessHandle {
     // TODO(security): Should proc handle allow raw calls into process's environment? Or more controlled messages from external?
     /// Send a blocking message to process, and get the result of evaluation
-    pub(crate) async fn call(&self, form: lemma::Form) -> Result<lemma::Form> {
+    pub(crate) async fn call(&self, form: lyric::Form) -> Result<lyric::Form> {
         let (tx, rx) = oneshot::channel();
         self.msg_tx.send(Message::Call(form, tx)).await?;
         rx.await
@@ -115,7 +115,7 @@ impl WeakProcessHandle {
 /// Messages that [Process] responds to
 #[derive(Debug)]
 pub enum Message {
-    Call(lemma::Form, oneshot::Sender<Result<lemma::Form>>),
+    Call(lyric::Form, oneshot::Sender<Result<lyric::Form>>),
     AddSubscription(subscription::Subscription),
     Shutdown,
     IsShutdown(oneshot::Sender<bool>),
@@ -163,10 +163,10 @@ impl Process {
     }
 
     /// Evaluate given form in process's environment
-    fn eval(&mut self, _form: &lemma::Form) -> Result<lemma::Form> {
+    fn eval(&mut self, _form: &lyric::Form) -> Result<lyric::Form> {
         // TODO: Implement me!
         // self.ns.eval(form)
-        Ok(lemma::Form::Nil)
+        Ok(lyric::Form::Nil)
     }
 
     /// Add a new subscription to this process
@@ -191,8 +191,8 @@ impl Process {
 // #[cfg(test)]
 // mod tests {
 //     use super::*;
-//     use lemma::parse as p;
-//     use lemma::Form;
+//     use lyric::parse as p;
+//     use lyric::Form;
 //     use tracing_test::traced_test;
 
 //     #[tokio::test]

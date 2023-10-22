@@ -30,7 +30,7 @@ pub struct Request {
     /// Unique ID assigned to request
     pub req_id: u32,
     /// Contents of request
-    pub contents: lemma::Form,
+    pub contents: lyric::Form,
 }
 
 /// Incoming response
@@ -39,14 +39,14 @@ pub struct Response {
     /// Unique ID of request this response is for
     pub req_id: u32,
     /// Contents of response
-    pub contents: Result<lemma::Form, Error>,
+    pub contents: Result<lyric::Form, Error>,
 }
 
 /// Error Type
 #[derive(thiserror::Error, Debug, Deserialize, Serialize, PartialEq)]
 pub enum Error {
     #[error("Error evaluating expression - {0}")]
-    EvaluationError(#[from] lemma::Error),
+    EvaluationError(#[from] lyric::Error),
 
     #[error("Unexpected error")]
     UnexpectedError,

@@ -1,11 +1,11 @@
 //! Tests for embedding in host application
 
 use assert_matches::assert_matches;
-use lemma::{parse, Error, FiberState, Inst, NativeFn, NativeFnVal, SymbolId};
+use lyric::{parse, Error, FiberState, Inst, NativeFn, NativeFnVal, SymbolId};
 use FiberState::*;
 
-type Fiber = lemma::Fiber<Ext>;
-type Val = lemma::Val<Ext>;
+type Fiber = lyric::Fiber<Ext>;
+type Val = lyric::Val<Ext>;
 
 #[derive(Debug, Clone, PartialEq)]
 enum Ext {

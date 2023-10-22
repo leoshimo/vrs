@@ -156,7 +156,7 @@ impl Kernel {
 // #[cfg(test)]
 // mod tests {
 //     use crate::{Client, Connection};
-//     use lemma::{parse as p, Form};
+//     use lyric::{parse as p, Form};
 //     use std::time::Duration;
 //     use tokio::{task::yield_now, time::timeout};
 //     use tracing_test::traced_test;

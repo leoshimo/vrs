@@ -103,7 +103,7 @@ directly, or as a development tool.
 NDJSON-based messages and syntactic sugar to it will be used to keep CLI
 interaction close to client API as possible.
 
-* Lemma Lang
+* Lyric Lang
 ** Goals
 
 Interactions from the REPL or hypermedia interface should be exactly how the
@@ -168,12 +168,12 @@ v0.1 sketch of Lisp as Hypermedia
 
 ** Quirk: Dynamic Scoping
 
-Lemma uses dynamic scoping instead of lexical scoping today.
+Lyric uses dynamic scoping instead of lexical scoping today.
 
 This is due to few reasons:
 - Dynamic scoping is [very useful](https://www.gnu.org/software/emacs/emacs-paper.html#SEC17)
 - It simplifies implementation of interpreter
-- It simplifies implementation serialization of lemma expressions
+- It simplifies implementation serialization of Lyric expressions
 
 It may be nice to default to lexical scoping and add closures if existing
 utility of free variables can be provided by some other mechanism, e.g. a
@@ -201,7 +201,7 @@ More specifically:
 4. Otherwise, process continues running, polling for subscribed events. When a
    event fires, loop again from (1).
 
-The =Process= implements this logic, driving an Lemma Lang interpreter via an
+The =Process= implements this logic, driving an Lyric Lang interpreter via an
 event-loop. The messages to event loop are themselves are sourced from
 subscriptions of the process, or some initial expression.
 
@@ -306,7 +306,7 @@ At a high level:
 * Process, Bytecode, and Fibers (A Sketch)
 
 TL;DR - to take advantage of tokio's cooperative multitasking model, the
-programs written in Lemma must itself allow for pausing and resuming execution
+programs written in Lyric must itself allow for pausing and resuming execution
 of instruction when there is a call to yield for.
 
 ** Fiber
@@ -322,7 +322,7 @@ such as IO, message-passing, etc.
 
 A Process is an unit in the runtime that is an active execution of a program.
 
-Internally, it manages a single Fiber that it initializes with the Lemma
+Internally, it manages a single Fiber that it initializes with the Lyric
 expression representing the spawned program.
 
 A high-level sketch looks like:
@@ -418,7 +418,7 @@ connection, and resume the fiber with a single execution to evaluate (?)
 
 *** Scenario: How =spawn= works
 
-In the Lemma interpreter environment, the =Process= will bind a symbol for
+In the Lyric interpreter environment, the =Process= will bind a symbol for
 =spawn= that returns a signal to yield for some external command to be
 processed, like =recv=
 
