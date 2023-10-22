@@ -27,7 +27,12 @@ impl<T: Extern> Fiber<T> {
         let global = Arc::new(Mutex::new(Env::standard()));
         Fiber {
             stack: vec![],
-            cframes: vec![CallFrame::from_bytecode(Arc::clone(&global), bytecode)],
+            cframes: vec![CallFrame::from_bytecode(
+                Arc::clone(&global),
+                bytecode,
+                0,
+                None,
+            )],
             global,
             is_yielding: false,
         }
@@ -123,15 +128,33 @@ impl<T: Extern> Fiber<T> {
 /// Single call frame of fiber
 #[derive(Debug)]
 struct CallFrame<T: Extern> {
+    /// instruction pointer in code
     ip: usize,
+    /// Code in callframe
     code: Vec<Inst<T>>,
+    /// Environment this callframe is operating in
     env: Arc<Mutex<Env<T>>>,
+    /// Length of stack when callframe was created
+    stack_len: usize,
+    /// Length of callframe of fiber to unwind to on error, if any
+    unwind_cf_len: Option<usize>,
 }
 
 impl<T: Extern> CallFrame<T> {
     /// Create a new callframe for executing given bytecode from start
-    fn from_bytecode(env: Arc<Mutex<Env<T>>>, code: Vec<Inst<T>>) -> Self {
-        Self { ip: 0, env, code }
+    fn from_bytecode(
+        env: Arc<Mutex<Env<T>>>,
+        code: Vec<Inst<T>>,
+        stack_len: usize,
+        unwind_cf_len: Option<usize>,
+    ) -> Self {
+        Self {
+            ip: 0,
+            env,
+            code,
+            stack_len,
+            unwind_cf_len,
+        }
     }
 
     /// Whether or not call frame should return (i.e. on last call frame execution)
@@ -171,132 +194,162 @@ fn run<T: Extern>(f: &mut Fiber<T>) -> Result<FiberState<T>> {
             f.stack,
         );
 
-        match inst {
-            Inst::PushConst(form) => {
-                f.stack.push(form);
-            }
-            Inst::DefSym(s) => {
-                let value = f.stack.last().ok_or(Error::UnexpectedStack(
-                    "Expected stack to be nonempty".to_string(),
-                ))?;
-                f.top().env.lock().unwrap().define(&s, value.clone());
-            }
-            Inst::SetSym(s) => {
-                let value = f.stack.last().ok_or(Error::UnexpectedStack(
-                    "Expected stack to be nonempty".to_string(),
-                ))?;
-                f.top().env.lock().unwrap().set(&s, value.clone())?
-            }
-            Inst::GetSym(s) => {
-                let value = f
-                    .top()
-                    .env
-                    .clone()
-                    .lock()
-                    .unwrap()
-                    .get(&s)
-                    .ok_or(Error::UndefinedSymbol(s))?;
-                f.stack.push(value.clone());
-            }
-            Inst::MakeFunc => {
-                let code = match f.stack.pop() {
-                    Some(Val::Bytecode(b)) => Ok(b),
-                    _ => Err(Error::UnexpectedStack(
-                        "Missing function bytecode".to_string(),
-                    )),
-                }?;
-
-                let params = match f.stack.pop() {
-                    Some(Val::List(p)) => Ok(p),
-                    _ => Err(Error::UnexpectedStack("Missing parameter list".to_string())),
-                }?;
-
-                let params = params
-                    .into_iter()
-                    .map(|f| match f {
-                        Val::Symbol(s) => Ok(s),
-                        _ => Err(Error::UnexpectedStack(
-                            "Unexpected parameter list".to_string(),
-                        )),
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-
-                f.stack.push(Val::Lambda(Lambda {
-                    params,
-                    code,
-                    env: Arc::clone(&f.top().env),
-                }));
-            }
-            Inst::CallFunc(nargs) => {
-                let mut args = vec![];
-                for _ in 0..nargs {
-                    let v = f.stack.pop().ok_or(Error::UnexpectedStack(
-                        "Missing expected {nargs} args".to_string(),
-                    ))?;
-                    args.push(v);
+        let res = || -> Result<()> {
+            match inst {
+                Inst::PushConst(form) => {
+                    f.stack.push(form);
                 }
-                let args = args.into_iter().rev();
+                Inst::DefSym(s) => {
+                    let value = f.stack.last().ok_or(Error::UnexpectedStack(
+                        "Expected stack to be nonempty".to_string(),
+                    ))?;
+                    f.top().env.lock().unwrap().define(&s, value.clone());
+                }
+                Inst::SetSym(s) => {
+                    let value = f.stack.last().ok_or(Error::UnexpectedStack(
+                        "Expected stack to be nonempty".to_string(),
+                    ))?;
+                    f.top().env.lock().unwrap().set(&s, value.clone())?
+                }
+                Inst::GetSym(s) => {
+                    let value = f
+                        .top()
+                        .env
+                        .clone()
+                        .lock()
+                        .unwrap()
+                        .get(&s)
+                        .ok_or(Error::UndefinedSymbol(s))?;
+                    f.stack.push(value.clone());
+                }
+                Inst::MakeFunc => {
+                    let code = match f.stack.pop() {
+                        Some(Val::Bytecode(b)) => Ok(b),
+                        _ => Err(Error::UnexpectedStack(
+                            "Missing function bytecode".to_string(),
+                        )),
+                    }?;
 
-                match f.stack.pop() {
-                    Some(Val::NativeFn(n)) => {
-                        let v = (n.func)(f, &args.collect::<Vec<_>>())?;
-                        match v {
-                            NativeFnVal::Return(v) => f.stack.push(v),
-                            NativeFnVal::Yield(v) => {
-                                f.stack.push(v);
-                                f.is_yielding = true;
+                    let params = match f.stack.pop() {
+                        Some(Val::List(p)) => Ok(p),
+                        _ => Err(Error::UnexpectedStack("Missing parameter list".to_string())),
+                    }?;
+
+                    let params = params
+                        .into_iter()
+                        .map(|f| match f {
+                            Val::Symbol(s) => Ok(s),
+                            _ => Err(Error::UnexpectedStack(
+                                "Unexpected parameter list".to_string(),
+                            )),
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+
+                    f.stack.push(Val::Lambda(Lambda {
+                        params,
+                        code,
+                        env: Arc::clone(&f.top().env),
+                    }));
+                }
+                Inst::CallFunc(nargs) => {
+                    let mut args = vec![];
+                    for _ in 0..nargs {
+                        let v = f.stack.pop().ok_or(Error::UnexpectedStack(
+                            "Missing expected {nargs} args".to_string(),
+                        ))?;
+                        args.push(v);
+                    }
+                    let args = args.into_iter().rev();
+
+                    match f.stack.pop() {
+                        Some(Val::NativeFn(n)) => {
+                            let v = (n.func)(f, &args.collect::<Vec<_>>())?;
+                            match v {
+                                NativeFnVal::Return(v) => f.stack.push(v),
+                                NativeFnVal::Yield(v) => {
+                                    f.stack.push(v);
+                                    f.is_yielding = true;
+                                }
                             }
                         }
-                    }
-                    Some(Val::Lambda(l)) => {
-                        let mut fn_env = Env::extend(&l.env);
-                        for (s, arg) in l.params.iter().zip(args) {
-                            fn_env.define(s, arg);
+                        Some(Val::Lambda(l)) => {
+                            let mut fn_env = Env::extend(&l.env);
+                            for (s, arg) in l.params.iter().zip(args) {
+                                fn_env.define(s, arg);
+                            }
+                            f.cframes.push(CallFrame::from_bytecode(
+                                Arc::new(Mutex::new(fn_env)),
+                                l.code,
+                                f.stack.len(),
+                                f.top().unwind_cf_len,
+                            ))
                         }
-                        f.cframes.push(CallFrame::from_bytecode(
-                            Arc::new(Mutex::new(fn_env)),
-                            l.code,
-                        ))
-                    }
-                    _ => {
-                        return Err(Error::UnexpectedStack(
-                            "Missing function object".to_string(),
-                        ))
-                    }
-                };
-            }
-            Inst::Eval => {
-                let val = f.stack.pop().ok_or(Error::UnexpectedStack(
-                    "Did not find form to eval on stack".to_string(),
-                ))?;
-                let bc = compile(&val)?;
-                let cur_env = &f.top().env;
-                f.cframes
-                    .push(CallFrame::from_bytecode(Arc::clone(cur_env), bc));
-            }
-            Inst::PopTop => {
-                if f.stack.pop().is_none() {
-                    return Err(Error::UnexpectedStack(
-                        "Attempting to pop empty stack".to_string(),
+                        _ => {
+                            return Err(Error::UnexpectedStack(
+                                "Missing function object".to_string(),
+                            ))
+                        }
+                    };
+                }
+                Inst::Eval(protected) => {
+                    // set new protected frame or inherit
+                    let unwind_cf_len = match protected {
+                        true => Some(f.cframes.len()),
+                        false => f.top().unwind_cf_len,
+                    };
+                    let val = f.stack.pop().ok_or(Error::UnexpectedStack(
+                        "Did not find form to eval on stack".to_string(),
+                    ))?;
+                    let bc = compile(&val)?;
+                    let cur_env = &f.top().env;
+                    f.cframes.push(CallFrame::from_bytecode(
+                        Arc::clone(cur_env),
+                        bc,
+                        f.stack.len(),
+                        unwind_cf_len,
                     ));
                 }
-            }
-            Inst::JumpFwd(fwd) => f.top_mut().ip += fwd,
-            Inst::PopJumpFwdIfTrue(offset) => {
-                let v = f.stack.pop().ok_or(Error::UnexpectedStack(
-                    "Expected conditional expression on stack".to_string(),
-                ))?;
-                if is_true(v)? {
-                    f.top_mut().ip += offset;
+                Inst::PopTop => {
+                    if f.stack.pop().is_none() {
+                        return Err(Error::UnexpectedStack(
+                            "Attempting to pop empty stack".to_string(),
+                        ));
+                    }
                 }
-            }
-            Inst::JumpBck(back) => f.top_mut().ip -= back,
-            Inst::YieldTop => f.is_yielding = true,
+                Inst::JumpFwd(fwd) => f.top_mut().ip += fwd,
+                Inst::PopJumpFwdIfTrue(offset) => {
+                    let v = f.stack.pop().ok_or(Error::UnexpectedStack(
+                        "Expected conditional expression on stack".to_string(),
+                    ))?;
+                    if is_true(v)? {
+                        f.top_mut().ip += offset;
+                    }
+                }
+                Inst::JumpBck(back) => f.top_mut().ip -= back,
+                Inst::YieldTop => f.is_yielding = true,
+            };
+
+            Ok(())
+        }();
+
+        // Error during execution of inst - unwind or error out
+        if let Err(e) = res {
+            let unwind_len = match f.top().unwind_cf_len {
+                Some(l) => l,
+                None => return Err(e),
+            };
+            let stack_len = f.cframes[unwind_len].stack_len;
+            f.cframes.truncate(unwind_len);
+            f.stack.truncate(stack_len);
+            f.stack.push(Val::Error(e));
         }
 
         // Implicit returns - Pop completed frames except root
         while f.cframes.len() > 1 && f.top().is_done() {
-            f.cframes.pop();
+            let cf = f.cframes.pop().unwrap();
+            if f.stack.len() != cf.stack_len + 1 {
+                panic!("Unexpected state during execution - all function are expected to have stack effect of 1");
+            }
         }
     }
 }
@@ -641,7 +694,7 @@ mod tests {
     #[test]
     #[traced_test]
     fn eval() {
-        let mut f = Fiber::from_bytecode(vec![PushConst(Val::Int(42)), Eval]);
+        let mut f = Fiber::from_bytecode(vec![PushConst(Val::Int(42)), Eval(false)]);
         assert_eq!(f.resume().unwrap(), Done(Val::Int(42)));
 
         let mut f = Fiber::from_bytecode(vec![
@@ -653,7 +706,7 @@ mod tests {
                     Val::keyword("c"),
                 ]),
             ])),
-            Eval,
+            Eval(false),
         ]);
 
         assert_eq!(
@@ -669,7 +722,7 @@ mod tests {
     #[test]
     #[traced_test]
     fn eval_error() {
-        let mut f = Fiber::from_bytecode(vec![PushConst(Val::symbol("jibberish")), Eval]);
+        let mut f = Fiber::from_bytecode(vec![PushConst(Val::symbol("jibberish")), Eval(false)]);
         assert_matches!(f.resume(), Err(Error::UndefinedSymbol(_)));
 
         let mut f = Fiber::from_bytecode(vec![
@@ -679,7 +732,7 @@ mod tests {
                 Val::keyword("b"),
                 Val::keyword("c"),
             ])),
-            Eval,
+            Eval(false),
         ]);
         assert_matches!(f.resume(), Err(Error::UndefinedSymbol(_)));
     }

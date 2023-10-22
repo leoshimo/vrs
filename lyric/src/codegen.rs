@@ -30,8 +30,8 @@ where
     PopJumpFwdIfTrue(usize),
     /// Yield TOS as value
     YieldTop,
-    /// Evaluate TOS and push value back onto stack
-    Eval,
+    /// Evaluate TOS and push value back onto stack. May be protected eval
+    Eval(bool),
 }
 
 /// Compile a value to bytecode representation
@@ -53,7 +53,8 @@ pub fn compile<T: Extern>(v: &Val<T>) -> Result<Vec<Inst<T>>> {
                     "let" => return compile_let(args),
                     "quote" => return compile_quote(args),
                     "set" => return compile_set(args),
-                    "eval" => return compile_eval(args),
+                    "eval" => return compile_eval(args, false),
+                    "peval" => return compile_eval(args, true),
                     "yield" => return compile_yield(args),
                     "loop" => return compile_loop(args),
                     _ => (),
@@ -158,7 +159,10 @@ fn compile_quote<T: Extern>(args: &[Val<T>]) -> Result<Vec<Inst<T>>> {
     Ok(vec![Inst::PushConst(v.clone())])
 }
 
-fn compile_eval<T: Extern>(args: &[Val<T>]) -> std::result::Result<Vec<Inst<T>>, Error> {
+fn compile_eval<T: Extern>(
+    args: &[Val<T>],
+    is_protected: bool,
+) -> std::result::Result<Vec<Inst<T>>, Error> {
     let v = match args {
         [v] => v,
         _ => {
@@ -169,7 +173,7 @@ fn compile_eval<T: Extern>(args: &[Val<T>]) -> std::result::Result<Vec<Inst<T>>,
     };
 
     let mut bc = compile(v)?;
-    bc.push(Inst::Eval);
+    bc.push(Inst::Eval(is_protected));
     Ok(bc)
 }
 
@@ -597,7 +601,7 @@ mod tests {
     fn compile_eval() {
         assert_eq!(
             compile(&f("(eval 42)")),
-            Ok(vec![PushConst(Val::Int(42)), Eval,])
+            Ok(vec![PushConst(Val::Int(42)), Eval(false),])
         );
         assert_eq!(
             compile(&f("(eval (+ 1 2))")),
@@ -606,14 +610,14 @@ mod tests {
                 PushConst(Val::Int(1)),
                 PushConst(Val::Int(2)),
                 CallFunc(2),
-                Eval,
+                Eval(false),
             ])
         );
         assert_eq!(
             compile(&f("(eval '(+ 1 2))")),
             Ok(vec![
                 PushConst(Val::List(vec![Val::symbol("+"), Val::Int(1), Val::Int(2),])),
-                Eval,
+                Eval(false),
             ])
         );
     }

@@ -12,5 +12,5 @@ tracing = "0.1.37"
 
 [dev-dependencies]
 assert_matches = "1.5.0"
-tracing-test = { version = "0.2.4", features=["no-env-filter"] }
+tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 void = "1.0.2"

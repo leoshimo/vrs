@@ -372,6 +372,100 @@ fn eval_peval() {
     );
 }
 
+#[test]
+fn peval_deep_callframes() {
+    {
+        let prog = r#"
+            (peval
+                '((lambda () (begin
+                    (+ 1 1)
+                    unknown_var
+                    (+ 1 1)))))
+        "#;
+        assert_eq!(
+            eval_expr(prog),
+            Ok(Val::Error(Error::UndefinedSymbol(SymbolId::from(
+                "unknown_var"
+            ))))
+        );
+    }
+
+    {
+        let prog = r#"
+            (peval
+                '((lambda () (begin
+                    (+ 1 1)
+                    (unknown_func)
+                    (+ 1 1)))))
+        "#;
+        assert_eq!(
+            eval_expr(prog),
+            Ok(Val::Error(Error::UndefinedSymbol(SymbolId::from(
+                "unknown_func"
+            ))))
+        );
+    }
+
+    {
+        let prog = r#"
+            (peval '(+ (+ 1 (+ 1 (+ 1 unknown_var)))))
+        "#;
+        assert_eq!(
+            eval_expr(prog),
+            Ok(Val::Error(Error::UndefinedSymbol(SymbolId::from(
+                "unknown_var"
+            ))))
+        );
+    }
+}
+
+#[test]
+fn peval_in_peval() {
+    {
+        let prog = r#"
+            (peval (peval
+                '(begin
+                    (+ 1 1)
+                    unknown_var
+                    (+ 1 1))))
+        "#;
+        assert_eq!(
+            eval_expr(prog),
+            Ok(Val::Error(Error::UndefinedSymbol(SymbolId::from(
+                "unknown_var"
+            ))))
+        );
+    }
+
+    {
+        let prog = r#"
+            (peval (peval
+                '(begin
+                    (+ 1 1)
+                    (unknown_func)
+                    (+ 1 1))))
+        "#;
+        assert_eq!(
+            eval_expr(prog),
+            Ok(Val::Error(Error::UndefinedSymbol(SymbolId::from(
+                "unknown_func"
+            ))))
+        );
+    }
+
+    {
+        let prog = r#"
+            (peval (peval '(+ (+ 1 (+ 1 (+ 1 unknown_var))))))
+        "#;
+        assert_eq!(
+            eval_expr(prog),
+            Ok(Val::Error(Error::UndefinedSymbol(SymbolId::from(
+                "unknown_var"
+            ))))
+        );
+    }
+}
+
 // TODO: Test - if with blocks
 
 //     #[test]
