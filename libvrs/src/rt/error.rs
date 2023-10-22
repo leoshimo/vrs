@@ -30,4 +30,13 @@ pub enum Error {
 
     #[error("Failed to join process")]
     ProcessJoinError(#[from] oneshot::error::RecvError),
+
+    #[error("Unexpected signal yield")]
+    UnexpectedSignal,
+
+    #[error("Process IO Error - {0}")]
+    ProcessIOError(String),
+
+    #[error("IO Error - {0}")]
+    IOError(#[from] std::io::Error),
 }

@@ -1,53 +1,157 @@
 #![allow(dead_code)]
 use crate::rt::{Error, Result};
-use lemma::FiberState;
-use tokio::sync::{mpsc, oneshot};
+use crate::{Connection, Response};
+use lemma::{FiberState, Form, NativeFn, NativeFnVal, SymbolId};
+use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 
-pub(crate) type ProcessSet = JoinSet<Result<Val>>;
+pub(crate) type ProcessSet = JoinSet<Result<ProcessResult>>;
 
 /// Handle to process
 #[derive(Debug)]
 pub struct ProcessHandle {
-    msg_tx: mpsc::Sender<Message>,
+    msg_tx: mpsc::Sender<()>,
 }
 
 /// Values produced by processes
-pub type Val = lemma::Val<Signal>;
+pub type Val = lemma::Val<Extern>;
 
-/// Signal type between Fiber and hosting Process
+/// Extern type between Fiber and hosting Process
 #[derive(Debug, Clone, PartialEq)]
-pub enum Signal {}
+pub enum Extern {
+    /// IO Commands
+    IOCmd(Box<IOCmd>),
+}
+
+/// IO Commands that can be yielded from fiber
+#[derive(Debug, Clone, PartialEq)]
+pub enum IOCmd {
+    /// Signal to notify for RecvConn IO
+    RecvConn,
+    SendConn(i32, lemma::Val<Extern>),
+}
+
+/// The result of process
+#[derive(Debug, Clone, PartialEq)]
+pub enum ProcessResult {
+    /// Completed with value
+    Done(Val),
+    /// Cancelled for closed event loop
+    Cancelled,
+}
 
 /// Spawn a new process
-pub fn spawn(prog: Val, procs: &mut ProcessSet) -> Result<ProcessHandle> {
-    let (msg_tx, _msg_rx) = mpsc::channel(32);
-
+pub fn spawn(prog: Val, procs: &mut ProcessSet, conn: Option<Connection>) -> Result<ProcessHandle> {
+    let (msg_tx, mut msg_rx) = mpsc::channel(32);
     procs.spawn(async move {
-        let mut fiber = Fiber::from_val(&prog)?;
-        let state = fiber.resume()?;
-        let val = match state {
-            FiberState::Done(val) => val,
-            FiberState::Yield(_) => todo!(),
-        };
-        Ok::<Val, Error>(val)
+        let mut fiber = create_fiber(&prog)?;
+        let mut state = fiber.resume()?;
+        let mut conn = conn;
+        loop {
+            match state {
+                FiberState::Done(v) => return Ok(ProcessResult::Done(v)),
+                FiberState::Yield(ref v) => {
+                    tokio::select!(
+                        Some(_msg) = msg_rx.recv() => {
+                            // TODO: Wire up w/ proc-handle messages
+                        }
+                        io_result = handle_io(v.clone(), &mut conn) => {
+                            let io_result = io_result?;
+                            state = fiber.resume_from_yield(io_result)?;
+                        }
+                    );
+                }
+            }
+        }
     });
 
     Ok(ProcessHandle { msg_tx })
 }
 
-/// Running process in runtime
-struct Process {
-    /// Executing fiber of process
-    fiber: Fiber,
+fn create_fiber(prog: &Val) -> Result<Fiber> {
+    let mut fiber = Fiber::from_val(prog)?;
+
+    // TODO: Revisit request / response with recv_conn / send_conn
+    fiber.bind(NativeFn {
+        symbol: SymbolId::from("recv_conn"),
+        func: |_, _| {
+            Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
+                IOCmd::RecvConn,
+            )))))
+        },
+    });
+    fiber.bind(NativeFn {
+        symbol: SymbolId::from("send_conn"),
+        func: |_, args| -> std::result::Result<NativeFnVal<Extern>, lemma::Error> {
+            let (id, val) = match args {
+                [Val::Int(id), v] => (id, v.clone()),
+                _ => {
+                    return Err(lemma::Error::InvalidExpression(
+                        "send_conn expects two arguments".to_string(),
+                    ))
+                }
+            };
+            Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
+                IOCmd::SendConn(*id, val),
+            )))))
+        },
+    });
+
+    Ok(fiber)
 }
 
-type Fiber = lemma::Fiber<Signal>;
+async fn handle_io(val: Val, conn: &mut Option<Connection>) -> Result<Val> {
+    let iocmd = match val {
+        Val::Extern(Extern::IOCmd(cmd)) => cmd,
+        _ => return Err(Error::UnexpectedSignal),
+    };
 
-/// Messages driving process execution
-enum Message {}
+    // TODO: How should errors from handling IO commands be handled - native / fiber?
+    match *iocmd {
+        IOCmd::RecvConn => {
+            let req = conn
+                .as_mut()
+                .ok_or(Error::ProcessIOError(
+                    "No connection bound to processs".to_string(),
+                ))?
+                .recv_req()
+                .await
+                .ok_or(Error::ProcessIOError("Connection closed".to_string()))??;
 
-impl std::fmt::Display for Signal {
+            Ok(Val::List(vec![
+                Val::Int(req.req_id as i32),
+                req.contents.into(),
+            ]))
+        }
+        IOCmd::SendConn(req_id, contents) => {
+            let contents = match TryInto::<Form>::try_into(contents) {
+                Ok(c) => c,
+                Err(e) => return Ok(Val::Error(e)),
+            };
+
+            let resp = Response {
+                req_id: req_id as u32,
+                contents: Ok(contents),
+            };
+
+            let resp = conn
+                .as_mut()
+                .ok_or(Error::ProcessIOError(
+                    "No connection bound to processs".to_string(),
+                ))?
+                .send_resp(resp)
+                .await;
+            match resp {
+                Ok(()) => Ok(Val::symbol("ok")),
+                Err(_) => Ok(Val::symbol("err")),
+            }
+        }
+    }
+}
+
+type Fiber = lemma::Fiber<Extern>;
+
+impl std::fmt::Display for Extern {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "<signal>")
     }
@@ -57,17 +161,19 @@ impl std::fmt::Display for Signal {
 mod tests {
 
     use assert_matches::assert_matches;
-    use lemma::parse;
+    use lemma::{parse, Form};
+
+    use crate::Request;
 
     use super::*;
 
     #[tokio::test]
     async fn spawn_simple() {
         let mut procs = ProcessSet::new();
-        let _ = spawn(Val::string("Hello"), &mut procs).unwrap();
+        let _ = spawn(Val::string("Hello"), &mut procs, None).unwrap();
         assert_eq!(
             procs.join_next().await.unwrap().unwrap().unwrap(),
-            Val::string("Hello"),
+            ProcessResult::Done(Val::string("Hello")),
         );
     }
 
@@ -75,13 +181,13 @@ mod tests {
     async fn processes_are_isolated() {
         let mut procs = ProcessSet::new();
 
-        let _ = spawn(parse("(def x 0)").unwrap().into(), &mut procs).unwrap();
+        let _ = spawn(parse("(def x 0)").unwrap().into(), &mut procs, None).unwrap();
         assert_eq!(
             procs.join_next().await.unwrap().unwrap().unwrap(),
-            Val::Int(0),
+            ProcessResult::Done(Val::Int(0)),
         );
 
-        let _ = spawn(parse("x").unwrap().into(), &mut procs).unwrap();
+        let _ = spawn(parse("x").unwrap().into(), &mut procs, None).unwrap();
         assert_matches!(
             procs.join_next().await.unwrap().unwrap(),
             Err(Error::EvaluationError(lemma::Error::UndefinedSymbol(_))),
@@ -89,5 +195,69 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn recv_conn() {
+        let (local, mut remote) = Connection::pair().unwrap();
+
+        let mut procs = ProcessSet::new();
+        let _ = spawn(
+            parse("(recv_conn)").unwrap().into(),
+            &mut procs,
+            Some(local),
+        );
+
+        let _ = remote
+            .send_req(Request {
+                req_id: 0,
+                contents: Form::string("Hello world"),
+            })
+            .await;
+
+        assert_eq!(
+            procs.join_next().await.unwrap().unwrap().unwrap(),
+            ProcessResult::Done(Val::List(vec![Val::Int(0), Val::string("Hello world")])),
+            "recv_conn returns the request on connection w/ request id and contents"
+        );
+    }
+
+    #[tokio::test]
+    async fn send_conn() {
+        let (local, mut remote) = Connection::pair().unwrap();
+        let mut procs = ProcessSet::new();
+
+        let _ = spawn(
+            parse("(send_conn 10 \"Hello from process\")")
+                .unwrap()
+                .into(),
+            &mut procs,
+            Some(local),
+        );
+
+        let resp = remote.recv_resp().await;
+
+        assert_eq!(
+            procs.join_next().await.unwrap().unwrap().unwrap(),
+            ProcessResult::Done(Val::symbol("ok")),
+        );
+        assert_matches!(
+            resp,
+            Some(Ok(r)) if r.req_id == 10 && r.contents == Ok(Form::string("Hello from process"))
+        );
+    }
+
+    // TODO: Implement + test preemption
+    // #[tokio::test]
+    // async fn drop_handle_ends_process() {
+    //     let mut procs = ProcessSet::new();
+
+    //     let handle = spawn(parse("(loop 0)").unwrap().into(), &mut procs).unwrap();
+    //     drop(handle)l
+
+    //     assert_eq!(procs.join_next().await.unwrap().unwrap().unwrap(),
+    //                ProcessResult::Cancelled);
+    // }
+
+    // TODO: Test that top-level yield of jibberish like (yield 1) results in process terminating w/ error
     // TODO: Test spawning invalid expressions - quote w/o any expressions
+    // TODO: Test that dropping process handle ends process
 }
