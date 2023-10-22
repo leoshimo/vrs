@@ -27,7 +27,7 @@ pub fn peval_fn<T: Extern>() -> NativeFn<T> {
                     ))
                 }
             };
-            // TODO: Hack - This doesn't handle yields properly for nested yields, e.g. calling `recv` inside a shell repl
+            // FIXME: Hack - This does not handle yields in inner fiber that isn't the last expression, since fiber state is discarded when this fiber is resumed.
             let mut f = Fiber::from_val(v)?.with_env(f.env());
             match f.resume() {
                 Ok(FiberState::Done(v)) => Ok(NativeFnVal::Return(v)),
