@@ -10,7 +10,12 @@ pub(crate) type ProcessSet = JoinSet<Result<ProcessResult>>;
 /// Handle to process
 #[derive(Debug)]
 pub struct ProcessHandle {
-    msg_tx: mpsc::Sender<()>,
+    msg_tx: mpsc::Sender<Message>,
+}
+
+#[derive(Debug)]
+enum Message {
+    Kill,
 }
 
 /// Values produced by processes
@@ -41,6 +46,13 @@ pub enum ProcessResult {
     Cancelled,
 }
 
+impl ProcessHandle {
+    /// Kill process. Effect is not immediate.
+    pub async fn kill(&self) {
+        let _ = self.msg_tx.send(Message::Kill).await;
+    }
+}
+
 /// Spawn a new process
 pub fn spawn(prog: Val, procs: &mut ProcessSet, conn: Option<Connection>) -> Result<ProcessHandle> {
     let (msg_tx, mut msg_rx) = mpsc::channel(32);
@@ -51,12 +63,12 @@ pub fn spawn(prog: Val, procs: &mut ProcessSet, conn: Option<Connection>) -> Res
         loop {
             match state {
                 FiberState::Done(v) => return Ok(ProcessResult::Done(v)),
-                FiberState::Yield(ref v) => {
+                FiberState::Yield(v) => {
                     tokio::select!(
-                        Some(_msg) = msg_rx.recv() => {
-                            // TODO: Wire up w/ proc-handle messages
-                        }
-                        io_result = handle_io(v.clone(), &mut conn) => {
+                        Some(msg) = msg_rx.recv() => match msg {
+                            Message::Kill => return Ok(ProcessResult::Cancelled),
+                        },
+                        io_result = handle_io(v, &mut conn) => {
                             let io_result = io_result?;
                             state = fiber.resume_from_yield(io_result)?;
                         }
@@ -261,4 +273,5 @@ mod tests {
     // TODO: Test that top-level yield of jibberish like (yield 1) results in process terminating w/ error
     // TODO: Test spawning invalid expressions - quote w/o any expressions
     // TODO: Test that dropping process handle ends process
+    // TODO: Test ProcessHandle::kill
 }
