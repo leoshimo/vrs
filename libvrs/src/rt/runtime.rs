@@ -17,7 +17,7 @@ impl Runtime {
 
     /// Notify the runtime of new connection to handle
     pub async fn handle_conn(&self, conn: Connection) -> Result<ProcessHandle> {
-        self.kernel_task.spawn_proc(Some(conn)).await
+        self.kernel_task.spawn_for_conn(conn).await
     }
 }
 

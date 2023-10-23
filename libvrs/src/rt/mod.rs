@@ -1,12 +1,11 @@
 mod error;
 mod kernel;
-mod process;
 mod runtime;
-mod subscription;
 
-mod process2;
+mod proc;
+mod proc_io;
 
 pub use error::Error;
 pub type Result<T> = std::result::Result<T, Error>;
-pub use process::{ProcessHandle, ProcessId};
+pub use proc::{ProcessHandle, ProcessId};
 pub use runtime::Runtime;
