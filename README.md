@@ -15,15 +15,9 @@
 ## What is this?
 
 VRS is a WIP personal software runtime, inspired by Emacs, Erlang, Unix, Plan 9,
-and Hypermedia systems.
+and Hypermedia systems. 
 
-The intention is to incorporate ideas from each of those systems into one,
-cohesive experience in service of my personal happiness.
-
-Core principles are simplicity and joy that allows individuals to build
-rich software for themselves.
-
-[Renaissance tech for renaissance people](https://web.archive.org/web/20210428062809/https://twitter.com/dhh/status/1341758748717510659).
+Its key principles are simplicity and joy.
 
 ## Status
 
