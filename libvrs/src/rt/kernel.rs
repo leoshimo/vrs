@@ -182,7 +182,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[tracing_test::traced_test]
     async fn kernel_spawn_conn_drop() {
         let (local, remote) = Connection::pair().unwrap();
 
@@ -219,5 +218,27 @@ mod tests {
             k.procs().await.unwrap().is_empty(),
             "Should terminate conn process for killed process"
         );
+    }
+
+    #[tokio::test]
+    async fn kernel_spawn_kernel_drop() {
+        use std::time::Duration;
+        use tokio::time::timeout;
+
+        let (local, _remote) = Connection::pair().unwrap();
+        let k = start();
+        let hdl = k
+            .spawn_for_conn(local)
+            .await
+            .expect("Kernel should spawn new process");
+
+        drop(k); // drop kernel
+
+        let proc_exit = tokio::spawn(async move {
+            hdl.join().await;
+        });
+        let _ = timeout(Duration::from_millis(5), proc_exit)
+            .await
+            .expect("Process should terminate for dropped kernel before timeout");
     }
 }
