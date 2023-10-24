@@ -31,7 +31,6 @@ pub enum Val<T: Extern, L: Locals> {
     Error(Error),
     /// References as a value
     Ref(Ref),
-    // TOOD: Consider fiber-local references, instead of generic within val
     /// Externally defined type as Val
     Extern(T),
 }
