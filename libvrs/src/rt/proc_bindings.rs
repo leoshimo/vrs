@@ -42,7 +42,6 @@ pub(crate) fn self_fn() -> NativeFn {
         func: |f, _| {
             let pid = f.locals().pid;
             Ok(NativeFnVal::Return(Val::Int(pid as i32)))
-        }
+        },
     }
 }
-

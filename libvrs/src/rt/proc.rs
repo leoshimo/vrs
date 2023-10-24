@@ -269,24 +269,18 @@ mod tests {
     async fn get_self() {
         let mut procs = ProcessSet::new();
 
-        let _ = Process::from_expr(0, "(self)")
-            .unwrap()
-            .spawn(&mut procs);
+        let _ = Process::from_expr(0, "(self)").unwrap().spawn(&mut procs);
 
         let res = procs.join_next().await.unwrap().unwrap();
-        assert_matches!(
-            res.status,
-            Ok(ProcessResult::Done(Val::Int(_))));
+        assert_matches!(res.status, Ok(ProcessResult::Done(Val::Int(_))));
     }
 
     // TODO: Implement + test preemption
     // #[tokio::test]
     // async fn drop_handle_ends_process() {
     //     let mut procs = ProcessSet::new();
-
     //     let handle = spawn(parse("(loop 0)").unwrap().into(), &mut procs).unwrap();
-    //     drop(handle)l
-
+    //     drop(handle)
     //     assert_eq!(procs.join_next().await.unwrap().unwrap().unwrap(),
     //                ProcessResult::Cancelled);
     // }
