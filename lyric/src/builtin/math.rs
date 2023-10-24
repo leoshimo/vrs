@@ -1,4 +1,4 @@
-//! Builtin func
+//! Math builtins
 use crate::{Extern, NativeFn, NativeFnVal, SymbolId, Val};
 
 /// Native binding for `+`
