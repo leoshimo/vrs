@@ -260,4 +260,5 @@ fn get_set_locals() {
     });
 
     assert_eq!(f.resume().unwrap(), FiberState::Done(Val::Int(42)));
+    assert_eq!(f.locals().val, 42);
 }
