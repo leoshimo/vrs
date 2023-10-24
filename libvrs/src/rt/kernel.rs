@@ -108,14 +108,16 @@ pub enum Event {
 
 /// The runtime kernel task
 struct Kernel {
+    weak_hdl: WeakKernelHandle,
     procs: ProcessSet,
     proc_hdls: HashMap<ProcessId, ProcessHandle>,
     next_proc_id: usize,
 }
 
 impl Kernel {
-    pub fn new(_handle: KernelHandle) -> Self {
+    pub fn new(handle: KernelHandle) -> Self {
         Self {
+            weak_hdl: handle.downgrade(),
             procs: ProcessSet::new(),
             proc_hdls: HashMap::new(),
             next_proc_id: 0,
@@ -151,7 +153,7 @@ impl Kernel {
 
     /// Spawn a new process
     fn spawn(&mut self, proc: Process) -> Result<ProcessHandle> {
-        let hdl = proc.spawn(&mut self.procs)?;
+        let hdl = proc.kernel(self.weak_hdl.clone()).spawn(&mut self.procs)?;
         self.proc_hdls.insert(hdl.id(), hdl.clone());
         Ok(hdl)
     }

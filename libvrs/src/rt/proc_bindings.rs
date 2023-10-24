@@ -45,3 +45,15 @@ pub(crate) fn self_fn() -> NativeFn {
         },
     }
 }
+
+/// Bindings to list processes
+pub(crate) fn ps_fn() -> NativeFn {
+    NativeFn {
+        symbol: SymbolId::from("ps"),
+        func: |_, _| {
+            Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
+                IOCmd::ListProcesses,
+            )))))
+        },
+    }
+}

@@ -1,3 +1,4 @@
+use super::kernel::WeakKernelHandle;
 use super::proc_bindings;
 use super::proc_io::{IOCmd, ProcIO};
 use crate::rt::{Error, Result};
@@ -73,12 +74,13 @@ pub struct ProcessExit {
 
 impl Process {
     /// Create a new process from val
-    pub fn from_val(id: ProcessId, val: Val) -> Result<Self> {
+    pub(crate) fn from_val(id: ProcessId, val: Val) -> Result<Self> {
         let mut fiber = Fiber::from_val(&val, Locals { pid: id })?;
         fiber
             .bind(proc_bindings::recv_req_fn())
             .bind(proc_bindings::send_resp_fn())
-            .bind(proc_bindings::self_fn());
+            .bind(proc_bindings::self_fn())
+            .bind(proc_bindings::ps_fn());
         Ok(Self {
             id,
             fiber,
@@ -87,18 +89,24 @@ impl Process {
     }
 
     /// Create a new process from expression
-    pub fn from_expr(id: ProcessId, expr: &str) -> Result<Self> {
+    pub(crate) fn from_expr(id: ProcessId, expr: &str) -> Result<Self> {
         Self::from_val(id, parse(expr)?.into())
     }
 
     /// Set connection on process
-    pub fn conn(mut self, conn: Connection) -> Self {
+    pub(crate) fn conn(mut self, conn: Connection) -> Self {
         self.io.conn(conn);
         self
     }
 
+    /// Set kernel handle for process
+    pub(crate) fn kernel(mut self, k: WeakKernelHandle) -> Self {
+        self.io.kernel(k);
+        self
+    }
+
     /// Spawn a process
-    pub fn spawn(self, procs: &mut ProcessSet) -> Result<ProcessHandle> {
+    pub(crate) fn spawn(self, procs: &mut ProcessSet) -> Result<ProcessHandle> {
         info!("proc spawn - {}", self.id);
 
         let (msg_tx, mut msg_rx) = mpsc::channel(32);

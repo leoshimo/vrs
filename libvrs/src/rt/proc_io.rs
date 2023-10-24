@@ -1,4 +1,5 @@
 //! Process IO
+use super::kernel::WeakKernelHandle;
 use lyric::Form;
 
 use crate::connection::Error as ConnError;
@@ -12,6 +13,7 @@ use crate::rt::{Error, Result};
 pub(crate) struct ProcIO {
     conn: Option<Connection>,
     pending: Option<u32>,
+    kernel: Option<WeakKernelHandle>,
 }
 
 /// Set of IO command ProcIO can handle
@@ -19,6 +21,7 @@ pub(crate) struct ProcIO {
 pub enum IOCmd {
     RecvRequest,
     SendRequest(Val),
+    ListProcesses,
 }
 
 impl ProcIO {
@@ -27,12 +30,19 @@ impl ProcIO {
         Self {
             conn: None,
             pending: None,
+            kernel: None,
         }
     }
 
     /// Set connection on IO
     pub(crate) fn conn(&mut self, conn: Connection) -> &mut Self {
         self.conn = Some(conn);
+        self
+    }
+
+    /// Set kernel handle
+    pub(crate) fn kernel(&mut self, kernel: WeakKernelHandle) -> &mut Self {
+        self.kernel = Some(kernel);
         self
     }
 
@@ -59,6 +69,20 @@ impl ProcIO {
                 })
                 .await?;
                 Ok(Val::symbol("ok"))
+            }
+            IOCmd::ListProcesses => {
+                let kernel = self
+                    .kernel
+                    .as_ref()
+                    .and_then(|k| k.upgrade())
+                    .ok_or(Error::NoKernel)?;
+                let procs = kernel
+                    .procs()
+                    .await?
+                    .into_iter()
+                    .map(|pid| Val::Int(pid as i32))
+                    .collect::<Vec<_>>();
+                Ok(Val::List(procs))
             }
         }
     }

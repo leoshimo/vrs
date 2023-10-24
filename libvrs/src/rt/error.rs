@@ -37,4 +37,7 @@ pub enum Error {
 
     #[error("IO Error - {0}")]
     IOError(#[from] std::io::Error),
+
+    #[error("No kernel")]
+    NoKernel,
 }
