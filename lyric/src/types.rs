@@ -1,6 +1,6 @@
 //! Types in Lisp virtual machine
 use crate::codegen::Inst;
-use crate::{Env, Error, Fiber, Result};
+use crate::{Env, Error, Fiber, Ref, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
@@ -29,6 +29,9 @@ pub enum Val<T: Extern> {
     Bytecode(Vec<Inst<T>>),
     /// Error as a value
     Error(Error),
+    /// References as a value
+    Ref(Ref),
+    // TOOD: Consider fiber-local references, instead of generic within val
     /// Externally defined type as Val
     Extern(T),
 }
@@ -174,6 +177,7 @@ where
             Val::Bytecode(_) => write!(f, "<bytecode>"),
             Val::Error(e) => write!(f, "<error {e}>"),
             Val::Extern(e) => write!(f, "<extern {e}>"),
+            Val::Ref(r) => write!(f, "<ref {}>", r.0),
         }
     }
 }
@@ -272,6 +276,7 @@ impl<T: Extern> TryFrom<Val<T>> for Form {
             Val::Extern(_) => Err(Error::InvalidFormToExpr(
                 "extern values are not exprs".to_string(),
             )),
+            Val::Ref(_) => Err(Error::InvalidFormToExpr("refs are not exprs".to_string())),
         }
     }
 }

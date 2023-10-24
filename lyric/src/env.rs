@@ -19,6 +19,7 @@ impl<T: Extern> Env<T> {
             parent: None,
         };
         e.bind(builtin::plus_fn());
+        e.bind(builtin::ref_fn());
         e
     }
 

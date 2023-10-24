@@ -466,6 +466,15 @@ fn peval_in_peval() {
     }
 }
 
+#[test]
+fn refs() {
+    let r1 = eval_expr("(ref)");
+    let r2 = eval_expr("(ref)");
+    assert_matches!(r1, Ok(Val::Ref(_)));
+    assert_matches!(r2, Ok(Val::Ref(_)));
+    assert_ne!(r1, r2, "refs should be unique-ish");
+}
+
 // TODO: Test - if with blocks
 
 //     #[test]

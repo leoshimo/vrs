@@ -8,6 +8,7 @@ pub mod env;
 pub mod fiber;
 pub mod types;
 
+pub use builtin::Ref;
 pub use codegen::compile;
 pub use codegen::Inst;
 pub use env::Env;
