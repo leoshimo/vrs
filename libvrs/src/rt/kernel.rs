@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Runtime Kernel Task
 use std::collections::HashMap;
 
@@ -6,6 +8,18 @@ use crate::rt::{proc::Process, Error, ProcessId, Result};
 use crate::Connection;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, info};
+
+/// Handle to `Kernel`
+#[derive(Debug, Clone)]
+pub(crate) struct KernelHandle {
+    ev_tx: mpsc::Sender<Event>,
+}
+
+/// Handle to `Kernel`
+#[derive(Debug, Clone)]
+pub(crate) struct WeakKernelHandle {
+    ev_tx: mpsc::WeakSender<Event>,
+}
 
 /// Starts the kernel task, which manages processes on runtime
 pub(crate) fn start() -> KernelHandle {
@@ -33,13 +47,6 @@ pub(crate) fn start() -> KernelHandle {
     handle
 }
 
-/// Handle to `Kernel`
-#[derive(Clone)]
-pub(crate) struct KernelHandle {
-    ev_tx: mpsc::Sender<Event>,
-}
-
-#[allow(dead_code)]
 impl KernelHandle {
     /// Spawn a new program
     pub(crate) async fn spawn_prog(&self, prog: proc::Val) -> Result<ProcessHandle> {
@@ -72,6 +79,21 @@ impl KernelHandle {
             .map_err(|_| Error::FailedToMessageKernel("procs failed".to_string()))?;
         rx.await
             .map_err(Error::FailedToReceiveResponseFromKernelTask)
+    }
+
+    /// Downgrade a strong kernel handle to weak handle
+    pub(crate) fn downgrade(&self) -> WeakKernelHandle {
+        WeakKernelHandle {
+            ev_tx: self.ev_tx.downgrade(),
+        }
+    }
+}
+
+impl WeakKernelHandle {
+    /// Update a weak process handle into strong ref
+    pub(crate) fn upgrade(&self) -> Option<KernelHandle> {
+        let ev_tx = self.ev_tx.upgrade()?;
+        Some(KernelHandle { ev_tx })
     }
 }
 
@@ -153,6 +175,7 @@ impl Kernel {
 #[cfg(test)]
 mod tests {
     use crate::{Client, Connection};
+    use assert_matches::assert_matches;
     use lyric::{parse as p, Form};
 
     use super::*;
@@ -221,7 +244,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn kernel_spawn_kernel_drop() {
+    async fn kernel_drop() {
         use std::time::Duration;
         use tokio::time::timeout;
 
@@ -240,5 +263,22 @@ mod tests {
         let _ = timeout(Duration::from_millis(5), proc_exit)
             .await
             .expect("Process should terminate for dropped kernel before timeout");
+    }
+
+    #[tokio::test]
+    async fn kernel_weak_handle() {
+        let (local, _remote) = Connection::pair().unwrap();
+        let k = start();
+        let weak_k = k.downgrade();
+        let _ = k
+            .spawn_for_conn(local)
+            .await
+            .expect("Kernel should spawn new process");
+
+        assert_matches!(weak_k.upgrade(), Some(_));
+
+        drop(k); // drop kernel
+
+        assert_matches!(weak_k.upgrade(), None);
     }
 }
