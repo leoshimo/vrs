@@ -3,6 +3,7 @@ mod kernel;
 mod runtime;
 
 mod proc;
+mod proc_bindings;
 mod proc_io;
 
 pub use error::Error;

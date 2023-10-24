@@ -1,0 +1,36 @@
+//! Bindings for Process Fibers
+use super::proc::{Extern, Val};
+use super::proc_io::IOCmd;
+use lyric::{NativeFn, NativeFnVal, SymbolId};
+
+/// Binding for `recv_req` to receive requests over client connection
+pub(crate) fn recv_req_fn() -> NativeFn<Extern> {
+    NativeFn {
+        symbol: SymbolId::from("recv_req"),
+        func: |_, _| {
+            Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
+                IOCmd::RecvRequest,
+            )))))
+        },
+    }
+}
+
+/// Binding for `send_resp` to send responses over client connection
+pub(crate) fn send_resp_fn() -> NativeFn<Extern> {
+    NativeFn {
+        symbol: SymbolId::from("send_resp"),
+        func: |_, args| -> std::result::Result<NativeFnVal<Extern>, lyric::Error> {
+            let val = match args {
+                [v] => v.clone(),
+                _ => {
+                    return Err(lyric::Error::InvalidExpression(
+                        "send_conn expects two arguments".to_string(),
+                    ))
+                }
+            };
+            Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
+                IOCmd::SendRequest(val),
+            )))))
+        },
+    }
+}

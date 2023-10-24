@@ -1,7 +1,8 @@
+use super::proc_bindings;
 use super::proc_io::{IOCmd, ProcIO};
 use crate::rt::{Error, Result};
 use crate::Connection;
-use lyric::{parse, FiberState, NativeFn, NativeFnVal, SymbolId};
+use lyric::{parse, FiberState};
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 
@@ -58,30 +59,8 @@ impl Process {
     pub fn from_val(id: ProcessId, val: Val) -> Result<Self> {
         let mut fiber = Fiber::from_val(&val)?;
         fiber
-            .bind(NativeFn {
-                symbol: SymbolId::from("recv_req"),
-                func: |_, _| {
-                    Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
-                        IOCmd::RecvRequest,
-                    )))))
-                },
-            })
-            .bind(NativeFn {
-                symbol: SymbolId::from("send_resp"),
-                func: |_, args| -> std::result::Result<NativeFnVal<Extern>, lyric::Error> {
-                    let val = match args {
-                        [v] => v.clone(),
-                        _ => {
-                            return Err(lyric::Error::InvalidExpression(
-                                "send_conn expects two arguments".to_string(),
-                            ))
-                        }
-                    };
-                    Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
-                        IOCmd::SendRequest(val),
-                    )))))
-                },
-            });
+            .bind(proc_bindings::recv_req_fn())
+            .bind(proc_bindings::send_resp_fn());
         Ok(Self {
             id,
             fiber,
