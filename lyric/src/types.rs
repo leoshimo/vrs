@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 
 /// All values in VM that can be manipulated
 #[derive(Debug, Clone, PartialEq)]
-pub enum Val<T: Extern> {
+pub enum Val<T: Extern, L: Locals> {
     /// No value
     Nil,
     /// True or false
@@ -20,13 +20,13 @@ pub enum Val<T: Extern> {
     /// Unique strings
     Keyword(KeywordId),
     /// Lists
-    List(Vec<Val<T>>),
+    List(Vec<Val<T, L>>),
     /// A callable function object
-    Lambda(Lambda<T>),
+    Lambda(Lambda<T, L>),
     /// A callable native function object
-    NativeFn(NativeFn<T>),
+    NativeFn(NativeFn<T, L>),
     /// Compiled bytecode sequence
-    Bytecode(Vec<Inst<T>>),
+    Bytecode(Vec<Inst<T, L>>),
     /// Error as a value
     Error(Error),
     /// References as a value
@@ -51,25 +51,25 @@ pub enum Form {
 
 /// A function object that closes over environment it was created in
 #[derive(Clone)]
-pub struct Lambda<T: Extern> {
+pub struct Lambda<T: Extern, L: Locals> {
     pub params: Vec<SymbolId>,
-    pub code: Vec<Inst<T>>,
-    pub env: Arc<Mutex<Env<T>>>,
+    pub code: Vec<Inst<T, L>>,
+    pub env: Arc<Mutex<Env<T, L>>>,
 }
 
 /// A native founction bound to given symbol
 #[allow(clippy::type_complexity)]
 #[derive(Debug, Clone, PartialEq)]
-pub struct NativeFn<T: Extern> {
+pub struct NativeFn<T: Extern, L: Locals> {
     pub symbol: SymbolId,
-    pub func: fn(&Fiber<T>, &[Val<T>]) -> Result<NativeFnVal<T>>,
+    pub func: fn(&mut Fiber<T, L>, &[Val<T, L>]) -> Result<NativeFnVal<T, L>>,
 }
 
 /// Result of a native function value, which can yield with a
 #[derive(Debug, Clone, PartialEq)]
-pub enum NativeFnVal<T: Extern> {
-    Return(Val<T>),
-    Yield(Val<T>),
+pub enum NativeFnVal<T: Extern, L: Locals> {
+    Return(Val<T, L>),
+    Yield(Val<T, L>),
 }
 
 /// Identifier for Symbol
@@ -92,6 +92,12 @@ impl<T> Extern for T where
 {
 }
 
+/// Trait alias for fiber local storage
+pub trait Locals: std::fmt::Debug + std::cmp::PartialEq + std::clone::Clone {}
+
+/// Trait alias impl for [Locals]
+impl<T> Locals for T where T: std::fmt::Debug + std::cmp::PartialEq + std::clone::Clone {}
+
 impl Form {
     /// Shorhand for constructing [Form::String]
     pub fn string(s: &str) -> Self {
@@ -109,7 +115,7 @@ impl Form {
     }
 }
 
-impl<T: Extern> Val<T> {
+impl<T: Extern, L: Locals> Val<T, L> {
     /// Shorhand for constructing [Val::String]
     pub fn string(s: &str) -> Self {
         Self::String(String::from(s))
@@ -133,13 +139,13 @@ impl SymbolId {
     }
 }
 
-impl<T: Extern> PartialEq for Lambda<T> {
+impl<T: Extern, L: Locals> PartialEq for Lambda<T, L> {
     fn eq(&self, other: &Self) -> bool {
         self.params == other.params && self.code == other.code && Arc::ptr_eq(&self.env, &other.env)
     }
 }
 
-impl<T: Extern> std::fmt::Display for Val<T>
+impl<T: Extern, L: Locals> std::fmt::Display for Val<T, L>
 where
     T: std::fmt::Display,
 {
@@ -220,7 +226,7 @@ impl std::fmt::Display for KeywordId {
     }
 }
 
-impl<T: Extern> std::fmt::Debug for Lambda<T> {
+impl<T: Extern, L: Locals> std::fmt::Debug for Lambda<T, L> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // don't blow the stack via env
         let params = self
@@ -233,7 +239,7 @@ impl<T: Extern> std::fmt::Debug for Lambda<T> {
     }
 }
 
-impl<T: Extern> From<Form> for Val<T> {
+impl<T: Extern, L: Locals> From<Form> for Val<T, L> {
     fn from(value: Form) -> Self {
         match value {
             Form::Nil => Val::Nil,
@@ -247,10 +253,10 @@ impl<T: Extern> From<Form> for Val<T> {
     }
 }
 
-impl<T: Extern> TryFrom<Val<T>> for Form {
+impl<T: Extern, L: Locals> TryFrom<Val<T, L>> for Form {
     type Error = Error;
 
-    fn try_from(value: Val<T>) -> std::result::Result<Self, Self::Error> {
+    fn try_from(value: Val<T, L>) -> std::result::Result<Self, Self::Error> {
         match value {
             Val::Nil => Ok(Form::Nil),
             Val::Bool(b) => Ok(Form::Bool(b)),
@@ -309,7 +315,7 @@ impl From<&str> for KeywordId {
 mod tests {
     use void::Void;
 
-    type Val = super::Val<Void>;
+    type Val = super::Val<Void, Void>;
 
     #[test]
     fn nil_to_string() {

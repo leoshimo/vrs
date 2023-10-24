@@ -1,4 +1,4 @@
-use crate::{builtin, Error, Extern, NativeFn, SymbolId, Val};
+use crate::{builtin, Error, Extern, Locals, NativeFn, SymbolId, Val};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -6,12 +6,12 @@ use std::{
 
 /// An environment of bindings
 #[derive(Debug)]
-pub struct Env<T: Extern> {
-    bindings: HashMap<SymbolId, Val<T>>,
-    parent: Option<Arc<Mutex<Env<T>>>>,
+pub struct Env<T: Extern, L: Locals> {
+    bindings: HashMap<SymbolId, Val<T, L>>,
+    parent: Option<Arc<Mutex<Env<T, L>>>>,
 }
 
-impl<T: Extern> Env<T> {
+impl<T: Extern, L: Locals> Env<T, L> {
     /// Create standard base env
     pub fn standard() -> Self {
         let mut e = Env {
@@ -24,12 +24,12 @@ impl<T: Extern> Env<T> {
     }
 
     /// Define a new symbol with given value in current environment
-    pub fn define(&mut self, symbol: &SymbolId, value: Val<T>) {
+    pub fn define(&mut self, symbol: &SymbolId, value: Val<T, L>) {
         self.bindings.insert(symbol.clone(), value);
     }
 
     /// Get value for symbol
-    pub fn get(&self, symbol: &SymbolId) -> Option<Val<T>> {
+    pub fn get(&self, symbol: &SymbolId) -> Option<Val<T, L>> {
         match self.bindings.get(symbol) {
             Some(v) => Some(v.clone()),
             None => self
@@ -40,7 +40,7 @@ impl<T: Extern> Env<T> {
     }
 
     /// Set value of symbol in lexical scope
-    pub fn set(&mut self, symbol: &SymbolId, value: Val<T>) -> Result<(), Error> {
+    pub fn set(&mut self, symbol: &SymbolId, value: Val<T, L>) -> Result<(), Error> {
         if let Some(b) = self.bindings.get_mut(symbol) {
             *b = value;
             return Ok(());
@@ -55,7 +55,7 @@ impl<T: Extern> Env<T> {
     }
 
     /// Extend an existing environment with given env as parent
-    pub fn extend(parent: &Arc<Mutex<Env<T>>>) -> Self {
+    pub fn extend(parent: &Arc<Mutex<Env<T, L>>>) -> Self {
         Self {
             bindings: HashMap::new(),
             parent: Some(Arc::clone(parent)),
@@ -63,7 +63,7 @@ impl<T: Extern> Env<T> {
     }
 
     /// Convenience to bind native functions
-    pub fn bind(&mut self, nativefn: NativeFn<T>) -> &mut Self {
+    pub fn bind(&mut self, nativefn: NativeFn<T, L>) -> &mut Self {
         self.define(&nativefn.symbol.clone(), Val::NativeFn(nativefn));
         self
     }
@@ -74,8 +74,8 @@ mod tests {
     use super::*;
     use void::Void;
 
-    type Val = super::Val<Void>;
-    type Env = super::Env<Void>;
+    type Val = super::Val<Void, Void>;
+    type Env = super::Env<Void, Void>;
 
     #[test]
     fn get() {

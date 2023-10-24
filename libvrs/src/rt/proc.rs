@@ -20,10 +20,16 @@ pub struct Process {
 }
 
 /// Values produced by processes
-pub type Val = lyric::Val<Extern>;
+pub type Val = lyric::Val<Extern, ()>;
 
 /// Fibers for processes
-pub type Fiber = lyric::Fiber<Extern>;
+pub type Fiber = lyric::Fiber<Extern, ()>;
+
+/// NativeFn type for Process bindings
+pub type NativeFn = lyric::NativeFn<Extern, ()>;
+
+/// NativeFnVal for Process
+pub type NativeFnVal = lyric::NativeFnVal<Extern, ()>;
 
 /// A handle to [Process]
 #[derive(Debug)]
@@ -57,7 +63,7 @@ pub struct ProcessExit {
 impl Process {
     /// Create a new process from val
     pub fn from_val(id: ProcessId, val: Val) -> Result<Self> {
-        let mut fiber = Fiber::from_val(&val)?;
+        let mut fiber = Fiber::from_val(&val, ())?;
         fiber
             .bind(proc_bindings::recv_req_fn())
             .bind(proc_bindings::send_resp_fn());

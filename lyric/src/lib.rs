@@ -20,6 +20,7 @@ pub use types::Extern;
 pub use types::Form;
 pub use types::KeywordId;
 pub use types::Lambda;
+pub use types::Locals;
 pub use types::NativeFn;
 pub use types::NativeFnVal;
 pub use types::SymbolId;

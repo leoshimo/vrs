@@ -1,8 +1,8 @@
 //! Math builtins
-use crate::{Extern, NativeFn, NativeFnVal, SymbolId, Val};
+use crate::{Extern, Locals, NativeFn, NativeFnVal, SymbolId, Val};
 
 /// Native binding for `+`
-pub fn plus_fn<T: Extern>() -> NativeFn<T> {
+pub fn plus_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     // TODO: Write tests for +
     // TODO: Support N operands
     NativeFn {

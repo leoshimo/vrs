@@ -1,10 +1,10 @@
 //! Bindings for Process Fibers
-use super::proc::{Extern, Val};
+use super::proc::{Extern, NativeFn, NativeFnVal, Val};
 use super::proc_io::IOCmd;
-use lyric::{NativeFn, NativeFnVal, SymbolId};
+use lyric::SymbolId;
 
 /// Binding for `recv_req` to receive requests over client connection
-pub(crate) fn recv_req_fn() -> NativeFn<Extern> {
+pub(crate) fn recv_req_fn() -> NativeFn {
     NativeFn {
         symbol: SymbolId::from("recv_req"),
         func: |_, _| {
@@ -16,10 +16,10 @@ pub(crate) fn recv_req_fn() -> NativeFn<Extern> {
 }
 
 /// Binding for `send_resp` to send responses over client connection
-pub(crate) fn send_resp_fn() -> NativeFn<Extern> {
+pub(crate) fn send_resp_fn() -> NativeFn {
     NativeFn {
         symbol: SymbolId::from("send_resp"),
-        func: |_, args| -> std::result::Result<NativeFnVal<Extern>, lyric::Error> {
+        func: |_, args| -> std::result::Result<NativeFnVal, lyric::Error> {
             let val = match args {
                 [v] => v.clone(),
                 _ => {
