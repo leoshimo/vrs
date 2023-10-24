@@ -34,3 +34,15 @@ pub(crate) fn send_resp_fn() -> NativeFn {
         },
     }
 }
+
+/// Bindings to get current process's PID
+pub(crate) fn self_fn() -> NativeFn {
+    NativeFn {
+        symbol: SymbolId::from("self"),
+        func: |f, _| {
+            let pid = f.locals().pid;
+            Ok(NativeFnVal::Return(Val::Int(pid as i32)))
+        }
+    }
+}
+
