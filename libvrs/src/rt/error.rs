@@ -23,6 +23,9 @@ pub enum Error {
     #[error("IO failed to message process IO task")]
     IOFailed,
 
+    #[error("Connection closed")]
+    ConnectionClosed,
+
     #[error("Failed to join process")]
     ProcessJoinError(#[from] oneshot::error::RecvError),
 

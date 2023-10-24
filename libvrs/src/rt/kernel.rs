@@ -1,5 +1,7 @@
 //! Runtime Kernel Task
-use super::proc::{ProcessExit, ProcessHandle, ProcessSet};
+use std::collections::HashMap;
+
+use super::proc::{self, ProcessExit, ProcessHandle, ProcessSet};
 use crate::rt::{proc::Process, Error, ProcessId, Result};
 use crate::Connection;
 use tokio::sync::{mpsc, oneshot};
@@ -37,7 +39,19 @@ pub(crate) struct KernelHandle {
     ev_tx: mpsc::Sender<Event>,
 }
 
+#[allow(dead_code)]
 impl KernelHandle {
+    /// Spawn a new program
+    pub(crate) async fn spawn_prog(&self, prog: proc::Val) -> Result<ProcessHandle> {
+        let (tx, rx) = oneshot::channel();
+        self.ev_tx
+            .send(Event::SpawnProg(prog, tx))
+            .await
+            .map_err(|_| Error::FailedToMessageKernel("spawn failed".to_string()))?;
+        rx.await
+            .map_err(Error::FailedToReceiveResponseFromKernelTask)
+    }
+
     /// Spawn a new process
     pub(crate) async fn spawn_for_conn(&self, conn: Connection) -> Result<ProcessHandle> {
         let (tx, rx) = oneshot::channel();
@@ -48,18 +62,32 @@ impl KernelHandle {
         rx.await
             .map_err(Error::FailedToReceiveResponseFromKernelTask)
     }
+
+    /// Get running process information
+    pub(crate) async fn procs(&self) -> Result<Vec<ProcessId>> {
+        let (tx, rx) = oneshot::channel();
+        self.ev_tx
+            .send(Event::ListProcess(tx))
+            .await
+            .map_err(|_| Error::FailedToMessageKernel("procs failed".to_string()))?;
+        rx.await
+            .map_err(Error::FailedToReceiveResponseFromKernelTask)
+    }
 }
 
 /// Messages for [Kernel]
 #[derive(Debug)]
 pub enum Event {
+    SpawnProg(proc::Val, oneshot::Sender<ProcessHandle>),
     SpawnConnProc(Connection, oneshot::Sender<ProcessHandle>),
     ProcessExit(ProcessExit),
+    ListProcess(oneshot::Sender<Vec<ProcessId>>),
 }
 
 /// The runtime kernel task
 struct Kernel {
     procs: ProcessSet,
+    proc_hdls: HashMap<ProcessId, ProcessHandle>,
     next_proc_id: usize,
 }
 
@@ -67,6 +95,7 @@ impl Kernel {
     pub fn new(_handle: KernelHandle) -> Self {
         Self {
             procs: ProcessSet::new(),
+            proc_hdls: HashMap::new(),
             next_proc_id: 0,
         }
     }
@@ -74,33 +103,50 @@ impl Kernel {
     pub async fn handle_ev(&mut self, ev: Event) -> Result<()> {
         debug!("handle_ev - {ev:?}");
         match ev {
-            Event::SpawnConnProc(conn, rx) => {
-                let p = self.spawn_conn_proc(conn).await?;
-                let _ = rx.send(p);
+            Event::SpawnProg(prog, tx) => {
+                let proc = Process::from_val(self.next_pid(), prog)?;
+                let hdl = self.spawn(proc)?;
+                let _ = tx.send(hdl);
+                Ok(())
+            }
+            Event::SpawnConnProc(conn, tx) => {
+                let proc =
+                    Process::from_expr(self.next_pid(), "(loop (send_resp (peval (recv_req))))")
+                        .unwrap()
+                        .conn(conn);
+                let hdl = self.spawn(proc)?;
+                let _ = tx.send(hdl);
                 Ok(())
             }
             Event::ProcessExit(exit) => self.handle_exit(exit),
+            Event::ListProcess(tx) => {
+                let ids = self.proc_hdls.keys().copied().collect();
+                let _ = tx.send(ids);
+                Ok(())
+            }
         }
     }
 
-    /// Spawn a new process for given connection
-    async fn spawn_conn_proc(&mut self, conn: Connection) -> Result<ProcessHandle> {
-        let id = ProcessId::from(self.next_proc_id);
-        debug!("spawn_proc {id:?}");
-
-        self.next_proc_id = self.next_proc_id.wrapping_add(1);
-        let p = Process::from_expr(id, "(loop (send_resp (peval (recv_req))))")
-            .unwrap()
-            .conn(conn)
-            .spawn(&mut self.procs)?;
-
-        Ok(p)
+    /// Spawn a new process
+    fn spawn(&mut self, proc: Process) -> Result<ProcessHandle> {
+        let hdl = proc.spawn(&mut self.procs)?;
+        self.proc_hdls.insert(hdl.id(), hdl.clone());
+        Ok(hdl)
     }
 
     /// Cleanup process that terminated with given result
     fn handle_exit(&mut self, exit: ProcessExit) -> Result<()> {
-        debug!("handle_exit - {exit:?}");
-        Ok(())
+        match self.proc_hdls.remove(&exit.id) {
+            Some(_) => Ok(()),
+            None => panic!("Kernel notified of unmanaged process"),
+        }
+    }
+
+    /// Get the next process id
+    fn next_pid(&mut self) -> ProcessId {
+        let id = ProcessId::from(self.next_proc_id);
+        self.next_proc_id = self.next_proc_id.wrapping_add(1);
+        id
     }
 }
 
@@ -133,5 +179,45 @@ mod tests {
             .await
             .expect("Client should send request");
         assert_eq!(resp.contents, Ok(Form::string("Hello world")));
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn kernel_spawn_conn_drop() {
+        let (local, remote) = Connection::pair().unwrap();
+
+        let k = start();
+        let hdl = k
+            .spawn_for_conn(local)
+            .await
+            .expect("Kernel should spawn new process");
+        assert_eq!(k.procs().await.unwrap(), vec![hdl.id()]);
+
+        drop(remote); // remote terminates
+        hdl.join().await;
+
+        assert!(
+            k.procs().await.unwrap().is_empty(),
+            "Should terminate conn process for dropped conn"
+        );
+    }
+
+    #[tokio::test]
+    async fn kernel_spawn_kill() {
+        let (local, _remote) = Connection::pair().unwrap();
+        let k = start();
+        let hdl = k
+            .spawn_for_conn(local)
+            .await
+            .expect("Kernel should spawn new process");
+        assert_eq!(k.procs().await.unwrap(), vec![hdl.id()]);
+
+        hdl.kill().await; // manual kill
+        hdl.join().await;
+
+        assert!(
+            k.procs().await.unwrap().is_empty(),
+            "Should terminate conn process for killed process"
+        );
     }
 }

@@ -45,7 +45,7 @@ impl ProcIO {
                     return Err(Error::IOFailed); // HACK: only one pending at a time
                 }
 
-                let req = conn.recv_req().await.ok_or(Error::IOFailed)??;
+                let req = conn.recv_req().await.ok_or(Error::ConnectionClosed)??;
                 self.pending = Some(req.req_id);
                 Ok(req.contents.into())
             }

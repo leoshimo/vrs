@@ -5,6 +5,7 @@ use crate::Connection;
 use lyric::{parse, FiberState};
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
+use tracing::{debug, error, info};
 
 /// Set of running processes
 pub type ProcessSet = JoinSet<ProcessExit>;
@@ -39,8 +40,9 @@ pub struct Locals {
 }
 
 /// A handle to [Process]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ProcessHandle {
+    id: ProcessId,
     msg_tx: mpsc::Sender<Message>,
 }
 
@@ -95,6 +97,8 @@ impl Process {
 
     /// Spawn a process
     pub fn spawn(self, procs: &mut ProcessSet) -> Result<ProcessHandle> {
+        info!("proc spawn - {}", self.id);
+
         let (msg_tx, mut msg_rx) = mpsc::channel(32);
         procs.spawn(async move {
             let exit: Result<_> = async {
@@ -110,6 +114,7 @@ impl Process {
                             })
                         }
                         FiberState::Yield(v) => {
+                            debug!("proc yield - {:?} {:?}", self.id, v);
                             tokio::select!(
                                 Some(msg) = msg_rx.recv() => match msg {
                                     Message::Kill => return Ok(ProcessExit {
@@ -118,6 +123,7 @@ impl Process {
                                     })
                                 },
                                 io_result = Self::handle_yield(v, &mut io) => {
+                                    debug!("proc yield result - {:?} {:?}", self.id, io_result);
                                     let io_result = io_result?;
                                     state = fiber.resume_from_yield(io_result)?;
                                 }
@@ -127,15 +133,28 @@ impl Process {
                 }
             }
             .await;
+
             match exit {
-                Ok(exit) => exit,
-                Err(e) => ProcessExit {
-                    id: self.id,
-                    status: Err(e),
-                },
+                Ok(exit) => {
+                    info!("proc exit {} - {}", self.id, exit);
+                    exit
+                }
+                Err(e) => {
+                    match e {
+                        Error::ConnectionClosed => info!("proc exit {} - {}", self.id, e),
+                        _ => error!("proc exit {} - {}", self.id, e),
+                    }
+                    ProcessExit {
+                        id: self.id,
+                        status: Err(e),
+                    }
+                }
             }
         });
-        Ok(ProcessHandle { msg_tx })
+        Ok(ProcessHandle {
+            id: self.id,
+            msg_tx,
+        })
     }
 
     /// Handle a yield signal from fiber
@@ -149,9 +168,19 @@ impl Process {
 }
 
 impl ProcessHandle {
-    /// Kill process. Effect is not immediate.
+    /// Get the ID
+    pub fn id(&self) -> ProcessId {
+        self.id
+    }
+
+    /// Send kill message to process. Effect is not immediate.
     pub async fn kill(&self) {
         let _ = self.msg_tx.send(Message::Kill).await;
+    }
+
+    /// Wait for process to end
+    pub async fn join(&self) {
+        self.msg_tx.closed().await;
     }
 }
 
@@ -163,6 +192,16 @@ enum Message {
 impl std::fmt::Display for Extern {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "<signal>")
+    }
+}
+
+impl std::fmt::Display for ProcessExit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.status {
+            Ok(ProcessResult::Done(v)) => write!(f, "DONE - {v}"),
+            Ok(ProcessResult::Cancelled) => write!(f, "CANCELLED"),
+            Err(e) => write!(f, "ERROR - {e}"),
+        }
     }
 }
 
