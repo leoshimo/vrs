@@ -60,6 +60,8 @@ pub enum ProcessResult {
     Done(Val),
     /// Cancelled for closed event loop
     Cancelled,
+    /// Completed for disconnected connection
+    Disconnected,
 }
 
 /// A record of process exiting
@@ -124,7 +126,18 @@ impl Process {
                                 },
                                 io_result = Self::handle_yield(v, &mut io) => {
                                     debug!("proc yield result - {:?} {:?}", self.id, io_result);
-                                    let io_result = io_result?;
+
+                                    let io_result = match io_result {
+                                        Ok(r) => Ok(r),
+                                        Err(Error::ConnectionClosed) => {
+                                            return Ok(ProcessExit {
+                                                id: self.id,
+                                                status: Ok(ProcessResult::Disconnected)
+                                            })
+                                        }
+                                        Err(e) => Err(e),
+                                    }?;
+
                                     state = fiber.resume_from_yield(io_result)?;
                                 }
                             );
@@ -140,10 +153,7 @@ impl Process {
                     exit
                 }
                 Err(e) => {
-                    match e {
-                        Error::ConnectionClosed => info!("proc exit {} - {}", self.id, e),
-                        _ => error!("proc exit {} - {}", self.id, e),
-                    }
+                    error!("proc exit {} - {}", self.id, e);
                     ProcessExit {
                         id: self.id,
                         status: Err(e),
@@ -199,6 +209,7 @@ impl std::fmt::Display for ProcessExit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.status {
             Ok(ProcessResult::Done(v)) => write!(f, "DONE - {v}"),
+            Ok(ProcessResult::Disconnected) => write!(f, "DISCONNECTED"),
             Ok(ProcessResult::Cancelled) => write!(f, "CANCELLED"),
             Err(e) => write!(f, "ERROR - {e}"),
         }
