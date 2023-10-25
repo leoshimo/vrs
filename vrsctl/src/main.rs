@@ -7,6 +7,7 @@ use rustyline::error::ReadlineError;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
+use std::process::exit;
 use tokio::net::UnixStream;
 use tracing::debug;
 use vrs::client::Client;
@@ -26,6 +27,14 @@ async fn main() -> Result<()> {
     debug!("Connected to runtime: {:?}", conn);
     let conn = Connection::new(conn);
     let client = Client::new(conn);
+
+    // Hack to detect disconnect w/ non-async rustyline
+    let clone = client.clone();
+    tokio::spawn(async move {
+        clone.on_disconnect().await;
+        eprintln!("Disconnected from runtime");
+        exit(1);
+    });
 
     if let Some(cmd) = args.get_one::<String>("command") {
         run_cmd(client, cmd).await
