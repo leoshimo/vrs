@@ -80,7 +80,8 @@ impl Process {
             .bind(proc_bindings::recv_req_fn())
             .bind(proc_bindings::send_resp_fn())
             .bind(proc_bindings::self_fn())
-            .bind(proc_bindings::ps_fn());
+            .bind(proc_bindings::ps_fn())
+            .bind(proc_bindings::kill_fn());
         Ok(Self {
             id,
             fiber,

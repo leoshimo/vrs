@@ -1,5 +1,6 @@
 //! Process IO
 use super::kernel::WeakKernelHandle;
+use super::ProcessId;
 use lyric::Form;
 
 use crate::connection::Error as ConnError;
@@ -22,6 +23,7 @@ pub enum IOCmd {
     RecvRequest,
     SendRequest(Val),
     ListProcesses,
+    KillProcess(ProcessId),
 }
 
 impl ProcIO {
@@ -70,20 +72,35 @@ impl ProcIO {
                 .await?;
                 Ok(Val::symbol("ok"))
             }
-            IOCmd::ListProcesses => {
-                let kernel = self
-                    .kernel
-                    .as_ref()
-                    .and_then(|k| k.upgrade())
-                    .ok_or(Error::NoKernel)?;
-                let procs = kernel
-                    .procs()
-                    .await?
-                    .into_iter()
-                    .map(|pid| Val::Int(pid as i32))
-                    .collect::<Vec<_>>();
-                Ok(Val::List(procs))
-            }
+            IOCmd::ListProcesses => self.list_processes().await,
+            IOCmd::KillProcess(pid) => self.kill_process(pid).await,
         }
+    }
+
+    /// List Processes
+    async fn list_processes(&self) -> Result<Val> {
+        let kernel = self
+            .kernel
+            .as_ref()
+            .and_then(|k| k.upgrade())
+            .ok_or(Error::NoKernel)?;
+        let procs = kernel
+            .procs()
+            .await?
+            .into_iter()
+            .map(|pid| Val::Int(pid as i32))
+            .collect::<Vec<_>>();
+        Ok(Val::List(procs))
+    }
+
+    /// Kill process
+    async fn kill_process(&self, pid: ProcessId) -> Result<Val> {
+        let kernel = self
+            .kernel
+            .as_ref()
+            .and_then(|k| k.upgrade())
+            .ok_or(Error::NoKernel)?;
+        kernel.kill_proc(pid).await?;
+        Ok(Val::symbol("ok"))
     }
 }

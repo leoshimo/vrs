@@ -40,4 +40,7 @@ pub enum Error {
 
     #[error("No kernel")]
     NoKernel,
+
+    #[error("Unknown process")]
+    UnknownProcess,
 }

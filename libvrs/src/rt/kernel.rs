@@ -81,6 +81,14 @@ impl KernelHandle {
             .map_err(Error::FailedToReceiveResponseFromKernelTask)
     }
 
+    /// Kill specified process
+    pub(crate) async fn kill_proc(&self, pid: ProcessId) -> Result<()> {
+        self.ev_tx
+            .send(Event::KillProcess(pid))
+            .await
+            .map_err(|_| Error::FailedToMessageKernel("kill_procs failed".to_string()))
+    }
+
     /// Downgrade a strong kernel handle to weak handle
     pub(crate) fn downgrade(&self) -> WeakKernelHandle {
         WeakKernelHandle {
@@ -104,6 +112,7 @@ pub enum Event {
     SpawnConnProc(Connection, oneshot::Sender<ProcessHandle>),
     ProcessExit(ProcessExit),
     ListProcess(oneshot::Sender<Vec<ProcessId>>),
+    KillProcess(ProcessId),
 }
 
 /// The runtime kernel task
@@ -148,6 +157,7 @@ impl Kernel {
                 let _ = tx.send(ids);
                 Ok(())
             }
+            Event::KillProcess(pid) => self.kill_proc(pid).await,
         }
     }
 
@@ -166,6 +176,17 @@ impl Kernel {
         }
     }
 
+    /// Kill specified process
+    async fn kill_proc(&self, pid: ProcessId) -> Result<()> {
+        match self.proc_hdls.get(&pid) {
+            Some(hdl) => {
+                hdl.kill().await;
+                Ok(())
+            }
+            None => Err(Error::UnknownProcess),
+        }
+    }
+
     /// Get the next process id
     fn next_pid(&mut self) -> ProcessId {
         let id = ProcessId::from(self.next_proc_id);
@@ -176,9 +197,11 @@ impl Kernel {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Client, Connection};
+    use crate::{Client, Connection, Request};
     use assert_matches::assert_matches;
     use lyric::{parse as p, Form};
+    use std::time::Duration;
+    use tokio::time::timeout;
 
     use super::*;
 
@@ -247,9 +270,6 @@ mod tests {
 
     #[tokio::test]
     async fn kernel_drop() {
-        use std::time::Duration;
-        use tokio::time::timeout;
-
         let (local, _remote) = Connection::pair().unwrap();
         let k = start();
         let hdl = k
@@ -282,5 +302,60 @@ mod tests {
         drop(k); // drop kernel
 
         assert_matches!(weak_k.upgrade(), None);
+    }
+
+    #[tokio::test]
+    async fn kill_proc_from_kernel() {
+        let (local, _remote) = Connection::pair().unwrap();
+        let k = start();
+        let proc = k
+            .spawn_for_conn(local)
+            .await
+            .expect("Kernel should spawn new process");
+
+        k.kill_proc(proc.id()).await.unwrap();
+        let proc_exit = tokio::spawn(async move {
+            proc.join().await;
+        });
+
+        let _ = timeout(Duration::from_millis(5), proc_exit)
+            .await
+            .expect("Process should terminate");
+
+        assert!(
+            k.procs().await.unwrap().is_empty(),
+        );
+    }
+
+    #[tokio::test]
+    async fn kill_proc_from_proc() {
+        let (local, mut remote) = Connection::pair().unwrap();
+        let (local_other, _remote_other) = Connection::pair().unwrap();
+        let k = start();
+
+        let proc = k.spawn_for_conn(local).await.unwrap();
+
+        let proc_other = k.spawn_for_conn(local_other).await.unwrap();
+
+        remote
+            .send_req(Request {
+                req_id: 0,
+                contents: lyric::parse(&format!("(kill {})", proc_other.id())).unwrap(),
+            })
+            .await
+            .unwrap();
+
+        let proc_exit = tokio::spawn(async move {
+            proc_other.join().await;
+        });
+        let _ = timeout(Duration::from_millis(5), proc_exit)
+            .await
+            .expect("Killed process should terminate");
+
+        assert_eq!(
+            k.procs().await.unwrap(),
+            vec![proc.id()],
+            "Only remaining process should be tracked by kernel",
+        );
     }
 }

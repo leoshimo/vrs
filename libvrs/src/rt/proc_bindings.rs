@@ -1,7 +1,8 @@
 //! Bindings for Process Fibers
 use super::proc::{Extern, NativeFn, NativeFnVal, Val};
 use super::proc_io::IOCmd;
-use lyric::SymbolId;
+use super::ProcessId;
+use lyric::{Error, SymbolId};
 
 /// Binding for `recv_req` to receive requests over client connection
 pub(crate) fn recv_req_fn() -> NativeFn {
@@ -35,7 +36,7 @@ pub(crate) fn send_resp_fn() -> NativeFn {
     }
 }
 
-/// Bindings to get current process's PID
+/// Binding to get current process's PID
 pub(crate) fn self_fn() -> NativeFn {
     NativeFn {
         symbol: SymbolId::from("self"),
@@ -46,13 +47,34 @@ pub(crate) fn self_fn() -> NativeFn {
     }
 }
 
-/// Bindings to list processes
+/// Binding to list processes
 pub(crate) fn ps_fn() -> NativeFn {
     NativeFn {
         symbol: SymbolId::from("ps"),
         func: |_, _| {
             Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
                 IOCmd::ListProcesses,
+            )))))
+        },
+    }
+}
+
+/// Binding to kill process
+pub(crate) fn kill_fn() -> NativeFn {
+    NativeFn {
+        symbol: SymbolId::from("kill"),
+        func: |_, args| {
+            let pid = match args {
+                [Val::Int(pid)] => pid,
+                _ => {
+                    return Err(Error::InvalidExpression(
+                        "kill should have one integer argument".to_string(),
+                    ))
+                }
+            };
+
+            Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
+                IOCmd::KillProcess(*pid as ProcessId),
             )))))
         },
     }
