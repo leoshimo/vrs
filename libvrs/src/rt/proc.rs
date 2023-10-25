@@ -81,6 +81,7 @@ impl Process {
     pub(crate) fn from_val(id: ProcessId, val: Val) -> Result<Self> {
         let mut fiber = Fiber::from_val(&val, Locals { pid: id })?;
         fiber
+            .bind(proc_bindings::exec_fn())
             .bind(proc_bindings::recv_req_fn())
             .bind(proc_bindings::send_resp_fn())
             .bind(proc_bindings::self_fn())

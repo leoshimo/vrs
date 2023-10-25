@@ -46,4 +46,7 @@ pub enum Error {
 
     #[error("No mailbox")]
     NoMailbox,
+
+    #[error("Exec error - {0}")]
+    ExecError(String),
 }

@@ -2,7 +2,7 @@
 use super::proc::{Extern, NativeFn, NativeFnVal, Val};
 use super::proc_io::IOCmd;
 use super::ProcessId;
-use lyric::{Error, SymbolId};
+use lyric::{Error, Result, SymbolId};
 
 /// Binding for `recv_req` to receive requests over client connection
 pub(crate) fn recv_req_fn() -> NativeFn {
@@ -20,11 +20,11 @@ pub(crate) fn recv_req_fn() -> NativeFn {
 pub(crate) fn send_resp_fn() -> NativeFn {
     NativeFn {
         symbol: SymbolId::from("send_resp"),
-        func: |_, args| -> std::result::Result<NativeFnVal, lyric::Error> {
+        func: |_, args| -> std::result::Result<NativeFnVal, Error> {
             let val = match args {
                 [v] => v.clone(),
                 _ => {
-                    return Err(lyric::Error::InvalidExpression(
+                    return Err(Error::InvalidExpression(
                         "send_conn expects two arguments".to_string(),
                     ))
                 }
@@ -112,6 +112,40 @@ pub(crate) fn ls_msgs_fn() -> NativeFn {
             }
             Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
                 IOCmd::ListMessages,
+            )))))
+        },
+    }
+}
+
+/// Binding for exec
+pub(crate) fn exec_fn() -> NativeFn {
+    NativeFn {
+        symbol: SymbolId::from("exec"),
+        func: |_, args| {
+            let (prog, args) = args.split_first().ok_or(Error::UnexpectedArguments(
+                " Unexpected arguments to exec = (exec PROG [ARGS...])".to_string(),
+            ))?;
+
+            let prog = match prog {
+                Val::String(s) => s.clone(),
+                _ => {
+                    return Err(Error::UnexpectedArguments(
+                        "Expected string as first argument".to_string(),
+                    ))
+                }
+            };
+
+            let args = args
+                .iter()
+                .map(|a| match a {
+                    Val::String(s) => Ok(s.clone()),
+                    _ => Err(Error::UnexpectedArguments(
+                        "exec can handle string arguments only".to_string(),
+                    )),
+                })
+                .collect::<Result<Vec<_>>>()?;
+            Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
+                IOCmd::Exec(prog, args),
             )))))
         },
     }

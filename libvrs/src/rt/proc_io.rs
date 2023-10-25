@@ -3,6 +3,8 @@ use super::kernel::WeakKernelHandle;
 use super::mailbox::MailboxHandle;
 use super::ProcessId;
 use lyric::Form;
+use tokio::process::Command;
+use tracing::{debug, error};
 
 use crate::connection::Error as ConnError;
 
@@ -29,6 +31,7 @@ pub enum IOCmd {
     KillProcess(ProcessId),
     SendMessage(ProcessId, Val),
     ListMessages,
+    Exec(String, Vec<String>),
 }
 
 impl ProcIO {
@@ -88,6 +91,7 @@ impl ProcIO {
             IOCmd::KillProcess(pid) => self.kill_process(pid).await,
             IOCmd::SendMessage(dst, val) => self.send_message(dst, val).await,
             IOCmd::ListMessages => self.list_message().await,
+            IOCmd::Exec(prog, args) => self.exec(prog, args).await,
         }
     }
 
@@ -137,5 +141,23 @@ impl ProcIO {
         let msg_vals = msgs.into_iter().map(|m| m.msg).collect();
 
         Ok(Val::List(msg_vals))
+    }
+
+    /// Execute specified program
+    async fn exec(&self, prog: String, args: Vec<String>) -> Result<Val> {
+        debug!("exec {:?} {:?}", &prog, &args);
+        let mut cmd = Command::new(prog.clone()).args(args.clone()).spawn()?;
+        let exit_status = cmd.wait().await?;
+
+        if exit_status.success() {
+            debug!("exec {:?} {:?} - {:?}", prog, args, exit_status);
+            Ok(Val::symbol("ok"))
+        } else {
+            error!("exec {:?} {:?} - {:?}", prog, args, exit_status);
+            Err(Error::ExecError(format!(
+                "Failed to execute - {}",
+                exit_status
+            )))
+        }
     }
 }
