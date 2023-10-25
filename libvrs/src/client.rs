@@ -42,6 +42,11 @@ impl Client {
         !self.evloop_tx.is_closed() // tx is open as long as event loop is running
     }
 
+    /// Future that determines whether or not clien is closed
+    pub async fn on_disconnect(&self) {
+        self.evloop_tx.closed().await
+    }
+
     /// Shutdown
     pub async fn shutdown(&self) {
         self.evloop_cancel_token.cancel();
