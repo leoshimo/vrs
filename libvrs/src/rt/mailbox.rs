@@ -114,7 +114,6 @@ mod tests {
             ],
             "Messages should be present in order it was received"
         );
-
     }
 
     // TODO: Test messages can be received
