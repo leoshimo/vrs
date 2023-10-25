@@ -3,6 +3,7 @@
 //! Runtime Kernel Task
 use std::collections::HashMap;
 
+use super::mailbox::Message;
 use super::proc::{self, ProcessExit, ProcessHandle, ProcessSet};
 use crate::rt::{proc::Process, Error, ProcessId, Result};
 use crate::Connection;
@@ -89,6 +90,20 @@ impl KernelHandle {
             .map_err(|_| Error::FailedToMessageKernel("kill_procs failed".to_string()))
     }
 
+    // TODO(sec): SRC IDs too flexible
+    /// Handle a message being sent from one process to another
+    pub(crate) async fn send_message(
+        &self,
+        src: ProcessId,
+        dst: ProcessId,
+        val: proc::Val,
+    ) -> Result<()> {
+        self.ev_tx
+            .send(Event::ProcessSendMessage(src, dst, val))
+            .await
+            .map_err(|_| Error::FailedToMessageKernel("send_message failed".to_string()))
+    }
+
     /// Downgrade a strong kernel handle to weak handle
     pub(crate) fn downgrade(&self) -> WeakKernelHandle {
         WeakKernelHandle {
@@ -113,6 +128,7 @@ pub enum Event {
     ProcessExit(ProcessExit),
     ListProcess(oneshot::Sender<Vec<ProcessId>>),
     KillProcess(ProcessId),
+    ProcessSendMessage(ProcessId, ProcessId, proc::Val),
 }
 
 /// The runtime kernel task
@@ -120,7 +136,7 @@ struct Kernel {
     weak_hdl: WeakKernelHandle,
     procs: ProcessSet,
     proc_hdls: HashMap<ProcessId, ProcessHandle>,
-    next_proc_id: usize,
+    next_proc_id: ProcessId,
 }
 
 impl Kernel {
@@ -158,6 +174,7 @@ impl Kernel {
                 Ok(())
             }
             Event::KillProcess(pid) => self.kill_proc(pid).await,
+            Event::ProcessSendMessage(src, dst, msg) => self.dispatch_msg(src, dst, msg).await,
         }
     }
 
@@ -185,6 +202,13 @@ impl Kernel {
             }
             None => Err(Error::UnknownProcess),
         }
+    }
+
+    /// Dispatc message from src to dst
+    async fn dispatch_msg(&self, src: ProcessId, dst: ProcessId, msg: proc::Val) -> Result<()> {
+        let dst = self.proc_hdls.get(&dst).ok_or(Error::UnknownProcess)?;
+        dst.notify_message(Message::new(src, msg)).await;
+        Ok(())
     }
 
     /// Get the next process id

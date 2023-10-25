@@ -79,3 +79,40 @@ pub(crate) fn kill_fn() -> NativeFn {
         },
     }
 }
+
+/// Binding to send messages
+pub(crate) fn send_fn() -> NativeFn {
+    NativeFn {
+        symbol: SymbolId::from("send"),
+        func: |_, args| {
+            let (dst, msg) = match args {
+                [Val::Int(dst), msg] => (dst, msg),
+                _ => {
+                    return Err(Error::InvalidExpression(
+                        "Unexpected send call - (send DEST_PID DATA)".to_string(),
+                    ))
+                }
+            };
+            Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
+                IOCmd::SendMessage(*dst as ProcessId, msg.clone()),
+            )))))
+        },
+    }
+}
+
+/// Binding to list messages
+pub(crate) fn ls_msgs_fn() -> NativeFn {
+    NativeFn {
+        symbol: SymbolId::from("ls-msgs"),
+        func: |_, args| {
+            if !args.is_empty() {
+                return Err(Error::InvalidExpression(
+                    "Unexpected ls-msgs call - No arguments expected".to_string(),
+                ));
+            }
+            Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
+                IOCmd::ListMessages,
+            )))))
+        },
+    }
+}

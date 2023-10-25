@@ -1,6 +1,8 @@
 use super::kernel::WeakKernelHandle;
+use super::mailbox::Message;
 use super::proc_bindings;
 use super::proc_io::{IOCmd, ProcIO};
+use crate::rt::mailbox::{Mailbox, MailboxHandle};
 use crate::rt::{Error, Result};
 use crate::Connection;
 use lyric::{parse, FiberState};
@@ -11,6 +13,7 @@ use tracing::{debug, error, info};
 /// Set of running processes
 pub type ProcessSet = JoinSet<ProcessExit>;
 
+// TODO: Newtype or dedicated type?
 /// IDs assigned to processes
 pub type ProcessId = usize;
 
@@ -44,7 +47,8 @@ pub struct Locals {
 #[derive(Debug, Clone)]
 pub struct ProcessHandle {
     id: ProcessId,
-    msg_tx: mpsc::Sender<Message>,
+    hdl_tx: mpsc::Sender<Event>,
+    mailbox: MailboxHandle,
 }
 
 /// Extern type between Fiber and hosting Process
@@ -81,11 +85,13 @@ impl Process {
             .bind(proc_bindings::send_resp_fn())
             .bind(proc_bindings::self_fn())
             .bind(proc_bindings::ps_fn())
+            .bind(proc_bindings::send_fn())
+            .bind(proc_bindings::ls_msgs_fn())
             .bind(proc_bindings::kill_fn());
         Ok(Self {
             id,
             fiber,
-            io: ProcIO::new(),
+            io: ProcIO::new(id),
         })
     }
 
@@ -107,10 +113,14 @@ impl Process {
     }
 
     /// Spawn a process
-    pub(crate) fn spawn(self, procs: &mut ProcessSet) -> Result<ProcessHandle> {
+    pub(crate) fn spawn(mut self, procs: &mut ProcessSet) -> Result<ProcessHandle> {
         info!("proc spawn - {}", self.id);
 
         let (msg_tx, mut msg_rx) = mpsc::channel(32);
+
+        let mailbox: MailboxHandle = Mailbox::spawn(self.id);
+        self.io.mailbox(mailbox.clone());
+
         procs.spawn(async move {
             let exit: Result<_> = async {
                 let mut fiber = self.fiber;
@@ -128,7 +138,7 @@ impl Process {
                             debug!("proc yield - {:?} {:?}", self.id, v);
                             tokio::select!(
                                 Some(msg) = msg_rx.recv() => match msg {
-                                    Message::Kill => return Ok(ProcessExit {
+                                    Event::Kill => return Ok(ProcessExit {
                                         id: self.id,
                                         status: Ok(ProcessResult::Cancelled)
                                     })
@@ -172,7 +182,8 @@ impl Process {
         });
         Ok(ProcessHandle {
             id: self.id,
-            msg_tx,
+            hdl_tx: msg_tx,
+            mailbox,
         })
     }
 
@@ -188,23 +199,28 @@ impl Process {
 
 impl ProcessHandle {
     /// Get the ID
-    pub fn id(&self) -> ProcessId {
+    pub(crate) fn id(&self) -> ProcessId {
         self.id
     }
 
     /// Send kill message to process. Effect is not immediate.
-    pub async fn kill(&self) {
-        let _ = self.msg_tx.send(Message::Kill).await;
+    pub(crate) async fn kill(&self) {
+        let _ = self.hdl_tx.send(Event::Kill).await;
     }
 
     /// Wait for process to end
     pub async fn join(&self) {
-        self.msg_tx.closed().await;
+        self.hdl_tx.closed().await;
+    }
+
+    /// Send a new message to process's mailbox
+    pub(crate) async fn notify_message(&self, msg: Message) {
+        let _ = self.mailbox.received(msg).await;
     }
 }
 
 #[derive(Debug)]
-enum Message {
+enum Event {
     Kill,
 }
 

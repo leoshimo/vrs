@@ -1,5 +1,6 @@
 //! Process IO
 use super::kernel::WeakKernelHandle;
+use super::mailbox::MailboxHandle;
 use super::ProcessId;
 use lyric::Form;
 
@@ -12,8 +13,10 @@ use crate::rt::{Error, Result};
 
 /// Handles process IO requests
 pub(crate) struct ProcIO {
+    pid: ProcessId,
     conn: Option<Connection>,
     pending: Option<u32>,
+    mailbox: Option<MailboxHandle>,
     kernel: Option<WeakKernelHandle>,
 }
 
@@ -24,15 +27,19 @@ pub enum IOCmd {
     SendRequest(Val),
     ListProcesses,
     KillProcess(ProcessId),
+    SendMessage(ProcessId, Val),
+    ListMessages,
 }
 
 impl ProcIO {
-    /// Create new IO sources for process
-    pub(crate) fn new() -> Self {
+    /// Create new IO sources for given process
+    pub(crate) fn new(pid: ProcessId) -> Self {
         Self {
+            pid,
             conn: None,
             pending: None,
             kernel: None,
+            mailbox: None,
         }
     }
 
@@ -45,6 +52,11 @@ impl ProcIO {
     /// Set kernel handle
     pub(crate) fn kernel(&mut self, kernel: WeakKernelHandle) -> &mut Self {
         self.kernel = Some(kernel);
+        self
+    }
+
+    pub(crate) fn mailbox(&mut self, mailbox: MailboxHandle) -> &mut Self {
+        self.mailbox = Some(mailbox);
         self
     }
 
@@ -74,6 +86,8 @@ impl ProcIO {
             }
             IOCmd::ListProcesses => self.list_processes().await,
             IOCmd::KillProcess(pid) => self.kill_process(pid).await,
+            IOCmd::SendMessage(dst, val) => self.send_message(dst, val).await,
+            IOCmd::ListMessages => self.list_message().await,
         }
     }
 
@@ -102,5 +116,26 @@ impl ProcIO {
             .ok_or(Error::NoKernel)?;
         kernel.kill_proc(pid).await?;
         Ok(Val::symbol("ok"))
+    }
+
+    /// Send message to another process
+    async fn send_message(&self, dst: ProcessId, msg: Val) -> Result<Val> {
+        let kernel = self
+            .kernel
+            .as_ref()
+            .and_then(|k| k.upgrade())
+            .ok_or(Error::NoKernel)?;
+        kernel.send_message(self.pid, dst, msg.clone()).await?;
+        Ok(msg)
+    }
+
+    /// List messages in mailbox
+    async fn list_message(&self) -> Result<Val> {
+        let mailbox = self.mailbox.as_ref().ok_or(Error::NoMailbox)?;
+
+        let msgs = mailbox.messages().await?;
+        let msg_vals = msgs.into_iter().map(|m| m.msg).collect();
+
+        Ok(Val::List(msg_vals))
     }
 }

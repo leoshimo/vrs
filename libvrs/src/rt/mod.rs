@@ -2,6 +2,7 @@ mod error;
 mod kernel;
 mod runtime;
 
+mod mailbox;
 mod proc;
 mod proc_bindings;
 mod proc_io;

@@ -43,4 +43,7 @@ pub enum Error {
 
     #[error("Unknown process")]
     UnknownProcess,
+
+    #[error("No mailbox")]
+    NoMailbox,
 }
