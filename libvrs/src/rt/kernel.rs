@@ -322,9 +322,7 @@ mod tests {
             .await
             .expect("Process should terminate");
 
-        assert!(
-            k.procs().await.unwrap().is_empty(),
-        );
+        assert!(k.procs().await.unwrap().is_empty(),);
     }
 
     #[tokio::test]
