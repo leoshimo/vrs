@@ -100,6 +100,26 @@ pub(crate) fn send_fn() -> NativeFn {
     }
 }
 
+/// Binding to recv messages
+pub(crate) fn recv_fn() -> NativeFn {
+    NativeFn {
+        symbol: SymbolId::from("recv"),
+        func: |_, _args| {
+            // let (dst, msg) = match args {
+            //     [Val::Int(dst), msg] => (dst, msg),
+            //     _ => {
+            //         return Err(Error::InvalidExpression(
+            //             "Unexpected send call - (send DEST_PID DATA)".to_string(),
+            //         ))
+            //     }
+            // };
+            Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
+                IOCmd::Recv,
+            )))))
+        },
+    }
+}
+
 /// Binding to list messages
 pub(crate) fn ls_msgs_fn() -> NativeFn {
     NativeFn {

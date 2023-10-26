@@ -80,7 +80,9 @@ impl Process {
     /// Create a new process from val
     pub(crate) fn from_val(id: ProcessId, val: Val) -> Result<Self> {
         let mut fiber = Fiber::from_val(&val, Locals { pid: id })?;
+
         fiber
+            .bind(proc_bindings::recv_fn())
             .bind(proc_bindings::exec_fn())
             .bind(proc_bindings::recv_req_fn())
             .bind(proc_bindings::send_resp_fn())
@@ -216,7 +218,7 @@ impl ProcessHandle {
 
     /// Send a new message to process's mailbox
     pub(crate) async fn notify_message(&self, msg: Message) {
-        let _ = self.mailbox.received(msg).await;
+        let _ = self.mailbox.push(msg).await;
     }
 }
 

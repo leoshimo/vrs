@@ -32,6 +32,7 @@ pub enum IOCmd {
     SendMessage(ProcessId, Val),
     ListMessages,
     Exec(String, Vec<String>),
+    Recv,
 }
 
 impl ProcIO {
@@ -92,6 +93,7 @@ impl ProcIO {
             IOCmd::SendMessage(dst, val) => self.send_message(dst, val).await,
             IOCmd::ListMessages => self.list_message().await,
             IOCmd::Exec(prog, args) => self.exec(prog, args).await,
+            IOCmd::Recv => self.handle_recv().await,
         }
     }
 
@@ -133,11 +135,18 @@ impl ProcIO {
         Ok(msg)
     }
 
+    /// Handle recv command
+    async fn handle_recv(&self) -> Result<Val> {
+        let mailbox = self.mailbox.as_ref().ok_or(Error::NoMailbox)?;
+        let msg = mailbox.poll().await?;
+        Ok(msg.msg)
+    }
+
     /// List messages in mailbox
     async fn list_message(&self) -> Result<Val> {
         let mailbox = self.mailbox.as_ref().ok_or(Error::NoMailbox)?;
 
-        let msgs = mailbox.messages().await?;
+        let msgs = mailbox.all().await?;
         let msg_vals = msgs.into_iter().map(|m| m.msg).collect();
 
         Ok(Val::List(msg_vals))
