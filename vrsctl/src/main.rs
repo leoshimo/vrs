@@ -155,13 +155,13 @@ async fn run_repl(mut client: Client) -> Result<()> {
         }
     }
 
-    client.shutdown().await;
-
     if let Some(history_file) = history_file() {
         if let Err(e) = rl.save_history(&history_file) {
             eprintln!("Failed to save {} - {}", history_file.to_string_lossy(), e);
         }
     }
+
+    client.shutdown().await;
 
     Ok(())
 }
