@@ -196,7 +196,7 @@ pub(crate) fn exec_fn() -> NativeFn {
     }
 }
 
-// TODO: This feels like a hack - need easier lambda bindings
+// TODO: call_fn, open_url_fn, open_app_fn, open - need easier binding options (init script?)
 /// Binding for call
 pub(crate) fn call_fn(env: Arc<Mutex<Env>>) -> Lambda {
     Lambda {
@@ -212,6 +212,57 @@ pub(crate) fn call_fn(env: Arc<Mutex<Env>>) -> Lambda {
             )
             .unwrap()
             .into(),
+        )
+        .unwrap(),
+        env,
+    }
+}
+
+/// Binding for open_url
+pub(crate) fn open_url_fn(env: Arc<Mutex<Env>>) -> Lambda {
+    Lambda {
+        params: vec![SymbolId::from("url")],
+        code: compile(&parse(r#"(exec "open" "-a" "Safari" url)"#).unwrap().into()).unwrap(),
+        env,
+    }
+}
+
+/// Binding for open_app
+pub(crate) fn open_app_fn(env: Arc<Mutex<Env>>) -> Lambda {
+    Lambda {
+        params: vec![SymbolId::from("app")],
+        code: compile(&parse(r#"(exec "open" "-a" app)"#).unwrap().into()).unwrap(),
+        env,
+    }
+}
+
+/// Binding for shell_expand
+pub(crate) fn shell_expand_fn() -> NativeFn {
+    NativeFn {
+        symbol: SymbolId::from("shell_expand"),
+        func: |_, args| {
+            let path = match args {
+                [Val::String(s)] => s,
+                _ => {
+                    return Err(Error::UnexpectedArguments(
+                        "shell_expand expects one argument".to_string(),
+                    ))
+                }
+            };
+            let path = shellexpand::tilde(path).to_string();
+            Ok(NativeFnOp::Return(Val::String(path)))
+        },
+    }
+}
+
+/// Binding for open_file
+pub(crate) fn open_file_fn(env: Arc<Mutex<Env>>) -> Lambda {
+    Lambda {
+        params: vec![SymbolId::from("file")],
+        code: compile(
+            &parse(r#"(exec "open" (shell_expand file))"#)
+                .unwrap()
+                .into(),
         )
         .unwrap(),
         env,

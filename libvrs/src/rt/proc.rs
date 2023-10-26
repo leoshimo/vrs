@@ -93,7 +93,21 @@ impl Process {
         // TODO: How to deal with non-native builtins?
 
         fiber.bind_lambda(&SymbolId::from("call"), proc_bindings::call_fn(fiber.env()));
+        fiber.bind_lambda(
+            &SymbolId::from("open_url"),
+            proc_bindings::open_url_fn(fiber.env()),
+        );
+        fiber.bind_lambda(
+            &SymbolId::from("open_app"),
+            proc_bindings::open_app_fn(fiber.env()),
+        );
+        fiber.bind_lambda(
+            &SymbolId::from("open_file"),
+            proc_bindings::open_file_fn(fiber.env()),
+        );
+
         fiber
+            .bind(proc_bindings::shell_expand_fn())
             .bind(proc_bindings::recv_fn())
             .bind(proc_bindings::exec_fn())
             .bind(proc_bindings::recv_req_fn())
