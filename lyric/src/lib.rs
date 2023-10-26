@@ -6,6 +6,7 @@ mod parse;
 pub mod builtin;
 pub mod env;
 pub mod fiber;
+pub mod pmatch;
 pub mod types;
 
 pub use builtin::Ref;
@@ -16,6 +17,7 @@ pub use error::Error;
 pub use fiber::Fiber;
 pub use fiber::FiberState;
 pub use parse::parse;
+pub use pmatch::Pattern;
 pub use types::Extern;
 pub use types::Form;
 pub use types::KeywordId;
