@@ -1,7 +1,7 @@
 //! A Process's Mailbox
 use std::collections::VecDeque;
 
-use super::proc::{ProcessId, Val};
+use super::proc::{Pattern, ProcessId, Val};
 use crate::rt::{Error, Result};
 use tokio::sync::{mpsc, oneshot};
 use tracing::debug;
@@ -16,12 +16,12 @@ pub(crate) struct MailboxHandle {
 #[derive(Debug, Default)]
 pub(crate) struct Mailbox {
     messages: VecDeque<Message>,
-    pending: VecDeque<PendingPoll>,
+    pending: Option<PendingPoll>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Message {
-    pub(crate) msg: Val,
+    pub(crate) contents: Val,
 }
 
 /// Commands between mailbox handle and async task
@@ -29,12 +29,13 @@ pub(crate) struct Message {
 enum Cmd {
     Push(Message),
     GetAll(oneshot::Sender<Vec<Message>>),
-    Poll(oneshot::Sender<Message>),
+    Poll(Option<Pattern>, oneshot::Sender<Message>),
 }
 
 /// A pending handle for polling mailbox
 #[derive(Debug)]
 struct PendingPoll {
+    pattern: Option<Pattern>,
     tx: oneshot::Sender<Message>,
 }
 
@@ -59,11 +60,11 @@ impl MailboxHandle {
     }
 
     /// Poll mailbox for matching message.
-    /// Blocks calling task until message is received
-    pub(crate) async fn poll(&self) -> Result<Message> {
+    /// Blocks calling task until message is receive
+    pub(crate) async fn poll(&self, pat: Option<Pattern>) -> Result<Message> {
         let (tx, rx) = oneshot::channel();
         self.tx
-            .send(Cmd::Poll(tx))
+            .send(Cmd::Poll(pat, tx))
             .await
             .map_err(|_| Error::NoMailbox)?;
         Ok(rx.await?)
@@ -84,7 +85,7 @@ impl Mailbox {
                         let msgs = mailbox.messages.iter().cloned().collect();
                         let _ = tx.send(msgs);
                     }
-                    Cmd::Poll(tx) => mailbox.handle_poll(tx),
+                    Cmd::Poll(pat, tx) => mailbox.handle_poll(pat, tx),
                 }
             }
         });
@@ -93,29 +94,56 @@ impl Mailbox {
 
     /// Push a new message into mailbox. This may resolve pending requests
     fn push(&mut self, msg: Message) {
-        // check pending first
-        match self.pending.pop_front() {
-            Some(pending) => {
-                let _ = pending.tx.send(msg);
-            }
-            None => self.messages.push_back(msg),
+        let fufills_pending = match &self.pending {
+            Some(pending) => match &pending.pattern {
+                Some(pat) => pat.matches(&msg.contents),
+                None => true,
+            },
+            None => false,
+        };
+
+        if fufills_pending {
+            let pending = self.pending.take().unwrap();
+            let _ = pending.tx.send(msg);
+        } else {
+            self.messages.push_back(msg);
         }
     }
 
     /// Dequeue message in FIFO order
-    fn handle_poll(&mut self, tx: oneshot::Sender<Message>) {
-        match self.messages.pop_front() {
+    fn handle_poll(&mut self, pattern: Option<Pattern>, tx: oneshot::Sender<Message>) {
+        match self.pop_match(&pattern) {
             Some(msg) => {
                 let _ = tx.send(msg);
             }
-            None => self.pending.push_back(PendingPoll { tx }),
+            None => {
+                if self.pending.is_some() {
+                    panic!("Unexpected poll on mailbox - mailbox should only be polled from process task");
+                }
+                self.pending = Some(PendingPoll { pattern, tx });
+            }
+        }
+    }
+
+    /// Find the first matching message for given pattern, if any
+    fn pop_match(&mut self, pat: &Option<Pattern>) -> Option<Message> {
+        match pat {
+            None => self.messages.pop_front(),
+            Some(pat) => {
+                for i in 0..self.messages.len() {
+                    if pat.matches(&self.messages[i].contents) {
+                        return self.messages.remove(i);
+                    }
+                }
+                None
+            }
         }
     }
 }
 
 impl Message {
     pub(crate) fn new(_src: ProcessId, msg: Val) -> Self {
-        Self { msg }
+        Self { contents: msg }
     }
 }
 
@@ -171,7 +199,7 @@ mod tests {
 
         // poll after push
         assert_eq!(
-            mb.poll().await.unwrap(),
+            mb.poll(None).await.unwrap(),
             Message::new(1, parse("(:hello \"one\" 2 :three)").unwrap().into())
         );
     }
@@ -181,7 +209,7 @@ mod tests {
         let mb = Mailbox::spawn(0);
 
         let mb_clone = mb.clone();
-        let hdl = tokio::spawn(async move { mb_clone.poll().await });
+        let hdl = tokio::spawn(async move { mb_clone.poll(None).await });
 
         assert!(!hdl.is_finished(), "Task should block on poll");
 
@@ -197,4 +225,5 @@ mod tests {
     }
 
     // TODO: Test that mailbox errors terminate process
+    // TODO: Test for recv w/ pattern match predicates (non-matching ignored + preserved)
 }

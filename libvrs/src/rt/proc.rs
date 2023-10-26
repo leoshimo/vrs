@@ -30,6 +30,9 @@ pub type Val = lyric::Val<Extern, Locals>;
 /// Fibers for processes
 pub type Fiber = lyric::Fiber<Extern, Locals>;
 
+/// Pattern matches for processes
+pub type Pattern = lyric::Pattern<Extern, Locals>;
+
 /// NativeFn type for Process bindings
 pub type NativeFn = lyric::NativeFn<Extern, Locals>;
 

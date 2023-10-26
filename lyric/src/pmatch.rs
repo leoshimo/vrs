@@ -2,6 +2,7 @@
 use crate::{Extern, Locals, Val};
 
 /// Pattern matching predicate
+#[derive(Debug, Clone, PartialEq)]
 pub struct Pattern<T: Extern, L: Locals> {
     inner: Val<T, L>,
 }

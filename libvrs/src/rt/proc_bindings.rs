@@ -2,7 +2,7 @@
 use super::proc::{Extern, NativeFn, NativeFnVal, Val};
 use super::proc_io::IOCmd;
 use super::ProcessId;
-use lyric::{Error, Result, SymbolId};
+use lyric::{Error, Pattern, Result, SymbolId};
 
 /// Binding for `recv_req` to receive requests over client connection
 pub(crate) fn recv_req_fn() -> NativeFn {
@@ -104,17 +104,18 @@ pub(crate) fn send_fn() -> NativeFn {
 pub(crate) fn recv_fn() -> NativeFn {
     NativeFn {
         symbol: SymbolId::from("recv"),
-        func: |_, _args| {
-            // let (dst, msg) = match args {
-            //     [Val::Int(dst), msg] => (dst, msg),
-            //     _ => {
-            //         return Err(Error::InvalidExpression(
-            //             "Unexpected send call - (send DEST_PID DATA)".to_string(),
-            //         ))
-            //     }
-            // };
+        func: |_, args| {
+            let pattern = match args {
+                [pat] => Some(Pattern::from_val(pat.clone())),
+                [] => None,
+                _ => {
+                    return Err(Error::UnexpectedArguments(
+                        "recv expects one or no arguments - (recv [PATTERN])".to_string(),
+                    ))
+                }
+            };
             Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
-                IOCmd::Recv,
+                IOCmd::Recv(pattern),
             )))))
         },
     }

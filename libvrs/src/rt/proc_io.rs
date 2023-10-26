@@ -10,7 +10,7 @@ use crate::connection::Error as ConnError;
 
 use crate::{Connection, Response};
 
-use super::proc::Val;
+use super::proc::{Pattern, Val};
 use crate::rt::{Error, Result};
 
 /// Handles process IO requests
@@ -32,7 +32,7 @@ pub enum IOCmd {
     SendMessage(ProcessId, Val),
     ListMessages,
     Exec(String, Vec<String>),
-    Recv,
+    Recv(Option<Pattern>),
 }
 
 impl ProcIO {
@@ -93,7 +93,7 @@ impl ProcIO {
             IOCmd::SendMessage(dst, val) => self.send_message(dst, val).await,
             IOCmd::ListMessages => self.list_message().await,
             IOCmd::Exec(prog, args) => self.exec(prog, args).await,
-            IOCmd::Recv => self.handle_recv().await,
+            IOCmd::Recv(pat) => self.handle_recv(pat).await,
         }
     }
 
@@ -136,10 +136,10 @@ impl ProcIO {
     }
 
     /// Handle recv command
-    async fn handle_recv(&self) -> Result<Val> {
+    async fn handle_recv(&self, pat: Option<Pattern>) -> Result<Val> {
         let mailbox = self.mailbox.as_ref().ok_or(Error::NoMailbox)?;
-        let msg = mailbox.poll().await?;
-        Ok(msg.msg)
+        let msg = mailbox.poll(pat).await?;
+        Ok(msg.contents)
     }
 
     /// List messages in mailbox
@@ -147,7 +147,7 @@ impl ProcIO {
         let mailbox = self.mailbox.as_ref().ok_or(Error::NoMailbox)?;
 
         let msgs = mailbox.all().await?;
-        let msg_vals = msgs.into_iter().map(|m| m.msg).collect();
+        let msg_vals = msgs.into_iter().map(|m| m.contents).collect();
 
         Ok(Val::List(msg_vals))
     }
