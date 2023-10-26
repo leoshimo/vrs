@@ -95,7 +95,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
 
     /// Bind native function to global environment
     pub fn bind(&mut self, nativefn: NativeFn<T, L>) -> &mut Self {
-        self.global.lock().unwrap().bind(nativefn);
+        self.global.lock().unwrap().bind_native(nativefn);
         self
     }
 

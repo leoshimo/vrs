@@ -13,9 +13,9 @@ use tracing::{debug, error, info};
 /// Set of running processes
 pub type ProcessSet = JoinSet<ProcessExit>;
 
-// TODO: Newtype or dedicated type?
 /// IDs assigned to processes
-pub type ProcessId = usize;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ProcessId(usize);
 
 /// A running process in runtime
 pub struct Process {
@@ -57,7 +57,7 @@ pub struct ProcessHandle {
 /// Extern type between Fiber and hosting Process
 #[derive(Debug, Clone, PartialEq)]
 pub enum Extern {
-    /// IO Commands
+    ProcessId(ProcessId),
     IOCmd(Box<IOCmd>),
 }
 
@@ -90,6 +90,7 @@ impl Process {
             .bind(proc_bindings::recv_req_fn())
             .bind(proc_bindings::send_resp_fn())
             .bind(proc_bindings::self_fn())
+            .bind(proc_bindings::pid_fn())
             .bind(proc_bindings::ps_fn())
             .bind(proc_bindings::send_fn())
             .bind(proc_bindings::ls_msgs_fn())
@@ -230,9 +231,31 @@ enum Event {
     Kill,
 }
 
+#[cfg(test)]
+impl ProcessId {
+    pub(crate) fn inner(&self) -> &usize {
+        &self.0
+    }
+}
+
+impl From<usize> for ProcessId {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+impl std::fmt::Display for ProcessId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<pid {}>", self.0)
+    }
+}
+
 impl std::fmt::Display for Extern {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<signal>")
+        match self {
+            Extern::ProcessId(pid) => write!(f, "{}", pid),
+            Extern::IOCmd(_) => write!(f, "<iocmd>"),
+        }
     }
 }
 
@@ -260,13 +283,13 @@ mod tests {
     #[tokio::test]
     async fn spawn_simple() {
         let mut procs = ProcessSet::new();
-        let _ = Process::from_expr(99, "\"Hello\"")
+        let _ = Process::from_expr(99.into(), "\"Hello\"")
             .unwrap()
             .spawn(&mut procs)
             .unwrap();
 
         let res = procs.join_next().await.unwrap().unwrap();
-        assert_eq!(res.id, 99,);
+        assert_eq!(res.id, 99.into());
         assert_eq!(
             res.status.unwrap(),
             ProcessResult::Done(Val::string("Hello")),
@@ -276,14 +299,14 @@ mod tests {
     #[tokio::test]
     async fn processes_are_isolated() {
         let mut procs = ProcessSet::new();
-        let _ = Process::from_expr(0, "(def x 0)")
+        let _ = Process::from_expr(0.into(), "(def x 0)")
             .unwrap()
             .spawn(&mut procs)
             .unwrap();
         let res = procs.join_next().await.unwrap().unwrap();
         assert_eq!(res.status.unwrap(), ProcessResult::Done(Val::Int(0)),);
 
-        let _ = Process::from_expr(0, "x")
+        let _ = Process::from_expr(0.into(), "x")
             .unwrap()
             .spawn(&mut procs)
             .unwrap();
@@ -300,7 +323,7 @@ mod tests {
         let (local, mut remote) = Connection::pair().unwrap();
 
         let mut procs = ProcessSet::new();
-        let _ = Process::from_expr(0, "(recv_req)")
+        let _ = Process::from_expr(0.into(), "(recv_req)")
             .unwrap()
             .conn(local)
             .spawn(&mut procs);
@@ -325,7 +348,7 @@ mod tests {
         let (local, mut remote) = Connection::pair().unwrap();
         let mut procs = ProcessSet::new();
 
-        let _ = Process::from_expr(0, "(send_resp (peval (recv_req)))")
+        let _ = Process::from_expr(0.into(), "(send_resp (peval (recv_req)))")
             .unwrap()
             .conn(local)
             .spawn(&mut procs);
@@ -350,10 +373,15 @@ mod tests {
     async fn get_self() {
         let mut procs = ProcessSet::new();
 
-        let _ = Process::from_expr(0, "(self)").unwrap().spawn(&mut procs);
+        let _ = Process::from_expr(99.into(), "(self)")
+            .unwrap()
+            .spawn(&mut procs);
 
         let res = procs.join_next().await.unwrap().unwrap();
-        assert_matches!(res.status, Ok(ProcessResult::Done(Val::Int(_))));
+        assert_eq!(
+            res.status.unwrap(),
+            ProcessResult::Done(Val::Extern(Extern::ProcessId(99.into())))
+        );
     }
 
     // TODO: Implement + test preemption

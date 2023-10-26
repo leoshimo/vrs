@@ -10,7 +10,7 @@ use crate::connection::Error as ConnError;
 
 use crate::{Connection, Response};
 
-use super::proc::{Pattern, Val};
+use super::proc::{Extern, Pattern, Val};
 use crate::rt::{Error, Result};
 
 /// Handles process IO requests
@@ -108,7 +108,7 @@ impl ProcIO {
             .procs()
             .await?
             .into_iter()
-            .map(|pid| Val::Int(pid as i32))
+            .map(|pid| Val::Extern(Extern::ProcessId(pid)))
             .collect::<Vec<_>>();
         Ok(Val::List(procs))
     }

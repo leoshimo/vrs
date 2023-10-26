@@ -36,13 +36,33 @@ pub(crate) fn send_resp_fn() -> NativeFn {
     }
 }
 
-/// Binding to get current process's PID
+/// binding to create a new PID
+pub(crate) fn pid_fn() -> NativeFn {
+    NativeFn {
+        symbol: SymbolId::from("pid"),
+        func: |_, args| {
+            let pid = match args {
+                [Val::Int(pid)] => pid,
+                _ => {
+                    return Err(Error::UnexpectedArguments(
+                        "pid expects single integer argument".to_string(),
+                    ))
+                }
+            };
+            Ok(NativeFnVal::Return(Val::Extern(Extern::ProcessId(
+                ProcessId::from(*pid as usize),
+            ))))
+        },
+    }
+}
+
+/// binding to get current process's pid
 pub(crate) fn self_fn() -> NativeFn {
     NativeFn {
         symbol: SymbolId::from("self"),
         func: |f, _| {
             let pid = f.locals().pid;
-            Ok(NativeFnVal::Return(Val::Int(pid as i32)))
+            Ok(NativeFnVal::Return(Val::Extern(Extern::ProcessId(pid))))
         },
     }
 }
@@ -65,7 +85,8 @@ pub(crate) fn kill_fn() -> NativeFn {
         symbol: SymbolId::from("kill"),
         func: |_, args| {
             let pid = match args {
-                [Val::Int(pid)] => pid,
+                [Val::Extern(Extern::ProcessId(pid))] => *pid,
+                [Val::Int(pid)] => ProcessId::from(*pid as usize),
                 _ => {
                     return Err(Error::InvalidExpression(
                         "kill should have one integer argument".to_string(),
@@ -74,7 +95,7 @@ pub(crate) fn kill_fn() -> NativeFn {
             };
 
             Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
-                IOCmd::KillProcess(*pid as ProcessId),
+                IOCmd::KillProcess(pid),
             )))))
         },
     }
@@ -86,7 +107,7 @@ pub(crate) fn send_fn() -> NativeFn {
         symbol: SymbolId::from("send"),
         func: |_, args| {
             let (dst, msg) = match args {
-                [Val::Int(dst), msg] => (dst, msg),
+                [Val::Extern(Extern::ProcessId(dst)), msg] => (dst, msg),
                 _ => {
                     return Err(Error::InvalidExpression(
                         "Unexpected send call - (send DEST_PID DATA)".to_string(),
@@ -94,7 +115,7 @@ pub(crate) fn send_fn() -> NativeFn {
                 }
             };
             Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
-                IOCmd::SendMessage(*dst as ProcessId, msg.clone()),
+                IOCmd::SendMessage(*dst, msg.clone()),
             )))))
         },
     }

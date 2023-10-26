@@ -136,7 +136,7 @@ struct Kernel {
     weak_hdl: WeakKernelHandle,
     procs: ProcessSet,
     proc_hdls: HashMap<ProcessId, ProcessHandle>,
-    next_proc_id: ProcessId,
+    next_proc_id: usize,
 }
 
 impl Kernel {
@@ -362,7 +362,8 @@ mod tests {
         remote
             .send_req(Request {
                 req_id: 0,
-                contents: lyric::parse(&format!("(kill {})", proc_other.id())).unwrap(),
+                contents: lyric::parse(&format!("(kill (pid {}))", proc_other.id().inner()))
+                    .unwrap(),
             })
             .await
             .unwrap();

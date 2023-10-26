@@ -157,30 +157,30 @@ mod tests {
 
     #[tokio::test]
     async fn messages() {
-        let mb = Mailbox::spawn(0);
+        let mb = Mailbox::spawn(ProcessId::from(0));
         assert_eq!(mb.all().await.unwrap(), vec![]);
     }
 
     #[tokio::test]
     async fn received() {
-        let mb = Mailbox::spawn(0);
+        let mb = Mailbox::spawn(0.into());
 
-        mb.push(Message::new(1, Val::symbol("one")))
+        mb.push(Message::new(1.into(), Val::symbol("one")))
             .await
             .expect("Mailbox should receive msg");
-        mb.push(Message::new(2, Val::symbol("two")))
+        mb.push(Message::new(2.into(), Val::symbol("two")))
             .await
             .expect("Mailbox should receive msg");
-        mb.push(Message::new(3, Val::symbol("three")))
+        mb.push(Message::new(3.into(), Val::symbol("three")))
             .await
             .expect("Mailbox should receive msg");
 
         assert_eq!(
             mb.all().await.unwrap(),
             vec![
-                Message::new(1, Val::symbol("one")),
-                Message::new(2, Val::symbol("two")),
-                Message::new(3, Val::symbol("three")),
+                Message::new(1.into(), Val::symbol("one")),
+                Message::new(2.into(), Val::symbol("two")),
+                Message::new(3.into(), Val::symbol("three")),
             ],
             "Messages should be present in order it was received"
         );
@@ -188,10 +188,10 @@ mod tests {
 
     #[tokio::test]
     async fn poll_after_push() {
-        let mb = Mailbox::spawn(0);
+        let mb = Mailbox::spawn(0.into());
 
         mb.push(Message::new(
-            1,
+            1.into(),
             parse("(:hello \"one\" 2 :three)").unwrap().into(),
         ))
         .await
@@ -200,13 +200,13 @@ mod tests {
         // poll after push
         assert_eq!(
             mb.poll(None).await.unwrap(),
-            Message::new(1, parse("(:hello \"one\" 2 :three)").unwrap().into())
+            Message::new(1.into(), parse("(:hello \"one\" 2 :three)").unwrap().into())
         );
     }
 
     #[tokio::test]
     async fn poll_before_push() {
-        let mb = Mailbox::spawn(0);
+        let mb = Mailbox::spawn(0.into());
 
         let mb_clone = mb.clone();
         let hdl = tokio::spawn(async move { mb_clone.poll(None).await });
@@ -215,11 +215,13 @@ mod tests {
 
         yield_now().await; // yield on current task to let 2nd poll run
 
-        mb.push(Message::new(1, Val::symbol("hi"))).await.unwrap();
+        mb.push(Message::new(1.into(), Val::symbol("hi")))
+            .await
+            .unwrap();
 
         assert_eq!(
             hdl.await.unwrap().unwrap(),
-            Message::new(1, Val::symbol("hi")),
+            Message::new(1.into(), Val::symbol("hi")),
             "Poll should return with result"
         );
     }

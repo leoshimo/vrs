@@ -18,8 +18,8 @@ impl<T: Extern, L: Locals> Env<T, L> {
             bindings: HashMap::default(),
             parent: None,
         };
-        e.bind(builtin::plus_fn());
-        e.bind(builtin::ref_fn());
+        e.bind_native(builtin::plus_fn());
+        e.bind_native(builtin::ref_fn());
         e
     }
 

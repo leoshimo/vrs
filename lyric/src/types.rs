@@ -182,8 +182,8 @@ where
             Val::NativeFn(s) => write!(f, "<nativefn {}>", s.symbol),
             Val::Bytecode(_) => write!(f, "<bytecode>"),
             Val::Error(e) => write!(f, "<error {e}>"),
-            Val::Extern(e) => write!(f, "<extern {e}>"),
             Val::Ref(r) => write!(f, "<ref {}>", r.0),
+            Val::Extern(e) => write!(f, "{e}"),
         }
     }
 }
