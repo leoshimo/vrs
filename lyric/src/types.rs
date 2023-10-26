@@ -62,14 +62,15 @@ pub struct Lambda<T: Extern, L: Locals> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NativeFn<T: Extern, L: Locals> {
     pub symbol: SymbolId,
-    pub func: fn(&mut Fiber<T, L>, &[Val<T, L>]) -> Result<NativeFnVal<T, L>>,
+    pub func: fn(&mut Fiber<T, L>, &[Val<T, L>]) -> Result<NativeFnOp<T, L>>,
 }
 
-/// Result of a native function value, which can yield with a
+/// Result of executing native function value
 #[derive(Debug, Clone, PartialEq)]
-pub enum NativeFnVal<T: Extern, L: Locals> {
+pub enum NativeFnOp<T: Extern, L: Locals> {
     Return(Val<T, L>),
     Yield(Val<T, L>),
+    Call(Vec<Inst<T, L>>),
 }
 
 /// Identifier for Symbol
@@ -129,6 +130,11 @@ impl<T: Extern, L: Locals> Val<T, L> {
     /// Shorthand for creating [Val::Keyword]
     pub fn keyword(id: &str) -> Self {
         Self::Keyword(KeywordId::from(id))
+    }
+
+    /// Whether or not val is a callable function
+    pub fn is_callable(&self) -> bool {
+        matches!(self, Val::Lambda(_) | Val::NativeFn(_))
     }
 }
 

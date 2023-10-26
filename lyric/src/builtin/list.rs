@@ -1,11 +1,11 @@
 //! List builtins
-use crate::{Error, Extern, Locals, NativeFn, NativeFnVal, SymbolId, Val};
+use crate::{Error, Extern, Inst, Locals, NativeFn, NativeFnOp, SymbolId, Val};
 
 /// Language bindng for `list`
 pub fn list_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
         symbol: SymbolId::from("list"),
-        func: |_, args| Ok(NativeFnVal::Return(Val::List(args.to_vec()))),
+        func: |_, args| Ok(NativeFnOp::Return(Val::List(args.to_vec()))),
     }
 }
 
@@ -17,7 +17,7 @@ pub fn push_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
             [Val::List(l), elem] => {
                 let mut l = l.to_vec();
                 l.push(elem.clone());
-                Ok(NativeFnVal::Return(Val::List(l)))
+                Ok(NativeFnOp::Return(Val::List(l)))
             }
             _ => Err(Error::UnexpectedArguments(
                 "push expects a list and element argument".to_string(),
@@ -36,7 +36,7 @@ pub fn get_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
                     Some(elem) => elem.clone(),
                     None => Val::Nil,
                 };
-                Ok(NativeFnVal::Return(elem))
+                Ok(NativeFnOp::Return(elem))
             }
             [Val::List(l), Val::Keyword(target)] => {
                 let result = l
@@ -45,7 +45,7 @@ pub fn get_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
                     .map(|w| w[1].clone())
                     .unwrap_or(Val::Nil);
 
-                Ok(NativeFnVal::Return(result))
+                Ok(NativeFnOp::Return(result))
             }
             _ => Err(Error::UnexpectedArguments(
                 "get expects a list and indexing argument".to_string(),
@@ -54,4 +54,30 @@ pub fn get_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     }
 }
 
-// TOOD: Write lang.ts tests for list bindings?
+// TODO: Revisit this map impl.
+/// Language binding for `map`
+pub(crate) fn map_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
+    NativeFn {
+        symbol: SymbolId::from("map"),
+        func: |_, args| match args {
+            [Val::List(l), val] if val.is_callable() => {
+                let mut bc = vec![Inst::GetSym(SymbolId::from("list"))];
+                for elem in l {
+                    bc.extend([
+                        Inst::PushConst(val.clone()),
+                        Inst::PushConst(elem.clone()),
+                        Inst::CallFunc(1),
+                    ]);
+                }
+                bc.push(Inst::CallFunc(l.len()));
+                Ok(NativeFnOp::Call(dbg!(bc)))
+            }
+            _ => Err(Error::UnexpectedArguments(
+                "map expects a list and mapping operation".to_string(),
+            )),
+        },
+    }
+}
+
+// TODO: Write lang.ts tests for list bindings?
+// TODO: Write lang.ts tests for map

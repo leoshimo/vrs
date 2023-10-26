@@ -315,6 +315,31 @@ fn compile_loop<T: Extern, L: Locals>(
     Ok(inst)
 }
 
+impl<T: Extern, L: Locals> std::fmt::Display for Inst<T, L> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Inst::PushConst(c) => write!(f, "pushco {c}"),
+            Inst::GetSym(s) => write!(f, "getsym {s}"),
+            Inst::DefSym(s) => write!(f, "defsym {s}"),
+            Inst::SetSym(s) => write!(f, "setsym {s}"),
+            Inst::MakeFunc => write!(f, "makefn"),
+            Inst::CallFunc(nargs) => write!(f, "callfn {nargs}"),
+            Inst::PopTop => write!(f, "poptop"),
+            Inst::JumpFwd(o) => write!(f, "jmpfwd {o}"),
+            Inst::JumpBck(o) => write!(f, "jmpbck {o}"),
+            Inst::PopJumpFwdIfTrue(o) => write!(f, "jmpift {o}"),
+            Inst::YieldTop => write!(f, "yldtop"),
+            Inst::Eval(p) => {
+                if *p {
+                    write!(f, "eval")
+                } else {
+                    write!(f, "peval")
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Inst::*;

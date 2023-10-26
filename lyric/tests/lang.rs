@@ -2,7 +2,7 @@
 
 use assert_matches::assert_matches;
 use lyric::fiber::FiberState;
-use lyric::{Error, NativeFn, NativeFnVal, Result, SymbolId};
+use lyric::{Error, NativeFn, NativeFnOp, Result, SymbolId};
 use void::Void;
 
 type Fiber = lyric::Fiber<Void, ()>;
@@ -13,7 +13,7 @@ fn eval_expr(e: &str) -> Result<Val> {
     let mut f = Fiber::from_expr(e, ())?;
     f.bind(NativeFn {
         symbol: SymbolId::from("echo_args"),
-        func: |_, x| Ok(NativeFnVal::Return(Val::List(x.to_vec()))),
+        func: |_, x| Ok(NativeFnOp::Return(Val::List(x.to_vec()))),
     });
 
     // TODO: Think about ergonomics here

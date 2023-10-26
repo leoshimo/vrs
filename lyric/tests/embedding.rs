@@ -1,7 +1,7 @@
 //! Tests for embedding in host application
 
 use assert_matches::assert_matches;
-use lyric::{parse, Error, FiberState, Inst, NativeFn, NativeFnVal, SymbolId};
+use lyric::{parse, Error, FiberState, Inst, NativeFn, NativeFnOp, SymbolId};
 use FiberState::*;
 
 type Fiber = lyric::Fiber<Ext, Locals>;
@@ -127,7 +127,7 @@ fn fiber_yielding_native_binding() {
     let mut f = Fiber::from_expr("(echo_yield :one :two)", locals()).unwrap();
     f.bind(NativeFn {
         symbol: SymbolId::from("echo_yield"),
-        func: |_, x| Ok(NativeFnVal::Yield(Val::Extern(Ext::EchoYield(x.to_vec())))),
+        func: |_, x| Ok(NativeFnOp::Yield(Val::Extern(Ext::EchoYield(x.to_vec())))),
     });
 
     assert_eq!(
@@ -178,15 +178,11 @@ fn fiber_conn_recv_peval_sim() {
     let mut f = Fiber::from_expr(prog, locals()).unwrap();
     f.bind(NativeFn {
         symbol: SymbolId::from("recv_conn"),
-        func: |_, _| Ok(NativeFnVal::Yield(Val::Extern(Ext::RecvConn))),
+        func: |_, _| Ok(NativeFnOp::Yield(Val::Extern(Ext::RecvConn))),
     });
     f.bind(NativeFn {
         symbol: SymbolId::from("send_conn"),
-        func: |_, args| {
-            Ok(NativeFnVal::Yield(Val::Extern(Ext::SendConn(
-                args.to_vec(),
-            ))))
-        },
+        func: |_, args| Ok(NativeFnOp::Yield(Val::Extern(Ext::SendConn(args.to_vec())))),
     });
 
     assert_eq!(f.resume().unwrap(), Yield(Val::Extern(Ext::RecvConn)));
@@ -244,7 +240,7 @@ fn get_set_locals() {
         symbol: SymbolId::from("get_local"),
         func: |f, _| {
             let v = f.locals().val;
-            Ok(NativeFnVal::Return(Val::Int(v)))
+            Ok(NativeFnOp::Return(Val::Int(v)))
         },
     });
     f.bind(NativeFn {
@@ -255,7 +251,7 @@ fn get_set_locals() {
                 _ => panic!(),
             };
             f.locals_mut().val += v;
-            Ok(NativeFnVal::Return(Val::Nil))
+            Ok(NativeFnOp::Return(Val::Nil))
         },
     });
 

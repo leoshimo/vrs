@@ -37,7 +37,7 @@ pub type Pattern = lyric::Pattern<Extern, Locals>;
 pub type NativeFn = lyric::NativeFn<Extern, Locals>;
 
 /// NativeFnVal for Process
-pub type NativeFnVal = lyric::NativeFnVal<Extern, Locals>;
+pub type NativeFnVal = lyric::NativeFnOp<Extern, Locals>;
 
 /// Locals for Process Fiber
 #[derive(Debug, Clone, PartialEq)]

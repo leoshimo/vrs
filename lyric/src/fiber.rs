@@ -2,7 +2,7 @@
 use tracing::{debug, warn};
 
 use super::{Env, Inst};
-use crate::{compile, parse, Error, Extern, Lambda, Locals, NativeFn, NativeFnVal, Result, Val};
+use crate::{compile, parse, Error, Extern, Lambda, Locals, NativeFn, NativeFnOp, Result, Val};
 use std::sync::{Arc, Mutex};
 
 /// A single, cooperativly scheduled sequence of execution
@@ -199,11 +199,13 @@ fn run<T: Extern, L: Locals>(f: &mut Fiber<T, L>) -> Result<FiberState<T, L>> {
 
         // TODO(dev): Add fiber debug flag
         debug!(
-            "frame {} ip {}: \n\t{:?}\n\t{:?}",
+            "frame {} ip {}: {}\n\t{}",
             f.cframes.len() - 1,
-            f.top().ip,
+            f.top().ip - 1,
             inst,
-            f.stack,
+            f.stack
+                .iter()
+                .fold(String::new(), |acc, e| acc + &e.to_string() + ", ")
         );
 
         let res = || -> Result<()> {
@@ -277,10 +279,19 @@ fn run<T: Extern, L: Locals>(f: &mut Fiber<T, L>) -> Result<FiberState<T, L>> {
                         Some(Val::NativeFn(n)) => {
                             let v = (n.func)(f, &args.collect::<Vec<_>>())?;
                             match v {
-                                NativeFnVal::Return(v) => f.stack.push(v),
-                                NativeFnVal::Yield(v) => {
+                                NativeFnOp::Return(v) => f.stack.push(v),
+                                NativeFnOp::Yield(v) => {
                                     f.stack.push(v);
                                     f.is_yielding = true;
+                                }
+                                NativeFnOp::Call(code) => {
+                                    let cur_env = &f.top().env;
+                                    f.cframes.push(CallFrame::from_bytecode(
+                                        Arc::clone(cur_env),
+                                        code,
+                                        f.stack.len(),
+                                        f.top().unwind_cf_len,
+                                    ))
                                 }
                             }
                         }
@@ -299,7 +310,7 @@ fn run<T: Extern, L: Locals>(f: &mut Fiber<T, L>) -> Result<FiberState<T, L>> {
                         _ => {
                             return Err(Error::UnexpectedStack(
                                 "Missing function object".to_string(),
-                            ))
+                            ));
                         }
                     };
                 }
@@ -825,4 +836,6 @@ mod tests {
 
         assert!(f.is_stack_empty());
     }
+
+    // TODO: Add Test case for NativeFnOp::Call
 }

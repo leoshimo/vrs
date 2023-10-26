@@ -23,6 +23,7 @@ impl<T: Extern, L: Locals> Env<T, L> {
         e.bind_native(builtin::list_fn());
         e.bind_native(builtin::push_fn());
         e.bind_native(builtin::get_fn());
+        e.bind_native(builtin::map_fn());
         e
     }
 
