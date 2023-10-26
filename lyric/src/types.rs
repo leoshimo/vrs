@@ -43,6 +43,7 @@ pub enum Form {
     Bool(bool),
     Int(i32),
     String(String),
+    RawString(String), // TODO: Remove this w/ new client API
     Symbol(SymbolId),
     Keyword(KeywordId),
     List(Vec<Form>),
@@ -209,6 +210,7 @@ impl std::fmt::Display for Form {
                         .join(" ")
                 ),
             },
+            Form::RawString(s) => write!(f, "{}", s),
         }
     }
 }
@@ -248,6 +250,7 @@ impl<T: Extern, L: Locals> From<Form> for Val<T, L> {
             Form::Symbol(s) => Val::Symbol(s),
             Form::Keyword(k) => Val::Keyword(k),
             Form::List(l) => Val::List(l.into_iter().map(|e| e.into()).collect()),
+            Form::RawString(s) => Val::String(s),
         }
     }
 }
@@ -268,20 +271,8 @@ impl<T: Extern, L: Locals> TryFrom<Val<T, L>> for Form {
                     .map(|e| e.try_into())
                     .collect::<Result<Vec<_>>>()?,
             )),
-            Val::Bytecode(_) => Err(Error::InvalidFormToExpr(
-                "bytecode are not exprs".to_string(),
-            )),
-            Val::Lambda(_) => Err(Error::InvalidFormToExpr(
-                "lambdas are not exprs".to_string(),
-            )),
-            Val::NativeFn(_) => Err(Error::InvalidFormToExpr(
-                "nativefns are not exprs".to_string(),
-            )),
-            Val::Error(_) => Err(Error::InvalidFormToExpr("errors are not exprs".to_string())),
-            Val::Extern(_) => Err(Error::InvalidFormToExpr(
-                "extern values are not exprs".to_string(),
-            )),
-            Val::Ref(_) => Err(Error::InvalidFormToExpr("refs are not exprs".to_string())),
+            Val::Ref(_) | Val::Error(_) | Val::Bytecode(_) | Val::Lambda(_) | Val::NativeFn(_) | Val::Extern(_)
+            => Ok(Form::RawString(value.to_string())),
         }
     }
 }

@@ -2,6 +2,7 @@ mod editor;
 
 use anyhow::{Context, Result};
 use clap::{arg, command};
+use lyric::Form;
 use rustyline::error::ReadlineError;
 
 use std::fs::File;
@@ -136,6 +137,8 @@ async fn run_repl(mut client: Client) -> Result<()> {
                 };
                 match client.request(f).await {
                     Ok(resp) => match resp.contents {
+                        // TODO: Bringup different formats for clients - e.g. REPL should use text format only
+                        Ok(Form::RawString(s)) => println!("{}", s),
                         Ok(c) => println!("{}", c),
                         Err(e) => eprintln!("{}", e),
                     },

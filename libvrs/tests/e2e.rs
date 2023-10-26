@@ -1,5 +1,5 @@
 //! E2E tests for Runtime and Client
-use vrs::{connection::Error, Client, Connection, Response, Runtime};
+use vrs::{Client, Connection, Response, Runtime};
 
 #[tokio::test]
 async fn runtime_simple() {
@@ -59,15 +59,6 @@ async fn runtime_remote_request_multi() {
             Ok(Response { contents, .. }) if contents == Ok(lyric::Form::string("Hello world"))
         ),
         "evaluating a function call passing defined argument symbols should return result"
-    );
-
-    let resp = client.request(p("jibberish").unwrap()).await.unwrap();
-    assert!(
-        matches!(
-            resp.contents.expect_err("Should have errored"),
-            Error::EvaluationError(_),
-        ),
-        "evaluating a jibberish underined symbol should return :err"
     );
 }
 
