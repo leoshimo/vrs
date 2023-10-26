@@ -2,7 +2,9 @@
 use tracing::{debug, warn};
 
 use super::{Env, Inst};
-use crate::{compile, parse, Error, Extern, Lambda, Locals, NativeFn, NativeFnOp, Result, Val};
+use crate::{
+    compile, parse, Error, Extern, Lambda, Locals, NativeFn, NativeFnOp, Result, SymbolId, Val,
+};
 use std::sync::{Arc, Mutex};
 
 /// A single, cooperativly scheduled sequence of execution
@@ -96,6 +98,12 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
     /// Bind native function to global environment
     pub fn bind(&mut self, nativefn: NativeFn<T, L>) -> &mut Self {
         self.global.lock().unwrap().bind_native(nativefn);
+        self
+    }
+
+    /// Bind lambdas
+    pub fn bind_lambda(&mut self, s: &SymbolId, l: Lambda<T, L>) -> &mut Self {
+        self.global.lock().unwrap().define(s, Val::Lambda(l));
         self
     }
 

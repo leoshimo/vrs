@@ -1,15 +1,18 @@
 //! Bindings for Process Fibers
-use super::proc::{Extern, NativeFn, NativeFnVal, Val};
+
+use std::sync::{Arc, Mutex};
+
+use super::proc::{Env, Extern, Lambda, NativeFn, NativeFnOp, Val};
 use super::proc_io::IOCmd;
 use super::ProcessId;
-use lyric::{Error, Pattern, Result, SymbolId};
+use lyric::{compile, parse, Error, Pattern, Result, SymbolId};
 
 /// Binding for `recv_req` to receive requests over client connection
 pub(crate) fn recv_req_fn() -> NativeFn {
     NativeFn {
         symbol: SymbolId::from("recv_req"),
         func: |_, _| {
-            Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
+            Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
                 IOCmd::RecvRequest,
             )))))
         },
@@ -20,7 +23,7 @@ pub(crate) fn recv_req_fn() -> NativeFn {
 pub(crate) fn send_resp_fn() -> NativeFn {
     NativeFn {
         symbol: SymbolId::from("send_resp"),
-        func: |_, args| -> std::result::Result<NativeFnVal, Error> {
+        func: |_, args| {
             let val = match args {
                 [v] => v.clone(),
                 _ => {
@@ -29,7 +32,7 @@ pub(crate) fn send_resp_fn() -> NativeFn {
                     ))
                 }
             };
-            Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
+            Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
                 IOCmd::SendRequest(val),
             )))))
         },
@@ -49,7 +52,7 @@ pub(crate) fn pid_fn() -> NativeFn {
                     ))
                 }
             };
-            Ok(NativeFnVal::Return(Val::Extern(Extern::ProcessId(
+            Ok(NativeFnOp::Return(Val::Extern(Extern::ProcessId(
                 ProcessId::from(*pid as usize),
             ))))
         },
@@ -62,7 +65,7 @@ pub(crate) fn self_fn() -> NativeFn {
         symbol: SymbolId::from("self"),
         func: |f, _| {
             let pid = f.locals().pid;
-            Ok(NativeFnVal::Return(Val::Extern(Extern::ProcessId(pid))))
+            Ok(NativeFnOp::Return(Val::Extern(Extern::ProcessId(pid))))
         },
     }
 }
@@ -72,7 +75,7 @@ pub(crate) fn ps_fn() -> NativeFn {
     NativeFn {
         symbol: SymbolId::from("ps"),
         func: |_, _| {
-            Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
+            Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
                 IOCmd::ListProcesses,
             )))))
         },
@@ -94,7 +97,7 @@ pub(crate) fn kill_fn() -> NativeFn {
                 }
             };
 
-            Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
+            Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
                 IOCmd::KillProcess(pid),
             )))))
         },
@@ -114,7 +117,7 @@ pub(crate) fn send_fn() -> NativeFn {
                     ))
                 }
             };
-            Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
+            Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
                 IOCmd::SendMessage(*dst, msg.clone()),
             )))))
         },
@@ -135,7 +138,7 @@ pub(crate) fn recv_fn() -> NativeFn {
                     ))
                 }
             };
-            Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
+            Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
                 IOCmd::Recv(pattern),
             )))))
         },
@@ -152,7 +155,7 @@ pub(crate) fn ls_msgs_fn() -> NativeFn {
                     "Unexpected ls-msgs call - No arguments expected".to_string(),
                 ));
             }
-            Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
+            Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
                 IOCmd::ListMessages,
             )))))
         },
@@ -186,9 +189,31 @@ pub(crate) fn exec_fn() -> NativeFn {
                     )),
                 })
                 .collect::<Result<Vec<_>>>()?;
-            Ok(NativeFnVal::Yield(Val::Extern(Extern::IOCmd(Box::new(
+            Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
                 IOCmd::Exec(prog, args),
             )))))
         },
+    }
+}
+
+// TODO: This feels like a hack - need easier lambda bindings
+/// Binding for call
+pub(crate) fn call_fn(env: Arc<Mutex<Env>>) -> Lambda {
+    Lambda {
+        params: vec![SymbolId::from("pid"), SymbolId::from("msg")],
+        code: compile(
+            &parse(
+                r#"
+            (begin
+                (def r (ref))
+                (send pid (list r (self) msg))
+                (get (recv (list r 'any)) 1))
+        "#,
+            )
+            .unwrap()
+            .into(),
+        )
+        .unwrap(),
+        env,
     }
 }

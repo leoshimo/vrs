@@ -5,7 +5,7 @@ use super::proc_io::{IOCmd, ProcIO};
 use crate::rt::mailbox::{Mailbox, MailboxHandle};
 use crate::rt::{Error, Result};
 use crate::Connection;
-use lyric::{parse, FiberState};
+use lyric::{parse, FiberState, SymbolId};
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use tracing::{debug, error, info};
@@ -30,14 +30,20 @@ pub type Val = lyric::Val<Extern, Locals>;
 /// Fibers for processes
 pub type Fiber = lyric::Fiber<Extern, Locals>;
 
+/// Env for processes
+pub type Env = lyric::Env<Extern, Locals>;
+
 /// Pattern matches for processes
 pub type Pattern = lyric::Pattern<Extern, Locals>;
+
+/// Lambda for processes
+pub type Lambda = lyric::Lambda<Extern, Locals>;
 
 /// NativeFn type for Process bindings
 pub type NativeFn = lyric::NativeFn<Extern, Locals>;
 
-/// NativeFnVal for Process
-pub type NativeFnVal = lyric::NativeFnOp<Extern, Locals>;
+/// NativeFnOp for Process
+pub type NativeFnOp = lyric::NativeFnOp<Extern, Locals>;
 
 /// Locals for Process Fiber
 #[derive(Debug, Clone, PartialEq)]
@@ -84,6 +90,9 @@ impl Process {
     pub(crate) fn from_val(id: ProcessId, val: Val) -> Result<Self> {
         let mut fiber = Fiber::from_val(&val, Locals { pid: id })?;
 
+        // TODO: How to deal with non-native builtins?
+
+        fiber.bind_lambda(&SymbolId::from("call"), proc_bindings::call_fn(fiber.env()));
         fiber
             .bind(proc_bindings::recv_fn())
             .bind(proc_bindings::exec_fn())
