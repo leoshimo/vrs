@@ -16,17 +16,17 @@
 (defn mk_item (title cmd)
   (list :title title :on_click cmd))
 
-(add_item "GitHub - vrs"
-          '(open_url "https://www.github.com/leoshimo/vrs"))
-(add_item "Zulip"
-          '(open_app "Zulip"))
-(add_item "Recurse Center"
-          '(open_url "https://www.recurse.com"))
-(add_item "Google"
-          '(open_url "http://www.google.com"))
-(add_item "Downloads"
-          '(open_file "~/Downloads"))
+(add_item "GitHub - vrs" '(open_url "https://www.github.com/leoshimo/vrs"))
+(add_item "Zulip" '(open_app "Zulip"))
+(add_item "Google" '(open_url "http://www.google.com"))
+(add_item "Downloads" '(open_file "~/Downloads"))
 
+
+#
+# Pretend this nice macro code is here :P
+# (srv :name :launcher
+#      :export '(get_items add_item))
+#
 (loop
    (def req (recv))
    (let ((r (get req 0))
