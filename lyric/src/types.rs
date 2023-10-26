@@ -271,8 +271,12 @@ impl<T: Extern, L: Locals> TryFrom<Val<T, L>> for Form {
                     .map(|e| e.try_into())
                     .collect::<Result<Vec<_>>>()?,
             )),
-            Val::Ref(_) | Val::Error(_) | Val::Bytecode(_) | Val::Lambda(_) | Val::NativeFn(_) | Val::Extern(_)
-            => Ok(Form::RawString(value.to_string())),
+            Val::Ref(_)
+            | Val::Error(_)
+            | Val::Bytecode(_)
+            | Val::Lambda(_)
+            | Val::NativeFn(_)
+            | Val::Extern(_) => Ok(Form::RawString(value.to_string())),
         }
     }
 }
