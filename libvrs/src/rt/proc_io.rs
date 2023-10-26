@@ -3,7 +3,9 @@ use super::kernel::WeakKernelHandle;
 use super::mailbox::MailboxHandle;
 use super::ProcessId;
 use lyric::Form;
+use std::time::Duration;
 use tokio::process::Command;
+use tokio::time;
 use tracing::{debug, error};
 
 use crate::connection::Error as ConnError;
@@ -33,6 +35,7 @@ pub enum IOCmd {
     ListMessages,
     Exec(String, Vec<String>),
     Recv(Option<Pattern>),
+    Sleep(Duration),
 }
 
 impl ProcIO {
@@ -94,6 +97,7 @@ impl ProcIO {
             IOCmd::ListMessages => self.list_message().await,
             IOCmd::Exec(prog, args) => self.exec(prog, args).await,
             IOCmd::Recv(pat) => self.handle_recv(pat).await,
+            IOCmd::Sleep(duration) => self.sleep(duration).await,
         }
     }
 
@@ -168,5 +172,12 @@ impl ProcIO {
                 exit_status
             )))
         }
+    }
+
+    /// Sleep process
+    async fn sleep(&self, duration: Duration) -> Result<Val> {
+        debug!("sleep {:?}", &duration);
+        time::sleep(duration).await;
+        Ok(Val::symbol("ok"))
     }
 }

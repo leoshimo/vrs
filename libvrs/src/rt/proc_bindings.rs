@@ -1,6 +1,7 @@
 //! Bindings for Process Fibers
 
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use super::proc::{Env, Extern, Lambda, NativeFn, NativeFnOp, Val};
 use super::proc_io::IOCmd;
@@ -266,5 +267,25 @@ pub(crate) fn open_file_fn(env: Arc<Mutex<Env>>) -> Lambda {
         )
         .unwrap(),
         env,
+    }
+}
+
+/// Binding for sleep
+pub(crate) fn sleep_fn() -> NativeFn {
+    NativeFn {
+        symbol: SymbolId::from("sleep"),
+        func: |_, args| {
+            let secs = match args {
+                [Val::Int(secs)] => secs,
+                _ => {
+                    return Err(Error::UnexpectedArguments(
+                        "sleep expects single integer argument".to_string(),
+                    ))
+                }
+            };
+            Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
+                IOCmd::Sleep(Duration::from_secs(*secs as u64)),
+            )))))
+        },
     }
 }

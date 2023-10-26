@@ -108,6 +108,7 @@ impl Process {
 
         fiber
             .bind(proc_bindings::shell_expand_fn())
+            .bind(proc_bindings::sleep_fn())
             .bind(proc_bindings::recv_fn())
             .bind(proc_bindings::exec_fn())
             .bind(proc_bindings::recv_req_fn())
