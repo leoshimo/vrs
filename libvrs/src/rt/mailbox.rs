@@ -97,7 +97,7 @@ impl Mailbox {
         match self.pending.pop_front() {
             Some(pending) => {
                 let _ = pending.tx.send(msg);
-            },
+            }
             None => self.messages.push_back(msg),
         }
     }
