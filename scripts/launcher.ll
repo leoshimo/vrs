@@ -1,5 +1,5 @@
 #!/usr/bin/env vrsctl
-# launcher - A launcher service
+# launcher.ll - A launcher service
 
 (def items '())
 
@@ -9,10 +9,6 @@
 (defn add_item (title cmd)
   (set items (push items (mk_item title cmd))))
 
-(defn on_select (item)
-  (get item :on_click)
-  (peval item))
-
 (defn mk_item (title cmd)
   (list :title title :on_click cmd))
 
@@ -21,9 +17,8 @@
 (add_item "Google" '(open_url "http://www.google.com"))
 (add_item "Downloads" '(open_file "~/Downloads"))
 
-
 #
-# Pretend this nice macro code is here :P
+# Whoops service mgmt is broken
 # (srv :name :launcher
 #      :export '(get_items add_item))
 #
