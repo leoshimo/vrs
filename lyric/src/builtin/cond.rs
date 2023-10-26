@@ -18,3 +18,20 @@ pub fn eq_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
         },
     }
 }
+
+/// Language bindng for `contains`
+pub fn contains_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
+    NativeFn {
+        symbol: SymbolId::from("contains"),
+        func: |_, args| match args {
+            [Val::List(l), target] => Ok(NativeFnOp::Return(Val::Bool(l.contains(target)))),
+            [Val::String(s), Val::String(target)] => {
+                Ok(NativeFnOp::Return(Val::Bool(s.contains(target))))
+            }
+            _ => Err(Error::UnexpectedArguments(
+                "contains expects two arguments - (contains LST ELEM) or (contains STR SUBSTR)"
+                    .to_string(),
+            )),
+        },
+    }
+}
