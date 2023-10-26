@@ -20,6 +20,9 @@ impl<T: Extern, L: Locals> Env<T, L> {
         };
         e.bind_native(builtin::plus_fn());
         e.bind_native(builtin::ref_fn());
+        e.bind_native(builtin::list_fn());
+        e.bind_native(builtin::push_fn());
+        e.bind_native(builtin::get_fn());
         e
     }
 
@@ -63,7 +66,7 @@ impl<T: Extern, L: Locals> Env<T, L> {
     }
 
     /// Convenience to bind native functions
-    pub fn bind(&mut self, nativefn: NativeFn<T, L>) -> &mut Self {
+    pub fn bind_native(&mut self, nativefn: NativeFn<T, L>) -> &mut Self {
         self.define(&nativefn.symbol.clone(), Val::NativeFn(nativefn));
         self
     }
