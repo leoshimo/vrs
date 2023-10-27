@@ -19,14 +19,16 @@
 [vrs](https://github.com/leoshimo/vrs) is a WIP personal software runtime,
 inspired by Emacs, Erlang, Unix, Plan 9, and Hypermedia systems.
 
-Its key principles are simplicity and joy.
+Its key principles are: 
+
+- simplicity
+- progress
+- joy
 
 ## Status
 
-vrs is in early design stage. The runtime primitives are under rapid iteration
-and experimentation!
-
-Focus on key areas, such as security and performance, are deferred for now.
+vrs is a digital playground for aggressive experimentation and design - and
+likely always be so.
 
 ## Structure
 
