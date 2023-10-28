@@ -13,8 +13,10 @@
   (list :title title :on_click cmd))
 
 (add_item "Browser" '(open_app "Safari"))
-(add_item "Zulip" '(open_app "Zulip"))
 (add_item "Messages" '(open_app "Messages"))
+(add_item "Mail" '(open_app "Spark"))
+(add_item "Zulip" '(open_app "Zulip"))
+(add_item "Terminal" '(open_app "Alacritty"))
 (add_item "Twitter" '(open_url "https://www.twitter.com"))
 (add_item "GitHub - vrs" '(open_url "https://www.github.com/leoshimo/vrs"))
 (add_item "Downloads" '(open_file "~/Downloads"))
