@@ -12,9 +12,11 @@
 (defn mk_item (title cmd)
   (list :title title :on_click cmd))
 
-(add_item "GitHub - vrs" '(open_url "https://www.github.com/leoshimo/vrs"))
+(add_item "Browser" '(open_app "Safari"))
 (add_item "Zulip" '(open_app "Zulip"))
-(add_item "Google" '(open_url "http://www.google.com"))
+(add_item "Messages" '(open_app "Messages"))
+(add_item "Twitter" '(open_url "https://www.twitter.com"))
+(add_item "GitHub - vrs" '(open_url "https://www.github.com/leoshimo/vrs"))
 (add_item "Downloads" '(open_file "~/Downloads"))
 
 #
@@ -35,7 +37,7 @@
             :ok)
         (if (eq? (get msg 0) :get_items)
             (get_items)
-            (list :err "Unrecognized message"))))
+            '(:err "Unrecognized message"))))
 
      (send src (list r resp))
    ))
