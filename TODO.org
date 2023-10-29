@@ -1,0 +1,297 @@
+#+TITLE: TODO.org
+
+* roadmap
+
+curr: Runtime Process Ergonomics
+next: Client / Runtime interactions v2
+
+** Runtime Process Ergonomics
+- [ ] Headless Process Spawning
+- [ ] Service Discovery / Mgmt
+- [ ] IPC via =srv= and =bind=
+- [ ] Init File
+
+* runtime
+** TODO Conn-less Process Spawning
+Goal: Non-connection-backed =spawn= from =kernel.rs=
+
+Purpose:
+- Spawn from Process / REPL
+- Spawn from Init File
+
+** TODO Service Discovery / Mgmt
+Goal: Replace existing =pid 0= hardcoding w/ service mgmt
+Skip exports / imports map for this one - see also "Runtime Linking"
+Convenience APIs to see running services and some level of introspection
+
+- [ ] =ls-srv=
+- [ ] =srv= / =register= (?)
+- [ ] =find-srv=
+
+** TODO IPC - =srv= and =bind= - Runtime Linker
+
+Goal: Provide better wrappers over =call=
+
+=callee= serves unique named-interface w/ a set of callable symbol IDs:
+- Runtime linker records: The PID of callee, and exported symbols
+
+=caller= calls =bind=, which:
+- Requests service information from runtime linker
+- Runtime linker returns a set of =SymbolId= and =Val= to add into =Env=
+- Newly added bindings use =send pid= =recv pid id= to send + wait for result
+
+
+Want =svc= for service and =bind= for callers
+See also - pattern matching / destructuring
+
+Maybe also cover imports / exported interface and discoverability
+
+#+begin_src lyric
+# *** service-side
+(srv :name launcher
+     :export '(get_favs, add_favs))
+
+# *** client side (gets imports!)
+(link :launcher)
+#+end_src
+
+** TODO Runtime Introspection Builtins
+
+- list processes
+- list services
+- list links
+- list symbols
+
+** TODO Dotfiles / Init Scripts
+** TODO Hypermedia Client
+Goal: Build CLI Hypermedia Client over VRS
+See also - "Revisit Client Connection"
+
+APIs to manipulate lyric S-Exp more effectively
+See also [[https://github.com/janestreet/sexplib][s-explib]]
+https://github.com/janestreet/sexp
+
+See Also: CLI Client Shell
+
+- [ ] DOM API - Set Content of "Page"
+- [ ] DOM API - Get Element with ID
+
+** TODO Revisit Runtime / Client Boundary
+Goal: Revisit protocol b/t/ Runtime / Client w/ New Learnings
+
+Idea - Few standardized interactions?
+- REPL - text only (?)
+- Command-Bar /  Browser (List, Search, Select, Navigate)
+
+Learnings:
+- Instead of always sending =Form=, what client wants depends:
+   - REPL always wants text - it'd rather have error message v.s. "cannot
+     serialize" error
+- How to reconcile with Hypermedia API?
+
+** TODO Controlling Terminal Mechanics for Connection
+
+How to handle nesting? e.g. calling a yielding call in peval *while it is already yielding*
+Nested Yielding + Input routing for connection
+
+Allows:
+- Currently running program as "url"
+- Interactions on that program are routed
+- "Interrupt" to exit to prompt, like Ctrl-c
+
+Similar to =read= and =input()= working in shell + python respectively
+** TODO PubSub API
+- Support pub/sub channels
+- Proof-of-Concept: Pub/Sub listening to "counter" variable on new task execution model
+- Reactivity of PubSub over PubSub
+- Method to access pubsub topic via =vrsctl=
+** TODO Supervision Trees
+Goal: Spawn Link to be notified of errors in spawn-ed processes
+
+Purpose:
+- Service Mgmt on Startup (?)
+- Restarting on error
+
+** TODO Preemptive Multitasking
+
+- Start a process that infinite loops, =(loop 5)=
+- Show that other screen is still responsive
+
+** TODO Better =exec=
+
+Goal: Better interface over =Command= to access:
+- Process output
+- Exit code
+
+** TODO Universal Entities, Search, Indexing
+Goal: Unified Interface to persistent storage
+Goal: Expose entities in runtime programs via core primitive
+
+** TODO Plumber / Embark Mechanics for Entities
+Define actions on entities to act on shape of data
+I.e. the hypermedia is generated based rules on entities it matches
+
+"What can I do with this data" - like Emacs Embark
+Thought - Running embark-like mechanics is itself a cmd - i.e. "show me embark
+meno on this item"
+
+* lyric lang
+** TODO Pipeline Operator
+(Streaming?)
+** TODO Colocated Docstring for =defn=
+** TODO Conditional Operators =and= and =or=
+** TODO Support =case= and =cond=
+Goal: Add =case= and =cond= to make service code cleaner, v.s. =if= pyramid of doom
+** TODO Math Operators =-=
+** TODO Pattern Matching / Destructuring
+Goal: Provide way to extract params from messages w/o indexing
+
+** TODO quasiquote, unquote, unquote-splice
+** TODO Macros
+- [ ] [[https://www.youtube.com/watch?v=M4qj2ictRpg&t=22s][Gavin - Macros in ELisp]]
+- [ ] [[https://www.youtube.com/watch?v=_WLauBkO5rI][Emacs Elements - Macros]]
+** TODO Fiber API within lyric
+Allow creating and running fibers within lyric?
+E.g. Use Yielding Function as an Iterator
+** TODO Local Variables in Stack Frame
+
+CallFrames have base pointer to stack
+Local variable access is relative to base pointer
+Removes need for Env - Env is implicit (?)
+
+Wait... how do closures work?
+* live on
+** TODO Init File
+Goal: Replace =/scripts/serve.sh= hack w/ proper init rcfile load path
+
+** TODO Log File
+Goal: Introspect running runtime via logs
+
+** TODO Hot Reload / Auto Restart
+Goal: When runtime crashes, auto restart
+
+** TODO Demo: Timeline + Capture + Todo + Notes
+Quickly capture notes, todos, thoughts, tasks
+Recall + Search them
+** TODO Demo: Command Bar: Use Query String in Hypermedia Interaction
+Use query string! e.g.:
+- Open URL typed, instead of selecting item
+- Pass query string to command
+- Run CLI command from launchbar
+** TODO Demo: Process Manager over =ps=
+Exercises Embark Mechanics + Consuming Program Output
+Generate hypermedia based on =ps= output
+* rnd
+** TODO LLM Blocks
+
+Macro expansions, powered by LLM to generate UI
+Use bret-blocks to interactively tweak
+
+#+begin_src janet
+# Key idea: It's generated, and prompt is inline - but evaluation is NOT at runtime. Develop time expansion
+(prompt "An user interface for X"
+    ...)
+#+end_src
+
+** TODO Durable Execution
+Goal: Recovering from process or host failure
+** TODO Program Migration
+Goal: Moving snapshot of running program from machine to machine
+** TODO Agent Programs
+* testing
+** TODO Test Cases for Last Week Features
+** TODO More Test Cases for Message Passing
+- [ ] Test Cases:
+   - [ ] Calling =recv= FIRST, then =send=
+   - [ ] Calling =send= FIRST, then =recv=
+   - [ ] Calling =recv= for specific pattern
+** TODO Test Cases for Def, Get, Set, at different scopes
+
+Replicate tests in env.rs to eval.rs
+
+- get local in parent
+- get local in child
+- get parent in child
+- set parent in child
+- Two things capturing a parent, and each setting and updating it
+
+* debt  
+** TODO Fiber Execution
+Revisit =Fiber= and =CallStack= code
+
+* tooling
+** TODO Debuggers and Breakpoints
+** TODO Editorialize History / Interaction
+Seamless flow from REPL / Past Interaction, into durable program
+
+** TODO Interactive Inspection in Emacs
+
+E.g. See values
+E.g. See value of =watch=-ed topic
+
+** TODO Test Runner
+** TODO Expect Testing
+See Jane Street
+** TODO Observer
+See:
+- Processes / Services
+- Messages
+** TODO Structured Editor
+** TODO Victor Blocks
+
+https://recurse.zulipchat.com/#narrow/stream/102312-consciousness/topic/Leo.20Shimonaka/near/396280622
+
+Inspiration - Bret Victor Ladders of Abstraction
+
+Quickly do interactive "prop testing"
+- Go from a function
+- Parameterize over range of values
+- Immediately see output results
+
+Do this... in source?
+
+Extend to visual elements? UI:
+- Visually drag and adjust parameters, which get reflected in source
+
+#+begin_src lyric
+(defn my-fn (a b)
+    (+ a b))
+
+(defn my-ui (title subtitle)
+    (list :title title
+          :subtitle subtitle))
+
+(bret-block
+    (my-fn (a :from 0 :to 10)
+           (b :from 0 :to 10))
+    ; => See matrix of results
+
+    (render (my-ui (title :in '("ONE" "TWO" ...))
+                   (subtitle in '("one" "two" ...))))
+)
+#+end_src
+
+**** TODO learn - Charles - Fern
+
+* shell
+** TODO CLI Client Shell
+- [ ] CLI to subscribe to a topic that is the "interface"
+- [ ] Hypermedia Interface shows the "Actions"
+- [ ] "Search Query" can be provided via CLI
+- [ ] Actions can be invoked via CLI - Opening Apps, URLs, "Pushing" secondary
+  menus
+
+** TODO Voice Client Shell
+* integration
+** TODO Selected Text
+** TODO Clipboard
+** TODO Browser Page
+** TODO Image
+* perf
+** TODO String Interning
+** TODO Compact Bytecode
+** TODO Tail-Call Optimization
+* bugs
+** TODO =(loop 0)= blocks new connection only via REPL, but not =vrsctl -c "(loop 0)"=
+** TODO Using =(map (ps) (lambda (p) (kill p)))= results in runtime crash sometimes
+** TODO Disconnecting from REPL after running =loop 0= does not quit as expected.
