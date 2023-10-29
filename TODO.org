@@ -181,6 +181,7 @@ Use query string! e.g.:
 ** TODO Demo: Process Manager over =ps=
 Exercises Embark Mechanics + Consuming Program Output
 Generate hypermedia based on =ps= output
+** TODO Notification Service
 * rnd
 ** TODO LLM Blocks
 
