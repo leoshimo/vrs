@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 //! Runtime Kernel Task
 use std::collections::HashMap;
 
@@ -392,10 +390,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(
-            k.procs().await.unwrap(),
-            vec![recv.id()],
-        );
+        assert_eq!(k.procs().await.unwrap(), vec![recv.id()],);
 
         let send_prog = format!("(send (pid {}) :hi)", recv.id().inner());
         let send = k

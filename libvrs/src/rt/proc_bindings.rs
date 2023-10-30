@@ -28,7 +28,7 @@ pub(crate) fn send_resp_fn() -> NativeFn {
             let val = match args {
                 [v] => v.clone(),
                 _ => {
-                    return Err(Error::InvalidExpression(
+                    return Err(Error::UnexpectedArguments(
                         "send_conn expects two arguments".to_string(),
                     ))
                 }
@@ -92,7 +92,7 @@ pub(crate) fn kill_fn() -> NativeFn {
                 [Val::Extern(Extern::ProcessId(pid))] => *pid,
                 [Val::Int(pid)] => ProcessId::from(*pid as usize),
                 _ => {
-                    return Err(Error::InvalidExpression(
+                    return Err(Error::UnexpectedArguments(
                         "kill should have one integer argument".to_string(),
                     ))
                 }
@@ -113,7 +113,7 @@ pub(crate) fn send_fn() -> NativeFn {
             let (dst, msg) = match args {
                 [Val::Extern(Extern::ProcessId(dst)), msg] => (dst, msg),
                 _ => {
-                    return Err(Error::InvalidExpression(
+                    return Err(Error::UnexpectedArguments(
                         "Unexpected send call - (send DEST_PID DATA)".to_string(),
                     ))
                 }
@@ -152,7 +152,7 @@ pub(crate) fn ls_msgs_fn() -> NativeFn {
         symbol: SymbolId::from("ls-msgs"),
         func: |_, args| {
             if !args.is_empty() {
-                return Err(Error::InvalidExpression(
+                return Err(Error::UnexpectedArguments(
                     "Unexpected ls-msgs call - No arguments expected".to_string(),
                 ));
             }
@@ -285,6 +285,26 @@ pub(crate) fn sleep_fn() -> NativeFn {
             };
             Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
                 IOCmd::Sleep(Duration::from_secs(*secs as u64)),
+            )))))
+        },
+    }
+}
+
+/// Binding for spawn
+pub(crate) fn spawn_fn() -> NativeFn {
+    NativeFn {
+        symbol: SymbolId::from("spawn"),
+        func: |_, args| {
+            let prog = match args {
+                [prog] => prog.clone(),
+                _ => {
+                    return Err(Error::UnexpectedArguments(
+                        "spawn expects single expression".to_string(),
+                    ))
+                }
+            };
+            Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
+                IOCmd::Spawn(prog),
             )))))
         },
     }

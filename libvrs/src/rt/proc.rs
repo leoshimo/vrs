@@ -107,6 +107,7 @@ impl Process {
         );
 
         fiber
+            .bind(proc_bindings::spawn_fn())
             .bind(proc_bindings::shell_expand_fn())
             .bind(proc_bindings::sleep_fn())
             .bind(proc_bindings::recv_fn())
@@ -422,4 +423,5 @@ mod tests {
     // TODO: Test spawning invalid expressions - quote w/o any expressions
     // TODO: Test that dropping process handle ends process
     // TODO: Test ProcessHandle::kill
+    // TODO: Test `spawn` builtin
 }

@@ -36,6 +36,7 @@ pub enum IOCmd {
     Exec(String, Vec<String>),
     Recv(Option<Pattern>),
     Sleep(Duration),
+    Spawn(Val),
 }
 
 impl ProcIO {
@@ -98,6 +99,7 @@ impl ProcIO {
             IOCmd::Exec(prog, args) => self.exec(prog, args).await,
             IOCmd::Recv(pat) => self.handle_recv(pat).await,
             IOCmd::Sleep(duration) => self.sleep(duration).await,
+            IOCmd::Spawn(prog) => self.spawn_prog(prog).await,
         }
     }
 
@@ -179,5 +181,17 @@ impl ProcIO {
         debug!("sleep {:?}", &duration);
         time::sleep(duration).await;
         Ok(Val::symbol("ok"))
+    }
+
+    /// Spawn given process
+    async fn spawn_prog(&self, prog: Val) -> Result<Val> {
+        debug!("spawn_prog {:?}", &prog);
+        let kernel = self
+            .kernel
+            .as_ref()
+            .and_then(|k| k.upgrade())
+            .ok_or(Error::NoKernel)?;
+        let hdl = kernel.spawn_prog(prog).await?;
+        Ok(Val::Extern(Extern::ProcessId(hdl.id())))
     }
 }
