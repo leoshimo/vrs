@@ -381,4 +381,31 @@ mod tests {
             "Only remaining process should be tracked by kernel",
         );
     }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn spawn_progs() {
+        let k = start();
+
+        let recv = k
+            .spawn_prog(lyric::parse("(recv)").unwrap().into())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            k.procs().await.unwrap(),
+            vec![recv.id()],
+        );
+
+        let send_prog = format!("(send (pid {}) :hi)", recv.id().inner());
+        let send = k
+            .spawn_prog(lyric::parse(&send_prog).unwrap().into())
+            .await
+            .unwrap();
+
+        send.join().await;
+        recv.join().await;
+
+        assert!(k.procs().await.unwrap().is_empty());
+    }
 }
