@@ -423,5 +423,5 @@ mod tests {
     // TODO: Test spawning invalid expressions - quote w/o any expressions
     // TODO: Test that dropping process handle ends process
     // TODO: Test ProcessHandle::kill
-    // TODO: Test `spawn` builtin
+    // TODO: Test `spawn` builtin (w/ correct capture / eval semantics)
 }
