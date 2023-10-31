@@ -54,7 +54,7 @@ pub enum Form {
 pub struct Lambda<T: Extern, L: Locals> {
     pub params: Vec<SymbolId>,
     pub code: Vec<Inst<T, L>>,
-    pub env: Arc<Mutex<Env<T, L>>>,
+    pub parent: Option<Arc<Mutex<Env<T, L>>>>,
 }
 
 /// A native founction bound to given symbol
@@ -150,7 +150,13 @@ impl SymbolId {
 
 impl<T: Extern, L: Locals> PartialEq for Lambda<T, L> {
     fn eq(&self, other: &Self) -> bool {
-        self.params == other.params && self.code == other.code && Arc::ptr_eq(&self.env, &other.env)
+        self.params == other.params
+            && self.code == other.code
+            && ((self.parent.is_none() && other.parent.is_none())
+                || Arc::ptr_eq(
+                    self.parent.as_ref().unwrap(),
+                    other.parent.as_ref().unwrap(),
+                ))
     }
 }
 

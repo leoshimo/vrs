@@ -1,9 +1,8 @@
 //! Bindings for Process Fibers
 
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use super::proc::{Env, Extern, Lambda, NativeFn, NativeFnOp, Val};
+use super::proc::{Extern, Lambda, NativeFn, NativeFnOp, Val};
 use super::proc_io::IOCmd;
 use super::ProcessId;
 use lyric::{compile, parse, Error, Pattern, Result, SymbolId};
@@ -199,7 +198,7 @@ pub(crate) fn exec_fn() -> NativeFn {
 
 // TODO: call_fn, open_url_fn, open_app_fn, open - need easier binding options (init script?)
 /// Binding for call
-pub(crate) fn call_fn(env: Arc<Mutex<Env>>) -> Lambda {
+pub(crate) fn call_fn() -> Lambda {
     Lambda {
         params: vec![SymbolId::from("pid"), SymbolId::from("msg")],
         code: compile(
@@ -215,25 +214,25 @@ pub(crate) fn call_fn(env: Arc<Mutex<Env>>) -> Lambda {
             .into(),
         )
         .unwrap(),
-        env,
+        parent: None,
     }
 }
 
 /// Binding for open_url
-pub(crate) fn open_url_fn(env: Arc<Mutex<Env>>) -> Lambda {
+pub(crate) fn open_url_fn() -> Lambda {
     Lambda {
         params: vec![SymbolId::from("url")],
         code: compile(&parse(r#"(exec "open" "-a" "Safari" url)"#).unwrap().into()).unwrap(),
-        env,
+        parent: None,
     }
 }
 
 /// Binding for open_app
-pub(crate) fn open_app_fn(env: Arc<Mutex<Env>>) -> Lambda {
+pub(crate) fn open_app_fn() -> Lambda {
     Lambda {
         params: vec![SymbolId::from("app")],
         code: compile(&parse(r#"(exec "open" "-a" app)"#).unwrap().into()).unwrap(),
-        env,
+        parent: None,
     }
 }
 
@@ -257,7 +256,7 @@ pub(crate) fn shell_expand_fn() -> NativeFn {
 }
 
 /// Binding for open_file
-pub(crate) fn open_file_fn(env: Arc<Mutex<Env>>) -> Lambda {
+pub(crate) fn open_file_fn() -> Lambda {
     Lambda {
         params: vec![SymbolId::from("file")],
         code: compile(
@@ -266,7 +265,7 @@ pub(crate) fn open_file_fn(env: Arc<Mutex<Env>>) -> Lambda {
                 .into(),
         )
         .unwrap(),
-        env,
+        parent: None,
     }
 }
 

@@ -257,7 +257,7 @@ fn run<T: Extern, L: Locals>(f: &mut Fiber<T, L>) -> Result<FiberState<T, L>> {
                     f.stack.push(Val::Lambda(Lambda {
                         params,
                         code,
-                        env: Arc::clone(&f.top().env),
+                        parent: Some(Arc::clone(&f.top().env)),
                     }));
                 }
                 Inst::CallFunc(nargs) => {
@@ -291,7 +291,8 @@ fn run<T: Extern, L: Locals>(f: &mut Fiber<T, L>) -> Result<FiberState<T, L>> {
                             }
                         }
                         Some(Val::Lambda(l)) => {
-                            let mut fn_env = Env::extend(&l.env);
+                            let parent_env = l.parent.unwrap_or_else(|| Arc::clone(&f.global));
+                            let mut fn_env = Env::extend(&parent_env);
                             for (s, arg) in l.params.iter().zip(args) {
                                 fn_env.define(s, arg);
                             }
@@ -513,13 +514,12 @@ mod tests {
     #[test]
     #[traced_test]
     fn call_func() {
-        let env = Env::standard();
         let mut f = Fiber::from_bytecode(
             vec![
                 PushConst(Val::Lambda(Lambda {
                     params: vec![SymbolId::from("x")],
                     code: vec![GetSym(SymbolId::from("x"))],
-                    env: Arc::new(Mutex::new(env)),
+                    parent: None,
                 })),
                 PushConst(Val::string("hello")),
                 CallFunc(1),
