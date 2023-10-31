@@ -250,7 +250,6 @@ fn compile_let<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Vec<Inst<T, L
 
 /// Compile builtin begin
 fn compile_begin<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Vec<Inst<T, L>>> {
-    // Compile to anonymous lambda MakeFunc + CallFunc
     let mut inst = vec![];
     let mut is_first = true;
     for a in args {
