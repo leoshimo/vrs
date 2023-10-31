@@ -70,7 +70,7 @@ pub(crate) fn map_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
                     ]);
                 }
                 bc.push(Inst::CallFunc(l.len()));
-                Ok(NativeFnOp::Call(bc))
+                Ok(NativeFnOp::Exec(bc))
             }
             _ => Err(Error::UnexpectedArguments(
                 "map expects a list and mapping operation".to_string(),

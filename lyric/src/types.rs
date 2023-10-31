@@ -68,9 +68,12 @@ pub struct NativeFn<T: Extern, L: Locals> {
 /// Result of executing native function value
 #[derive(Debug, Clone, PartialEq)]
 pub enum NativeFnOp<T: Extern, L: Locals> {
+    /// Return a value
     Return(Val<T, L>),
+    /// Yield a value
     Yield(Val<T, L>),
-    Call(Vec<Inst<T, L>>),
+    /// Execute bytecode-level instructions
+    Exec(Vec<Inst<T, L>>),
 }
 
 /// Identifier for Symbol

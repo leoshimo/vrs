@@ -279,7 +279,7 @@ fn run<T: Extern, L: Locals>(f: &mut Fiber<T, L>) -> Result<FiberState<T, L>> {
                                     f.stack.push(v);
                                     f.is_yielding = true;
                                 }
-                                NativeFnOp::Call(code) => {
+                                NativeFnOp::Exec(code) => {
                                     let cur_env = &f.top().env;
                                     f.cframes.push(CallFrame::from_bytecode(
                                         Arc::clone(cur_env),
