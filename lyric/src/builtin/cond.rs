@@ -1,10 +1,9 @@
 //! Conditional expressions
-use crate::{Error, Extern, Locals, NativeFn, NativeFnOp, SymbolId, Val};
+use crate::{Error, Extern, Locals, NativeFn, NativeFnOp, Val};
 
 /// Language bindng for `eq?`
 pub fn eq_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
-        symbol: SymbolId::from("eq?"),
         func: |_, args| {
             let (lhs, rhs) = match args {
                 [lhs, rhs] => (lhs, rhs),
@@ -22,7 +21,6 @@ pub fn eq_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 /// Language bindng for `contains`
 pub fn contains_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
-        symbol: SymbolId::from("contains"),
         func: |_, args| match args {
             [Val::List(l), target] => Ok(NativeFnOp::Return(Val::Bool(l.contains(target)))),
             [Val::String(s), Val::String(target)] => {

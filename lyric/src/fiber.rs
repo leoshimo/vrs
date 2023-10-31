@@ -2,9 +2,7 @@
 use tracing::{debug, warn};
 
 use super::{Env, Inst};
-use crate::{
-    compile, parse, Error, Extern, Lambda, Locals, NativeFn, NativeFnOp, Result, SymbolId, Val,
-};
+use crate::{compile, parse, Error, Extern, Lambda, Locals, NativeFnOp, Result, Val};
 use std::sync::{Arc, Mutex};
 
 /// A single, cooperativly scheduled sequence of execution
@@ -26,8 +24,8 @@ pub enum FiberState<T: Extern, L: Locals> {
 
 impl<T: Extern, L: Locals> Fiber<T, L> {
     /// Create a new fiber from given bytecode
-    pub fn from_bytecode(bytecode: Vec<Inst<T, L>>, locals: L) -> Self {
-        let global = Arc::new(Mutex::new(Env::standard()));
+    pub fn from_bytecode(bytecode: Vec<Inst<T, L>>, env: Env<T, L>, locals: L) -> Self {
+        let global = Arc::new(Mutex::new(env));
         Fiber {
             stack: vec![],
             cframes: vec![CallFrame::from_bytecode(
@@ -43,15 +41,15 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
     }
 
     /// Create a new fiber from value
-    pub fn from_val(val: &Val<T, L>, locals: L) -> Result<Self> {
+    pub fn from_val(val: &Val<T, L>, env: Env<T, L>, locals: L) -> Result<Self> {
         let bytecode = compile(val)?;
-        Ok(Fiber::from_bytecode(bytecode, locals))
+        Ok(Fiber::from_bytecode(bytecode, env, locals))
     }
 
     /// Create a new fiber from given expressino
-    pub fn from_expr(expr: &str, locals: L) -> Result<Self> {
+    pub fn from_expr(expr: &str, env: Env<T, L>, locals: L) -> Result<Self> {
         let val: Val<T, L> = parse(expr)?.into();
-        Fiber::from_val(&val, locals)
+        Fiber::from_val(&val, env, locals)
     }
 
     /// Start execution of a fiber
@@ -80,23 +78,6 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
     /// Check if stack is empty
     pub fn is_stack_empty(&self) -> bool {
         self.stack.is_empty()
-    }
-
-    /// Bind native function to global environment
-    pub fn bind(&mut self, nativefn: NativeFn<T, L>) -> &mut Self {
-        self.global.lock().unwrap().bind_native(nativefn);
-        self
-    }
-
-    /// Bind lambdas
-    pub fn bind_lambda(&mut self, s: &SymbolId, l: Lambda<T, L>) -> &mut Self {
-        self.global.lock().unwrap().define(s, Val::Lambda(l));
-        self
-    }
-
-    /// Get current stack's environment
-    pub fn env(&self) -> Arc<Mutex<Env<T, L>>> {
-        Arc::clone(&self.top().env)
     }
 
     /// Get locals for fiber
@@ -212,7 +193,7 @@ fn run<T: Extern, L: Locals>(f: &mut Fiber<T, L>) -> Result<FiberState<T, L>> {
                     let value = f.stack.last().ok_or(Error::UnexpectedStack(
                         "Expected stack to be nonempty".to_string(),
                     ))?;
-                    f.top().env.lock().unwrap().define(&s, value.clone());
+                    f.top().env.lock().unwrap().define(s, value.clone());
                 }
                 Inst::SetSym(s) => {
                     let value = f.stack.last().ok_or(Error::UnexpectedStack(
@@ -293,7 +274,7 @@ fn run<T: Extern, L: Locals>(f: &mut Fiber<T, L>) -> Result<FiberState<T, L>> {
                         Some(Val::Lambda(l)) => {
                             let parent_env = l.parent.unwrap_or_else(|| Arc::clone(&f.global));
                             let mut fn_env = Env::extend(&parent_env);
-                            for (s, arg) in l.params.iter().zip(args) {
+                            for (s, arg) in l.params.into_iter().zip(args) {
                                 fn_env.define(s, arg);
                             }
                             f.cframes.push(CallFrame::from_bytecode(
@@ -402,14 +383,15 @@ mod tests {
 
     type Fiber = super::Fiber<Void, ()>;
     type Val = super::Val<Void, ()>;
+    type Env = super::Env<Void, ()>;
 
     #[test]
     #[traced_test]
     fn fiber_load_const_return() {
-        let mut f = Fiber::from_bytecode(vec![PushConst(Val::Int(5))], ());
+        let mut f = Fiber::from_bytecode(vec![PushConst(Val::Int(5))], Env::standard(), ());
         assert_eq!(f.resume().unwrap(), Done(Val::Int(5)));
 
-        let mut f = Fiber::from_bytecode(vec![PushConst(Val::string("Hi"))], ());
+        let mut f = Fiber::from_bytecode(vec![PushConst(Val::string("Hi"))], Env::standard(), ());
         assert_eq!(f.resume().unwrap(), Done(Val::string("Hi")));
 
         assert!(!logs_contain("ERROR"));
@@ -422,6 +404,7 @@ mod tests {
         // fiber for (def x 5)
         let mut f = Fiber::from_bytecode(
             vec![PushConst(Val::Int(5)), DefSym(SymbolId::from("x"))],
+            Env::standard(),
             (),
         );
         assert_eq!(f.resume().unwrap(), Done(Val::Int(5)));
@@ -438,19 +421,19 @@ mod tests {
     #[test]
     #[traced_test]
     fn get_symbol() {
-        let mut f = Fiber::from_bytecode(vec![GetSym(SymbolId::from("x"))], ());
+        let mut f = Fiber::from_bytecode(vec![GetSym(SymbolId::from("x"))], Env::standard(), ());
         f.top()
             .env
             .lock()
             .unwrap()
-            .define(&SymbolId::from("x"), Val::string("hi"));
+            .define(SymbolId::from("x"), Val::string("hi"));
         assert_eq!(f.resume().unwrap(), Done(Val::string("hi")));
     }
 
     #[test]
     #[traced_test]
     fn get_symbol_undefined() {
-        let mut f = Fiber::from_bytecode(vec![GetSym(SymbolId::from("x"))], ());
+        let mut f = Fiber::from_bytecode(vec![GetSym(SymbolId::from("x"))], Env::standard(), ());
         assert_matches!(f.resume(), Err(Error::UndefinedSymbol(_)));
         assert!(!logs_contain("ERROR"));
         assert!(!logs_contain("WARN"));
@@ -464,13 +447,14 @@ mod tests {
                 PushConst(Val::string("updated")),
                 SetSym(SymbolId::from("x")),
             ],
+            Env::standard(),
             (),
         );
         f.top()
             .env
             .lock()
             .unwrap()
-            .define(&SymbolId::from("x"), Val::string("original"));
+            .define(SymbolId::from("x"), Val::string("original"));
 
         assert_eq!(f.resume().unwrap(), Done(Val::string("updated")));
     }
@@ -480,6 +464,7 @@ mod tests {
     fn set_symbol_undefined() {
         let mut f = Fiber::from_bytecode(
             vec![PushConst(Val::string("value")), SetSym(SymbolId::from("x"))],
+            Env::standard(),
             (),
         );
 
@@ -498,6 +483,7 @@ mod tests {
                 PushConst(Val::Bytecode(vec![GetSym(SymbolId::from("x"))])),
                 MakeFunc,
             ],
+            Env::standard(),
             (),
         );
 
@@ -524,6 +510,7 @@ mod tests {
                 PushConst(Val::string("hello")),
                 CallFunc(1),
             ],
+            Env::standard(),
             (),
         );
 
@@ -545,6 +532,7 @@ mod tests {
                 PushConst(Val::string("hello")),
                 CallFunc(1),
             ],
+            Env::standard(),
             (),
         );
 
@@ -572,6 +560,7 @@ mod tests {
                 PushConst(Val::string("hello")),
                 CallFunc(1),
             ],
+            Env::standard(),
             (),
         );
         assert_eq!(f.resume().unwrap(), Done(Val::string("hello")));
@@ -591,6 +580,7 @@ mod tests {
                 CallFunc(1),
                 CallFunc(0),
             ],
+            Env::standard(),
             (),
         );
         assert_eq!(f.resume().unwrap(), Done(Val::string("hello")));
@@ -608,6 +598,7 @@ mod tests {
                 PushConst(Val::string("not this")),
                 PopTop,
             ],
+            Env::standard(),
             (),
         );
         assert_eq!(f.resume().unwrap(), Done(Val::string("this")));
@@ -619,7 +610,7 @@ mod tests {
     #[test]
     #[traced_test]
     fn pop_top_empty() {
-        let mut f = Fiber::from_bytecode(vec![PopTop], ());
+        let mut f = Fiber::from_bytecode(vec![PopTop], Env::standard(), ());
         assert_matches!(f.resume(), Err(Error::UnexpectedStack(_)));
 
         assert!(!logs_contain("ERROR"));
@@ -639,6 +630,7 @@ mod tests {
                 PushConst(Val::string("notthis")),
                 PushConst(Val::string("notthis")),
             ],
+            Env::standard(),
             (),
         );
 
@@ -659,6 +651,7 @@ mod tests {
                 JumpFwd(1),
                 PushConst(Val::string("this")),
             ],
+            Env::standard(),
             (),
         );
 
@@ -679,6 +672,7 @@ mod tests {
                 JumpFwd(1),
                 PushConst(Val::string("notthis")),
             ],
+            Env::standard(),
             (),
         );
 
@@ -704,6 +698,7 @@ mod tests {
                 JumpBck(6), // loop back to getsym
                 GetSym(SymbolId::from("x")),
             ],
+            Env::standard(),
             (),
         );
 
@@ -713,7 +708,11 @@ mod tests {
     #[test]
     #[traced_test]
     fn yield_once() {
-        let mut f = Fiber::from_bytecode(vec![PushConst(Val::string("before")), YieldTop], ());
+        let mut f = Fiber::from_bytecode(
+            vec![PushConst(Val::string("before")), YieldTop],
+            Env::standard(),
+            (),
+        );
         assert_eq!(f.resume().unwrap(), Yield(Val::string("before")));
         assert_eq!(
             f.resume_from_yield(Val::string("after")).unwrap(),
@@ -738,6 +737,7 @@ mod tests {
                 PopTop,
                 JumpBck(8),
             ],
+            Env::standard(),
             (),
         );
 
@@ -751,7 +751,11 @@ mod tests {
     #[test]
     #[traced_test]
     fn eval() {
-        let mut f = Fiber::from_bytecode(vec![PushConst(Val::Int(42)), Eval(false)], ());
+        let mut f = Fiber::from_bytecode(
+            vec![PushConst(Val::Int(42)), Eval(false)],
+            Env::standard(),
+            (),
+        );
         assert_eq!(f.resume().unwrap(), Done(Val::Int(42)));
 
         let mut f = Fiber::from_bytecode(
@@ -766,6 +770,7 @@ mod tests {
                 ])),
                 Eval(false),
             ],
+            Env::standard(),
             (),
         );
 
@@ -782,8 +787,11 @@ mod tests {
     #[test]
     #[traced_test]
     fn eval_error() {
-        let mut f =
-            Fiber::from_bytecode(vec![PushConst(Val::symbol("jibberish")), Eval(false)], ());
+        let mut f = Fiber::from_bytecode(
+            vec![PushConst(Val::symbol("jibberish")), Eval(false)],
+            Env::standard(),
+            (),
+        );
         assert_matches!(f.resume(), Err(Error::UndefinedSymbol(_)));
 
         let mut f = Fiber::from_bytecode(
@@ -796,6 +804,7 @@ mod tests {
                 ])),
                 Eval(false),
             ],
+            Env::standard(),
             (),
         );
         assert_matches!(f.resume(), Err(Error::UndefinedSymbol(_)));
@@ -806,6 +815,7 @@ mod tests {
     fn yield_loop() {
         let mut f = Fiber::from_bytecode(
             vec![PushConst(Val::string("hi")), YieldTop, PopTop, JumpBck(4)],
+            Env::standard(),
             (),
         );
 

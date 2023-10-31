@@ -61,7 +61,6 @@ pub struct Lambda<T: Extern, L: Locals> {
 #[allow(clippy::type_complexity)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct NativeFn<T: Extern, L: Locals> {
-    pub symbol: SymbolId,
     pub func: fn(&mut Fiber<T, L>, &[Val<T, L>]) -> Result<NativeFnOp<T, L>>,
 }
 
@@ -194,7 +193,7 @@ where
                     .collect::<Vec<_>>()
                     .join(" ")
             ),
-            Val::NativeFn(s) => write!(f, "<nativefn {}>", s.symbol),
+            Val::NativeFn(_) => write!(f, "<nativefn>"),
             Val::Bytecode(_) => write!(f, "<bytecode>"),
             Val::Error(e) => write!(f, "<error {e}>"),
             Val::Ref(r) => write!(f, "<ref {}>", r.0),

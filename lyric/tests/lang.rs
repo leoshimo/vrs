@@ -7,14 +7,19 @@ use void::Void;
 
 type Fiber = lyric::Fiber<Void, ()>;
 type Val = lyric::Val<Void, ()>;
+type Env = lyric::Env<Void, ()>;
 
 // Convenience to eval top-level expr
 fn eval_expr(e: &str) -> Result<Val> {
-    let mut f = Fiber::from_expr(e, ())?;
-    f.bind(NativeFn {
-        symbol: SymbolId::from("echo_args"),
-        func: |_, x| Ok(NativeFnOp::Return(Val::List(x.to_vec()))),
-    });
+    let mut env = Env::standard();
+    env.bind_native(
+        SymbolId::from("echo_args"),
+        NativeFn {
+            func: |_, x| Ok(NativeFnOp::Return(Val::List(x.to_vec()))),
+        },
+    );
+
+    let mut f = Fiber::from_expr(e, env, ())?;
 
     // TODO: Think about ergonomics here
     let res = match f.resume()? {

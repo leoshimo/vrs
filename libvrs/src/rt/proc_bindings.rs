@@ -10,7 +10,6 @@ use lyric::{compile, parse, Error, Pattern, Result, SymbolId};
 /// Binding for `recv_req` to receive requests over client connection
 pub(crate) fn recv_req_fn() -> NativeFn {
     NativeFn {
-        symbol: SymbolId::from("recv_req"),
         func: |_, _| {
             Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
                 IOCmd::RecvRequest,
@@ -22,7 +21,6 @@ pub(crate) fn recv_req_fn() -> NativeFn {
 /// Binding for `send_resp` to send responses over client connection
 pub(crate) fn send_resp_fn() -> NativeFn {
     NativeFn {
-        symbol: SymbolId::from("send_resp"),
         func: |_, args| {
             let val = match args {
                 [v] => v.clone(),
@@ -42,7 +40,6 @@ pub(crate) fn send_resp_fn() -> NativeFn {
 /// binding to create a new PID
 pub(crate) fn pid_fn() -> NativeFn {
     NativeFn {
-        symbol: SymbolId::from("pid"),
         func: |_, args| {
             let pid = match args {
                 [Val::Int(pid)] => pid,
@@ -62,7 +59,6 @@ pub(crate) fn pid_fn() -> NativeFn {
 /// binding to get current process's pid
 pub(crate) fn self_fn() -> NativeFn {
     NativeFn {
-        symbol: SymbolId::from("self"),
         func: |f, _| {
             let pid = f.locals().pid;
             Ok(NativeFnOp::Return(Val::Extern(Extern::ProcessId(pid))))
@@ -73,7 +69,6 @@ pub(crate) fn self_fn() -> NativeFn {
 /// Binding to list processes
 pub(crate) fn ps_fn() -> NativeFn {
     NativeFn {
-        symbol: SymbolId::from("ps"),
         func: |_, _| {
             Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
                 IOCmd::ListProcesses,
@@ -85,7 +80,6 @@ pub(crate) fn ps_fn() -> NativeFn {
 /// Binding to kill process
 pub(crate) fn kill_fn() -> NativeFn {
     NativeFn {
-        symbol: SymbolId::from("kill"),
         func: |_, args| {
             let pid = match args {
                 [Val::Extern(Extern::ProcessId(pid))] => *pid,
@@ -107,7 +101,6 @@ pub(crate) fn kill_fn() -> NativeFn {
 /// Binding to send messages
 pub(crate) fn send_fn() -> NativeFn {
     NativeFn {
-        symbol: SymbolId::from("send"),
         func: |_, args| {
             let (dst, msg) = match args {
                 [Val::Extern(Extern::ProcessId(dst)), msg] => (dst, msg),
@@ -127,7 +120,6 @@ pub(crate) fn send_fn() -> NativeFn {
 /// Binding to recv messages
 pub(crate) fn recv_fn() -> NativeFn {
     NativeFn {
-        symbol: SymbolId::from("recv"),
         func: |_, args| {
             let pattern = match args {
                 [pat] => Some(Pattern::from_val(pat.clone())),
@@ -148,7 +140,6 @@ pub(crate) fn recv_fn() -> NativeFn {
 /// Binding to list messages
 pub(crate) fn ls_msgs_fn() -> NativeFn {
     NativeFn {
-        symbol: SymbolId::from("ls-msgs"),
         func: |_, args| {
             if !args.is_empty() {
                 return Err(Error::UnexpectedArguments(
@@ -165,7 +156,6 @@ pub(crate) fn ls_msgs_fn() -> NativeFn {
 /// Binding for exec
 pub(crate) fn exec_fn() -> NativeFn {
     NativeFn {
-        symbol: SymbolId::from("exec"),
         func: |_, args| {
             let (prog, args) = args.split_first().ok_or(Error::UnexpectedArguments(
                 " Unexpected arguments to exec = (exec PROG [ARGS...])".to_string(),
@@ -239,7 +229,6 @@ pub(crate) fn open_app_fn() -> Lambda {
 /// Binding for shell_expand
 pub(crate) fn shell_expand_fn() -> NativeFn {
     NativeFn {
-        symbol: SymbolId::from("shell_expand"),
         func: |_, args| {
             let path = match args {
                 [Val::String(s)] => s,
@@ -272,7 +261,6 @@ pub(crate) fn open_file_fn() -> Lambda {
 /// Binding for sleep
 pub(crate) fn sleep_fn() -> NativeFn {
     NativeFn {
-        symbol: SymbolId::from("sleep"),
         func: |_, args| {
             let secs = match args {
                 [Val::Int(secs)] => secs,
@@ -292,7 +280,6 @@ pub(crate) fn sleep_fn() -> NativeFn {
 /// Binding for spawn
 pub(crate) fn spawn_fn() -> NativeFn {
     NativeFn {
-        symbol: SymbolId::from("spawn"),
         func: |_, args| {
             let prog = match args {
                 [prog] => prog.clone(),

@@ -1,4 +1,4 @@
-use crate::{builtin, Error, Extern, Locals, NativeFn, SymbolId, Val};
+use crate::{builtin, Error, Extern, Lambda, Locals, NativeFn, SymbolId, Val};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -18,19 +18,20 @@ impl<T: Extern, L: Locals> Env<T, L> {
             bindings: HashMap::default(),
             parent: None,
         };
-        e.bind_native(builtin::contains_fn());
-        e.bind_native(builtin::eq_fn());
-        e.bind_native(builtin::plus_fn());
-        e.bind_native(builtin::ref_fn());
-        e.bind_native(builtin::list_fn());
-        e.bind_native(builtin::push_fn());
-        e.bind_native(builtin::get_fn());
-        e.bind_native(builtin::map_fn());
+        e.bind_native(SymbolId::from("contains"), builtin::contains_fn())
+            .bind_native(SymbolId::from("eq?"), builtin::eq_fn())
+            .bind_native(SymbolId::from("+"), builtin::plus_fn())
+            .bind_native(SymbolId::from("ref"), builtin::ref_fn())
+            .bind_native(SymbolId::from("list"), builtin::list_fn())
+            .bind_native(SymbolId::from("push"), builtin::push_fn())
+            .bind_native(SymbolId::from("get"), builtin::get_fn())
+            .bind_native(SymbolId::from("map"), builtin::map_fn());
+
         e
     }
 
     /// Define a new symbol with given value in current environment
-    pub fn define(&mut self, symbol: &SymbolId, value: Val<T, L>) {
+    pub fn define(&mut self, symbol: SymbolId, value: Val<T, L>) {
         self.bindings.insert(symbol.clone(), value);
     }
 
@@ -69,8 +70,14 @@ impl<T: Extern, L: Locals> Env<T, L> {
     }
 
     /// Convenience to bind native functions
-    pub fn bind_native(&mut self, nativefn: NativeFn<T, L>) -> &mut Self {
-        self.define(&nativefn.symbol.clone(), Val::NativeFn(nativefn));
+    pub fn bind_native(&mut self, symbol: SymbolId, nativefn: NativeFn<T, L>) -> &mut Self {
+        self.define(symbol, Val::NativeFn(nativefn));
+        self
+    }
+
+    /// Convenience to bind lambdas
+    pub fn bind_lambda(&mut self, symbol: SymbolId, lambda: Lambda<T, L>) -> &mut Self {
+        self.define(symbol, Val::Lambda(lambda));
         self
     }
 }
@@ -86,7 +93,7 @@ mod tests {
     #[test]
     fn get() {
         let mut env = Env::standard();
-        env.define(&SymbolId::from("x"), Val::Int(0));
+        env.define(SymbolId::from("x"), Val::Int(0));
         assert_eq!(env.get(&SymbolId::from("x")), Some(Val::Int(0)));
     }
 
@@ -100,7 +107,7 @@ mod tests {
     fn set_defined() {
         let mut env = Env::standard();
         let sym = SymbolId::from("x");
-        env.define(&sym, Val::Int(0));
+        env.define(sym.clone(), Val::Int(0));
         assert_eq!(env.set(&sym, Val::string("one")), Ok(()));
         assert_eq!(
             env.get(&sym),
@@ -123,7 +130,10 @@ mod tests {
     fn get_parent() {
         let sym = SymbolId::from("x");
         let parent = Arc::new(Mutex::new(Env::standard()));
-        parent.lock().unwrap().define(&sym, Val::keyword("parent"));
+        parent
+            .lock()
+            .unwrap()
+            .define(sym.clone(), Val::keyword("parent"));
 
         let child = Env::extend(&parent);
         assert_eq!(
@@ -137,7 +147,10 @@ mod tests {
     fn set_parent() {
         let parent = Arc::new(Mutex::new(Env::standard()));
         let sym = SymbolId::from("x");
-        parent.lock().unwrap().define(&sym, Val::string("parent"));
+        parent
+            .lock()
+            .unwrap()
+            .define(sym.clone(), Val::string("parent"));
 
         let mut child = Env::extend(&parent);
         assert_eq!(

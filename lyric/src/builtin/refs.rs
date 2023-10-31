@@ -1,6 +1,6 @@
 //! Builtins for unique reference type
 //! This type is used to fill similar function as `make_ref()` in Erlang
-use crate::{Extern, Locals, NativeFn, NativeFnOp, SymbolId, Val};
+use crate::{Extern, Locals, NativeFn, NativeFnOp, Val};
 use nanoid::nanoid;
 
 /// Unique reference type
@@ -10,7 +10,6 @@ pub struct Ref(pub(crate) String);
 /// Binding to create a new unique reference
 pub fn ref_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
-        symbol: SymbolId::from("ref"),
         func: |_, _| {
             let r = Ref(nanoid!());
             Ok(NativeFnOp::Return(Val::Ref(r)))

@@ -6,6 +6,7 @@ use FiberState::*;
 
 type Fiber = lyric::Fiber<Ext, Locals>;
 type Val = lyric::Val<Ext, Locals>;
+type Env = lyric::Env<Ext, Locals>;
 
 #[derive(Debug, Clone, PartialEq)]
 enum Ext {
@@ -19,7 +20,10 @@ struct Locals {
     val: i32,
 }
 
-/// Helper - create local fixture
+fn env() -> Env {
+    Env::standard()
+}
+
 fn locals() -> Locals {
     Locals { val: 0 }
 }
@@ -32,21 +36,21 @@ impl std::fmt::Display for Ext {
 
 #[test]
 fn fiber_simple() {
-    let mut f = Fiber::from_expr("\"hello world\"", locals()).unwrap();
+    let mut f = Fiber::from_expr("\"hello world\"", env(), locals()).unwrap();
     assert_eq!(f.resume(), Ok(Done(Val::string("hello world"))));
 }
 
 #[test]
 fn fiber_invalid_expr() {
     assert_matches!(
-        Fiber::from_expr("- jibberish )(", locals()),
+        Fiber::from_expr("- jibberish )(", env(), locals()),
         Err(Error::FailedToLex(_))
     );
 }
 
 #[test]
 fn fiber_empty_bytecode() {
-    let mut f = Fiber::from_bytecode(vec![], locals());
+    let mut f = Fiber::from_bytecode(vec![], env(), locals());
     assert_matches!(
         f.resume(),
         Err(Error::UnexpectedStack(_)),
@@ -56,7 +60,11 @@ fn fiber_empty_bytecode() {
 
 #[test]
 fn fiber_invalid_bytecode() {
-    let mut f = Fiber::from_bytecode(vec![Inst::PopTop, Inst::PopTop, Inst::PopTop], locals());
+    let mut f = Fiber::from_bytecode(
+        vec![Inst::PopTop, Inst::PopTop, Inst::PopTop],
+        env(),
+        locals(),
+    );
     assert_matches!(f.resume(), Err(Error::UnexpectedStack(_)));
 }
 
@@ -73,7 +81,7 @@ fn fiber_yielding() {
             (yielding_add)
         )
     "#;
-    let mut f = Fiber::from_expr(prog, locals()).unwrap();
+    let mut f = Fiber::from_expr(prog, env(), locals()).unwrap();
 
     assert_eq!(f.resume().unwrap(), Yield(Val::Int(0)));
     assert_eq!(f.resume_from_yield(Val::Nil).unwrap(), Yield(Val::Int(1)));
@@ -97,7 +105,7 @@ fn fiber_yielding_by_arg() {
             (yielding_add)
         )
     "#;
-    let mut f = Fiber::from_expr(prog, locals()).unwrap();
+    let mut f = Fiber::from_expr(prog, env(), locals()).unwrap();
 
     assert_eq!(f.resume().unwrap(), Yield(Val::Int(0)));
     assert_eq!(
@@ -124,11 +132,15 @@ fn fiber_yielding_by_arg() {
 
 #[test]
 fn fiber_yielding_native_binding() {
-    let mut f = Fiber::from_expr("(echo_yield :one :two)", locals()).unwrap();
-    f.bind(NativeFn {
-        symbol: SymbolId::from("echo_yield"),
-        func: |_, x| Ok(NativeFnOp::Yield(Val::Extern(Ext::EchoYield(x.to_vec())))),
-    });
+    let mut env = env();
+    env.bind_native(
+        SymbolId::from("echo_yield"),
+        NativeFn {
+            func: |_, x| Ok(NativeFnOp::Yield(Val::Extern(Ext::EchoYield(x.to_vec())))),
+        },
+    );
+
+    let mut f = Fiber::from_expr("(echo_yield :one :two)", env, locals()).unwrap();
 
     assert_eq!(
         f.resume().unwrap(),
@@ -151,7 +163,7 @@ fn fiber_looping_yield() {
             (loop (set x (+ x (yield x)))))
     "#;
 
-    let mut f = Fiber::from_expr(prog, locals()).unwrap();
+    let mut f = Fiber::from_expr(prog, env(), locals()).unwrap();
 
     assert_eq!(f.resume().unwrap(), Yield(Val::Int(0)));
     assert_eq!(
@@ -175,16 +187,21 @@ fn fiber_conn_recv_peval_sim() {
         (loop (send_conn (peval (recv_conn))))
     "#;
 
-    let mut f = Fiber::from_expr(prog, locals()).unwrap();
-    f.bind(NativeFn {
-        symbol: SymbolId::from("recv_conn"),
-        func: |_, _| Ok(NativeFnOp::Yield(Val::Extern(Ext::RecvConn))),
-    });
-    f.bind(NativeFn {
-        symbol: SymbolId::from("send_conn"),
-        func: |_, args| Ok(NativeFnOp::Yield(Val::Extern(Ext::SendConn(args.to_vec())))),
-    });
+    let mut env = env();
+    env.bind_native(
+        SymbolId::from("recv_conn"),
+        NativeFn {
+            func: |_, _| Ok(NativeFnOp::Yield(Val::Extern(Ext::RecvConn))),
+        },
+    );
+    env.bind_native(
+        SymbolId::from("send_conn"),
+        NativeFn {
+            func: |_, args| Ok(NativeFnOp::Yield(Val::Extern(Ext::SendConn(args.to_vec())))),
+        },
+    );
 
+    let mut f = Fiber::from_expr(prog, env, locals()).unwrap();
     assert_eq!(f.resume().unwrap(), Yield(Val::Extern(Ext::RecvConn)));
 
     assert_eq!(
@@ -235,26 +252,32 @@ fn get_set_locals() {
             (inc_local 1)
             (inc_local 2)
             (get_local))"#;
-    let mut f = Fiber::from_expr(prog, Locals { val: 15 }).unwrap();
-    f.bind(NativeFn {
-        symbol: SymbolId::from("get_local"),
-        func: |f, _| {
-            let v = f.locals().val;
-            Ok(NativeFnOp::Return(Val::Int(v)))
-        },
-    });
-    f.bind(NativeFn {
-        symbol: SymbolId::from("inc_local"),
-        func: |f, args| {
-            let v = match args {
-                [Val::Int(v)] => v,
-                _ => panic!(),
-            };
-            f.locals_mut().val += v;
-            Ok(NativeFnOp::Return(Val::Nil))
-        },
-    });
 
+    let mut env = env();
+    env.bind_native(
+        SymbolId::from("get_local"),
+        NativeFn {
+            func: |f, _| {
+                let v = f.locals().val;
+                Ok(NativeFnOp::Return(Val::Int(v)))
+            },
+        },
+    );
+    env.bind_native(
+        SymbolId::from("inc_local"),
+        NativeFn {
+            func: |f, args| {
+                let v = match args {
+                    [Val::Int(v)] => v,
+                    _ => panic!(),
+                };
+                f.locals_mut().val += v;
+                Ok(NativeFnOp::Return(Val::Nil))
+            },
+        },
+    );
+
+    let mut f = Fiber::from_expr(prog, env, Locals { val: 15 }).unwrap();
     assert_eq!(f.resume().unwrap(), FiberState::Done(Val::Int(42)));
     assert_eq!(f.locals().val, 42);
 }

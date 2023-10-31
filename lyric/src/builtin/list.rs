@@ -4,7 +4,6 @@ use crate::{Error, Extern, Inst, Locals, NativeFn, NativeFnOp, SymbolId, Val};
 /// Language bindng for `list`
 pub fn list_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
-        symbol: SymbolId::from("list"),
         func: |_, args| Ok(NativeFnOp::Return(Val::List(args.to_vec()))),
     }
 }
@@ -12,7 +11,6 @@ pub fn list_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 /// Language bindng for `push`
 pub fn push_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
-        symbol: SymbolId::from("push"),
         func: |_, args| match args {
             [Val::List(l), elem] => {
                 let mut l = l.to_vec();
@@ -29,7 +27,6 @@ pub fn push_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 /// Language bindng for `get`
 pub fn get_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
-        symbol: SymbolId::from("get"),
         func: |_, x| match x {
             [Val::List(l), Val::Int(idx)] => {
                 let elem = match l.get(*idx as usize) {
@@ -58,7 +55,6 @@ pub fn get_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 /// Language binding for `map`
 pub(crate) fn map_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
-        symbol: SymbolId::from("map"),
         func: |_, args| match args {
             [Val::List(l), val] if val.is_callable() => {
                 let mut bc = vec![Inst::GetSym(SymbolId::from("list"))];

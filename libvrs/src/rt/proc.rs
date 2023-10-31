@@ -27,6 +27,9 @@ pub struct Process {
 /// Values produced by processes
 pub type Val = lyric::Val<Extern, Locals>;
 
+/// Environment used by proc
+pub type Env = lyric::Env<Extern, Locals>;
+
 /// Fibers for processes
 pub type Fiber = lyric::Fiber<Extern, Locals>;
 
@@ -85,29 +88,7 @@ pub struct ProcessExit {
 impl Process {
     /// Create a new process from val
     pub(crate) fn from_val(id: ProcessId, val: Val) -> Result<Self> {
-        let mut fiber = Fiber::from_val(&val, Locals { pid: id })?;
-
-        // TODO: How to deal with non-native builtins?
-
-        fiber.bind_lambda(&SymbolId::from("call"), proc_bindings::call_fn());
-        fiber.bind_lambda(&SymbolId::from("open_url"), proc_bindings::open_url_fn());
-        fiber.bind_lambda(&SymbolId::from("open_app"), proc_bindings::open_app_fn());
-        fiber.bind_lambda(&SymbolId::from("open_file"), proc_bindings::open_file_fn());
-
-        fiber
-            .bind(proc_bindings::spawn_fn())
-            .bind(proc_bindings::shell_expand_fn())
-            .bind(proc_bindings::sleep_fn())
-            .bind(proc_bindings::recv_fn())
-            .bind(proc_bindings::exec_fn())
-            .bind(proc_bindings::recv_req_fn())
-            .bind(proc_bindings::send_resp_fn())
-            .bind(proc_bindings::self_fn())
-            .bind(proc_bindings::pid_fn())
-            .bind(proc_bindings::ps_fn())
-            .bind(proc_bindings::send_fn())
-            .bind(proc_bindings::ls_msgs_fn())
-            .bind(proc_bindings::kill_fn());
+        let fiber = Fiber::from_val(&val, Self::env(), Locals { pid: id })?;
         Ok(Self {
             id,
             fiber,
@@ -130,6 +111,34 @@ impl Process {
     pub(crate) fn kernel(mut self, k: WeakKernelHandle) -> Self {
         self.io.kernel(k);
         self
+    }
+
+    /// Create new environment for process
+    fn env() -> Env {
+        let mut e = Env::standard();
+
+        e.bind_lambda(SymbolId::from("call"), proc_bindings::call_fn())
+            .bind_lambda(SymbolId::from("open_app"), proc_bindings::open_app_fn())
+            .bind_lambda(SymbolId::from("open_file"), proc_bindings::open_file_fn())
+            .bind_lambda(SymbolId::from("open_url"), proc_bindings::open_url_fn())
+            .bind_native(SymbolId::from("exec"), proc_bindings::exec_fn())
+            .bind_native(SymbolId::from("kill"), proc_bindings::kill_fn())
+            .bind_native(SymbolId::from("ls-msgs"), proc_bindings::ls_msgs_fn())
+            .bind_native(SymbolId::from("pid"), proc_bindings::pid_fn())
+            .bind_native(SymbolId::from("ps"), proc_bindings::ps_fn())
+            .bind_native(SymbolId::from("recv"), proc_bindings::recv_fn())
+            .bind_native(SymbolId::from("recv_req"), proc_bindings::recv_req_fn())
+            .bind_native(SymbolId::from("self"), proc_bindings::self_fn())
+            .bind_native(SymbolId::from("send"), proc_bindings::send_fn())
+            .bind_native(SymbolId::from("send_resp"), proc_bindings::send_resp_fn())
+            .bind_native(
+                SymbolId::from("shell_expand"),
+                proc_bindings::shell_expand_fn(),
+            )
+            .bind_native(SymbolId::from("sleep"), proc_bindings::sleep_fn())
+            .bind_native(SymbolId::from("spawn"), proc_bindings::spawn_fn());
+
+        e
     }
 
     /// Spawn a process
