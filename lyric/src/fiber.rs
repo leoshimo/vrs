@@ -54,19 +54,6 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
         Fiber::from_val(&val, locals)
     }
 
-    /// Set root environment of fiber
-    pub fn with_env(mut self, env: Arc<Mutex<Env<T, L>>>) -> Self {
-        // TODO: This is a hack for peval. Replace with builder for setting bytecode + env for new processes
-        assert_eq!(
-            self.cframes.len(),
-            1,
-            "hack to override root callstack is only avaiable to fibers at root callstack 1"
-        );
-        self.global = Arc::clone(&env);
-        self.top_mut().env = env;
-        self
-    }
-
     /// Start execution of a fiber
     pub fn resume(&mut self) -> Result<FiberState<T, L>> {
         // TODO: Better safeguards for resume vs resume_from_yield
