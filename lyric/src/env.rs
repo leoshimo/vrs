@@ -8,8 +8,11 @@ use std::{
 #[derive(Debug, Clone)]
 pub struct Env<T: Extern, L: Locals> {
     bindings: HashMap<SymbolId, Val<T, L>>,
-    parent: Option<Arc<Mutex<Env<T, L>>>>,
+    parent: Option<EnvRef<T, L>>,
 }
+
+/// Reference to an environment
+pub type EnvRef<T, L> = Arc<Mutex<Env<T, L>>>;
 
 impl<T: Extern, L: Locals> Env<T, L> {
     /// Create standard base env
