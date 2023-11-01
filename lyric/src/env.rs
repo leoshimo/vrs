@@ -5,12 +5,13 @@ use std::{
 };
 
 /// An environment of bindings
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Env<T: Extern, L: Locals> {
     bindings: HashMap<SymbolId, Val<T, L>>,
     parent: Option<EnvRef<T, L>>,
 }
 
+// TODO: EnvRef as NewType? For ergonomic clone
 /// Reference to an environment
 pub type EnvRef<T, L> = Arc<Mutex<Env<T, L>>>;
 
@@ -82,6 +83,20 @@ impl<T: Extern, L: Locals> Env<T, L> {
     pub fn bind_lambda(&mut self, symbol: SymbolId, lambda: Lambda<T, L>) -> &mut Self {
         self.define(symbol, Val::Lambda(lambda));
         self
+    }
+}
+
+impl<T: Extern, L: Locals> std::clone::Clone for Env<T, L> {
+    // Clone by value, not by ref via Arc::clone
+    fn clone(&self) -> Self {
+        let parent = self
+            .parent
+            .as_ref()
+            .map(|parent| Arc::new(Mutex::new(parent.as_ref().lock().unwrap().clone())));
+        Self {
+            bindings: self.bindings.clone(),
+            parent,
+        }
     }
 }
 
@@ -169,4 +184,6 @@ mod tests {
             "get should retrieve updated value"
         );
     }
+
+    // TODO: Test Clone Isolation
 }

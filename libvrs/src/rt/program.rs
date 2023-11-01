@@ -77,7 +77,10 @@ impl Program {
         }
 
         let mut prog = Self::from_bytecode(lambda.code);
-        prog.env = Env::extend(&lambda.parent.unwrap());
+        prog.env = match lambda.parent.as_ref() {
+            Some(parent) => parent.as_ref().lock().unwrap().clone(),
+            None => program_env(),
+        };
 
         Ok(prog)
     }
