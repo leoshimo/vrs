@@ -12,7 +12,7 @@ next: Client / Runtime interactions v2
 - [ ] Init File
 
 * runtime
-** TODO Conn-less Process Spawning
+** DONE Conn-less Process Spawning
 Goal: Non-connection-backed =spawn= from =kernel.rs=
 
 Purpose:
