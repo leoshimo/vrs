@@ -27,5 +27,6 @@ pub use types::NativeFn;
 pub use types::NativeFnOp;
 pub use types::SymbolId;
 pub use types::Val;
+pub use types::Bytecode;
 
 pub type Result<T> = std::result::Result<T, Error>;

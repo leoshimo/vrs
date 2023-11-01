@@ -1,5 +1,5 @@
 //! Compiler for Lyric Form AST
-use crate::{Error, Extern, Locals, Result, SymbolId, Val};
+use crate::{Error, Extern, Locals, Result, SymbolId, Val, Bytecode};
 
 // TODO: Compact bytecode repr
 /// Bytecode instructions
@@ -36,7 +36,7 @@ where
 }
 
 /// Compile a value to bytecode representation
-pub fn compile<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Vec<Inst<T, L>>> {
+pub fn compile<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Bytecode<T, L>> {
     match v {
         Val::List(l) => {
             let (first, args) = l.split_first().ok_or(Error::InvalidExpression(
@@ -69,7 +69,7 @@ pub fn compile<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Vec<Inst<T, L>>> {
 }
 
 /// Compile special form builtin def
-fn compile_def<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Vec<Inst<T, L>>> {
+fn compile_def<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
     let (symbol, value) = match args {
         [Val::Symbol(symbol), value] => (symbol, value),
         _ => {
@@ -85,7 +85,7 @@ fn compile_def<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Vec<Inst<T, L
 }
 
 /// Compile special form builtin set
-fn compile_set<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Vec<Inst<T, L>>> {
+fn compile_set<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
     let (symbol, value) = match args {
         [Val::Symbol(symbol), value] => (symbol, value),
         _ => {
@@ -102,7 +102,7 @@ fn compile_set<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Vec<Inst<T, L
 
 // TODO: Replace with a macro
 /// Compile defn
-fn compile_defn<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Vec<Inst<T, L>>> {
+fn compile_defn<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
     let (name, params, body) = match args {
         [name, params, body @ ..] if !body.is_empty() => (name, params, body),
         _ => {
@@ -128,7 +128,7 @@ fn compile_defn<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Vec<Inst<T, 
 }
 
 /// Compile special form lambda
-fn compile_lambda<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Vec<Inst<T, L>>> {
+fn compile_lambda<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
     let (param, body) = match args {
         [param, body] => (param, body),
         _ => {
@@ -148,7 +148,7 @@ fn compile_lambda<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Vec<Inst<T
 }
 
 /// Compile quote special forms
-fn compile_quote<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Vec<Inst<T, L>>> {
+fn compile_quote<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
     let v = match args {
         [v] => v,
         _ => {
@@ -163,7 +163,7 @@ fn compile_quote<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Vec<Inst<T,
 fn compile_eval<T: Extern, L: Locals>(
     args: &[Val<T, L>],
     is_protected: bool,
-) -> std::result::Result<Vec<Inst<T, L>>, Error> {
+) -> Result<Bytecode<T, L>> {
     let v = match args {
         [v] => v,
         _ => {
@@ -182,7 +182,7 @@ fn compile_eval<T: Extern, L: Locals>(
 fn compile_func_call<T: Extern, L: Locals>(
     func: &Val<T, L>,
     args: &[Val<T, L>],
-) -> Result<Vec<Inst<T, L>>> {
+) -> Result<Bytecode<T, L>> {
     let mut bytecode = vec![];
     let nargs = args.len();
 
@@ -201,7 +201,7 @@ fn compile_func_call<T: Extern, L: Locals>(
 }
 
 /// Compile builtin let
-fn compile_let<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Vec<Inst<T, L>>> {
+fn compile_let<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
     let (bindings, body) = match args.split_first() {
         Some((Val::List(bindings), body)) => (bindings, body),
         _ => {
@@ -249,7 +249,7 @@ fn compile_let<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Vec<Inst<T, L
 }
 
 /// Compile builtin begin
-fn compile_begin<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Vec<Inst<T, L>>> {
+fn compile_begin<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
     let mut inst = vec![];
     let mut is_first = true;
     for a in args {
@@ -264,7 +264,7 @@ fn compile_begin<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Vec<Inst<T,
 }
 
 /// Compile if
-fn compile_if<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Vec<Inst<T, L>>> {
+fn compile_if<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
     let (cond, t, f) = match args {
         [c, t, f] => (c, t, f),
         _ => {
@@ -289,7 +289,7 @@ fn compile_if<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Vec<Inst<T, L>
 /// Compile yield statement
 fn compile_yield<T: Extern, L: Locals>(
     args: &[Val<T, L>],
-) -> std::result::Result<Vec<Inst<T, L>>, Error> {
+) -> Result<Bytecode<T, L>> {
     let v = match args {
         [] => &Val::Nil,
         [v] => v,
@@ -307,7 +307,7 @@ fn compile_yield<T: Extern, L: Locals>(
 /// Compile loop expr
 fn compile_loop<T: Extern, L: Locals>(
     args: &[Val<T, L>],
-) -> std::result::Result<Vec<Inst<T, L>>, Error> {
+) -> Result<Bytecode<T, L>> {
     let mut inst = compile_begin(args)?;
     inst.push(Inst::PopTop);
     inst.push(Inst::JumpBck(inst.len() + 1));

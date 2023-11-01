@@ -2,7 +2,7 @@
 use tracing::{debug, warn};
 
 use super::{Env, Inst};
-use crate::{compile, parse, Error, Extern, Lambda, Locals, NativeFnOp, Result, Val};
+use crate::{compile, parse, Error, Extern, Lambda, Locals, NativeFnOp, Result, Val, Bytecode};
 use std::sync::{Arc, Mutex};
 
 /// A single, cooperativly scheduled sequence of execution
@@ -24,7 +24,7 @@ pub enum FiberState<T: Extern, L: Locals> {
 
 impl<T: Extern, L: Locals> Fiber<T, L> {
     /// Create a new fiber from given bytecode
-    pub fn from_bytecode(bytecode: Vec<Inst<T, L>>, env: Env<T, L>, locals: L) -> Self {
+    pub fn from_bytecode(bytecode: Bytecode<T, L>, env: Env<T, L>, locals: L) -> Self {
         let global = Arc::new(Mutex::new(env));
         Fiber {
             stack: vec![],
@@ -119,7 +119,7 @@ struct CallFrame<T: Extern, L: Locals> {
     /// instruction pointer in code
     ip: usize,
     /// Code in callframe
-    code: Vec<Inst<T, L>>,
+    code: Bytecode<T, L>,
     /// Environment this callframe is operating in
     env: Arc<Mutex<Env<T, L>>>,
     /// Length of stack when callframe was created
@@ -132,7 +132,7 @@ impl<T: Extern, L: Locals> CallFrame<T, L> {
     /// Create a new callframe for executing given bytecode from start
     fn from_bytecode(
         env: Arc<Mutex<Env<T, L>>>,
-        code: Vec<Inst<T, L>>,
+        code: Bytecode<T, L>,
         stack_len: usize,
         unwind_cf_len: Option<usize>,
     ) -> Self {

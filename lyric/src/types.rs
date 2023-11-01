@@ -26,7 +26,7 @@ pub enum Val<T: Extern, L: Locals> {
     /// A callable native function object
     NativeFn(NativeFn<T, L>),
     /// Compiled bytecode sequence
-    Bytecode(Vec<Inst<T, L>>),
+    Bytecode(Bytecode<T, L>),
     /// Error as a value
     Error(Error),
     /// References as a value
@@ -49,11 +49,14 @@ pub enum Form {
     List(Vec<Form>),
 }
 
+/// Bytecode sequence
+pub type Bytecode<T, L> = Vec<Inst<T, L>>;
+
 /// A function object that closes over environment it was created in
 #[derive(Clone)]
 pub struct Lambda<T: Extern, L: Locals> {
     pub params: Vec<SymbolId>,
-    pub code: Vec<Inst<T, L>>,
+    pub code: Bytecode<T, L>,
     pub parent: Option<Arc<Mutex<Env<T, L>>>>,
 }
 
@@ -72,7 +75,7 @@ pub enum NativeFnOp<T: Extern, L: Locals> {
     /// Yield a value
     Yield(Val<T, L>),
     /// Execute bytecode-level instructions
-    Exec(Vec<Inst<T, L>>),
+    Exec(Bytecode<T, L>),
 }
 
 /// Identifier for Symbol
