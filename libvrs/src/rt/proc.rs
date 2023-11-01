@@ -81,7 +81,7 @@ pub enum ProcessResult {
 }
 
 /// A record of process exiting
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ProcessExit {
     pub id: ProcessId,
     pub status: Result<ProcessResult>,

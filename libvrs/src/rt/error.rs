@@ -1,6 +1,6 @@
 use tokio::sync::oneshot;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Clone)]
 pub enum Error {
     #[error("Failed to message kernel task - {0}")]
     FailedToMessageKernel(String),
@@ -36,7 +36,7 @@ pub enum Error {
     ProcessIOError(String),
 
     #[error("IO Error - {0}")]
-    IOError(#[from] std::io::Error),
+    IOError(String),
 
     #[error("No kernel")]
     NoKernel,

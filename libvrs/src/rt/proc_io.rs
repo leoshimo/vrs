@@ -77,7 +77,11 @@ impl ProcIO {
                     return Err(Error::IOFailed); // HACK: only one pending at a time
                 }
 
-                let req = conn.recv_req().await.ok_or(Error::ConnectionClosed)??;
+                let req = conn
+                    .recv_req()
+                    .await
+                    .ok_or(Error::ConnectionClosed)?
+                    .map_err(|e| Error::IOError(format!("{}", e)))?;
                 self.pending = Some(req.req_id);
                 Ok(req.contents.into())
             }
@@ -89,7 +93,8 @@ impl ProcIO {
                     req_id: pending,
                     contents: contents.map_err(ConnError::EvaluationError),
                 })
-                .await?;
+                .await
+                .map_err(|e| Error::IOError(format!("{}", e)))?;
                 Ok(Val::symbol("ok"))
             }
             IOCmd::ListProcesses => self.list_processes().await,
@@ -161,8 +166,14 @@ impl ProcIO {
     /// Execute specified program
     async fn exec(&self, prog: String, args: Vec<String>) -> Result<Val> {
         debug!("exec {:?} {:?}", &prog, &args);
-        let mut cmd = Command::new(prog.clone()).args(args.clone()).spawn()?;
-        let exit_status = cmd.wait().await?;
+        let mut cmd = Command::new(prog.clone())
+            .args(args.clone())
+            .spawn()
+            .map_err(|e| Error::IOError(format!("{}", e)))?;
+        let exit_status = cmd
+            .wait()
+            .await
+            .map_err(|e| Error::IOError(format!("{}", e)))?;
 
         if exit_status.success() {
             debug!("exec {:?} {:?} - {:?}", prog, args, exit_status);
