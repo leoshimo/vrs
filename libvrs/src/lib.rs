@@ -6,6 +6,7 @@ pub mod rt;
 
 pub use client::Client;
 pub use connection::{Connection, Request, Response};
+pub use rt::Program;
 pub use rt::Runtime;
 
 /// The path to runtime socket
