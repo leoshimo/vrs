@@ -15,7 +15,7 @@ async fn spawn_pid_is_different() {
         (list origin_pid spawn_pid)
     )
     "#;
-    let prog: Program = lyric::parse(prog).unwrap().into();
+    let prog: Program = Program::from_expr(prog).unwrap();
     let hdl = rt.run(prog).await.unwrap();
 
     let exit = timeout(Duration::from_millis(5), hdl.join())

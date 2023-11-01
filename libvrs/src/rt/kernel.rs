@@ -5,7 +5,7 @@ use super::mailbox::Message;
 use super::proc::{ProcessExit, ProcessHandle, ProcessSet};
 use super::program;
 use crate::rt::{proc::Process, Error, ProcessId, Result};
-use crate::Connection;
+use crate::{Connection, Program};
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, info};
 
@@ -49,7 +49,7 @@ pub(crate) fn start() -> KernelHandle {
 
 impl KernelHandle {
     /// Spawn a new program
-    pub(crate) async fn spawn_prog(&self, prog: program::Val) -> Result<ProcessHandle> {
+    pub(crate) async fn spawn_prog(&self, prog: Program) -> Result<ProcessHandle> {
         let (tx, rx) = oneshot::channel();
         self.ev_tx
             .send(Event::SpawnProg(prog, tx))
@@ -122,7 +122,7 @@ impl WeakKernelHandle {
 /// Messages for [Kernel]
 #[derive(Debug)]
 pub enum Event {
-    SpawnProg(program::Val, oneshot::Sender<ProcessHandle>),
+    SpawnProg(Program, oneshot::Sender<ProcessHandle>),
     SpawnConnProc(Connection, oneshot::Sender<ProcessHandle>),
     ProcessExit(ProcessExit),
     ListProcess(oneshot::Sender<Vec<ProcessId>>),
@@ -152,7 +152,7 @@ impl Kernel {
         debug!("handle_ev - {ev:?}");
         match ev {
             Event::SpawnProg(prog, tx) => {
-                let proc = Process::from_val(self.next_pid(), prog);
+                let proc = Process::from_prog(self.next_pid(), prog);
                 let hdl = self.spawn(proc)?;
                 let _ = tx.send(hdl);
                 Ok(())
@@ -394,7 +394,7 @@ mod tests {
         let k = start();
 
         let recv = k
-            .spawn_prog(lyric::parse("(recv)").unwrap().into())
+            .spawn_prog(Program::from_expr("(recv)").unwrap())
             .await
             .unwrap();
 
@@ -402,7 +402,7 @@ mod tests {
 
         let send_prog = format!("(send (pid {}) :hi)", recv.id().inner());
         let send = k
-            .spawn_prog(lyric::parse(&send_prog).unwrap().into())
+            .spawn_prog(Program::from_expr(&send_prog).unwrap())
             .await
             .unwrap();
 

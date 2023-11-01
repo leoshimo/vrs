@@ -1,5 +1,5 @@
 //! Compiler for Lyric Form AST
-use crate::{Error, Extern, Locals, Result, SymbolId, Val, Bytecode};
+use crate::{Bytecode, Error, Extern, Locals, Result, SymbolId, Val};
 
 // TODO: Compact bytecode repr
 /// Bytecode instructions
@@ -287,9 +287,7 @@ fn compile_if<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>
 }
 
 /// Compile yield statement
-fn compile_yield<T: Extern, L: Locals>(
-    args: &[Val<T, L>],
-) -> Result<Bytecode<T, L>> {
+fn compile_yield<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
     let v = match args {
         [] => &Val::Nil,
         [v] => v,
@@ -305,9 +303,7 @@ fn compile_yield<T: Extern, L: Locals>(
 }
 
 /// Compile loop expr
-fn compile_loop<T: Extern, L: Locals>(
-    args: &[Val<T, L>],
-) -> Result<Bytecode<T, L>> {
+fn compile_loop<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
     let mut inst = compile_begin(args)?;
     inst.push(Inst::PopTop);
     inst.push(Inst::JumpBck(inst.len() + 1));

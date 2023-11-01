@@ -2,7 +2,7 @@
 use tracing::{debug, warn};
 
 use super::{Env, Inst};
-use crate::{compile, parse, Error, Extern, Lambda, Locals, NativeFnOp, Result, Val, Bytecode};
+use crate::{compile, parse, Bytecode, Error, Extern, Lambda, Locals, NativeFnOp, Result, Val};
 use std::sync::{Arc, Mutex};
 
 /// A single, cooperativly scheduled sequence of execution

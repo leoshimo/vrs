@@ -10,7 +10,7 @@ use tracing::{debug, error};
 
 use crate::connection::Error as ConnError;
 
-use crate::{Connection, Response};
+use crate::{Connection, Program, Response};
 
 use super::program::{Extern, Pattern, Val};
 use crate::rt::{Error, Result};
@@ -195,13 +195,14 @@ impl ProcIO {
     }
 
     /// Spawn given process
-    async fn spawn_prog(&self, prog: Val) -> Result<Val> {
-        debug!("spawn_prog {:?}", &prog);
+    async fn spawn_prog(&self, val: Val) -> Result<Val> {
+        debug!("spawn_prog {:?}", &val);
         let kernel = self
             .kernel
             .as_ref()
             .and_then(|k| k.upgrade())
             .ok_or(Error::NoKernel)?;
+        let prog = Program::from_val(val)?;
         let hdl = kernel.spawn_prog(prog).await?;
         Ok(Val::Extern(Extern::ProcessId(hdl.id())))
     }

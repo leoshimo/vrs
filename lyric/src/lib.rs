@@ -18,6 +18,7 @@ pub use fiber::Fiber;
 pub use fiber::FiberState;
 pub use parse::parse;
 pub use pmatch::Pattern;
+pub use types::Bytecode;
 pub use types::Extern;
 pub use types::Form;
 pub use types::KeywordId;
@@ -27,6 +28,5 @@ pub use types::NativeFn;
 pub use types::NativeFnOp;
 pub use types::SymbolId;
 pub use types::Val;
-pub use types::Bytecode;
 
 pub type Result<T> = std::result::Result<T, Error>;

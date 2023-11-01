@@ -1,14 +1,12 @@
-#![allow(dead_code)]
 use super::kernel::WeakKernelHandle;
 use super::mailbox::Message;
-use super::proc_bindings;
 use super::proc_io::ProcIO;
-use super::program::{Env, Extern, Fiber, Locals, Val};
+use super::program::{Extern, Locals, Val};
 use crate::rt::mailbox::{Mailbox, MailboxHandle};
 use crate::rt::{Error, Result};
-use crate::Connection;
+use crate::{Connection, Program};
 use futures::future::{FutureExt, Shared};
-use lyric::{parse, FiberState, SymbolId};
+use lyric::{FiberState};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinSet;
 use tracing::{debug, error, info};
@@ -23,8 +21,7 @@ pub struct ProcessId(usize);
 /// A running process in runtime
 pub struct Process {
     id: ProcessId,
-    prog: Val,
-    env: Env,
+    prog: Program,
     locals: Locals,
     io: ProcIO,
 }
@@ -57,20 +54,21 @@ pub struct ProcessExit {
 }
 
 impl Process {
-    /// Create a new process from val
-    pub(crate) fn from_val(id: ProcessId, val: Val) -> Self {
+    /// Create a new process for program
+    pub(crate) fn from_prog(id: ProcessId, prog: Program) -> Self {
         Self {
             id,
-            prog: val,
-            env: Self::proc_env(),
+            prog,
             locals: Locals { pid: id },
             io: ProcIO::new(id),
         }
     }
 
+    // TODO: Why is this used?
     /// Create a new process from expression
     pub(crate) fn from_expr(id: ProcessId, expr: &str) -> Result<Self> {
-        Ok(Self::from_val(id, parse(expr)?.into()))
+        let prog = Program::from_expr(expr)?;
+        Ok(Self::from_prog(id, prog))
     }
 
     /// Set connection on process
@@ -85,39 +83,6 @@ impl Process {
         self
     }
 
-    /// Set environment of process
-    pub(crate) fn env(mut self, env: Env) -> Self {
-        self.env = env;
-        self
-    }
-
-    /// Create new environment for process
-    fn proc_env() -> Env {
-        let mut e = Env::standard();
-
-        e.bind_lambda(SymbolId::from("call"), proc_bindings::call_fn())
-            .bind_lambda(SymbolId::from("open_app"), proc_bindings::open_app_fn())
-            .bind_lambda(SymbolId::from("open_file"), proc_bindings::open_file_fn())
-            .bind_lambda(SymbolId::from("open_url"), proc_bindings::open_url_fn())
-            .bind_native(SymbolId::from("exec"), proc_bindings::exec_fn())
-            .bind_native(SymbolId::from("kill"), proc_bindings::kill_fn())
-            .bind_native(SymbolId::from("ls-msgs"), proc_bindings::ls_msgs_fn())
-            .bind_native(SymbolId::from("pid"), proc_bindings::pid_fn())
-            .bind_native(SymbolId::from("ps"), proc_bindings::ps_fn())
-            .bind_native(SymbolId::from("recv"), proc_bindings::recv_fn())
-            .bind_native(SymbolId::from("recv_req"), proc_bindings::recv_req_fn())
-            .bind_native(SymbolId::from("self"), proc_bindings::self_fn())
-            .bind_native(SymbolId::from("send"), proc_bindings::send_fn())
-            .bind_native(SymbolId::from("send_resp"), proc_bindings::send_resp_fn())
-            .bind_native(
-                SymbolId::from("shell_expand"),
-                proc_bindings::shell_expand_fn(),
-            )
-            .bind_native(SymbolId::from("sleep"), proc_bindings::sleep_fn())
-            .bind_native(SymbolId::from("spawn"), proc_bindings::spawn_fn());
-
-        e
-    }
 
     /// Spawn a process
     pub(crate) fn spawn(mut self, procs: &mut ProcessSet) -> Result<ProcessHandle> {
@@ -126,7 +91,7 @@ impl Process {
         let (exit_tx, exit_rx) = oneshot::channel();
         let (msg_tx, mut msg_rx) = mpsc::channel(32);
 
-        let mut fiber = Fiber::from_val(&self.prog, self.env, self.locals)?;
+        let mut fiber = self.prog.into_fiber(self.locals);
 
         let mailbox: MailboxHandle = Mailbox::spawn(self.id);
         self.io.mailbox(mailbox.clone());
