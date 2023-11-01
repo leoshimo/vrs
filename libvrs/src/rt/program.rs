@@ -55,7 +55,7 @@ impl Program {
     pub fn from_bytecode(code: Bytecode) -> Self {
         Self {
             code,
-            env: program_env()
+            env: program_env(),
         }
     }
 
@@ -72,6 +72,12 @@ impl Program {
     pub fn into_fiber(self, locals: Locals) -> Fiber {
         Fiber::from_bytecode(self.code, self.env, locals)
     }
+}
+
+/// Create a new program for connections
+pub fn connection_program() -> Program {
+    Program::from_expr("(loop (send_resp (peval (recv_req))))")
+        .expect("Connection program should compile")
 }
 
 /// Create new environment for programs

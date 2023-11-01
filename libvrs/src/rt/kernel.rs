@@ -159,9 +159,7 @@ impl Kernel {
             }
             Event::SpawnConnProc(conn, tx) => {
                 let proc =
-                    Process::from_expr(self.next_pid(), "(loop (send_resp (peval (recv_req))))")
-                        .unwrap()
-                        .conn(conn);
+                    Process::from_prog(self.next_pid(), program::connection_program()).conn(conn);
                 let hdl = self.spawn(proc)?;
                 let _ = tx.send(hdl);
                 Ok(())

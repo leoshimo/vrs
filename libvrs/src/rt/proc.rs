@@ -6,7 +6,7 @@ use crate::rt::mailbox::{Mailbox, MailboxHandle};
 use crate::rt::{Error, Result};
 use crate::{Connection, Program};
 use futures::future::{FutureExt, Shared};
-use lyric::{FiberState};
+use lyric::FiberState;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinSet;
 use tracing::{debug, error, info};
@@ -64,13 +64,6 @@ impl Process {
         }
     }
 
-    // TODO: Why is this used?
-    /// Create a new process from expression
-    pub(crate) fn from_expr(id: ProcessId, expr: &str) -> Result<Self> {
-        let prog = Program::from_expr(expr)?;
-        Ok(Self::from_prog(id, prog))
-    }
-
     /// Set connection on process
     pub(crate) fn conn(mut self, conn: Connection) -> Self {
         self.io.conn(conn);
@@ -82,7 +75,6 @@ impl Process {
         self.io.kernel(k);
         self
     }
-
 
     /// Spawn a process
     pub(crate) fn spawn(mut self, procs: &mut ProcessSet) -> Result<ProcessHandle> {
@@ -255,8 +247,8 @@ mod tests {
     #[tokio::test]
     async fn spawn_simple() {
         let mut procs = ProcessSet::new();
-        let _ = Process::from_expr(99.into(), "\"Hello\"")
-            .unwrap()
+        let prog = Program::from_expr("\"Hello\"").unwrap();
+        let _ = Process::from_prog(99.into(), prog)
             .spawn(&mut procs)
             .unwrap();
 
@@ -271,15 +263,15 @@ mod tests {
     #[tokio::test]
     async fn processes_are_isolated() {
         let mut procs = ProcessSet::new();
-        let _ = Process::from_expr(0.into(), "(def x 0)")
-            .unwrap()
+        let prog = Program::from_expr("(def x 0)").unwrap();
+        let _ = Process::from_prog(0.into(), prog)
             .spawn(&mut procs)
             .unwrap();
         let res = procs.join_next().await.unwrap().unwrap();
         assert_eq!(res.status.unwrap(), ProcessResult::Done(Val::Int(0)),);
 
-        let _ = Process::from_expr(0.into(), "x")
-            .unwrap()
+        let prog = Program::from_expr("x").unwrap();
+        let _ = Process::from_prog(0.into(), prog)
             .spawn(&mut procs)
             .unwrap();
         let res = procs.join_next().await.unwrap().unwrap();
@@ -295,8 +287,8 @@ mod tests {
         let (local, mut remote) = Connection::pair().unwrap();
 
         let mut procs = ProcessSet::new();
-        let _ = Process::from_expr(0.into(), "(recv_req)")
-            .unwrap()
+        let prog = Program::from_expr("(recv_req)").unwrap();
+        let _ = Process::from_prog(0.into(), prog)
             .conn(local)
             .spawn(&mut procs);
 
@@ -320,8 +312,8 @@ mod tests {
         let (local, mut remote) = Connection::pair().unwrap();
         let mut procs = ProcessSet::new();
 
-        let _ = Process::from_expr(0.into(), "(send_resp (peval (recv_req)))")
-            .unwrap()
+        let prog = Program::from_expr("(send_resp (peval (recv_req)))").unwrap();
+        let _ = Process::from_prog(0.into(), prog)
             .conn(local)
             .spawn(&mut procs);
 
@@ -345,9 +337,8 @@ mod tests {
     async fn get_self() {
         let mut procs = ProcessSet::new();
 
-        let _ = Process::from_expr(99.into(), "(self)")
-            .unwrap()
-            .spawn(&mut procs);
+        let prog = Program::from_expr("(self)").unwrap();
+        let _ = Process::from_prog(99.into(), prog).spawn(&mut procs);
 
         let res = procs.join_next().await.unwrap().unwrap();
         assert_eq!(
