@@ -12,7 +12,7 @@ use crate::connection::Error as ConnError;
 
 use crate::{Connection, Response};
 
-use super::proc::{Extern, Pattern, Val};
+use super::program::{Extern, Pattern, Val};
 use crate::rt::{Error, Result};
 
 /// Handles process IO requests

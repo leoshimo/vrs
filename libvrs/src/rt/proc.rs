@@ -2,7 +2,8 @@
 use super::kernel::WeakKernelHandle;
 use super::mailbox::Message;
 use super::proc_bindings;
-use super::proc_io::{IOCmd, ProcIO};
+use super::proc_io::ProcIO;
+use super::program::{Env, Extern, Fiber, Locals, Val};
 use crate::rt::mailbox::{Mailbox, MailboxHandle};
 use crate::rt::{Error, Result};
 use crate::Connection;
@@ -28,34 +29,6 @@ pub struct Process {
     io: ProcIO,
 }
 
-/// Values produced by processes
-pub type Val = lyric::Val<Extern, Locals>;
-
-/// Environment used by proc
-pub type Env = lyric::Env<Extern, Locals>;
-
-/// Fibers for processes
-pub type Fiber = lyric::Fiber<Extern, Locals>;
-
-/// Pattern matches for processes
-pub type Pattern = lyric::Pattern<Extern, Locals>;
-
-/// Lambda for processes
-pub type Lambda = lyric::Lambda<Extern, Locals>;
-
-/// NativeFn type for Process bindings
-pub type NativeFn = lyric::NativeFn<Extern, Locals>;
-
-/// NativeFnOp for Process
-pub type NativeFnOp = lyric::NativeFnOp<Extern, Locals>;
-
-/// Locals for Process Fiber
-#[derive(Debug, Clone, PartialEq)]
-pub struct Locals {
-    /// Id of process owning fiber
-    pub(crate) pid: ProcessId,
-}
-
 /// A handle to [Process]
 #[derive(Debug, Clone)]
 pub struct ProcessHandle {
@@ -63,13 +36,6 @@ pub struct ProcessHandle {
     hdl_tx: mpsc::Sender<Event>,
     mailbox: MailboxHandle,
     exit_rx: Shared<oneshot::Receiver<ProcessExit>>,
-}
-
-/// Extern type between Fiber and hosting Process
-#[derive(Debug, Clone, PartialEq)]
-pub enum Extern {
-    ProcessId(ProcessId),
-    IOCmd(Box<IOCmd>),
 }
 
 /// The result of process

@@ -2,8 +2,8 @@
 
 use std::time::Duration;
 
-use super::proc::{Extern, Lambda, NativeFn, NativeFnOp, Val};
 use super::proc_io::IOCmd;
+use super::program::{Extern, Lambda, NativeFn, NativeFnOp, Val};
 use super::ProcessId;
 use lyric::{compile, parse, Error, Pattern, Result, SymbolId};
 

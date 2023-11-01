@@ -2,7 +2,8 @@
 use std::collections::HashMap;
 
 use super::mailbox::Message;
-use super::proc::{self, ProcessExit, ProcessHandle, ProcessSet};
+use super::proc::{ProcessExit, ProcessHandle, ProcessSet};
+use super::program;
 use crate::rt::{proc::Process, Error, ProcessId, Result};
 use crate::Connection;
 use tokio::sync::{mpsc, oneshot};
@@ -48,7 +49,7 @@ pub(crate) fn start() -> KernelHandle {
 
 impl KernelHandle {
     /// Spawn a new program
-    pub(crate) async fn spawn_prog(&self, prog: proc::Val) -> Result<ProcessHandle> {
+    pub(crate) async fn spawn_prog(&self, prog: program::Val) -> Result<ProcessHandle> {
         let (tx, rx) = oneshot::channel();
         self.ev_tx
             .send(Event::SpawnProg(prog, tx))
@@ -94,7 +95,7 @@ impl KernelHandle {
         &self,
         src: ProcessId,
         dst: ProcessId,
-        val: proc::Val,
+        val: program::Val,
     ) -> Result<()> {
         self.ev_tx
             .send(Event::ProcessSendMessage(src, dst, val))
@@ -121,12 +122,12 @@ impl WeakKernelHandle {
 /// Messages for [Kernel]
 #[derive(Debug)]
 pub enum Event {
-    SpawnProg(proc::Val, oneshot::Sender<ProcessHandle>),
+    SpawnProg(program::Val, oneshot::Sender<ProcessHandle>),
     SpawnConnProc(Connection, oneshot::Sender<ProcessHandle>),
     ProcessExit(ProcessExit),
     ListProcess(oneshot::Sender<Vec<ProcessId>>),
     KillProcess(ProcessId),
-    ProcessSendMessage(ProcessId, ProcessId, proc::Val),
+    ProcessSendMessage(ProcessId, ProcessId, program::Val),
 }
 
 /// The runtime kernel task
@@ -203,7 +204,7 @@ impl Kernel {
     }
 
     /// Dispatc message from src to dst
-    async fn dispatch_msg(&self, src: ProcessId, dst: ProcessId, msg: proc::Val) -> Result<()> {
+    async fn dispatch_msg(&self, src: ProcessId, dst: ProcessId, msg: program::Val) -> Result<()> {
         let dst = self.proc_hdls.get(&dst).ok_or(Error::UnknownProcess)?;
         dst.notify_message(Message::new(src, msg)).await;
         Ok(())
@@ -407,11 +408,11 @@ mod tests {
 
         assert_eq!(
             send.join().await.unwrap().status.unwrap(),
-            ProcessResult::Done(proc::Val::keyword("hi"))
+            ProcessResult::Done(program::Val::keyword("hi"))
         );
         assert_eq!(
             recv.join().await.unwrap().status.unwrap(),
-            ProcessResult::Done(proc::Val::keyword("hi"))
+            ProcessResult::Done(program::Val::keyword("hi"))
         );
 
         assert!(k.procs().await.unwrap().is_empty());

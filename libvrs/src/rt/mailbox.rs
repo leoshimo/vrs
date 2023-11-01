@@ -1,7 +1,8 @@
 //! A Process's Mailbox
 use std::collections::VecDeque;
 
-use super::proc::{Pattern, ProcessId, Val};
+use super::proc::ProcessId;
+use super::program::{Pattern, Val};
 use crate::rt::{Error, Result};
 use tokio::sync::{mpsc, oneshot};
 use tracing::debug;

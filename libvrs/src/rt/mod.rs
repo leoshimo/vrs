@@ -1,5 +1,6 @@
 mod error;
 mod kernel;
+mod program;
 mod runtime;
 
 mod mailbox;
@@ -12,4 +13,4 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub use proc::{ProcessExit, ProcessHandle, ProcessId, ProcessResult};
 pub use runtime::Runtime;
 
-pub type Program = proc::Val;
+pub type Program = program::Val;
