@@ -1,9 +1,9 @@
 //! Runtime tests    
+use assert_matches::assert_matches;
 use std::time::Duration;
 use tokio::time::timeout;
-use vrs::{ProcessResult, Program, Runtime};
+use vrs::{Extern, ProcessResult, Program, Runtime, Val};
 
-#[ignore]
 #[tokio::test]
 async fn spawn_pid_is_different() {
     let rt = Runtime::new();
@@ -18,15 +18,18 @@ async fn spawn_pid_is_different() {
     let prog: Program = Program::from_expr(prog).unwrap();
     let hdl = rt.run(prog).await.unwrap();
 
-    let exit = timeout(Duration::from_millis(5), hdl.join())
+    let exit = timeout(Duration::from_millis(10), hdl.join())
         .await
         .expect("shouldn't timeout")
         .unwrap();
-    let val = match exit.status.unwrap() {
-        ProcessResult::Done(v) => v,
-        _ => panic!("should be done"),
+
+    let pids = match exit.status.unwrap() {
+        ProcessResult::Done(Val::List(pids)) => pids,
+        _ => panic!("should be done w/ list of pids"),
     };
 
-    println!("{}", val);
-    panic!();
+    assert_matches!(
+        pids[..],
+        [Val::Extern(Extern::ProcessId(origin)), Val::Extern(Extern::ProcessId(spawn))] if origin.inner() != spawn.inner()
+    )
 }

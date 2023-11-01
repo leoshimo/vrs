@@ -36,7 +36,7 @@ pub enum IOCmd {
     Exec(String, Vec<String>),
     Recv(Option<Pattern>),
     Sleep(Duration),
-    Spawn(Val),
+    Spawn(Program),
 }
 
 impl ProcIO {
@@ -195,14 +195,13 @@ impl ProcIO {
     }
 
     /// Spawn given process
-    async fn spawn_prog(&self, val: Val) -> Result<Val> {
-        debug!("spawn_prog {:?}", &val);
+    async fn spawn_prog(&self, prog: Program) -> Result<Val> {
+        debug!("spawn_prog {:?}", &prog);
         let kernel = self
             .kernel
             .as_ref()
             .and_then(|k| k.upgrade())
             .ok_or(Error::NoKernel)?;
-        let prog = Program::from_val(val)?;
         let hdl = kernel.spawn_prog(prog).await?;
         Ok(Val::Extern(Extern::ProcessId(hdl.id())))
     }

@@ -5,7 +5,7 @@ use std::{
 };
 
 /// An environment of bindings
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Env<T: Extern, L: Locals> {
     bindings: HashMap<SymbolId, Val<T, L>>,
     parent: Option<Arc<Mutex<Env<T, L>>>>,

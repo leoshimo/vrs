@@ -1,13 +1,13 @@
 //! Program that specifies a process
-use lyric::SymbolId;
+
+use lyric::{Error, Result, SymbolId};
 
 use super::proc::ProcessId;
 use super::proc_bindings;
 use super::proc_io::IOCmd;
-use crate::rt::Result;
 
 /// Program used to spawn new processes
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Program {
     code: Bytecode,
     env: Env,
@@ -69,6 +69,19 @@ impl Program {
         Self::from_val(val)
     }
 
+    pub fn from_lambda(lambda: Lambda) -> Result<Self> {
+        if !lambda.params.is_empty() {
+            return Err(Error::UnexpectedArguments(
+                "Program are created from zero arity lambdas".to_string(),
+            ));
+        }
+
+        let mut prog = Self::from_bytecode(lambda.code);
+        prog.env = Env::extend(&lambda.parent.unwrap());
+
+        Ok(prog)
+    }
+
     pub fn into_fiber(self, locals: Locals) -> Fiber {
         Fiber::from_bytecode(self.code, self.env, locals)
     }
@@ -78,6 +91,12 @@ impl Program {
 pub fn connection_program() -> Program {
     Program::from_expr("(loop (send_resp (peval (recv_req))))")
         .expect("Connection program should compile")
+}
+
+impl PartialEq for Program {
+    fn eq(&self, _other: &Self) -> bool {
+        false
+    }
 }
 
 /// Create new environment for programs

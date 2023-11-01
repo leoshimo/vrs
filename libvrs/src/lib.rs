@@ -6,10 +6,12 @@ pub mod rt;
 
 pub use client::Client;
 pub use connection::{Connection, Request, Response};
+pub use rt::program::{
+    Bytecode, Env, Extern, Lambda, Locals, NativeFn, NativeFnOp, Pattern, Program, Val,
+};
 pub use rt::ProcessExit;
 pub use rt::ProcessHandle;
 pub use rt::ProcessResult;
-pub use rt::Program;
 pub use rt::Runtime;
 
 /// The path to runtime socket

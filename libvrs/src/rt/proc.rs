@@ -195,9 +195,8 @@ enum Event {
     Kill,
 }
 
-#[cfg(test)]
 impl ProcessId {
-    pub(crate) fn inner(&self) -> &usize {
+    pub fn inner(&self) -> &usize {
         &self.0
     }
 }

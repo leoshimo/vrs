@@ -2,6 +2,8 @@
 
 use std::time::Duration;
 
+use crate::Program;
+
 use super::proc_io::IOCmd;
 use super::program::{Extern, Lambda, NativeFn, NativeFnOp, Val};
 use super::ProcessId;
@@ -281,14 +283,16 @@ pub(crate) fn sleep_fn() -> NativeFn {
 pub(crate) fn spawn_fn() -> NativeFn {
     NativeFn {
         func: |_, args| {
-            let prog = match args {
-                [prog] => prog.clone(),
+            let lambda = match args {
+                [Val::Lambda(l)] => l.clone(),
                 _ => {
                     return Err(Error::UnexpectedArguments(
-                        "spawn expects single expression".to_string(),
+                        "spawn expects single lambda".to_string(),
                     ))
                 }
             };
+
+            let prog = Program::from_lambda(lambda)?;
             Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
                 IOCmd::Spawn(prog),
             )))))
