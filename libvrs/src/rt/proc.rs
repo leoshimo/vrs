@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use super::kernel::WeakKernelHandle;
 use super::mailbox::Message;
 use super::proc_bindings;
@@ -5,8 +6,9 @@ use super::proc_io::{IOCmd, ProcIO};
 use crate::rt::mailbox::{Mailbox, MailboxHandle};
 use crate::rt::{Error, Result};
 use crate::Connection;
+use futures::future::{FutureExt, Shared};
 use lyric::{parse, FiberState, SymbolId};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinSet;
 use tracing::{debug, error, info};
 
@@ -60,6 +62,7 @@ pub struct ProcessHandle {
     id: ProcessId,
     hdl_tx: mpsc::Sender<Event>,
     mailbox: MailboxHandle,
+    exit_rx: Shared<oneshot::Receiver<ProcessExit>>,
 }
 
 /// Extern type between Fiber and hosting Process
@@ -154,6 +157,7 @@ impl Process {
     pub(crate) fn spawn(mut self, procs: &mut ProcessSet) -> Result<ProcessHandle> {
         info!("proc spawn - {}", self.id);
 
+        let (exit_tx, exit_rx) = oneshot::channel();
         let (msg_tx, mut msg_rx) = mpsc::channel(32);
 
         let mut fiber = Fiber::from_val(&self.prog, self.env, self.locals)?;
@@ -161,6 +165,7 @@ impl Process {
         let mailbox: MailboxHandle = Mailbox::spawn(self.id);
         self.io.mailbox(mailbox.clone());
 
+        // TODO: Clean this up!
         procs.spawn(async move {
             let exit: Result<_> = async {
                 let mut io = self.io;
@@ -205,7 +210,7 @@ impl Process {
             }
             .await;
 
-            match exit {
+            let exit = match exit {
                 Ok(exit) => {
                     info!("proc exit {} - {}", self.id, exit);
                     exit
@@ -217,11 +222,15 @@ impl Process {
                         status: Err(e),
                     }
                 }
-            }
+            };
+
+            let _ = exit_tx.send(exit.clone());
+            exit
         });
         Ok(ProcessHandle {
             id: self.id,
             hdl_tx: msg_tx,
+            exit_rx: exit_rx.shared(),
             mailbox,
         })
     }
@@ -248,8 +257,8 @@ impl ProcessHandle {
     }
 
     /// Wait for process to end
-    pub async fn join(&self) {
-        self.hdl_tx.closed().await;
+    pub async fn join(self) -> Result<ProcessExit> {
+        Ok(self.exit_rx.await?)
     }
 
     /// Send a new message to process's mailbox

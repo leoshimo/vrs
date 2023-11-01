@@ -6,6 +6,9 @@ pub mod rt;
 
 pub use client::Client;
 pub use connection::{Connection, Request, Response};
+pub use rt::ProcessExit;
+pub use rt::ProcessHandle;
+pub use rt::ProcessResult;
 pub use rt::Program;
 pub use rt::Runtime;
 

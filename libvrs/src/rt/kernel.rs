@@ -219,7 +219,7 @@ impl Kernel {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Client, Connection, Request};
+    use crate::{Client, Connection, ProcessResult, Request};
     use assert_matches::assert_matches;
     use lyric::{parse as p, Form};
     use std::time::Duration;
@@ -263,8 +263,11 @@ mod tests {
         assert_eq!(k.procs().await.unwrap(), vec![hdl.id()]);
 
         drop(remote); // remote terminates
-        hdl.join().await;
 
+        assert_eq!(
+            hdl.join().await.unwrap().status.unwrap(),
+            ProcessResult::Disconnected
+        );
         assert!(
             k.procs().await.unwrap().is_empty(),
             "Should terminate conn process for dropped conn"
@@ -282,8 +285,11 @@ mod tests {
         assert_eq!(k.procs().await.unwrap(), vec![hdl.id()]);
 
         hdl.kill().await; // manual kill
-        hdl.join().await;
 
+        assert_eq!(
+            hdl.join().await.unwrap().status.unwrap(),
+            ProcessResult::Cancelled
+        );
         assert!(
             k.procs().await.unwrap().is_empty(),
             "Should terminate conn process for killed process"
@@ -302,7 +308,7 @@ mod tests {
         drop(k); // drop kernel
 
         let proc_exit = tokio::spawn(async move {
-            hdl.join().await;
+            let _ = hdl.join().await;
         });
         let _ = timeout(Duration::from_millis(5), proc_exit)
             .await
@@ -336,14 +342,15 @@ mod tests {
             .expect("Kernel should spawn new process");
 
         k.kill_proc(proc.id()).await.unwrap();
-        let proc_exit = tokio::spawn(async move {
-            proc.join().await;
-        });
+        let proc_exit = tokio::spawn(async move { proc.join().await });
 
-        let _ = timeout(Duration::from_millis(5), proc_exit)
+        let exit = timeout(Duration::from_millis(5), proc_exit)
             .await
-            .expect("Process should terminate");
+            .expect("Process should terminate")
+            .unwrap()
+            .unwrap();
 
+        assert_eq!(exit.status.unwrap(), ProcessResult::Cancelled);
         assert!(k.procs().await.unwrap().is_empty(),);
     }
 
@@ -354,7 +361,6 @@ mod tests {
         let k = start();
 
         let proc = k.spawn_for_conn(local).await.unwrap();
-
         let proc_other = k.spawn_for_conn(local_other).await.unwrap();
 
         remote
@@ -366,13 +372,14 @@ mod tests {
             .await
             .unwrap();
 
-        let proc_exit = tokio::spawn(async move {
-            proc_other.join().await;
-        });
-        let _ = timeout(Duration::from_millis(5), proc_exit)
+        let proc_exit = tokio::spawn(async move { proc_other.join().await });
+        let killed_exit = timeout(Duration::from_millis(5), proc_exit)
             .await
-            .expect("Killed process should terminate");
+            .expect("Killed process should terminate")
+            .unwrap()
+            .unwrap();
 
+        assert_eq!(killed_exit.status.unwrap(), ProcessResult::Cancelled);
         assert_eq!(
             k.procs().await.unwrap(),
             vec![proc.id()],
@@ -398,8 +405,14 @@ mod tests {
             .await
             .unwrap();
 
-        send.join().await;
-        recv.join().await;
+        assert_eq!(
+            send.join().await.unwrap().status.unwrap(),
+            ProcessResult::Done(proc::Val::keyword("hi"))
+        );
+        assert_eq!(
+            recv.join().await.unwrap().status.unwrap(),
+            ProcessResult::Done(proc::Val::keyword("hi"))
+        );
 
         assert!(k.procs().await.unwrap().is_empty());
     }
