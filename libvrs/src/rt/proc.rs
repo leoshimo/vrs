@@ -20,7 +20,9 @@ pub struct ProcessId(usize);
 /// A running process in runtime
 pub struct Process {
     id: ProcessId,
-    fiber: Fiber,
+    prog: Val,
+    env: Env,
+    locals: Locals,
     io: ProcIO,
 }
 
@@ -87,18 +89,19 @@ pub struct ProcessExit {
 
 impl Process {
     /// Create a new process from val
-    pub(crate) fn from_val(id: ProcessId, val: Val) -> Result<Self> {
-        let fiber = Fiber::from_val(&val, Self::env(), Locals { pid: id })?;
-        Ok(Self {
+    pub(crate) fn from_val(id: ProcessId, val: Val) -> Self {
+        Self {
             id,
-            fiber,
+            prog: val,
+            env: Self::proc_env(),
+            locals: Locals { pid: id },
             io: ProcIO::new(id),
-        })
+        }
     }
 
     /// Create a new process from expression
     pub(crate) fn from_expr(id: ProcessId, expr: &str) -> Result<Self> {
-        Self::from_val(id, parse(expr)?.into())
+        Ok(Self::from_val(id, parse(expr)?.into()))
     }
 
     /// Set connection on process
@@ -113,8 +116,14 @@ impl Process {
         self
     }
 
+    /// Set environment of process
+    pub(crate) fn env(mut self, env: Env) -> Self {
+        self.env = env;
+        self
+    }
+
     /// Create new environment for process
-    fn env() -> Env {
+    fn proc_env() -> Env {
         let mut e = Env::standard();
 
         e.bind_lambda(SymbolId::from("call"), proc_bindings::call_fn())
@@ -147,12 +156,13 @@ impl Process {
 
         let (msg_tx, mut msg_rx) = mpsc::channel(32);
 
+        let mut fiber = Fiber::from_val(&self.prog, self.env, self.locals)?;
+
         let mailbox: MailboxHandle = Mailbox::spawn(self.id);
         self.io.mailbox(mailbox.clone());
 
         procs.spawn(async move {
             let exit: Result<_> = async {
-                let mut fiber = self.fiber;
                 let mut io = self.io;
                 let mut state = fiber.resume()?;
                 loop {

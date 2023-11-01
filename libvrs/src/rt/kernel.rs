@@ -151,7 +151,7 @@ impl Kernel {
         debug!("handle_ev - {ev:?}");
         match ev {
             Event::SpawnProg(prog, tx) => {
-                let proc = Process::from_val(self.next_pid(), prog)?;
+                let proc = Process::from_val(self.next_pid(), prog);
                 let hdl = self.spawn(proc)?;
                 let _ = tx.send(hdl);
                 Ok(())
