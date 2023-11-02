@@ -4,6 +4,6 @@
 while true; do
     PID=$(RUST_LOG=debug cargo run --bin vrsd) &
     sleep 1
-    ./scripts/launcher.ll&
+    ./scripts/launcher.ll &
     wait $PID
 done

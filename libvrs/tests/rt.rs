@@ -72,6 +72,8 @@ async fn spawn_env_isolated() {
 // TODO: Write  Test case for Service Registry + Discovery
 // Cover - =register=, =ls-srv=, =find-srv=, deregistration on complete
 //
+// - Unknown service return nil
+//
 // Proc A:
 // Running `target/debug/vrsctl`
 // vrs> (ls-srv)
