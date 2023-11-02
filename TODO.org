@@ -19,14 +19,14 @@ Purpose:
 - Spawn from Process / REPL
 - Spawn from Init File
 
-** TODO Service Discovery / Mgmt
+** DONE Service Discovery / Mgmt
 Goal: Replace existing =pid 0= hardcoding w/ service mgmt
 Skip exports / imports map for this one - see also "Runtime Linking"
 Convenience APIs to see running services and some level of introspection
 
 - [X] =register=
 - [X] =ls-srv=
-- [ ] =find-srv=
+- [X] =find-srv=
 
 ** TODO IPC - =srv= and =bind=
 
