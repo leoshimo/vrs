@@ -4,7 +4,7 @@
 
 set -eu
 
-SELECTED=$(vrsctl -c "(call (pid 0) '(:get_items))" \
+SELECTED=$(vrsctl -c "(call (find-srv :launcher) '(:get_items))" \
     | sed -E "s/^\(\(/\(/g" \
     | sed -E "s/\)\)$/\)/g" \
     | sed -E "s/\) \(/\)\n\(/g" \

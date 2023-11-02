@@ -31,6 +31,7 @@
 # (srv :name :launcher
 #      :export '(get_items add_item))
 #
+(register :launcher)
 (loop
    (def req (recv))
    (let ((r (get req 0))
