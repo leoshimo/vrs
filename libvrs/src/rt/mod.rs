@@ -1,3 +1,4 @@
+mod binding;
 mod error;
 mod kernel;
 pub mod program;
@@ -6,7 +7,6 @@ mod runtime;
 
 mod mailbox;
 mod proc;
-mod proc_bindings;
 mod proc_io;
 
 pub use error::Error;

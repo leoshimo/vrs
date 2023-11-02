@@ -2,8 +2,8 @@
 
 use lyric::{Error, Result, SymbolId};
 
+use super::binding;
 use super::proc::ProcessId;
-use super::proc_bindings;
 use super::proc_io::IOCmd;
 
 /// Program used to spawn new processes
@@ -106,29 +106,43 @@ impl PartialEq for Program {
 fn program_env() -> Env {
     let mut e = Env::standard();
 
-    e.bind_lambda(SymbolId::from("call"), proc_bindings::call_fn())
-        .bind_lambda(SymbolId::from("open_app"), proc_bindings::open_app_fn())
-        .bind_lambda(SymbolId::from("open_file"), proc_bindings::open_file_fn())
-        .bind_lambda(SymbolId::from("open_url"), proc_bindings::open_url_fn())
-        .bind_native(SymbolId::from("exec"), proc_bindings::exec_fn())
-        .bind_native(SymbolId::from("kill"), proc_bindings::kill_fn())
-        .bind_native(SymbolId::from("ls-msgs"), proc_bindings::ls_msgs_fn())
-        .bind_native(SymbolId::from("pid"), proc_bindings::pid_fn())
-        .bind_native(SymbolId::from("ps"), proc_bindings::ps_fn())
-        .bind_native(SymbolId::from("recv"), proc_bindings::recv_fn())
-        .bind_native(SymbolId::from("recv_req"), proc_bindings::recv_req_fn())
-        .bind_native(SymbolId::from("self"), proc_bindings::self_fn())
-        .bind_native(SymbolId::from("send"), proc_bindings::send_fn())
-        .bind_native(SymbolId::from("send_resp"), proc_bindings::send_resp_fn())
-        .bind_native(
-            SymbolId::from("shell_expand"),
-            proc_bindings::shell_expand_fn(),
-        )
-        .bind_native(SymbolId::from("sleep"), proc_bindings::sleep_fn())
-        .bind_native(SymbolId::from("register"), proc_bindings::register_fn())
-        .bind_native(SymbolId::from("find-srv"), proc_bindings::find_srv_fn())
-        .bind_native(SymbolId::from("ls-srv"), proc_bindings::ls_srv_fn())
-        .bind_native(SymbolId::from("spawn"), proc_bindings::spawn_fn());
+    {
+        e.bind_native(SymbolId::from("recv_req"), binding::recv_req_fn())
+            .bind_native(SymbolId::from("send_resp"), binding::send_resp_fn());
+    }
+
+    {
+        e.bind_native(SymbolId::from("recv"), binding::recv_fn())
+            .bind_native(SymbolId::from("ls-msgs"), binding::ls_msgs_fn())
+            .bind_native(SymbolId::from("send"), binding::send_fn())
+            .bind_lambda(SymbolId::from("call"), binding::call_fn());
+    }
+
+    {
+        e.bind_native(SymbolId::from("kill"), binding::kill_fn())
+            .bind_native(SymbolId::from("pid"), binding::pid_fn())
+            .bind_native(SymbolId::from("ps"), binding::ps_fn())
+            .bind_native(SymbolId::from("self"), binding::self_fn())
+            .bind_native(SymbolId::from("sleep"), binding::sleep_fn())
+            .bind_native(SymbolId::from("spawn"), binding::spawn_fn());
+    }
+
+    {
+        e.bind_native(SymbolId::from("exec"), binding::exec_fn())
+            .bind_native(SymbolId::from("shell_expand"), binding::shell_expand_fn());
+    }
+
+    {
+        e.bind_lambda(SymbolId::from("open_app"), binding::open_app_fn())
+            .bind_lambda(SymbolId::from("open_file"), binding::open_file_fn())
+            .bind_lambda(SymbolId::from("open_url"), binding::open_url_fn());
+    }
+
+    {
+        e.bind_native(SymbolId::from("register"), binding::register_fn())
+            .bind_native(SymbolId::from("find-srv"), binding::find_srv_fn())
+            .bind_native(SymbolId::from("ls-srv"), binding::ls_srv_fn());
+    }
 
     e
 }
