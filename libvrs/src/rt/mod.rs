@@ -1,6 +1,7 @@
 mod error;
 mod kernel;
 pub mod program;
+mod registry;
 mod runtime;
 
 mod mailbox;
