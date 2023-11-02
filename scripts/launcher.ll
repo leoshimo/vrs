@@ -24,6 +24,7 @@
 (add_item "GitHub - vrs" '(open_url "https://www.github.com/leoshimo/vrs"))
 (add_item "Downloads" '(open_file "~/Downloads"))
 (add_item "Send to Kindle" '(open_url "https://www.amazon.com/gp/sendtokindle"))
+(add_item "RC - Presentations" '(open_url "https://presentations.recurse.com"))
 
 #
 # Whoops service mgmt is broken
