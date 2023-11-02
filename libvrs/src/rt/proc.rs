@@ -2,6 +2,7 @@ use super::kernel::WeakKernelHandle;
 use super::mailbox::Message;
 use super::proc_io::ProcIO;
 use super::program::{Extern, Locals, Val};
+use super::registry::Registry;
 use crate::rt::mailbox::{Mailbox, MailboxHandle};
 use crate::rt::{Error, Result};
 use crate::{Connection, Program};
@@ -76,6 +77,12 @@ impl Process {
         self
     }
 
+    /// Set registry handle for process
+    pub(crate) fn registry(mut self, r: Registry) -> Self {
+        self.io.registry(r);
+        self
+    }
+
     /// Spawn a process
     pub(crate) fn spawn(mut self, procs: &mut ProcessSet) -> Result<ProcessHandle> {
         info!("proc spawn - {}", self.id);
@@ -88,7 +95,15 @@ impl Process {
         let mailbox: MailboxHandle = Mailbox::spawn(self.id);
         self.io.mailbox(mailbox.clone());
 
+        let proc_hdl = ProcessHandle {
+            id: self.id,
+            hdl_tx: msg_tx,
+            exit_rx: exit_rx.shared(),
+            mailbox,
+        };
+
         // TODO: Clean this up!
+        self.io.handle(proc_hdl.clone());
         procs.spawn(async move {
             let exit: Result<_> = async {
                 let mut io = self.io;
@@ -150,12 +165,8 @@ impl Process {
             let _ = exit_tx.send(exit.clone());
             exit
         });
-        Ok(ProcessHandle {
-            id: self.id,
-            hdl_tx: msg_tx,
-            exit_rx: exit_rx.shared(),
-            mailbox,
-        })
+
+        Ok(proc_hdl)
     }
 
     /// Handle a yield signal from fiber

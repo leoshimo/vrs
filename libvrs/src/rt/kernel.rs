@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use super::mailbox::Message;
 use super::proc::{ProcessExit, ProcessHandle, ProcessSet};
 use super::program;
+use super::registry::Registry;
 use crate::rt::{proc::Process, Error, ProcessId, Result};
 use crate::{Connection, Program};
 use tokio::sync::{mpsc, oneshot};
@@ -54,7 +55,7 @@ impl KernelHandle {
         self.ev_tx
             .send(Event::SpawnProg(prog, tx))
             .await
-            .map_err(|_| Error::FailedToMessageKernel("spawn failed".to_string()))?;
+            .map_err(|_| Error::NoMessageReceiver("spawn failed".to_string()))?;
         rx.await
             .map_err(Error::FailedToReceiveResponseFromKernelTask)
     }
@@ -65,7 +66,7 @@ impl KernelHandle {
         self.ev_tx
             .send(Event::SpawnConnProc(conn, tx))
             .await
-            .map_err(|_| Error::FailedToMessageKernel("spawn_for_conn failed".to_string()))?;
+            .map_err(|_| Error::NoMessageReceiver("spawn_for_conn failed".to_string()))?;
         rx.await
             .map_err(Error::FailedToReceiveResponseFromKernelTask)
     }
@@ -76,7 +77,7 @@ impl KernelHandle {
         self.ev_tx
             .send(Event::ListProcess(tx))
             .await
-            .map_err(|_| Error::FailedToMessageKernel("procs failed".to_string()))?;
+            .map_err(|_| Error::NoMessageReceiver("procs failed".to_string()))?;
         rx.await
             .map_err(Error::FailedToReceiveResponseFromKernelTask)
     }
@@ -86,7 +87,7 @@ impl KernelHandle {
         self.ev_tx
             .send(Event::KillProcess(pid))
             .await
-            .map_err(|_| Error::FailedToMessageKernel("kill_procs failed".to_string()))
+            .map_err(|_| Error::NoMessageReceiver("kill_procs failed".to_string()))
     }
 
     // TODO(sec): SRC IDs too flexible
@@ -100,7 +101,7 @@ impl KernelHandle {
         self.ev_tx
             .send(Event::ProcessSendMessage(src, dst, val))
             .await
-            .map_err(|_| Error::FailedToMessageKernel("send_message failed".to_string()))
+            .map_err(|_| Error::NoMessageReceiver("send_message failed".to_string()))
     }
 
     /// Downgrade a strong kernel handle to weak handle
@@ -136,6 +137,7 @@ struct Kernel {
     procs: ProcessSet,
     proc_hdls: HashMap<ProcessId, ProcessHandle>,
     next_proc_id: usize,
+    registry: Registry,
 }
 
 impl Kernel {
@@ -145,6 +147,7 @@ impl Kernel {
             procs: ProcessSet::new(),
             proc_hdls: HashMap::new(),
             next_proc_id: 0,
+            registry: Registry::spawn(),
         }
     }
 
@@ -177,7 +180,10 @@ impl Kernel {
 
     /// Spawn a new process
     fn spawn(&mut self, proc: Process) -> Result<ProcessHandle> {
-        let hdl = proc.kernel(self.weak_hdl.clone()).spawn(&mut self.procs)?;
+        let hdl = proc
+            .kernel(self.weak_hdl.clone())
+            .registry(self.registry.clone())
+            .spawn(&mut self.procs)?;
         self.proc_hdls.insert(hdl.id(), hdl.clone());
         Ok(hdl)
     }

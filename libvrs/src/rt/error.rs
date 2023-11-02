@@ -2,8 +2,8 @@ use tokio::sync::oneshot;
 
 #[derive(Debug, thiserror::Error, Clone)]
 pub enum Error {
-    #[error("Failed to message kernel task - {0}")]
-    FailedToMessageKernel(String),
+    #[error("Failed to send message to task - {0}")]
+    NoMessageReceiver(String),
 
     #[error("Failed to receive response from kernel task - {0}")]
     FailedToReceiveResponseFromKernelTask(tokio::sync::oneshot::error::RecvError),
@@ -16,6 +16,9 @@ pub enum Error {
 
     #[error("Evaluation Error - {0}")]
     EvaluationError(#[from] lyric::Error),
+
+    #[error("Registry Error - {0}")]
+    RegistryError(String),
 
     #[error("Process Exec Error - {0}")]
     ProcessExecError(lyric::Error),
@@ -49,4 +52,7 @@ pub enum Error {
 
     #[error("Exec error - {0}")]
     ExecError(String),
+
+    #[error("Missing IO Source - {0}")]
+    NoIOResource(String),
 }

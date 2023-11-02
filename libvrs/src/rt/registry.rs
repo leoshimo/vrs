@@ -9,6 +9,8 @@ use tracing::error;
 
 use crate::{Error, ProcessExit, ProcessHandle, Result};
 
+use super::ProcessId;
+
 /// Handle to [Registry]
 #[derive(Debug, Clone)]
 pub struct Registry {
@@ -155,6 +157,18 @@ impl Entry {
             id: EntryId::from(nanoid!()),
             handle,
         }
+    }
+
+    pub fn id(&self) -> &EntryId {
+        &self.id
+    }
+
+    pub fn keyword(&self) -> &KeywordId {
+        &self.keyword
+    }
+
+    pub fn pid(&self) -> ProcessId {
+        self.handle.id()
     }
 }
 

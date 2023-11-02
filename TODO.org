@@ -24,15 +24,11 @@ Goal: Replace existing =pid 0= hardcoding w/ service mgmt
 Skip exports / imports map for this one - see also "Runtime Linking"
 Convenience APIs to see running services and some level of introspection
 
-- [ ] =ls-srv=
-- [ ] =srv= / =register= (?)
+- [X] =register=
+- [X] =ls-srv=
 - [ ] =find-srv=
 
-** TODO Dotfiles / Init Scripts
-** TODO Runtime Live-On
-- [ ] =vrsd= does not crash if process crashes (?)
-- [ ] =vrsd= can run in parallel - =dev= and =prod=
-** TODO IPC - =srv= and =bind= - Runtime Linker
+** TODO IPC - =srv= and =bind=
 
 Goal: Provide better wrappers over =call=
 
@@ -59,6 +55,11 @@ Maybe also cover imports / exported interface and discoverability
 (link :launcher)
 #+end_src
 
+** TODO Supervisors and Links
+** TODO Dotfiles / Init Scripts
+** TODO Runtime Live-On
+- [ ] =vrsd= does not crash if process crashes (?)
+- [ ] =vrsd= can run in parallel - =dev= and =prod=
 ** TODO Runtime Introspection Builtins
 
 - list processes

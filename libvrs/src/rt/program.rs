@@ -125,6 +125,8 @@ fn program_env() -> Env {
             proc_bindings::shell_expand_fn(),
         )
         .bind_native(SymbolId::from("sleep"), proc_bindings::sleep_fn())
+        .bind_native(SymbolId::from("register"), proc_bindings::register_fn())
+        .bind_native(SymbolId::from("ls-srv"), proc_bindings::ls_srv_fn())
         .bind_native(SymbolId::from("spawn"), proc_bindings::spawn_fn());
 
     e

@@ -1,8 +1,9 @@
 //! Process IO
 use super::kernel::WeakKernelHandle;
 use super::mailbox::MailboxHandle;
+use super::registry::Registry;
 use super::ProcessId;
-use lyric::Form;
+use lyric::{Form, KeywordId};
 use std::time::Duration;
 use tokio::process::Command;
 use tokio::time;
@@ -10,7 +11,7 @@ use tracing::{debug, error};
 
 use crate::connection::Error as ConnError;
 
-use crate::{Connection, Program, Response};
+use crate::{Connection, ProcessHandle, Program, Response};
 
 use super::program::{Extern, Pattern, Val};
 use crate::rt::{Error, Result};
@@ -21,7 +22,9 @@ pub(crate) struct ProcIO {
     conn: Option<Connection>,
     pending: Option<u32>,
     mailbox: Option<MailboxHandle>,
+    registry: Option<Registry>,
     kernel: Option<WeakKernelHandle>,
+    self_handle: Option<ProcessHandle>,
 }
 
 /// Set of IO command ProcIO can handle
@@ -37,6 +40,8 @@ pub enum IOCmd {
     Recv(Option<Pattern>),
     Sleep(Duration),
     Spawn(Program),
+    RegisterAsService(KeywordId),
+    ListServices,
 }
 
 impl ProcIO {
@@ -47,7 +52,9 @@ impl ProcIO {
             conn: None,
             pending: None,
             kernel: None,
+            registry: None,
             mailbox: None,
+            self_handle: None,
         }
     }
 
@@ -65,6 +72,16 @@ impl ProcIO {
 
     pub(crate) fn mailbox(&mut self, mailbox: MailboxHandle) -> &mut Self {
         self.mailbox = Some(mailbox);
+        self
+    }
+
+    pub(crate) fn registry(&mut self, registry: Registry) -> &mut Self {
+        self.registry = Some(registry);
+        self
+    }
+
+    pub(crate) fn handle(&mut self, handle: ProcessHandle) -> &mut Self {
+        self.self_handle = Some(handle);
         self
     }
 
@@ -105,6 +122,8 @@ impl ProcIO {
             IOCmd::Recv(pat) => self.handle_recv(pat).await,
             IOCmd::Sleep(duration) => self.sleep(duration).await,
             IOCmd::Spawn(prog) => self.spawn_prog(prog).await,
+            IOCmd::RegisterAsService(keyword) => self.register_self(keyword).await,
+            IOCmd::ListServices => self.list_services().await,
         }
     }
 
@@ -204,5 +223,42 @@ impl ProcIO {
             .ok_or(Error::NoKernel)?;
         let hdl = kernel.spawn_prog(prog).await?;
         Ok(Val::Extern(Extern::ProcessId(hdl.id())))
+    }
+
+    /// Register itself as a process
+    async fn register_self(&self, keyword: KeywordId) -> Result<Val> {
+        let hdl = self.self_handle.as_ref().expect("Dangling ProcIO");
+
+        self.registry
+            .as_ref()
+            .ok_or(Error::NoIOResource("No registry for process".to_string()))?
+            .register(keyword, hdl.clone())
+            .await?;
+
+        Ok(Val::keyword("ok"))
+    }
+
+    /// Retrieve available services as
+    async fn list_services(&self) -> Result<Val> {
+        let entries = self
+            .registry
+            .as_ref()
+            .ok_or(Error::NoIOResource("No registry for process".to_string()))?
+            .all()
+            .await?;
+
+        let entry_values: Vec<_> = entries
+            .into_iter()
+            .map(|e| {
+                Val::List(vec![
+                    Val::keyword("name"),
+                    Val::Keyword(e.keyword().clone()),
+                    Val::keyword("pid"),
+                    Val::Extern(Extern::ProcessId(e.pid())),
+                ])
+            })
+            .collect();
+
+        Ok(Val::List(entry_values))
     }
 }
