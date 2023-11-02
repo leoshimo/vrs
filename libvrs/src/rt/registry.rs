@@ -283,8 +283,23 @@ mod tests {
             .into_iter()
             .map(|e| (e.keyword))
             .collect();
-
         assert!(entries.contains(&KeywordId::from("A")));
+        assert!(entries.contains(&KeywordId::from("B")));
+
+        hdl_a.kill().await;
+        hdl_a.join().await.expect("should complete");
+
+        let entries: Vec<_> = r
+            .all()
+            .await
+            .expect("Should be able to retrieve entries")
+            .into_iter()
+            .map(|e| (e.keyword))
+            .collect();
+        assert!(
+            !entries.contains(&KeywordId::from("A")),
+            "A should have been removed"
+        );
         assert!(entries.contains(&KeywordId::from("B")));
     }
 }
