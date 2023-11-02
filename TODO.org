@@ -6,7 +6,7 @@ curr: Runtime Process Ergonomics
 next: Client / Runtime interactions v2
 
 ** Runtime Process Ergonomics
-- [ ] Headless Process Spawning
+- [X] Headless Process Spawning
 - [ ] Service Discovery / Mgmt
 - [ ] IPC via =srv= and =bind=
 - [ ] Init File
@@ -28,6 +28,10 @@ Convenience APIs to see running services and some level of introspection
 - [ ] =srv= / =register= (?)
 - [ ] =find-srv=
 
+** TODO Dotfiles / Init Scripts
+** TODO Runtime Live-On
+- [ ] =vrsd= does not crash if process crashes (?)
+- [ ] =vrsd= can run in parallel - =dev= and =prod=
 ** TODO IPC - =srv= and =bind= - Runtime Linker
 
 Goal: Provide better wrappers over =call=
@@ -62,7 +66,6 @@ Maybe also cover imports / exported interface and discoverability
 - list links
 - list symbols
 
-** TODO Dotfiles / Init Scripts
 ** TODO Hypermedia Client
 Goal: Build CLI Hypermedia Client over VRS
 See also - "Revisit Client Connection"
