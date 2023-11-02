@@ -42,6 +42,7 @@ pub enum IOCmd {
     Spawn(Program),
     RegisterAsService(KeywordId),
     ListServices,
+    FindService(KeywordId),
 }
 
 impl ProcIO {
@@ -124,6 +125,7 @@ impl ProcIO {
             IOCmd::Spawn(prog) => self.spawn_prog(prog).await,
             IOCmd::RegisterAsService(keyword) => self.register_self(keyword).await,
             IOCmd::ListServices => self.list_services().await,
+            IOCmd::FindService(keyword) => self.find_service(keyword).await,
         }
     }
 
@@ -260,5 +262,19 @@ impl ProcIO {
             .collect();
 
         Ok(Val::List(entry_values))
+    }
+
+    async fn find_service(&self, keyword: KeywordId) -> Result<Val> {
+        let entry = self
+            .registry
+            .as_ref()
+            .ok_or(Error::NoIOResource("No registry for process".to_string()))?
+            .lookup(keyword)
+            .await?;
+
+        match entry {
+            Some(e) => Ok(Val::Extern(Extern::ProcessId(e.pid()))),
+            None => Ok(Val::Nil),
+        }
     }
 }

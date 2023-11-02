@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! Process Registry
 use nanoid::nanoid;
 use std::collections::HashMap;
@@ -157,10 +156,6 @@ impl Entry {
             id: EntryId::from(nanoid!()),
             handle,
         }
-    }
-
-    pub fn id(&self) -> &EntryId {
-        &self.id
     }
 
     pub fn keyword(&self) -> &KeywordId {

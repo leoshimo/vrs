@@ -336,4 +336,24 @@ pub(crate) fn ls_srv_fn() -> NativeFn {
     }
 }
 
+/// Binding for find-srv
+pub(crate) fn find_srv_fn() -> NativeFn {
+    NativeFn {
+        func: |_, args| {
+            let keyword = match args {
+                [Val::Keyword(k)] => k.clone(),
+                _ => {
+                    return Err(Error::UnexpectedArguments(
+                        "find-srv expects single keyword argument".to_string(),
+                    ))
+                }
+            };
+
+            Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
+                IOCmd::FindService(keyword),
+            )))))
+        },
+    }
+}
+
 // TODO: Test case for =register= and =ls-srv=
