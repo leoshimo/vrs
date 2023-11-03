@@ -68,29 +68,3 @@ async fn spawn_env_isolated() {
         "Spawning new variable should have isolated state"
     );
 }
-
-// TODO: Write  Test case for Service Registry + Discovery
-// Cover - =register=, =ls-srv=, =find-srv=, deregistration on complete
-//
-// - Unknown service return nil
-//
-// Proc A:
-// Running `target/debug/vrsctl`
-// vrs> (ls-srv)
-// ()
-// vrs> (register :hello)
-// :ok
-// vrs> (ls-srv)
-// ((:name :hello :pid <pid 1>))
-//
-// Proc B:
-// vrs> (ls-srv)
-// ((:name :hello :pid <pid 1>))
-// vrs> (get (ls-srv) 0)
-// (:name :hello :pid <pid 1>)
-// vrs> (get (get (ls-srv) 0) :pid)
-// <pid 1>
-// vrs> (send (get (get (ls-srv) 0) :pid) :hi)
-// :hi
-// vrs>
-//

@@ -181,7 +181,7 @@ impl Process {
 
 impl ProcessHandle {
     /// Get the ID
-    pub(crate) fn id(&self) -> ProcessId {
+    pub fn id(&self) -> ProcessId {
         self.id
     }
 
@@ -240,6 +240,15 @@ impl std::fmt::Display for ProcessExit {
             Ok(ProcessResult::Disconnected) => write!(f, "DISCONNECTED"),
             Ok(ProcessResult::Cancelled) => write!(f, "CANCELLED"),
             Err(e) => write!(f, "ERROR - {e}"),
+        }
+    }
+}
+
+impl ProcessResult {
+    pub fn unwrap(self) -> Val {
+        match self {
+            ProcessResult::Done(v) => v,
+            _ => panic!("Unwrapping a process result that is not done"),
         }
     }
 }
