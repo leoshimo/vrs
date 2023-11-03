@@ -153,7 +153,7 @@ impl ProcIO {
             .and_then(|k| k.upgrade())
             .ok_or(Error::NoKernel)?;
         kernel.kill_proc(pid).await?;
-        Ok(Val::symbol("ok"))
+        Ok(Val::keyword("ok"))
     }
 
     /// Send message to another process
