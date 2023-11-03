@@ -28,6 +28,7 @@ Convenience APIs to see running services and some level of introspection
 - [X] =ls-srv=
 - [X] =find-srv=
 
+** TODO Supervisors and Links
 ** TODO IPC - =srv= and =bind=
 
 Goal: Provide better wrappers over =call=
@@ -55,18 +56,10 @@ Maybe also cover imports / exported interface and discoverability
 (link :launcher)
 #+end_src
 
-** TODO Supervisors and Links
 ** TODO Dotfiles / Init Scripts
 ** TODO Runtime Live-On
 - [ ] =vrsd= does not crash if process crashes (?)
 - [ ] =vrsd= can run in parallel - =dev= and =prod=
-** TODO Runtime Introspection Builtins
-
-- list processes
-- list services
-- list links
-- list symbols
-
 ** TODO Hypermedia Client
 Goal: Build CLI Hypermedia Client over VRS
 See also - "Revisit Client Connection"
