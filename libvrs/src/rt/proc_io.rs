@@ -113,7 +113,7 @@ impl ProcIO {
                 })
                 .await
                 .map_err(|e| Error::IOError(format!("{}", e)))?;
-                Ok(Val::symbol("ok"))
+                Ok(Val::keyword("ok"))
             }
             IOCmd::ListProcesses => self.list_processes().await,
             IOCmd::KillProcess(pid) => self.kill_process(pid).await,
@@ -198,7 +198,7 @@ impl ProcIO {
 
         if exit_status.success() {
             debug!("exec {:?} {:?} - {:?}", prog, args, exit_status);
-            Ok(Val::symbol("ok"))
+            Ok(Val::keyword("ok"))
         } else {
             error!("exec {:?} {:?} - {:?}", prog, args, exit_status);
             Err(Error::ExecError(format!(
@@ -212,7 +212,7 @@ impl ProcIO {
     async fn sleep(&self, duration: Duration) -> Result<Val> {
         debug!("sleep {:?}", &duration);
         time::sleep(duration).await;
-        Ok(Val::symbol("ok"))
+        Ok(Val::keyword("ok"))
     }
 
     /// Spawn given process

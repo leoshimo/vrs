@@ -345,7 +345,7 @@ mod tests {
         let resp = remote.recv_resp().await;
 
         let res = procs.join_next().await.unwrap().unwrap();
-        assert_eq!(res.status.unwrap(), ProcessResult::Done(Val::symbol("ok")),);
+        assert_eq!(res.status.unwrap(), ProcessResult::Done(Val::keyword("ok")),);
         assert_matches!(
             resp,
             Some(Ok(r)) if r.req_id == 10 && r.contents == Ok(Form::string("Hello world"))
