@@ -263,7 +263,7 @@ fn eval_if() {
         Val::string("true"),
     );
 
-    assert_eq!(eval_expr("(if false \"true\")").unwrap(), Val::Nil,);
+    assert_eq!(eval_expr("(if false \"true\")").unwrap(), Val::Nil);
 
     assert_eq!(
         eval_expr("(if true \"true\" \"false\")").unwrap(),
