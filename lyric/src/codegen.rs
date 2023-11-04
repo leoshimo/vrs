@@ -273,6 +273,7 @@ fn compile_begin<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T,
 fn compile_if<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
     let (cond, t, f) = match args {
         [c, t, f] => (c, t, f),
+        [c, t] => (c, t, &Val::Nil),
         _ => {
             return Err(Error::InvalidExpression(
                 "if expects three arguments".to_string(),

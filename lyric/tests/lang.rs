@@ -259,6 +259,13 @@ fn eval_defn() {
 #[test]
 fn eval_if() {
     assert_eq!(
+        eval_expr("(if true \"true\")").unwrap(),
+        Val::string("true"),
+    );
+
+    assert_eq!(eval_expr("(if false \"true\")").unwrap(), Val::Nil,);
+
+    assert_eq!(
         eval_expr("(if true \"true\" \"false\")").unwrap(),
         Val::string("true")
     );
