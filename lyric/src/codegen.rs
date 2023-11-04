@@ -227,6 +227,7 @@ fn compile_let<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L
                 params.push(sym.clone());
                 args.push(val.clone());
             }
+
             _ => {
                 return Err(Error::InvalidExpression(
                     "pair in let bindings must contain one symbol and one expression".to_string(),
@@ -260,6 +261,11 @@ fn compile_begin<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T,
         }
         inst.extend(compile(a)?);
     }
+
+    if inst.is_empty() {
+        inst.push(Inst::PushConst(Val::Nil));
+    }
+
     Ok(inst)
 }
 

@@ -87,6 +87,11 @@ fn begin_block_nested() {
 }
 
 #[test]
+fn begin_empty() {
+    assert_eq!(eval_expr("(begin)").unwrap(), Val::Nil)
+}
+
+#[test]
 fn begin_no_scope() {
     let prog = r#"
         (begin
