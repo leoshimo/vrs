@@ -139,6 +139,7 @@ input (text, voice, selection)
 ** DONE Add =cond=
 Add =cond= macro to avoid pyramid of =if=.
 
+** TODO Destructuring =def=
 ** TODO Pipeline Operator
 (Streaming?)
 ** TODO Colocated Docstring for =defn=

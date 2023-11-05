@@ -3,6 +3,7 @@ pub mod cond;
 pub mod list;
 pub mod math;
 pub mod refs;
+pub mod types;
 
 // TODO: Builtins to instruction?
 
@@ -14,5 +15,6 @@ pub(crate) use list::map_fn;
 pub(crate) use list::push_fn;
 pub(crate) use math::plus_fn;
 pub(crate) use refs::ref_fn;
+pub(crate) use types::err_fn;
 
 pub use refs::Ref;
