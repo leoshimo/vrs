@@ -50,6 +50,7 @@ pub fn compile<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Bytecode<T, L>> {
                     "def" => return compile_def(args),
                     "defn" => return compile_defn(args),
                     "if" => return compile_if(args),
+                    "cond" => return compile_cond(args),
                     "lambda" => return compile_lambda(args),
                     "let" => return compile_let(args),
                     "quote" => return compile_quote(args),
@@ -100,7 +101,7 @@ fn compile_set<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L
     Ok(inst)
 }
 
-// TODO: Replace with a macro
+// TODO: Replace `defn` with a macro
 /// Compile defn
 fn compile_defn<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
     let (name, params, body) = match args {
@@ -291,6 +292,36 @@ fn compile_if<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>
     bc.extend(t_code);
 
     Ok(bc)
+}
+
+// TODO: Replace `cond` with a macro
+/// Compile cond
+fn compile_cond<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
+    let mut res = Val::Nil;
+
+    for f in args.iter().rev() {
+        let pair = match f {
+            Val::List(pair) => pair,
+            _ => {
+                return Err(Error::UnexpectedArguments(
+                    "cond expects a list of pairs".to_string(),
+                ))
+            }
+        };
+        let (cond, expr) = match &pair[..] {
+            [cond, expr] => (cond.clone(), expr.clone()),
+            _ => {
+                return Err(Error::UnexpectedArguments(
+                    "cond expects a list of pairs".to_string(),
+                ))
+            }
+        };
+
+        // transform to nested `if`
+        res = Val::List(vec![Val::symbol("if"), cond, expr, res]);
+    }
+
+    compile(&res)
 }
 
 /// Compile yield statement

@@ -132,13 +132,22 @@ I.e. the hypermedia is generated based rules on entities it matches
 Thought - Running embark-like mechanics is itself a cmd - i.e. "show me embark
 meno on this item"
 
+** TODO General User IO
+Give VRs capability to see (web pages, screen), Hear (user, text) and prompt for
+input (text, voice, selection)
 * lyric lang
+** DONE Add =cond=
+Add =cond= macro to avoid pyramid of =if=.
+
 ** TODO Pipeline Operator
 (Streaming?)
 ** TODO Colocated Docstring for =defn=
-** TODO Conditional Operators =and= and =or=
-** TODO Support =case= and =cond=
-Goal: Add =case= and =cond= to make service code cleaner, v.s. =if= pyramid of doom
+** TODO Conditional Operators =not=, =and=, and =or=
+=and EXPR...= - left-to-right, and stop if one expr evaluates to =#f=. Otherwise =#t=
+=or= - left-to-right, stop if one expr evaluates to NOT =#f=
+** TODO Add =match= 
+Add pattern matching conditional branching
+Test: Make sure that =(a b a)= only matches =(1 2 1)= but not =(1 2 3)=
 ** TODO Math Operators =-=
 ** TODO Pattern Matching / Destructuring
 Goal: Provide way to extract params from messages w/o indexing
@@ -290,6 +299,8 @@ Extend to visual elements? UI:
 ** TODO Compact Bytecode
 ** TODO Tail-Call Optimization
 * bugs
+** TODO =(begin)= should push =nil= if there are no body statements
+** TODO =(if ...)= without =else-form= should return =nil=
 ** TODO =(loop 0)= blocks new connection only via REPL, but not =vrsctl -c "(loop 0)"=
 ** TODO Using =(map (ps) (lambda (p) (kill p)))= results in runtime crash sometimes
 ** TODO Disconnecting from REPL after running =loop 0= does not quit as expected.

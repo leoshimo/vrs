@@ -315,6 +315,104 @@ fn eval_if_cond_lambda() {
 }
 
 #[test]
+fn cond_empty() {
+    assert_eq!(eval_expr("(cond)"), Ok(Val::Nil));
+}
+
+#[test]
+fn cond_simple() {
+    assert_eq!(
+        eval_expr(
+            r#"
+            (cond (true :true))
+        "#
+        ),
+        Ok(Val::keyword("true"))
+    );
+
+    assert_eq!(
+        eval_expr(
+            r#"
+            (cond (false :false))
+        "#
+        ),
+        Ok(Val::Nil)
+    );
+
+    assert_eq!(
+        eval_expr(
+            r#"
+            (cond
+                (true :true)
+                (false :false))
+        "#
+        ),
+        Ok(Val::keyword("true"))
+    );
+
+    assert_eq!(
+        eval_expr(
+            r#"
+            (cond
+                (false :false)
+                (true :true))
+        "#
+        ),
+        Ok(Val::keyword("true"))
+    );
+}
+
+#[test]
+fn cond_multi() {
+    {
+        let prog = r#"(begin
+            (defn categorize (x)
+                (cond
+                    ((eq? x 10) "is int ten")
+                    ((eq? x "ten") "is string ten")
+                    ((eq? x :ten) "is keyword ten")
+                    ((eq? x 3) "is int three")
+                    (true "unrecognized")))
+            (list (categorize 10) (categorize "ten") (categorize :ten) (categorize 3) (categorize nil) (categorize "jibberish")))
+            "#;
+        assert_eq!(
+            eval_expr(prog),
+            Ok(Val::List(vec![
+                Val::string("is int ten"),
+                Val::string("is string ten"),
+                Val::string("is keyword ten"),
+                Val::string("is int three"),
+                Val::string("unrecognized"),
+                Val::string("unrecognized"),
+            ]))
+        );
+    }
+
+    {
+        let prog = r#"(begin
+            (defn categorize (x)
+                (cond
+                    ((eq? x 10) "is int ten")
+                    ((eq? x "ten") "is string ten")
+                    ((eq? x :ten) "is keyword ten")
+                    ((eq? x 3) "is int three")))
+            (list (categorize 10) (categorize "ten") (categorize :ten) (categorize 3) (categorize nil) (categorize "jibberish")))
+            "#;
+        assert_eq!(
+            eval_expr(prog),
+            Ok(Val::List(vec![
+                Val::string("is int ten"),
+                Val::string("is string ten"),
+                Val::string("is keyword ten"),
+                Val::string("is int three"),
+                Val::Nil,
+                Val::Nil,
+            ]))
+        );
+    }
+}
+
+#[test]
 fn eval_if_body_begin() {
     let t_prog = r#"
         (begin 
