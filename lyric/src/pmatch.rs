@@ -30,7 +30,7 @@ where
 
     /// Extract matches
     pub fn matches(&self, val: &Val<T, L>) -> Option<Matches<T, L>> {
-        let mut matches = Matches::new();
+        let mut matches = Matches::default();
         if Self::matches_inner(&self.inner, val, &mut matches) {
             Some(matches)
         } else {
@@ -62,8 +62,8 @@ where
     }
 }
 
-impl<T: Extern, L: Locals> Matches<T, L> {
-    pub fn new() -> Self {
+impl<T: Extern, L: Locals> std::default::Default for Matches<T, L> {
+    fn default() -> Self {
         Self {
             bindings: Default::default(),
         }
