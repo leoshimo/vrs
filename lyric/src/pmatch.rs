@@ -40,12 +40,15 @@ where
 
     fn matches_inner(pat: &Val<T, L>, val: &Val<T, L>, matches: &mut Matches<T, L>) -> bool {
         use Val::*;
-
         match pat {
-            Symbol(s) => {
-                matches.bindings.insert(s.clone(), val.clone());
-                true
-            }
+            Symbol(s) => match matches.bindings.get(s) {
+                Some(seen) if val == seen => true,
+                None => {
+                    matches.bindings.insert(s.clone(), val.clone());
+                    true
+                }
+                _ => false,
+            },
             List(pat) => match val {
                 List(val) if pat.len() == val.len() => pat
                     .iter()
@@ -289,6 +292,79 @@ mod tests {
         assert!(!pat.is_match(&v("(:one :two (\"three\" 4))")));
         assert!(!pat.is_match(&v("(1 2 (3 4))")));
         assert!(!pat.is_match(&v("()")));
+    }
+
+    #[test]
+    fn repeated_symbols() {
+        let pat = Pattern::from_val(v("(a b a)"));
+
+        {
+            let m = pat.matches(&v("(1 2 1)")).expect("should match");
+            assert_eq!(m.bindings.len(), 2,);
+            assert_eq!(m.bindings.get(&SymbolId::from("a")), Some(&Val::Int(1)));
+            assert_eq!(m.bindings.get(&SymbolId::from("b")), Some(&Val::Int(2)));
+        }
+
+        assert!(
+            !pat.is_match(&v("(1 2 3)")),
+            "(1 2 3) does not match (a b a)"
+        );
+    }
+
+    #[test]
+    fn repeated_symbols_nested() {
+        let pat = Pattern::from_val(v("(a b (a b))"));
+
+        {
+            let m = pat.matches(&v("(1 1 (1 1))")).expect("should match");
+            assert_eq!(m.bindings.len(), 2);
+            assert_eq!(m.bindings.get(&SymbolId::from("a")), Some(&Val::Int(1)));
+            assert_eq!(m.bindings.get(&SymbolId::from("b")), Some(&Val::Int(1)));
+        }
+
+        {
+            let m = pat
+                .matches(&v("(:one \"two\" (:one \"two\"))"))
+                .expect("should match");
+            assert_eq!(m.bindings.len(), 2);
+            assert_eq!(
+                m.bindings.get(&SymbolId::from("a")),
+                Some(&Val::keyword("one"))
+            );
+            assert_eq!(
+                m.bindings.get(&SymbolId::from("b")),
+                Some(&Val::string("two"))
+            );
+        }
+
+        {
+            let m = pat
+                .matches(&v("((:a :b :c) :d ((:a :b :c) :d))"))
+                .expect("should match");
+            assert_eq!(m.bindings.len(), 2);
+            assert_eq!(m.bindings.get(&SymbolId::from("a")), Some(&v("(:a :b :c)")));
+            assert_eq!(m.bindings.get(&SymbolId::from("b")), Some(&v(":d")));
+        }
+
+        {
+            let m = pat
+                .matches(&v("(1 (:d :e) (1 (:d :e)))"))
+                .expect("should match");
+            assert_eq!(m.bindings.len(), 2);
+            assert_eq!(m.bindings.get(&SymbolId::from("a")), Some(&Val::Int(1)));
+            assert_eq!(m.bindings.get(&SymbolId::from("b")), Some(&v("(:d :e)")));
+        }
+
+        {
+            let m = pat
+                .matches(&v("((:a :b :c) (:d :e) ((:a :b :c) (:d :e)))"))
+                .expect("should match");
+            assert_eq!(m.bindings.len(), 2);
+            assert_eq!(m.bindings.get(&SymbolId::from("a")), Some(&v("(:a :b :c)")));
+            assert_eq!(m.bindings.get(&SymbolId::from("b")), Some(&v("(:d :e)")));
+        }
+
+        assert!(!pat.is_match(&v("(1 2 (3 4))")));
     }
 
     fn v(expr: &str) -> Val {
