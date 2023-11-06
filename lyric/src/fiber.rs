@@ -303,10 +303,14 @@ fn run<T: Extern, L: Locals>(f: &mut Fiber<T, L>) -> Result<FiberState<T, L>> {
                                 f.top().unwind_cf_len,
                             ))
                         }
+                        Some(obj) => {
+                            return Err(Error::UnexpectedStack(format!(
+                                "Not a function object - {}",
+                                obj
+                            )));
+                        }
                         _ => {
-                            return Err(Error::UnexpectedStack(
-                                "Missing function object".to_string(),
-                            ));
+                            return Err(Error::UnexpectedStack("Stack is empty".to_string()));
                         }
                     };
                 }

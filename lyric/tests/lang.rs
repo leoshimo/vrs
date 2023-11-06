@@ -230,7 +230,7 @@ fn eval_quote() {
     {
         assert_matches!(
             eval_expr("((quote (lambda (x) x)) 5)"),
-            Err(Error::UnexpectedStack(s)) if s == "Missing function object",
+            Err(Error::UnexpectedStack(_)),
             "Quoted expressions don't evaluate inner forms - no function yet"
         );
     }
