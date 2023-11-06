@@ -277,6 +277,7 @@ fn compile_begin<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T,
     Ok(inst)
 }
 
+// TODO: try can be macro w/ quote
 fn compile_try<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
     let v = match args {
         [v] => v,
