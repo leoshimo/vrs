@@ -7,7 +7,8 @@
   items)
 
 (defn add_item (title cmd)
-  (set items (push items (mk_item title cmd))))
+  (set items (push items (mk_item title cmd)))
+  :ok)
 
 (defn mk_item (title cmd)
   (list :title title :on_click cmd))
@@ -33,19 +34,12 @@
 #
 (register :launcher)
 (loop
-   (def req (recv))
-   (let ((r (get req 0))
-         (src (get req 1))
-         (msg (get req 2)))
+    (def (r src msg) (recv))
+    (def resp
+        (cond 
+            ((eq? (get msg 0) :add_item) (add_item (get msg 1) (get msg 2)))
+            ((eq? (get msg 0) :get_items) (get_items))
+            (true '(:err "Unrecognized message"))))
+    (send src (list r resp)))
+)
 
-     (def resp
-        (if (eq? (get msg 0) :add_item)
-        (begin
-            (add_item (get msg 1) (get msg 2))
-            :ok)
-        (if (eq? (get msg 0) :get_items)
-            (get_items)
-            '(:err "Unrecognized message"))))
-
-     (send src (list r resp))
-   ))
