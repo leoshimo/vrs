@@ -1,5 +1,5 @@
 //! Conditional expressions
-use crate::{Error, Extern, Locals, NativeFn, NativeFnOp, Val};
+use crate::{Error, Extern, Locals, NativeFn, NativeFnOp, Result, Val};
 
 /// Language bindng for `eq?`
 pub fn eq_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
@@ -32,4 +32,33 @@ pub fn contains_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
             )),
         },
     }
+}
+
+/// Language binding for `not`
+pub fn not_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
+    NativeFn {
+        func: |_, args| match args {
+            [cond] => Ok(NativeFnOp::Return(Val::Bool(!is_true(cond)?))),
+            _ => Err(Error::UnexpectedArguments(
+                "not expects single argument".to_string(),
+            )),
+        },
+    }
+}
+
+/// Defines true values
+pub fn is_true<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<bool> {
+    let cond = match v {
+        Val::Nil => false,
+        Val::Bool(b) => *b,
+        Val::Int(i) => *i != 0,
+        Val::String(s) => !s.is_empty(),
+        Val::List(l) => !l.is_empty(),
+        v => {
+            return Err(Error::UnexpectedArguments(format!(
+                "Value is not a valid condition - {v}"
+            )))
+        }
+    };
+    Ok(cond)
 }

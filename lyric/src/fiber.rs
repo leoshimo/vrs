@@ -3,7 +3,8 @@ use tracing::{debug, warn};
 
 use super::{Env, Inst};
 use crate::{
-    compile, parse, Bytecode, Error, Extern, Lambda, Locals, NativeFnOp, Pattern, Result, Val,
+    builtin::cond::is_true, compile, parse, Bytecode, Error, Extern, Lambda, Locals, NativeFnOp,
+    Pattern, Result, Val,
 };
 use std::sync::{Arc, Mutex};
 
@@ -344,7 +345,7 @@ fn run<T: Extern, L: Locals>(f: &mut Fiber<T, L>) -> Result<FiberState<T, L>> {
                     let v = f.stack.pop().ok_or(Error::UnexpectedStack(
                         "Expected conditional expression on stack".to_string(),
                     ))?;
-                    if is_true(v)? {
+                    if is_true(&v)? {
                         f.top_mut().ip += offset;
                     }
                 }
@@ -375,23 +376,6 @@ fn run<T: Extern, L: Locals>(f: &mut Fiber<T, L>) -> Result<FiberState<T, L>> {
             }
         }
     }
-}
-
-/// Defines true values
-fn is_true<T: Extern, L: Locals>(v: Val<T, L>) -> Result<bool> {
-    let cond = match v {
-        Val::Nil => false,
-        Val::Bool(b) => b,
-        Val::Int(i) => i != 0,
-        Val::String(s) => !s.is_empty(),
-        Val::List(l) => !l.is_empty(),
-        v => {
-            return Err(Error::UnexpectedArguments(format!(
-                "Value is not a valid condition - {v}"
-            )))
-        }
-    };
-    Ok(cond)
 }
 
 #[cfg(test)]
