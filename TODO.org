@@ -296,6 +296,7 @@ Extend to visual elements? UI:
 ** TODO Browser Page
 ** TODO Image
 * perf
+** TODO Use FxHash
 ** TODO String Interning
 ** TODO Compact Bytecode
 ** TODO Tail-Call Optimization

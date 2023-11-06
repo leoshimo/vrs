@@ -1,5 +1,6 @@
 //! Pattern Matching
-use crate::{Extern, Locals, Val};
+use crate::{Extern, Locals, SymbolId, Val};
+use std::collections::HashMap;
 
 /// Pattern matching predicate
 #[derive(Debug, Clone, PartialEq)]
@@ -8,7 +9,10 @@ pub struct Pattern<T: Extern, L: Locals> {
 }
 
 /// Result of pattern match
-pub struct Match {}
+#[derive(Debug, PartialEq)]
+pub struct Matches<T: Extern, L: Locals> {
+    bindings: HashMap<SymbolId, Val<T, L>>,
+}
 
 impl<T, L> Pattern<T, L>
 where
@@ -21,19 +25,32 @@ where
 
     /// Check if pattern matches given value
     pub fn is_match(&self, val: &Val<T, L>) -> bool {
-        Self::val_matches(&self.inner, val)
+        self.matches(val).is_some()
     }
 
-    fn val_matches(pat: &Val<T, L>, val: &Val<T, L>) -> bool {
+    /// Extract matches
+    pub fn matches(&self, val: &Val<T, L>) -> Option<Matches<T, L>> {
+        let mut matches = Matches::new();
+        if Self::matches_inner(&self.inner, val, &mut matches) {
+            Some(matches)
+        } else {
+            None
+        }
+    }
+
+    fn matches_inner(pat: &Val<T, L>, val: &Val<T, L>, matches: &mut Matches<T, L>) -> bool {
         use Val::*;
 
         match pat {
-            Symbol(_) => true,
+            Symbol(s) => {
+                matches.bindings.insert(s.clone(), val.clone());
+                true
+            }
             List(pat) => match val {
                 List(val) if pat.len() == val.len() => pat
                     .iter()
                     .zip(val.iter())
-                    .all(|(lhs, rhs)| Self::val_matches(lhs, rhs)),
+                    .all(|(lhs, rhs)| Self::matches_inner(lhs, rhs, matches)),
                 _ => false,
             },
             Nil | Bool(_) | Int(_) | String(_) | Keyword(_) | Lambda(_) | NativeFn(_)
@@ -42,9 +59,17 @@ where
     }
 }
 
+impl<T: Extern, L: Locals> Matches<T, L> {
+    pub fn new() -> Self {
+        Self {
+            bindings: Default::default(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::{parse, Ref};
+    use crate::{parse, Ref, SymbolId};
     use void::Void;
 
     type Val = crate::Val<Void, ()>;
@@ -101,12 +126,50 @@ mod tests {
     fn symbols_matches_all() {
         let pat = Pattern::from_val(v("a"));
 
-        assert!(pat.is_match(&v("hello")));
-        assert!(pat.is_match(&v("5")));
-        assert!(pat.is_match(&v("\"hello\"")));
-        assert!(pat.is_match(&v(":hello")));
-        assert!(pat.is_match(&v("'()")));
-        assert!(pat.is_match(&v("'(1 2 3)")));
+        {
+            let m = pat.matches(&v("hello")).expect("should match");
+            assert_eq!(m.bindings.len(), 1,);
+            assert_eq!(
+                m.bindings.get(&SymbolId::from("a")),
+                Some(&Val::symbol("hello"))
+            );
+        }
+
+        {
+            let m = pat.matches(&v("5")).expect("should match");
+            assert_eq!(m.bindings.len(), 1,);
+            assert_eq!(m.bindings.get(&SymbolId::from("a")), Some(&Val::Int(5)));
+        }
+
+        {
+            let m = pat.matches(&v("\"hello\"")).expect("should match");
+            assert_eq!(m.bindings.len(), 1,);
+            assert_eq!(
+                m.bindings.get(&SymbolId::from("a")),
+                Some(&Val::string("hello"))
+            );
+        }
+        {
+            let m = pat.matches(&v(":hello")).expect("should match");
+            assert_eq!(m.bindings.len(), 1,);
+            assert_eq!(
+                m.bindings.get(&SymbolId::from("a")),
+                Some(&Val::keyword("hello"))
+            );
+        }
+        {
+            let m = pat.matches(&v("()")).expect("should match");
+            assert_eq!(m.bindings.len(), 1,);
+            assert_eq!(
+                m.bindings.get(&SymbolId::from("a")),
+                Some(&Val::List(vec![]))
+            );
+        }
+        {
+            let m = pat.matches(&v("(1 2 3)")).expect("should match");
+            assert_eq!(m.bindings.len(), 1,);
+            assert_eq!(m.bindings.get(&SymbolId::from("a")), Some(&v("(1 2 3)")));
+        }
     }
 
     #[test]
@@ -120,30 +183,108 @@ mod tests {
     #[test]
     fn list_nonempty() {
         let pat = Pattern::from_val(v("(a b c)"));
-        assert!(pat.is_match(&v("(1 2 3)")));
-        assert!(pat.is_match(&v("(:one :two \"three\")")));
-        assert!(!pat.is_match(&v("\"hello\"")));
-        assert!(!pat.is_match(&v("()")));
-        assert!(!pat.is_match(&v("(1 :two)")));
+
+        {
+            let m = pat.matches(&v("(1 2 3)")).expect("should match");
+            assert_eq!(m.bindings.len(), 3,);
+            assert_eq!(m.bindings.get(&SymbolId::from("a")), Some(&Val::Int(1)));
+            assert_eq!(m.bindings.get(&SymbolId::from("b")), Some(&Val::Int(2)));
+            assert_eq!(m.bindings.get(&SymbolId::from("c")), Some(&Val::Int(3)));
+        }
+
+        {
+            let m = pat
+                .matches(&v("(:one :two \"three\")"))
+                .expect("should match");
+            assert_eq!(m.bindings.len(), 3);
+            assert_eq!(
+                m.bindings.get(&SymbolId::from("a")),
+                Some(&Val::keyword("one"))
+            );
+            assert_eq!(
+                m.bindings.get(&SymbolId::from("b")),
+                Some(&Val::keyword("two"))
+            );
+            assert_eq!(
+                m.bindings.get(&SymbolId::from("c")),
+                Some(&Val::string("three"))
+            );
+        }
+
+        assert_eq!(pat.matches(&v("\"hello\"")), None);
+        assert_eq!(pat.matches(&v("()")), None);
+        assert_eq!(pat.matches(&v("(1 :two)")), None)
     }
 
     #[test]
     fn list_nested() {
         let pat = Pattern::from_val(v("(a b (c d))"));
-        assert!(pat.is_match(&v("(1 2 (3 4))")));
-        assert!(pat.is_match(&v("(:one :two (\"three\" 4))")));
 
-        assert!(!pat.is_match(&v("(1 2 3 4)")));
-        assert!(!pat.is_match(&v("(1 (2 3) 4)")));
-        assert!(!pat.is_match(&v("\"1234\"")));
-        assert!(!pat.is_match(&v("()")));
+        {
+            let m = pat.matches(&v("(1 2 (3 4))")).expect("should match");
+            assert_eq!(m.bindings.len(), 4);
+            assert_eq!(m.bindings.get(&SymbolId::from("a")), Some(&Val::Int(1)));
+            assert_eq!(m.bindings.get(&SymbolId::from("b")), Some(&Val::Int(2)));
+            assert_eq!(m.bindings.get(&SymbolId::from("c")), Some(&Val::Int(3)));
+            assert_eq!(m.bindings.get(&SymbolId::from("d")), Some(&Val::Int(4)));
+        }
+
+        {
+            let m = pat
+                .matches(&v("(:one :two (\"three\" 4))"))
+                .expect("should match");
+            assert_eq!(m.bindings.len(), 4);
+            assert_eq!(
+                m.bindings.get(&SymbolId::from("a")),
+                Some(&Val::keyword("one"))
+            );
+            assert_eq!(
+                m.bindings.get(&SymbolId::from("b")),
+                Some(&Val::keyword("two"))
+            );
+            assert_eq!(
+                m.bindings.get(&SymbolId::from("c")),
+                Some(&Val::string("three"))
+            );
+            assert_eq!(m.bindings.get(&SymbolId::from("d")), Some(&Val::Int(4)));
+        }
+
+        assert_eq!(pat.matches(&v("(1 2 3 4)")), None);
+        assert_eq!(pat.matches(&v("(1 (2 3) 4)")), None);
+        assert_eq!(pat.matches(&v("\"1234\"")), None);
+        assert_eq!(pat.matches(&v("()")), None);
     }
 
     #[test]
     fn list_symbols_and_constants() {
         let pat = Pattern::from_val(v("(a 2 (:three d))"));
-        assert!(pat.is_match(&v("(:one 2 (:three 4))")));
-        assert!(pat.is_match(&v("(:one 2 (:three :four))")));
+
+        {
+            let m = pat
+                .matches(&v("(:one 2 (:three 4))"))
+                .expect("should match");
+            assert_eq!(m.bindings.len(), 2);
+            assert_eq!(
+                m.bindings.get(&SymbolId::from("a")),
+                Some(&Val::keyword("one"))
+            );
+            assert_eq!(m.bindings.get(&SymbolId::from("d")), Some(&Val::Int(4)));
+        }
+
+        {
+            let m = pat
+                .matches(&v("(:one 2 (:three :four))"))
+                .expect("should match");
+            assert_eq!(m.bindings.len(), 2);
+            assert_eq!(
+                m.bindings.get(&SymbolId::from("a")),
+                Some(&Val::keyword("one"))
+            );
+            assert_eq!(
+                m.bindings.get(&SymbolId::from("d")),
+                Some(&Val::keyword("four"))
+            );
+        }
 
         assert!(!pat.is_match(&v("(:one :two (\"three\" 4))")));
         assert!(!pat.is_match(&v("(1 2 (3 4))")));
