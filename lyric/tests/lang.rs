@@ -684,6 +684,20 @@ fn def_destructuring() {
     }
 }
 
+#[test]
+fn eval_try() {
+    // baseline
+    let prog = "(def (a b) '(1 2 3))";
+    assert_matches!(eval_expr(prog), Err(Error::InvalidPatternMatch));
+
+    // w/ try
+    let prog = "(try (def (a b) '(1 2 3)))";
+    assert_matches!(
+        eval_expr(prog).expect("eval should succeed"),
+        Val::Error(Error::InvalidPatternMatch)
+    );
+}
+
 // TODO: Test - if with blocks
 
 //     #[test]

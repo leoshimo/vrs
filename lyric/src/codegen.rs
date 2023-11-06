@@ -57,6 +57,7 @@ pub fn compile<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Bytecode<T, L>> {
                     "let" => return compile_let(args),
                     "quote" => return compile_quote(args),
                     "set" => return compile_set(args),
+                    "try" => return compile_try(args),
                     "eval" => return compile_eval(args, false),
                     "peval" => return compile_eval(args, true),
                     "yield" => return compile_yield(args),
@@ -274,6 +275,20 @@ fn compile_begin<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T,
     }
 
     Ok(inst)
+}
+
+fn compile_try<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
+    let v = match args {
+        [v] => v,
+        _ => {
+            return Err(Error::InvalidExpression(
+                "try expects a single argument".to_string(),
+            ))
+        }
+    };
+
+    // `try` is quoting
+    Ok(vec![Inst::PushConst(v.clone()), Inst::Eval(true)])
 }
 
 /// Compile if

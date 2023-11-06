@@ -377,7 +377,7 @@ mod tests {
     // }
 
     // TODO: Test that top-level yield of jibberish like (yield 1) results in process terminating w/ error
-    // TODO: Test spawning invalid expressions - quote w/o any expressions
+    // TODO: Test spawning invalid expressions - quote w/o any expression
     // TODO: Test that dropping process handle ends process
     // TODO: Test ProcessHandle::kill
     // TODO: Test `spawn` builtin (w/ correct capture / eval semantics)
