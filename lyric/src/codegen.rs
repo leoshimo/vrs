@@ -15,6 +15,8 @@ where
     GetSym(SymbolId),
     /// Pop TOS and store value as given symbol
     DefSym(SymbolId),
+    /// Pop TOS twice for pattern and constant value, and define symbols in env if pattern matches
+    DefBind,
     /// Set given symbol to value popped from TOS
     SetSym(SymbolId),
     /// Pop parameter list and function body from stack, and pushes a new function onto stack
@@ -71,18 +73,22 @@ pub fn compile<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Bytecode<T, L>> {
 
 /// Compile special form builtin def
 fn compile_def<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
-    let (symbol, value) = match args {
-        [Val::Symbol(symbol), value] => (symbol, value),
-        _ => {
-            return Err(Error::InvalidExpression(
-                "def accepts one symbol and one form as arguments".to_string(),
-            ))
+    match args {
+        [Val::Symbol(symbol), value] => {
+            let mut inst = compile(value)?;
+            inst.push(Inst::DefSym(symbol.clone()));
+            Ok(inst)
         }
-    };
-
-    let mut inst = compile(value)?;
-    inst.push(Inst::DefSym(symbol.clone()));
-    Ok(inst)
+        [pat, value] => {
+            let mut inst = compile(value)?;
+            inst.push(Inst::PushConst(pat.clone()));
+            inst.push(Inst::DefBind);
+            Ok(inst)
+        }
+        _ => Err(Error::InvalidExpression(
+            "def accepts one symbol and one form as arguments".to_string(),
+        )),
+    }
 }
 
 /// Compile special form builtin set
@@ -354,6 +360,7 @@ impl<T: Extern, L: Locals> std::fmt::Display for Inst<T, L> {
             Inst::PushConst(c) => write!(f, "pushco {c}"),
             Inst::GetSym(s) => write!(f, "getsym {s}"),
             Inst::DefSym(s) => write!(f, "defsym {s}"),
+            Inst::DefBind => write!(f, "defbind"),
             Inst::SetSym(s) => write!(f, "setsym {s}"),
             Inst::MakeFunc => write!(f, "makefn"),
             Inst::CallFunc(nargs) => write!(f, "callfn {nargs}"),
@@ -411,6 +418,18 @@ mod tests {
         assert_eq!(
             compile(&f("(def x 5)")),
             Ok(vec![PushConst(Val::Int(5)), DefSym(SymbolId::from("x")),])
+        );
+
+        assert_eq!(
+            compile(&f("(def (a (b c)) val)")),
+            Ok(vec![
+                GetSym(SymbolId::from("val")),
+                PushConst(Val::List(vec![
+                    Val::symbol("a"),
+                    Val::List(vec![Val::symbol("b"), Val::symbol("c")])
+                ])),
+                DefBind,
+            ])
         );
     }
 

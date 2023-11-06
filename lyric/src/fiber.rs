@@ -195,6 +195,9 @@ fn run<T: Extern, L: Locals>(f: &mut Fiber<T, L>) -> Result<FiberState<T, L>> {
                     ))?;
                     f.top().env.lock().unwrap().define(s, value.clone());
                 }
+                Inst::DefBind => {
+                    todo!();
+                }
                 Inst::SetSym(s) => {
                     let value = f.stack.last().ok_or(Error::UnexpectedStack(
                         "Expected stack to be nonempty".to_string(),
