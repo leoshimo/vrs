@@ -575,8 +575,17 @@ fn refs() {
 }
 
 #[test]
-#[tracing_test::traced_test]
 fn def_destructuring() {
+    assert_eq!(eval_expr("(def :ok :ok)").unwrap(), Val::keyword("ok"));
+    assert_eq!(eval_expr("(def 10 10)").unwrap(), Val::Int(10));
+    assert_eq!(eval_expr("(def \"hi\" \"hi\")").unwrap(), Val::string("hi"));
+    assert_eq!(eval_expr("(def _ :ok)").unwrap(), Val::keyword("ok"));
+    assert_eq!(eval_expr("(def _ 10)").unwrap(), Val::Int(10));
+    assert_eq!(eval_expr("(def _ \"hi\")").unwrap(), Val::string("hi"));
+}
+
+#[test]
+fn def_destructuring_nested() {
     {
         let prog = r#"(begin
             (def (a b) '(1 2))
@@ -670,16 +679,34 @@ fn def_destructuring() {
 
 #[test]
 fn eval_try() {
-    // baseline
-    let prog = "(def (a b) '(1 2 3))";
-    assert_matches!(eval_expr(prog), Err(Error::InvalidPatternMatch));
+    {
+        // baseline
+        assert_eq!(
+            eval_expr("(eval '(+ x x))"),
+            Err(Error::UndefinedSymbol(SymbolId::from("x"))),
+            "eval propagates errors at top-level"
+        );
 
-    // w/ try
-    let prog = "(try (def (a b) '(1 2 3)))";
-    assert_matches!(
-        eval_expr(prog).expect("eval should succeed"),
-        Val::Error(Error::InvalidPatternMatch)
-    );
+        // w/ try
+        assert_eq!(
+            eval_expr("(try (eval '(+ x x)))"),
+            Ok(Val::Error(Error::UndefinedSymbol(SymbolId::from("x")))),
+            "try propagates error as a value"
+        );
+    }
+    {
+        // baseline
+        let prog = "(def (a b) '(1 2 3))";
+        assert_matches!(eval_expr(prog), Err(Error::InvalidPatternMatch));
+
+        // w/ try
+        let prog = "(try (def (a b) '(1 2 3)))";
+        assert_matches!(
+            eval_expr(prog).expect("eval should succeed"),
+            Val::Error(Error::InvalidPatternMatch)
+        );
+    }
+}
 }
 
 // TODO: Test - if with blocks
