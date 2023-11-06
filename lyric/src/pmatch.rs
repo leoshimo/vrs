@@ -20,7 +20,7 @@ where
     }
 
     /// Check if pattern matches given value
-    pub fn matches(&self, val: &Val<T, L>) -> bool {
+    pub fn is_match(&self, val: &Val<T, L>) -> bool {
         Self::val_matches(&self.inner, val)
     }
 
@@ -53,47 +53,47 @@ mod tests {
     #[test]
     fn values_matches_itself() {
         {
-            assert!(Pattern::from_val(v("nil")).matches(&v("nil")));
-            assert!(!Pattern::from_val(v("nil")).matches(&v("0")));
-            assert!(!Pattern::from_val(v("nil")).matches(&v("\"hello\"")));
-            assert!(!Pattern::from_val(v("nil")).matches(&v("true")));
+            assert!(Pattern::from_val(v("nil")).is_match(&v("nil")));
+            assert!(!Pattern::from_val(v("nil")).is_match(&v("0")));
+            assert!(!Pattern::from_val(v("nil")).is_match(&v("\"hello\"")));
+            assert!(!Pattern::from_val(v("nil")).is_match(&v("true")));
         }
         {
-            assert!(Pattern::from_val(v("true")).matches(&v("true")));
-            assert!(Pattern::from_val(v("false")).matches(&v("false")));
-            assert!(!Pattern::from_val(v("true")).matches(&v("false")));
-            assert!(!Pattern::from_val(v("false")).matches(&v("true")));
+            assert!(Pattern::from_val(v("true")).is_match(&v("true")));
+            assert!(Pattern::from_val(v("false")).is_match(&v("false")));
+            assert!(!Pattern::from_val(v("true")).is_match(&v("false")));
+            assert!(!Pattern::from_val(v("false")).is_match(&v("true")));
         }
         {
-            assert!(Pattern::from_val(v("0")).matches(&v("0")));
-            assert!(Pattern::from_val(v("9999")).matches(&v("9999")));
-            assert!(!Pattern::from_val(v("10")).matches(&v("1")));
-            assert!(!Pattern::from_val(v("99")).matches(&v("0")));
-            assert!(!Pattern::from_val(v("9")).matches(&v("99")));
+            assert!(Pattern::from_val(v("0")).is_match(&v("0")));
+            assert!(Pattern::from_val(v("9999")).is_match(&v("9999")));
+            assert!(!Pattern::from_val(v("10")).is_match(&v("1")));
+            assert!(!Pattern::from_val(v("99")).is_match(&v("0")));
+            assert!(!Pattern::from_val(v("9")).is_match(&v("99")));
         }
         {
-            assert!(Pattern::from_val(v("\"hello\"")).matches(&v("\"hello\"")));
-            assert!(Pattern::from_val(v("\"hello world\"")).matches(&v("\"hello world\"")));
-            assert!(!Pattern::from_val(v("\"hello\"")).matches(&v("\"goodbye\"")));
-            assert!(!Pattern::from_val(v("\"hello world\"")).matches(&v("\"hello\"")));
-            assert!(!Pattern::from_val(v("\"hello world\"")).matches(&v("\"world\"")));
+            assert!(Pattern::from_val(v("\"hello\"")).is_match(&v("\"hello\"")));
+            assert!(Pattern::from_val(v("\"hello world\"")).is_match(&v("\"hello world\"")));
+            assert!(!Pattern::from_val(v("\"hello\"")).is_match(&v("\"goodbye\"")));
+            assert!(!Pattern::from_val(v("\"hello world\"")).is_match(&v("\"hello\"")));
+            assert!(!Pattern::from_val(v("\"hello world\"")).is_match(&v("\"world\"")));
         }
         {
-            assert!(Pattern::from_val(v(":hello")).matches(&v(":hello")));
-            assert!(Pattern::from_val(v(":hello_world")).matches(&v(":hello_world")));
-            assert!(!Pattern::from_val(v(":hello")).matches(&v(":goodbye")));
-            assert!(!Pattern::from_val(v(":hello_world")).matches(&v(":hello")));
-            assert!(!Pattern::from_val(v(":hello_world")).matches(&v(":world")));
+            assert!(Pattern::from_val(v(":hello")).is_match(&v(":hello")));
+            assert!(Pattern::from_val(v(":hello_world")).is_match(&v(":hello_world")));
+            assert!(!Pattern::from_val(v(":hello")).is_match(&v(":goodbye")));
+            assert!(!Pattern::from_val(v(":hello_world")).is_match(&v(":hello")));
+            assert!(!Pattern::from_val(v(":hello_world")).is_match(&v(":world")));
         }
         {
             let ref1 = Val::Ref(Ref("abc".to_string()));
             let ref2 = Val::Ref(Ref("ABC".to_string()));
             let ref3 = Val::Ref(Ref("abcde".to_string()));
 
-            assert!(Pattern::from_val(ref1.clone()).matches(&ref1));
-            assert!(!Pattern::from_val(ref1.clone()).matches(&ref2));
-            assert!(!Pattern::from_val(ref1.clone()).matches(&ref3));
-            assert!(!Pattern::from_val(ref3).matches(&ref2));
+            assert!(Pattern::from_val(ref1.clone()).is_match(&ref1));
+            assert!(!Pattern::from_val(ref1.clone()).is_match(&ref2));
+            assert!(!Pattern::from_val(ref1.clone()).is_match(&ref3));
+            assert!(!Pattern::from_val(ref3).is_match(&ref2));
         }
     }
 
@@ -101,53 +101,53 @@ mod tests {
     fn symbols_matches_all() {
         let pat = Pattern::from_val(v("a"));
 
-        assert!(pat.matches(&v("hello")));
-        assert!(pat.matches(&v("5")));
-        assert!(pat.matches(&v("\"hello\"")));
-        assert!(pat.matches(&v(":hello")));
-        assert!(pat.matches(&v("'()")));
-        assert!(pat.matches(&v("'(1 2 3)")));
+        assert!(pat.is_match(&v("hello")));
+        assert!(pat.is_match(&v("5")));
+        assert!(pat.is_match(&v("\"hello\"")));
+        assert!(pat.is_match(&v(":hello")));
+        assert!(pat.is_match(&v("'()")));
+        assert!(pat.is_match(&v("'(1 2 3)")));
     }
 
     #[test]
     fn list_empty() {
         let pat = Pattern::from_val(v("()"));
-        assert!(pat.matches(&v("()")));
-        assert!(!pat.matches(&v("(1)")));
-        assert!(!pat.matches(&v("\"hello\"")));
+        assert!(pat.is_match(&v("()")));
+        assert!(!pat.is_match(&v("(1)")));
+        assert!(!pat.is_match(&v("\"hello\"")));
     }
 
     #[test]
     fn list_nonempty() {
         let pat = Pattern::from_val(v("(a b c)"));
-        assert!(pat.matches(&v("(1 2 3)")));
-        assert!(pat.matches(&v("(:one :two \"three\")")));
-        assert!(!pat.matches(&v("\"hello\"")));
-        assert!(!pat.matches(&v("()")));
-        assert!(!pat.matches(&v("(1 :two)")));
+        assert!(pat.is_match(&v("(1 2 3)")));
+        assert!(pat.is_match(&v("(:one :two \"three\")")));
+        assert!(!pat.is_match(&v("\"hello\"")));
+        assert!(!pat.is_match(&v("()")));
+        assert!(!pat.is_match(&v("(1 :two)")));
     }
 
     #[test]
     fn list_nested() {
         let pat = Pattern::from_val(v("(a b (c d))"));
-        assert!(pat.matches(&v("(1 2 (3 4))")));
-        assert!(pat.matches(&v("(:one :two (\"three\" 4))")));
+        assert!(pat.is_match(&v("(1 2 (3 4))")));
+        assert!(pat.is_match(&v("(:one :two (\"three\" 4))")));
 
-        assert!(!pat.matches(&v("(1 2 3 4)")));
-        assert!(!pat.matches(&v("(1 (2 3) 4)")));
-        assert!(!pat.matches(&v("\"1234\"")));
-        assert!(!pat.matches(&v("()")));
+        assert!(!pat.is_match(&v("(1 2 3 4)")));
+        assert!(!pat.is_match(&v("(1 (2 3) 4)")));
+        assert!(!pat.is_match(&v("\"1234\"")));
+        assert!(!pat.is_match(&v("()")));
     }
 
     #[test]
     fn list_symbols_and_constants() {
         let pat = Pattern::from_val(v("(a 2 (:three d))"));
-        assert!(pat.matches(&v("(:one 2 (:three 4))")));
-        assert!(pat.matches(&v("(:one 2 (:three :four))")));
+        assert!(pat.is_match(&v("(:one 2 (:three 4))")));
+        assert!(pat.is_match(&v("(:one 2 (:three :four))")));
 
-        assert!(!pat.matches(&v("(:one :two (\"three\" 4))")));
-        assert!(!pat.matches(&v("(1 2 (3 4))")));
-        assert!(!pat.matches(&v("()")));
+        assert!(!pat.is_match(&v("(:one :two (\"three\" 4))")));
+        assert!(!pat.is_match(&v("(1 2 (3 4))")));
+        assert!(!pat.is_match(&v("()")));
     }
 
     fn v(expr: &str) -> Val {

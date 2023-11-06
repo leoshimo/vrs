@@ -97,7 +97,7 @@ impl Mailbox {
     fn push(&mut self, msg: Message) {
         let fufills_pending = match &self.pending {
             Some(pending) => match &pending.pattern {
-                Some(pat) => pat.matches(&msg.contents),
+                Some(pat) => pat.is_match(&msg.contents),
                 None => true,
             },
             None => false,
@@ -132,7 +132,7 @@ impl Mailbox {
             None => self.messages.pop_front(),
             Some(pat) => {
                 for i in 0..self.messages.len() {
-                    if pat.matches(&self.messages[i].contents) {
+                    if pat.is_match(&self.messages[i].contents) {
                         return self.messages.remove(i);
                     }
                 }
