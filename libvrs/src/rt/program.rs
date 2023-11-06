@@ -92,7 +92,7 @@ impl Program {
 
 /// Create a new program for connections
 pub fn connection_program() -> Program {
-    Program::from_expr("(loop (send_resp (peval (recv_req))))")
+    Program::from_expr("(loop (send_resp (try (eval (recv_req)))))")
         .expect("Connection program should compile")
 }
 

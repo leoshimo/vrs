@@ -181,10 +181,10 @@ fn fiber_looping_yield() {
 }
 
 #[test]
-fn fiber_conn_recv_peval_sim() {
+fn fiber_conn_recv_try_eval_sim() {
     // program representing client REPL loop
     let prog = r#"
-        (loop (send_conn (peval (recv_conn))))
+        (loop (send_conn (try (eval (recv_conn)))))
     "#;
 
     let mut env = env();

@@ -473,26 +473,10 @@ fn eval_let_nested() {
 }
 
 #[test]
-fn eval_peval() {
-    assert_eq!(
-        eval_expr("(eval '(+ x x))"),
-        Err(Error::UndefinedSymbol(SymbolId::from("x"))),
-        "eval propagates errors at top-level"
-    );
-
-    assert_eq!(
-        eval_expr("(peval '(+ x x))"),
-        Ok(Val::Error(Error::UndefinedSymbol(SymbolId::from("x")))),
-        "peval propagates error as a value"
-    );
-}
-
-#[test]
-fn peval_deep_callframes() {
+fn try_deep_callframes() {
     {
         let prog = r#"
-            (peval
-                '((lambda () (begin
+            (try ((lambda () (begin
                     (+ 1 1)
                     unknown_var
                     (+ 1 1)))))
@@ -507,8 +491,8 @@ fn peval_deep_callframes() {
 
     {
         let prog = r#"
-            (peval
-                '((lambda () (begin
+            (try
+                ((lambda () (begin
                     (+ 1 1)
                     (unknown_func)
                     (+ 1 1)))))
@@ -523,7 +507,7 @@ fn peval_deep_callframes() {
 
     {
         let prog = r#"
-            (peval '(+ (+ 1 (+ 1 (+ 1 unknown_var)))))
+            (try (+ (+ 1 (+ 1 (+ 1 unknown_var)))))
         "#;
         assert_eq!(
             eval_expr(prog),
@@ -535,11 +519,11 @@ fn peval_deep_callframes() {
 }
 
 #[test]
-fn peval_in_peval() {
+fn try_in_try() {
     {
         let prog = r#"
-            (peval (peval
-                '(begin
+            (try (try
+                (begin
                     (+ 1 1)
                     unknown_var
                     (+ 1 1))))
@@ -554,8 +538,8 @@ fn peval_in_peval() {
 
     {
         let prog = r#"
-            (peval (peval
-                '(begin
+            (try (try
+                (begin
                     (+ 1 1)
                     (unknown_func)
                     (+ 1 1))))
@@ -570,7 +554,7 @@ fn peval_in_peval() {
 
     {
         let prog = r#"
-            (peval (peval '(+ (+ 1 (+ 1 (+ 1 unknown_var))))))
+            (try (try (+ (+ 1 (+ 1 (+ 1 unknown_var))))))
         "#;
         assert_eq!(
             eval_expr(prog),
@@ -662,7 +646,7 @@ fn def_destructuring() {
     {
         let prog = r#"(begin
             (def (a b) '(0 0))
-            (peval '(def (a b a) '(1 2 1)))
+            (try (def (a b a) '(1 2 1)))
             (list a b)
         )"#;
         assert_eq!(
@@ -673,7 +657,7 @@ fn def_destructuring() {
 
         let prog = r#"(begin
             (def (a b) '(0 0))
-            (peval '(def (a b a) '(1 2 3)))
+            (try (def (a b a) '(1 2 3)))
             (list a b)
         )"#;
         assert_eq!(

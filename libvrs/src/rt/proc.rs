@@ -327,11 +327,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn recv_req_peval_send_resp() {
+    async fn recv_req_try_eval_send_resp() {
         let (local, mut remote) = Connection::pair().unwrap();
         let mut procs = ProcessSet::new();
 
-        let prog = Program::from_expr("(send_resp (peval (recv_req)))").unwrap();
+        let prog = Program::from_expr("(send_resp (try (eval (recv_req))))").unwrap();
         let _ = Process::from_prog(0.into(), prog)
             .conn(local)
             .spawn(&mut procs);

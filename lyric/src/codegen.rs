@@ -58,8 +58,7 @@ pub fn compile<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Bytecode<T, L>> {
                     "quote" => return compile_quote(args),
                     "set" => return compile_set(args),
                     "try" => return compile_try(args),
-                    "eval" => return compile_eval(args, false),
-                    "peval" => return compile_eval(args, true),
+                    "eval" => return compile_eval(args),
                     "yield" => return compile_yield(args),
                     "loop" => return compile_loop(args),
                     _ => (),
@@ -168,10 +167,7 @@ fn compile_quote<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T,
     Ok(vec![Inst::PushConst(v.clone())])
 }
 
-fn compile_eval<T: Extern, L: Locals>(
-    args: &[Val<T, L>],
-    is_protected: bool,
-) -> Result<Bytecode<T, L>> {
+fn compile_eval<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
     let v = match args {
         [v] => v,
         _ => {
@@ -182,7 +178,7 @@ fn compile_eval<T: Extern, L: Locals>(
     };
 
     let mut bc = compile(v)?;
-    bc.push(Inst::Eval(is_protected));
+    bc.push(Inst::Eval(false));
     Ok(bc)
 }
 
