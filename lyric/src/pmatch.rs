@@ -62,6 +62,14 @@ where
     }
 }
 
+impl<T: Extern, L: Locals> IntoIterator for Matches<T, L> {
+    type Item = (SymbolId, Val<T, L>);
+    type IntoIter = std::collections::hash_map::IntoIter<SymbolId, Val<T, L>>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.bindings.into_iter()
+    }
+}
+
 impl<T: Extern, L: Locals> std::default::Default for Matches<T, L> {
     fn default() -> Self {
         Self {

@@ -590,6 +590,100 @@ fn refs() {
     assert_ne!(r1, r2, "refs should be unique-ish");
 }
 
+#[test]
+#[tracing_test::traced_test]
+fn def_destructuring() {
+    {
+        let prog = r#"(begin
+            (def (a b) '(1 2))
+            (list a b)
+        )"#;
+        assert_eq!(
+            eval_expr(prog).unwrap(),
+            Val::List(vec![Val::Int(1), Val::Int(2),])
+        );
+    }
+
+    {
+        let prog = r#"(begin
+            (def exp '(:ok (1 2) (3 4)))
+            (def (:ok a b) exp)
+            (list a b)
+        )"#;
+        assert_eq!(
+            eval_expr(prog).unwrap(),
+            Val::List(vec![
+                Val::List(vec![Val::Int(1), Val::Int(2),]),
+                Val::List(vec![Val::Int(3), Val::Int(4),])
+            ])
+        );
+    }
+
+    {
+        let prog = r#"(begin
+            (def (a b a)
+                '(1 2 1))
+            (list a b)
+        )"#;
+        assert_eq!(
+            eval_expr(prog).unwrap(),
+            Val::List(vec![Val::Int(1), Val::Int(2),])
+        );
+    }
+
+    {
+        let prog = r#"(begin
+            (def (a b (a b))
+                '(1 2 (1 2)))
+            (list a b)
+        )"#;
+        assert_eq!(
+            eval_expr(prog).unwrap(),
+            Val::List(vec![Val::Int(1), Val::Int(2),])
+        );
+    }
+
+    {
+        let prog = r#"(begin
+            (def (a b)
+                '(1 2 3))
+        )"#;
+        assert_eq!(eval_expr(prog), Err(Error::InvalidPatternMatch));
+    }
+
+    {
+        let prog = r#"(begin
+            (def (a b a)
+                '(1 2 3))
+        )"#;
+        assert_eq!(eval_expr(prog), Err(Error::InvalidPatternMatch));
+    }
+
+    {
+        let prog = r#"(begin
+            (def (a b) '(0 0))
+            (peval '(def (a b a) '(1 2 1)))
+            (list a b)
+        )"#;
+        assert_eq!(
+            eval_expr(prog).unwrap(),
+            Val::List(vec![Val::Int(1), Val::Int(2),]),
+            "a and b should be updated"
+        );
+
+        let prog = r#"(begin
+            (def (a b) '(0 0))
+            (peval '(def (a b a) '(1 2 3)))
+            (list a b)
+        )"#;
+        assert_eq!(
+            eval_expr(prog).unwrap(),
+            Val::List(vec![Val::Int(0), Val::Int(0),]),
+            "a and b should not be updated if match failed"
+        );
+    }
+}
+
 // TODO: Test - if with blocks
 
 //     #[test]

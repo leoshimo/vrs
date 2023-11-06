@@ -41,4 +41,7 @@ pub enum Error {
 
     #[error("Unexpected resume of fiber - {0}")]
     UnexpectedResume(String),
+
+    #[error("Invalid pattern match")]
+    InvalidPatternMatch,
 }

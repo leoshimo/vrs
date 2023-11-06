@@ -2,7 +2,9 @@
 use tracing::{debug, warn};
 
 use super::{Env, Inst};
-use crate::{compile, parse, Bytecode, Error, Extern, Lambda, Locals, NativeFnOp, Result, Val};
+use crate::{
+    compile, parse, Bytecode, Error, Extern, Lambda, Locals, NativeFnOp, Pattern, Result, Val,
+};
 use std::sync::{Arc, Mutex};
 
 /// A single, cooperativly scheduled sequence of execution
@@ -196,7 +198,21 @@ fn run<T: Extern, L: Locals>(f: &mut Fiber<T, L>) -> Result<FiberState<T, L>> {
                     f.top().env.lock().unwrap().define(s, value.clone());
                 }
                 Inst::DefBind => {
-                    todo!();
+                    let pat = f.stack.pop().ok_or(Error::UnexpectedStack(
+                        "Expected stack to be nonempty".to_string(),
+                    ))?;
+                    let val = f.stack.last().ok_or(Error::UnexpectedStack(
+                        "Expected stack to be nonempty".to_string(),
+                    ))?;
+
+                    let m = Pattern::from_val(pat)
+                        .matches(val)
+                        .ok_or(Error::InvalidPatternMatch)?;
+
+                    let mut env = f.top().env.lock().unwrap();
+                    for (s, v) in m.into_iter() {
+                        env.define(s, v.clone());
+                    }
                 }
                 Inst::SetSym(s) => {
                     let value = f.stack.last().ok_or(Error::UnexpectedStack(
