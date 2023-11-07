@@ -26,8 +26,8 @@ Runtime code should be able to run in several configurations:
 - Cross-process, for client and runtime processes on the same machine.
 - Over-network, for thin-clients that interact with runtime on different
   machines.
-- In-process, for platforms that want same-device client-runtime but cannot
-  spawn separate process.
+- In-process, for platforms that must run client-runtime in single
+  process. (E.g. Mobile)
 
 Client API should be simple and lean so bringing up new clients is low cost.
 
@@ -48,20 +48,20 @@ for convenience, but the channel is a bidirectional.
 
 How the runtime is started may be platform dependent:
 
-- On desktop, native service management may be used (`systemd`, `launchd`, etc).
-- On web, runtime may be always running in the cloud.
-- On mobile, a in-process runtime may be spun up before client initialization.
+- On desktop, runtime daemon runs via typical service management (`systemd`, `launchd`, etc).
+- On cloud, runtime may be always running as a service.
+- On mobile, a in-process runtime may be spun up during application initialization.
 
 ** Runtime - High Level Lifecycle
 
 1. Runtime is initialized in host process
 2. Host process begins listening on some transport for new connections
 3. Host process hands-off accepted connections to runtime
-4. Runtime spawns a dedicated client task per connection
-5. Messages on client connection are forwarded to rest of runtime, such as
-   the interpreter task
-6. Responses are forwarded back on client connection
-7. When client task ends or connection is disconnected, the task is terminated
+4. Runtime spawns a dedicated client process per connection
+5. Interactions from client connection are processed and forwarded from client
+   process to other processes in the runtime.
+6. Responses, if any, are forwarded back on client connection.
+7. When client task ends or connection is disconnected, the client process is terminated.
 
 ** Client API
 
@@ -101,15 +101,18 @@ Per invocation, it will:
 CLI can be used to bootstrap new clients that is able to launch `vrsctl`
 directly, or as a development tool.
 
-NDJSON-based messages and syntactic sugar to it will be used to keep CLI
-interaction close to client API as possible.
-
 * Lyric Lang
 ** Goals
+
+An embedded lisp dialect provides a single, uniform interface for everything -
+code, data, interfaces, and protocol.
 
 Interactions from the REPL or hypermedia interface should be exactly how the
 applications are programmed, similar to how the language of the shell can be
 used to write scripts.
+
+All data, including interface markup, can be captured by the dialect's
+s-expressions.
 
 ** Why write your own Lisp?
 
@@ -167,262 +170,53 @@ v0.1 sketch of Lisp as Hypermedia
             :on_click '(action_for_elem_3))))
 #+end_src
 
-** Quirk: Dynamic Scoping
-
-Lyric uses dynamic scoping instead of lexical scoping today.
-
-This is due to few reasons:
-- Dynamic scoping is [very useful](https://www.gnu.org/software/emacs/emacs-paper.html#SEC17)
-- It simplifies implementation of interpreter
-- It simplifies implementation serialization of Lyric expressions
-
-It may be nice to default to lexical scoping and add closures if existing
-utility of free variables can be provided by some other mechanism, e.g. a
-stack-based parameter like Jai's context mechanism.
-
 * Runtime Program Execution
 
 The runtime spawns and manages processes. These are not OS processes, but
 lightweight threads of execution like [Erlang Processes](https://www.erlang.org/docs/22/reference_manual/processes.html).
 
-Each process has its own Lisp environment for evaluating S-expressions, and an
-event loop that used to process events such as:
+Each process has its own Lisp environment for evaluating S-expressions.
 
-- Messages from runtime kernel, e.g. kill a process
-- Requests from other processes, e.g. function call of exported binding
-- Messages from subscriptions, e.g. child process terminating
+Unlike Node, which uses callbacks to implement continuations, `lyric` is built
+to support preemptive and cooperative multitasking during evaluation, similar to
+BEAM VM.
 
-More specifically:
+Instead of a subscription + callback mechanism, the process's code describes
+when IO is polled, when mailbox is queried, etc.
 
-1. A process is notified to execute some expression via call or cast message
-2. Evaluation of that expression may change that process's state, e.g. add new
-   subscriptions (i.e. callbacks) for that running process.
-3. Event loop checks if there is "pending work" (i.e. subscriptions). If not,
-   process exits.
-4. Otherwise, process continues running, polling for subscribed events. When a
-   event fires, loop again from (1).
+`lyric` and the runtime provides conveniences for typical patterns,
+e.g. implementing long-running services, supervisors, request-response, etc.
 
-The =Process= implements this logic, driving an Lyric Lang interpreter via an
-event-loop. The messages to event loop are themselves are sourced from
-subscriptions of the process, or some initial expression.
+* Process, Bytecode, and Fibers
 
-It has two main events that drive a process: *Call*, which are request /
-response evaluations of S-expressions, and *Cast*, which are fire-and-forget
-evaluations.
+The programs written in `lyric` support yielding - pausing and continuing
+execution of bytecode sequences.
 
-** Lifecycle of Process Execution
+This makes it possible for runtime to drive evaluation of program via
+asynchronous IO. Interpreter host captures signals yielded during program
+execution, dispatches appropriate async IO, and continues execution once the IO
+resource is ready.
 
-Model Scenarios:
+The key motivation for this is to not tie an OS thread per paused program. A
+`lyric` program waiting for IO does not block a thread, since it's runtime state
+can be captured as a data structure.
 
-1. A client shell process is spawned, which is used by the connected client to
-   interact with rest of runtime.
-2. An echo process is spawned, listening for request messages (calls) from other
-   processes and responding with contents of request.
-3. A fire-and-forget process is spawned in via an S-expression by another
-   process, which waits for spawned process to terminate.
+E.g. A 10,000 sleeping processes "at rest" does not use 10,000 threads.
 
-TODO: Illustrate examples
+This makes it viable to model most things as programs - e.g. cron jobs are
+programs that sleep in a loop:
 
-*** Example 1: Client Shell Process
+#+begin_src lyric
+(loop (sleep 10000)
+      (do_a_thing))
+#+end_src
 
-1. Runtime kernel is notified to spawn a client shell process - i.e. there is a
-   new client connection
-2. Kernel spawns new process that has a subscription representing stream of
-   S-expressions from client connection.
-3. When connected client sends a message, that is delivered as a *Call* message
-   to process's event loop, which contains message contents and a channel for
-   sending responses over.
-4. The event loop dequeues the Call message, and evaluates expression in the
-   Lisp interpreter. The evaluation may change the state of process, e.g. setup
-   new subscriptions.
-5. The event loop checks if there will be more messages, or if process was
-   flagged for shutdown. Otherwise, repeat from step 3.
-6. If process shuts down, the runtime kernel is notified, and handle is cleaned up.
+** What is a Fiber
 
-*** Example 2: Echo Process
-
-The following is the mechanisim for request / response between processes via
-=Call= message
-
-1. A running client shell process issues =spawn= with an S-expression that
-   starts the echo process.
-2. The runtime kernel receives the =spawn=, and creates a new process to run the
-   expression in.
-3. The new process receives the spawn expression as a TBD (call or cast?), and
-   evaluates the expression in the process's interpreter.
-4. The evaluation adds a new subscription for a globally bound =echo= function
-   via =export= keyword. The =export= call also updates a global map of bindings.
-5. The client shell process can =import= the new =echo= function, which defines
-   an =echo= function in its namespace
-6. The client shell process evaluates a call to new =echo=, which routes a
-   =Call= message via runtime's global binding table to the spawned echo process
-   with =echo= export.
-7. The echo process receives a =Call= messsage via it's export subscription,
-   which calls the function in local interpreter, and returns result via
-   sender channel for response.
-8. The response is received via response channel on the client shell process
-
-*** Example 3: Fire-and-Forget Process
-
-The following is the mechanism for one-shot fire-and-forget triggered by a
-process to off-load work to another process with another event loop and interpreter
-
-TODO:
-- Cover how parent process receives results from child process
-- Cover how parent process can receive messages during execution of child
-  process to process mailbox, and =send= and =recv= calls, before child process
-  terminates.
-
-* Process-to-Process Communication (Deprecated)
-
-Two flavors:
-- Runtime Linking of Symbols
-- Message Passing over Mailbox
-
-Linking can be used for lazy export and import of symbols. The underlying
-messaging structure between processes is hidden.
-
-Messaging can be used for sending arbitrary data to a process's input
-mailbox. The sending process must acquire an explicit handle to destination
-process, and receiving process must explicitly "read" from mailbox.
-
-** Runtime Linking
-
-Runtime Linking is used for dynamic, lazy linking of symbols between processes.
-
-At a high level:
-
-1. Process A calls =export= to expose a function to the global namespace. This
-   messages the kernel task to update the runtime linker's symbol tables.
-2. Process B calls =import= to import a function to local namespace. This
-   messages the kernel task to query the runtime linker's symbol table.
-3. The runtime linker returns a callable handle that is bound to a specific
-   process's exported symbol (i.e. Process A's export). The callable handle
-   wraps a message dispatch to Process A.
-4. Process B updates local namespace, binding callable handle to a symbol.
-4. Process B calls the imported symbol - which evaluates in local namespace,
-   which calls the handle, which messages Process A, which returns the result of
-   evaluation over callable handle's response channel.
-
-* Process, Bytecode, and Fibers (A Sketch)
-
-TL;DR - to take advantage of tokio's cooperative multitasking model, the
-programs written in Lyric must itself allow for pausing and resuming execution
-of instruction when there is a call to yield for.
-
-** Fiber
-
-A sequence of instructions that can be cooperatively scheduled. When it
-runs an instruction to yield for, control flow is returned to caller that
+A fiber is a sequence of instructions that can be cooperatively scheduled. When
+it runs an instruction to yield for, control flow is returned to caller that
 initiated execution of fiber.
 
 A fiber can later be resumed when the event that fiber was paused for occurs,
 such as IO, message-passing, etc.
 
-** How Process manages a Fiber
-
-A Process is an unit in the runtime that is an active execution of a program.
-
-Internally, it manages a single Fiber that it initializes with the Lyric
-expression representing the spawned program.
-
-A high-level sketch looks like:
-
-#+begin_src rust
-tokio::spawn(async move {
-    let proc = Process::new(program);
-    proc.start();                               // calls fiber.start()
-    while proc.is_running() {
-        tokio::select! {
-            // =next_event(proc)= completes when an future that proc is waiting
-            // for completes, e.g. resume paused fiber for messages, IO, etc
-            // Fiber execution should be resumed.
-            event = next_event(proc) if proc.is_waiting() => {
-                proc.resume(event);             // calls fiber.resume()
-            },
-            // Message from runtime or other processes.
-            msg = msg_rx.recv() => match msg {
-                Kill => /* snip */,
-                Eval => /* snip */,
-                /* snip */
-            }
-        }
-    }
-    Ok(proc.state)
-};
-#+end_src
-
-*** Scenario: A Simple Process is Started
-
-Suppose a program (or native execution) spawns a new process, e.g. =(spawn (+ 1 2))=:
-
-1. A new tokio task for process event loop is started
-2. The event loop's =Process= is initialized with expression =(+ 1 2)=
-3. The process's =Fiber= fiber is kickstarted in =proc.start()=
-4. The fiber evaluates bytecode for =(+ 1 2)=, which completes with result =3=
-5. At this point, fiber has completed execution, so =proc.is_running()= returns =false=
-6. The tokio task returns with the state of process, e.g. =Complete(ProcResult(3))=
-
-*** Scenario: A Process that Yields for Message
-
-Suppose we have a program like =(recv)= that is waiting for a message
-
-1. The process is started as steps 1-3 from previous example
-2. This time, =fiber.start()= call returns a signal that the fiber yielded,
-   instead of completing with result, e.g. =Yielded(Event::RecvMessage)=
-3. =proc.is_running()= is still true (fiber has not completed), so the while
-   loop runs.
-4. Tokio polls on =next_event(proc)=, which is a hook to be signaled for an
-   event fiber is interested for - in this case receiving a new message in
-   process mailbox.
-5. Suppose another process messages this process, which is received through the
-   =msg_rx= channel. This updates =Process= object's mailbox. NOTE: This does
-   not resume fiber yet.
-6. The loop is executed again, and =select!= polls both futures. This time, the
-   =next_event(proc)= is used to return event message, destructively updating =Process=.
-7. The fiber is resumed, and the process terminates with result of message it received.
-
-Addendum - note that =next_event(proc)= itself can be used to implement timeouts
-for =recv= - e.g. the future can emit a event for recv timing out because a
-message didn't arrive in time.
-
-The =recv= is an symbol bound to native function that returns a signal that
-yields, restoring control flow to caller that initiated evaluation.
-
-#+begin_src rust
-/// Binding Implementation for recv
-pub fn recv_stub(env: &Env, ...) -> Result<BindingResult> {
-    Ok(Form::Signal(Command::RecvMessage))
-}
-#+end_src
-
-
-*** Scenario: A Process that Yields for Async IO
-
-Suppose we have a program like =(read "afile.txt")=
-
-1. The process starts, starting fiber, which immediately yields for IO.
-2. The while loop is entered, selecting on two futures
-3. =next_event(proc)= returns a future backed by Async IO callback to satisfy
-   the file read command
-4. When the IO is ready, the branch completes, and fiber is resumed.
-
-*** Scenario: A REPL Process for Client Connection
-
-It is nice to have a REPL environment.
-
-An idea is to hook into =proc.start()= and =proc.resume()= to be ALWAYS yield
-immediately.
-
-The implementation of =next_event(proc)= will await on data from client
-connection, and resume the fiber with a single execution to evaluate (?)
-
-*** Scenario: How =spawn= works
-
-In the Lyric interpreter environment, the =Process= will bind a symbol for
-=spawn= that returns a signal to yield for some external command to be
-processed, like =recv=
-
-This is a key point - the spawn request is fufilled in the body of
-=next_event(proc)=, which sees that process is waiting for another process to be
-spawned, kicks off spawning, then returns =:ok= signal back to resume fiber.
