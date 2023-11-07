@@ -28,7 +28,6 @@ Convenience APIs to see running services and some level of introspection
 - [X] =ls-srv=
 - [X] =find-srv=
 
-** TODO Supervisors and Links
 ** TODO IPC - =srv= and =bind=
 
 Goal: Provide better wrappers over =call=
@@ -56,6 +55,7 @@ Maybe also cover imports / exported interface and discoverability
 (link :launcher)
 #+end_src
 
+** TODO Supervisors and Links
 ** TODO Dotfiles / Init Scripts
 ** TODO Runtime Live-On
 - [ ] =vrsd= does not crash if process crashes (?)
@@ -139,19 +139,26 @@ input (text, voice, selection)
 ** DONE Add =cond=
 Add =cond= macro to avoid pyramid of =if=.
 
-** TODO Destructuring =def=
+** DONE Destructuring =def=
+** DONE Pattern Matching / Destructuring
+Goal: Provide way to extract params from messages w/o indexing
+
+** DONE Add =match= 
+Add pattern matching conditional branching
+Test: Make sure that =(a b a)= only matches =(1 2 1)= but not =(1 2 3)=
 ** TODO Pipeline Operator
 (Streaming?)
 ** TODO Colocated Docstring for =defn=
 ** TODO Conditional Operators =not=, =and=, and =or=
 =and EXPR...= - left-to-right, and stop if one expr evaluates to =#f=. Otherwise =#t=
 =or= - left-to-right, stop if one expr evaluates to NOT =#f=
-** TODO Add =match= 
-Add pattern matching conditional branching
-Test: Make sure that =(a b a)= only matches =(1 2 1)= but not =(1 2 3)=
 ** TODO Math Operators =-=
-** TODO Pattern Matching / Destructuring
-Goal: Provide way to extract params from messages w/o indexing
+** TODO Pinning Symbols in Pattern Matches
+
+Using the *value* of symbol instead of symbol
+
+E.g. =(match '(+ a b)= would not work, since =+= would be bound to =Val::Symbol=
+instead of =Val::NativeFn=
 
 ** TODO quasiquote, unquote, unquote-splice
 ** TODO Macros
