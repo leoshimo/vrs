@@ -731,6 +731,68 @@ fn eval_not() {
         Val::Bool(true),
     );
 }
+
+#[test]
+#[tracing_test::traced_test]
+fn eval_match() {
+    {
+        assert_eq!(eval_expr("(match :hi)").unwrap(), Val::Nil,);
+    }
+    {
+        let prog = r#"(begin
+            (defn matcher (x)
+                (match x
+                    (10 "got ten")
+                    (20 "got twenty")
+                    (_ "got unknown")))
+            (list (matcher 10) (matcher 20) (matcher 30) (matcher :hi))
+        )
+        "#;
+
+        assert_eq!(
+            eval_expr(prog).unwrap(),
+            Val::List(vec![
+                Val::string("got ten"),
+                Val::string("got twenty"),
+                Val::string("got unknown"),
+                Val::string("got unknown"),
+            ])
+        );
+    }
+    {
+        let prog = r#"(begin
+            (defn matcher (x)
+                (match x
+                    ((:ok val) val)
+                    ((:err val) val)))
+            (list (matcher '(:ok "was ok")) (matcher '(:err "was err")) (matcher '(:jibberish 3)))
+        )
+        "#;
+
+        assert_eq!(
+            eval_expr(prog).unwrap(),
+            Val::List(vec![
+                Val::string("was ok"),
+                Val::string("was err"),
+                Val::Nil
+            ])
+        );
+    }
+    {
+        let prog = r#"(begin
+            (defn weird_add (x)
+                (match x
+                    ((:add x y) (+ x y))
+                    (("add" x y) (+ x y))))
+            (list (weird_add '(:add 1 2)) (weird_add '("add" 3 4)))
+        )
+        "#;
+
+        assert_eq!(
+            eval_expr(prog).unwrap(),
+            Val::List(vec![Val::Int(3), Val::Int(7),])
+        );
+    }
 }
 
 // TODO: Test - if with blocks

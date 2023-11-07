@@ -31,6 +31,7 @@ impl<T: Extern, L: Locals> Env<T, L> {
             .bind_native(SymbolId::from("get"), builtin::get_fn())
             .bind_native(SymbolId::from("map"), builtin::map_fn())
             .bind_native(SymbolId::from("not"), builtin::not_fn())
+            .bind_native(SymbolId::from("ok?"), builtin::ok_fn())
             .bind_native(SymbolId::from("err?"), builtin::err_fn());
 
         e

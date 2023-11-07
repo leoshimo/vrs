@@ -61,6 +61,7 @@ pub fn compile<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Bytecode<T, L>> {
                     "eval" => return compile_eval(args),
                     "yield" => return compile_yield(args),
                     "loop" => return compile_loop(args),
+                    "match" => return compile_match(args),
                     _ => (),
                 }
             }
@@ -364,6 +365,66 @@ fn compile_loop<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, 
     inst.push(Inst::PopTop);
     inst.push(Inst::JumpBck(inst.len() + 1));
     Ok(inst)
+}
+
+// TODO: Implement `gensym`?
+// TODO: Replace `match` with macro
+/// Compile `match` expr
+fn compile_match<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
+    // convert to:
+    // (let ((_expr EXPR))
+    //   (cond
+    //    ((ok? (try (def PAT1 _expr))) BODY1)
+    //    ((ok? (try (def PAT2 _expr))) BODY2)
+    //    (...)))
+
+    let (expr, clauses) = args.split_first().ok_or(Error::UnexpectedArguments(
+        "match expects at least one argument".to_string(),
+    ))?;
+
+    let cond_clauses: Vec<Val<T, L>> = clauses
+        .iter()
+        .map(|c| {
+            let c = match c {
+                Val::List(c) => Ok(c),
+                _ => Err(Error::UnexpectedArguments(
+                    "match clauses should be lists".to_string(),
+                )),
+            }?;
+
+            let (pat, body) = match &c[..] {
+                [pat, body] => Ok((pat.clone(), body.clone())),
+                _ => Err(Error::UnexpectedArguments(
+                    "match clause list expects two elements".to_string(),
+                )),
+            }?;
+
+            Ok(Val::List(vec![
+                Val::List(vec![
+                    Val::symbol("ok?"),
+                    Val::List(vec![
+                        Val::symbol("try"),
+                        Val::List(vec![Val::symbol("def"), pat, Val::symbol("_expr")]),
+                    ]),
+                ]),
+                body,
+            ]))
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    let ast = Val::List(vec![
+        Val::symbol("let"),
+        Val::List(vec![Val::List(vec![Val::symbol("_expr"), expr.clone()])]),
+        Val::List(
+            std::iter::once(Val::symbol("cond"))
+                .chain(cond_clauses.into_iter())
+                .collect(),
+        ),
+    ]);
+
+    dbg!(&ast.to_string());
+
+    compile(&ast)
 }
 
 impl<T: Extern, L: Locals> std::fmt::Display for Inst<T, L> {
