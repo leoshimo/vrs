@@ -4,11 +4,12 @@ Dumping ground for high level design notes
 
 * Influences
 
-Emacs - Extensible, uniform software environment 
+Emacs - Extensible, uniform software environment.
 
-Erlang - Message based, distributed software runtime w/ userspace concurrency.
+Erlang - Message based, distributed software runtime w/ userspace
+concurrency. "Let It Crash" philosophy.
 
-Hypermedia - Self-describing, uniform interface of early browser applications 
+Hypermedia - Self-describing, uniform interface. Thin general-purpose clients.
 
 Unix - Composability of programs via stdio, pipes, and plaintext. Polyglot.
 
