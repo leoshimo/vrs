@@ -36,10 +36,10 @@
 (loop
     (def (r src msg) (recv))
     (def resp
-        (cond 
-            ((eq? (get msg 0) :add_item) (add_item (get msg 1) (get msg 2)))
-            ((eq? (get msg 0) :get_items) (get_items))
-            (true '(:err "Unrecognized message"))))
+      (match msg
+        ((:add_item title cmd) (add_item title cmd))
+        ((:get_items) (get_items))
+        (_ '(:err "Unrecognized message"))))
     (send src (list r resp)))
 
 
