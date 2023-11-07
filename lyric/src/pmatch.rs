@@ -41,6 +41,7 @@ where
     fn matches_inner(pat: &Val<T, L>, val: &Val<T, L>, matches: &mut Matches<T, L>) -> bool {
         use Val::*;
         match pat {
+            Symbol(s) if s.as_str() == "_" => true,
             Symbol(s) => match matches.bindings.get(s) {
                 Some(seen) if val == seen => true,
                 None => {
@@ -373,6 +374,39 @@ mod tests {
         }
 
         assert!(!pat.is_match(&v("(1 2 (3 4))")));
+    }
+
+    #[test]
+    fn underscore_simple() {
+        let pat = Pattern::from_val(v("_"));
+        {
+            let m = pat.matches(&v("0")).expect("should match");
+            assert!(m.bindings.is_empty(), "_ should not capture new bindings");
+        }
+        {
+            let m = pat.matches(&v("true")).expect("should match");
+            assert!(m.bindings.is_empty(), "_ should not capture new bindings");
+        }
+        {
+            let m = pat.matches(&v("\"hello\"")).expect("should match");
+            assert!(m.bindings.is_empty(), "_ should not capture new bindings");
+        }
+        {
+            let m = pat.matches(&v(":hello")).expect("should match");
+            assert!(m.bindings.is_empty(), "_ should not capture new bindings");
+        }
+    }
+
+    #[test]
+    fn underscore_nested() {
+        let pat = Pattern::from_val(v("(a _ (a _ a))"));
+        {
+            let m = pat
+                .matches(&v("(1 :hello (1 :boop 1))"))
+                .expect("should match");
+            assert_eq!(m.bindings.len(), 1, "should have one binding for `a`");
+            assert_eq!(m.bindings.get(&SymbolId::from("a")), Some(&v("1")));
+        }
     }
 
     fn v(expr: &str) -> Val {
