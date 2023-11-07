@@ -422,8 +422,6 @@ fn compile_match<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T,
         ),
     ]);
 
-    dbg!(&ast.to_string());
-
     compile(&ast)
 }
 
