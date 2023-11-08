@@ -36,6 +36,32 @@ async fn srv_echo() {
 }
 
 #[tokio::test]
+async fn srv_multi_export() {
+    let rt = Runtime::new();
+
+    let echo_prog = r#" (begin 
+        (spawn (lambda () (begin
+            (defn ping (msg) (list "pong" msg))
+            (defn pong (msg) (list "ping" msg))
+            (srv :name :ping_pong :exports '(ping pong)))))
+        (list
+            (call (find-srv :ping_pong) '(:ping "hi"))
+            (call (find-srv :ping_pong) '(:pong "bye")))
+    )"#;
+    let prog = Program::from_expr(echo_prog).unwrap();
+    let hdl = rt.run(prog).await.unwrap();
+
+    let resp = hdl.join().await.unwrap();
+    assert_eq!(
+        resp.status.unwrap(),
+        ProcessResult::Done(Val::List(vec![
+            Val::List(vec![Val::string("pong"), Val::string("hi")]),
+            Val::List(vec![Val::string("ping"), Val::string("bye")]),
+        ]))
+    );
+}
+
+#[tokio::test]
 async fn srv_echo_invalid_msg() {
     let rt = Runtime::new();
 
@@ -84,4 +110,24 @@ async fn srv_echo_invalid_arg() {
     );
 }
 
-// TODO: Test calling w/ invalid number of arguments
+#[tokio::test]
+async fn spawn_echo_svc() {
+    let rt = Runtime::new();
+
+    // Spawn + interact on same program
+    let prog = r#"(begin
+         (spawn (lambda () (begin
+            (defn echo (name) (list "got" name))
+            (srv :name :echo :exports '(echo))
+         )))
+         (call (find-srv :echo) '(:echo "hello")))
+    "#;
+    let prog = Program::from_expr(prog).unwrap();
+    let hdl = rt.run(prog).await.unwrap();
+
+    let resp = hdl.join().await.unwrap();
+    assert_eq!(
+        resp.status.unwrap(),
+        ProcessResult::Done(Val::List(vec![Val::string("got"), Val::string("hello"),]))
+    );
+}

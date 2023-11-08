@@ -7,8 +7,8 @@ next: Client / Runtime interactions v2
 
 ** Runtime Process Ergonomics
 - [X] Headless Process Spawning
-- [ ] Service Discovery / Mgmt
-- [ ] IPC via =srv= and =bind=
+- [X] Service Discovery / Mgmt
+- [X] IPC via =srv= (=bind= is punted)
 - [ ] Init File
 
 * runtime
