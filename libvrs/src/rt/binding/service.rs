@@ -1,9 +1,9 @@
 //! Service Bindings
 //! See also [super::registry]
-use lyric::{compile, kwargs, Error, KeywordId, Result};
+use lyric::{compile, kwargs, Error, KeywordId, Result, SymbolId};
 
 use crate::rt::proc_io::IOCmd;
-use crate::rt::program::{Extern, Fiber, NativeFn, NativeFnOp, Val};
+use crate::rt::program::{Extern, Fiber, Lambda, NativeFn, NativeFnOp, Val};
 
 /// Binding for register
 pub(crate) fn register_fn() -> NativeFn {
@@ -108,32 +108,27 @@ fn srv(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
     let register_form = Val::List(vec![Val::symbol("register"), name]);
 
     let mut match_form = vec![Val::symbol("match"), Val::symbol("msg")];
-    for sym in exports {
-        let val = f
-            .cur_env()
-            .lock()
-            .unwrap()
-            .get(&sym)
-            .ok_or(Error::InvalidExpression(format!(
+    {
+        let env = f.cur_env().lock().unwrap();
+
+        for sym in exports {
+            let val = env.get(&sym).ok_or(Error::InvalidExpression(format!(
                 "No symbol bound to {}",
                 sym
             )))?;
-        let lambda = match val {
-            Val::Lambda(l) => Ok(l),
-            _ => Err(Error::UnexpectedArguments(format!(
-                "{} is not a lambda - found {}",
-                sym, val
-            ))),
-        }?;
-        let pattern = std::iter::once(Val::Keyword(sym.clone().to_keyword()))
-            .chain(lambda.params.iter().map(|v| Val::Symbol(v.clone())))
-            .collect::<Vec<_>>();
-        let body = std::iter::once(Val::Symbol(sym))
-            .chain(lambda.params.into_iter().map(Val::Symbol))
-            .collect::<Vec<_>>();
-        match_form.push(Val::List(vec![Val::List(pattern), Val::List(body)]));
+            let lambda = match val {
+                Val::Lambda(l) => Ok(l),
+                _ => Err(Error::UnexpectedArguments(format!(
+                    "{} is not a lambda - found {}",
+                    sym, val
+                ))),
+            }?;
+            match_form.push(Val::List(vec![
+                lambda_pattern(&sym, &lambda),
+                lambda_call(&sym, &lambda),
+            ]));
+        }
     }
-
     // catch-all
     match_form.push(Val::List(vec![
         Val::symbol("_"),
@@ -183,4 +178,87 @@ fn srv(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
 
     let bc = compile(&ast)?;
     Ok(NativeFnOp::Exec(bc))
+}
+
+/// Generates pattern for calling exported lambda
+fn lambda_pattern(symbol: &SymbolId, lambda: &Lambda) -> Val {
+    Val::List(
+        std::iter::once(Val::Keyword(symbol.clone().to_keyword()))
+            .chain(lambda.params.iter().map(|v| Val::Symbol(v.clone())))
+            .collect::<Vec<_>>(),
+    )
+}
+
+/// Generates function call expression compatible with [lambda_pattern]
+fn lambda_call(symbol: &SymbolId, lambda: &Lambda) -> Val {
+    //
+    Val::List(
+        std::iter::once(Val::Symbol(symbol.clone()))
+            .chain(lambda.params.iter().map(|v| Val::Symbol(v.clone())))
+            .collect::<Vec<_>>(),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use lyric::Inst;
+
+    use super::*;
+
+    #[test]
+    fn lambda_pattern_empty() {
+        let lambda = Lambda {
+            params: vec![],
+            code: vec![Inst::PushConst(Val::Nil)],
+            parent: None,
+        };
+
+        assert_eq!(
+            lambda_pattern(&SymbolId::from("hello"), &lambda),
+            v("(:hello)")
+        );
+    }
+
+    #[test]
+    fn lambda_pattern_nonempty() {
+        let lambda = Lambda {
+            params: vec![SymbolId::from("arg1"), SymbolId::from("arg2")],
+            code: vec![Inst::PushConst(Val::Nil)],
+            parent: None,
+        };
+
+        assert_eq!(
+            lambda_pattern(&SymbolId::from("hello"), &lambda),
+            v("(:hello arg1 arg2)")
+        );
+    }
+
+    #[test]
+    fn lambda_call_empty() {
+        let lambda = Lambda {
+            params: vec![],
+            code: vec![Inst::PushConst(Val::Nil)],
+            parent: None,
+        };
+
+        assert_eq!(lambda_call(&SymbolId::from("hello"), &lambda), v("(hello)"));
+    }
+
+    #[test]
+    fn lambda_call_nonempty() {
+        let lambda = Lambda {
+            params: vec![SymbolId::from("arg1"), SymbolId::from("arg2")],
+            code: vec![Inst::PushConst(Val::Nil)],
+            parent: None,
+        };
+
+        assert_eq!(
+            lambda_call(&SymbolId::from("hello"), &lambda),
+            v("(hello arg1 arg2)")
+        );
+    }
+
+    fn v(expr: &str) -> Val {
+        lyric::parse(expr).unwrap().into()
+    }
 }
