@@ -152,6 +152,17 @@ Test: Make sure that =(a b a)= only matches =(1 2 1)= but not =(1 2 3)=
 ** TODO Conditional Operators =not=, =and=, and =or=
 =and EXPR...= - left-to-right, and stop if one expr evaluates to =#f=. Otherwise =#t=
 =or= - left-to-right, stop if one expr evaluates to NOT =#f=
+** TODO Function Calling Arguments - Lambda Lists
+Support richer lambda list
+
+Alternate Idea: Only support =rest= - but build convenience for:
+- Supplying value for optional arg from =rest= list
+- Extracting keyword argument from =rest= list
+
+- [ ] =optional=
+- [ ] =rest=
+- [ ] =keyword= arguments
+
 ** TODO Math Operators =-=
 ** TODO Pinning Symbols in Pattern Matches
 

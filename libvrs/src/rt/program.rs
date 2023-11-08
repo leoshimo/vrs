@@ -119,6 +119,10 @@ fn program_env() -> Env {
     }
 
     {
+        e.bind_native(SymbolId::from("srv"), binding::srv_fn());
+    }
+
+    {
         e.bind_native(SymbolId::from("kill"), binding::kill_fn())
             .bind_native(SymbolId::from("pid"), binding::pid_fn())
             .bind_native(SymbolId::from("ps"), binding::ps_fn())
