@@ -131,3 +131,6 @@ async fn spawn_echo_svc() {
         ProcessResult::Done(Val::List(vec![Val::string("got"), Val::string("hello"),]))
     );
 }
+
+// TODO: Test srv w/o :name errors
+// TODO: Test srv w/o :exports errors
