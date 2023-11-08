@@ -28,19 +28,5 @@
 (add_item "Send to Kindle" '(open_url "https://www.amazon.com/gp/sendtokindle"))
 (add_item "RC - Presentations" '(open_url "https://presentations.recurse.com"))
 
-#
-# Whoops service mgmt is broken
-# (srv :name :launcher
-#      :export '(get_items add_item))
-#
-(register :launcher)
-(loop
-    (def (r src msg) (recv))
-    (def resp
-      (try (match msg
-        ((:add_item title cmd) (add_item title cmd))
-        ((:get_items) (get_items))
-        (_ '(:err "Unrecognized message")))))
-    (send src (list r resp)))
-
-
+(srv :name :launcher
+     :exports '(get_items add_item))
