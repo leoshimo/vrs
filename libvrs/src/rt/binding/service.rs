@@ -1,6 +1,6 @@
 //! Service Bindings
 //! See also [super::registry]
-use lyric::{compile, Error, Result};
+use lyric::{compile, kwargs, Error, KeywordId, Result};
 
 use crate::rt::proc_io::IOCmd;
 use crate::rt::program::{Extern, Fiber, NativeFn, NativeFnOp, Val};
@@ -67,7 +67,7 @@ pub(crate) fn srv_fn() -> NativeFn {
 }
 
 // TODO: Define as lisp macro
-fn srv(fiber: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
+fn srv(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
     // Expand
     //     (srv :name :SRV_NAME :exports '(sym_a sym_b))
     // to
@@ -82,12 +82,59 @@ fn srv(fiber: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
     //                     (_ '(:err "Unrecognized message")))))
     //             (send src (list r resp))))
 
-    let srv_name = Val::keyword("todo");
-    let exports = Val::List(vec![]);
+    let name = kwargs::get(args, &KeywordId::from("name")).ok_or(Error::UnexpectedArguments(
+        "Missing :name keyword argument".to_string(),
+    ))?;
 
-    let register_form = Val::List(vec![Val::symbol("register"), srv_name]);
+    let exports = kwargs::get(args, &KeywordId::from("exports")).ok_or(
+        Error::UnexpectedArguments("Missing :exports keyword argument".to_string()),
+    )?;
+    let exports = match exports {
+        Val::List(symbols) => Ok(symbols),
+        _ => Err(Error::UnexpectedArguments(
+            ":exports keyword argument must be a list".to_string(),
+        )),
+    }?;
+    let exports = exports
+        .into_iter()
+        .map(|e| match e {
+            Val::Symbol(s) => Ok(s),
+            _ => Err(Error::UnexpectedArguments(
+                "Forms in :exports list should be symbols".to_string(),
+            )),
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    let register_form = Val::List(vec![Val::symbol("register"), name]);
 
     let mut match_form = vec![Val::symbol("match"), Val::symbol("msg")];
+    for sym in exports {
+        let val = f
+            .cur_env()
+            .lock()
+            .unwrap()
+            .get(&sym)
+            .ok_or(Error::InvalidExpression(format!(
+                "No symbol bound to {}",
+                sym
+            )))?;
+        let lambda = match val {
+            Val::Lambda(l) => Ok(l),
+            _ => Err(Error::UnexpectedArguments(format!(
+                "{} is not a lambda - found {}",
+                sym, val
+            ))),
+        }?;
+        let pattern = std::iter::once(Val::Keyword(sym.clone().to_keyword()))
+            .chain(lambda.params.iter().map(|v| Val::Symbol(v.clone())))
+            .collect::<Vec<_>>();
+        let body = std::iter::once(Val::Symbol(sym))
+            .chain(lambda.params.into_iter().map(Val::Symbol))
+            .collect::<Vec<_>>();
+        match_form.push(Val::List(vec![Val::List(pattern), Val::List(body)]));
+    }
+
+    // catch-all
     match_form.push(Val::List(vec![
         Val::symbol("_"),
         Val::List(vec![

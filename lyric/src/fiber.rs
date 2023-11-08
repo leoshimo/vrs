@@ -93,6 +93,11 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
         &mut self.locals
     }
 
+    /// Get current environment
+    pub fn cur_env(&self) -> &Arc<Mutex<Env<T, L>>> {
+        &self.top().env
+    }
+
     /// Reference to top of callstack
     fn top(&self) -> &CallFrame<T, L> {
         self.cframes.last().expect("Fiber has no callframes!")
