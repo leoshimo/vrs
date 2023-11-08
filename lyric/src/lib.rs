@@ -6,6 +6,7 @@ mod parse;
 pub mod builtin;
 pub mod env;
 pub mod fiber;
+pub mod kwargs;
 pub mod pmatch;
 pub mod types;
 

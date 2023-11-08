@@ -1,5 +1,5 @@
 //! List builtins
-use crate::{Error, Extern, Inst, Locals, NativeFn, NativeFnOp, SymbolId, Val};
+use crate::{kwargs, Error, Extern, Inst, Locals, NativeFn, NativeFnOp, SymbolId, Val};
 
 /// Language bindng for `list`
 pub fn list_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
@@ -35,15 +35,9 @@ pub fn get_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
                 };
                 Ok(NativeFnOp::Return(elem))
             }
-            [Val::List(l), Val::Keyword(target)] => {
-                let result = l
-                    .windows(2)
-                    .find(|w| matches!(&w[0], Val::Keyword(key) if key == target))
-                    .map(|w| w[1].clone())
-                    .unwrap_or(Val::Nil);
-
-                Ok(NativeFnOp::Return(result))
-            }
+            [Val::List(l), Val::Keyword(target)] => Ok(NativeFnOp::Return(
+                kwargs::get(l, target).unwrap_or(Val::Nil),
+            )),
             _ => Err(Error::UnexpectedArguments(
                 "get expects a list and indexing argument".to_string(),
             )),
