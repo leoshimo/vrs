@@ -8,7 +8,7 @@ next: Client / Runtime interactions v2
 ** Runtime Process Ergonomics
 - [X] Headless Process Spawning
 - [X] Service Discovery / Mgmt
-- [X] IPC via =srv= (=bind= is punted)
+- [ ] IPC via =srv= / =bind=
 - [ ] Init File
 
 * runtime
@@ -55,8 +55,13 @@ Maybe also cover imports / exported interface and discoverability
 (link :launcher)
 #+end_src
 
-** TODO Supervisors and Links
 ** TODO Dotfiles / Init Scripts
+** TODO File IO for S-Expressions
+
+Read / Write S-Expressions to File
+Goal: Replace hard-coded data in =launcher.ll=
+
+** TODO Supervisors and Links
 ** TODO Runtime Live-On
 - [ ] =vrsd= does not crash if process crashes (?)
 - [ ] =vrsd= can run in parallel - =dev= and =prod=
@@ -146,6 +151,10 @@ Goal: Provide way to extract params from messages w/o indexing
 ** DONE Add =match= 
 Add pattern matching conditional branching
 Test: Make sure that =(a b a)= only matches =(1 2 1)= but not =(1 2 3)=
+** TODO quasiquote, unquote, unquote-splice
+** TODO Macros
+- [ ] [[https://www.youtube.com/watch?v=M4qj2ictRpg&t=22s][Gavin - Macros in ELisp]]
+- [ ] [[https://www.youtube.com/watch?v=_WLauBkO5rI][Emacs Elements - Macros]]
 ** TODO Pipeline Operator
 (Streaming?)
 ** TODO Colocated Docstring for =defn=
@@ -171,10 +180,6 @@ Using the *value* of symbol instead of symbol
 E.g. =(match '(+ a b)= would not work, since =+= would be bound to =Val::Symbol=
 instead of =Val::NativeFn=
 
-** TODO quasiquote, unquote, unquote-splice
-** TODO Macros
-- [ ] [[https://www.youtube.com/watch?v=M4qj2ictRpg&t=22s][Gavin - Macros in ELisp]]
-- [ ] [[https://www.youtube.com/watch?v=_WLauBkO5rI][Emacs Elements - Macros]]
 ** TODO Fiber API within lyric
 Allow creating and running fibers within lyric?
 E.g. Use Yielding Function as an Iterator
@@ -185,6 +190,7 @@ Local variable access is relative to base pointer
 Removes need for Env - Env is implicit (?)
 
 Wait... how do closures work?
+** TODO Pretty Printing Code and S-Expressions
 * live on
 ** TODO Init File
 Goal: Replace =/scripts/serve.sh= hack w/ proper init rcfile load path
@@ -192,6 +198,24 @@ Goal: Replace =/scripts/serve.sh= hack w/ proper init rcfile load path
 ** TODO Log File
 Goal: Introspect running runtime via logs
 
+** TODO Better Errors - Process Tombstones?
+
+Better Error Reporting when Process Crashes
+Lots of noise for fiber execution.
+
+#+begin_src rust
+// E.g. below fails in =call= BUT the real error is at ping_pong :exports '(echo) - echo is not defined for this program
+let echo_prog = r#" (begin 
+    (spawn (lambda () (begin
+        (defn ping (msg) (list "pong" msg))
+        (defn pong (msg) (list "ping" msg))
+        (srv :name :ping_pong :exports '(echo)))))
+    (list
+        (call (find-srv :ping_pong) '(:ping "hi"))
+        (call (find-srv :ping_pong) '(:pong "bye")))
+)"#;
+
+#+end_src
 ** TODO Hot Reload / Auto Restart
 Goal: When runtime crashes, auto restart
 
@@ -242,6 +266,35 @@ Replicate tests in env.rs to eval.rs
 - Two things capturing a parent, and each setting and updating it
 
 * debt  
+** TODO Native Bindings that should be =Lambda=
+E.g. built-in lambda bindings - e.g. =call_fn=
+
+#+begin_src rust
+/// Binding for call
+pub(crate) fn call_fn() -> Lambda {
+    Lambda {
+        params: vec![SymbolId::from("pid"), SymbolId::from("msg")],
+        code: compile(
+            &parse(
+                r#"
+            (begin
+                (def r (ref))
+                (send pid (list r (self) msg))
+                (get (recv (list r 'any)) 1))
+        "#,
+            )
+            .unwrap()
+            .into(),
+        )
+        .unwrap(),
+        parent: None,
+    }
+}
+#+end_src
+
+** TODO Native Bindings w/ hand-rolled macos
+E.g. =srv= definition - =srv_fn=
+
 ** TODO Fiber Execution
 Revisit =Fiber= and =CallStack= code
 
