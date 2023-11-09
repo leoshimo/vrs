@@ -97,6 +97,37 @@ pub(crate) fn bind_srv_fn() -> Lambda {
     }
 }
 
+/// Binding for info-srv
+pub(crate) fn info_srv_fn() -> NativeFn {
+    NativeFn {
+        func: |_, args| {
+            let (keyword, query) = match args {
+                [Val::Keyword(k), Val::Keyword(q)] => (k, q),
+                _ => {
+                    return Err(Error::UnexpectedArguments(
+                        "info-srv expects single keyword argument".to_string(),
+                    ))
+                }
+            };
+
+            let query = match query.as_str() {
+                "pid" => ServiceQuery::Pid,
+                "interface" => ServiceQuery::Interface,
+                q => {
+                    return Err(Error::UnexpectedArguments(format!(
+                        "info-srv got unexpected query: {}",
+                        q
+                    )))
+                }
+            };
+
+            Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
+                IOCmd::QueryService(keyword.clone(), query),
+            )))))
+        },
+    }
+}
+
 // TODO: Define as lisp macro
 fn srv(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
     // Expand
