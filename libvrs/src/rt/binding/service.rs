@@ -20,13 +20,13 @@ pub(crate) fn register_fn() -> NativeFn {
             };
 
             let mut reg = Registration::new(keyword);
-            match kwargs::get(&args[1..], &KeywordId::from("exports")) {
-                Some(Val::List(exports)) => {
-                    reg.exports(exports);
+            match kwargs::get(&args[1..], &KeywordId::from("interface")) {
+                Some(Val::List(interface)) => {
+                    reg.interface(interface);
                 }
                 Some(val) => {
                     return Err(Error::UnexpectedArguments(format!(
-                        ":exports must be a list - got {}",
+                        ":interface must be a list - got {}",
                         val
                     )))
                 }

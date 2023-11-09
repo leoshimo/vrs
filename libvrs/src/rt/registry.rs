@@ -40,7 +40,7 @@ pub struct Entry {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Registration {
     keyword: KeywordId,
-    exports: Vec<Val>,
+    interface: Vec<Val>,
 }
 
 impl Registry {
@@ -185,10 +185,10 @@ impl From<Entry> for Val {
             Val::Extern(Extern::ProcessId(value.pid())),
         ];
 
-        let exports = &value.registration.exports;
-        if !exports.is_empty() {
-            contents.push(Val::keyword("exports"));
-            contents.push(Val::List(exports.clone()));
+        let interface = &value.registration.interface;
+        if !interface.is_empty() {
+            contents.push(Val::keyword("interface"));
+            contents.push(Val::List(interface.clone()));
         }
 
         Val::List(contents)
@@ -199,12 +199,12 @@ impl Registration {
     pub fn new(keyword: KeywordId) -> Self {
         Self {
             keyword,
-            exports: vec![],
+            interface: vec![],
         }
     }
 
-    pub fn exports(&mut self, exports: Vec<Val>) -> &mut Self {
-        self.exports = exports;
+    pub fn interface(&mut self, interface: Vec<Val>) -> &mut Self {
+        self.interface = interface;
         self
     }
 }
@@ -322,13 +322,13 @@ mod tests {
         let hdl_b = k.spawn_prog(prog).await.unwrap();
 
         let mut reg_a = Registration::new(KeywordId::from("A"));
-        reg_a.exports(vec![Val::keyword("export_a")]);
+        reg_a.interface(vec![Val::keyword("interface_a")]);
         r.register(reg_a, hdl_a.clone())
             .await
             .expect("registration should succeed");
 
         let mut reg_b = Registration::new(KeywordId::from("B"));
-        reg_b.exports(vec![Val::keyword("export_b")]);
+        reg_b.interface(vec![Val::keyword("interface_b")]);
         r.register(reg_b, hdl_b.clone())
             .await
             .expect("registration should succeed");
@@ -341,10 +341,10 @@ mod tests {
             .map(|e| (e.registration))
             .collect();
         assert!(entries.contains(
-            Registration::new(KeywordId::from("A")).exports(vec![Val::keyword("export_a")])
+            Registration::new(KeywordId::from("A")).interface(vec![Val::keyword("interface_a")])
         ));
         assert!(entries.contains(
-            Registration::new(KeywordId::from("B")).exports(vec![Val::keyword("export_b")])
+            Registration::new(KeywordId::from("B")).interface(vec![Val::keyword("interface_b")])
         ));
 
         hdl_a.kill().await;

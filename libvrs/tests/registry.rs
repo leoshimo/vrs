@@ -29,7 +29,7 @@ async fn list_services() {
         r#"(begin
         (defn ping (x) x)
         (defn pong (x) x)
-        (register :service_c :exports '(ping pong))
+        (register :service_c :interface '(ping pong))
         (recv)
     )"#,
     )
@@ -64,7 +64,7 @@ async fn list_services() {
         Val::keyword("service_c"),
         Val::keyword("pid"),
         Val::Extern(Extern::ProcessId(srv_c.id())),
-        Val::keyword("exports"),
+        Val::keyword("interface"),
         Val::List(vec![Val::symbol("ping"), Val::symbol("pong"),])
     ])));
 }
