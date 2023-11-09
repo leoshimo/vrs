@@ -32,7 +32,8 @@ impl<T: Extern, L: Locals> Env<T, L> {
             .bind_native(SymbolId::from("map"), builtin::map_fn())
             .bind_native(SymbolId::from("not"), builtin::not_fn())
             .bind_native(SymbolId::from("ok?"), builtin::ok_fn())
-            .bind_native(SymbolId::from("err?"), builtin::err_fn());
+            .bind_native(SymbolId::from("err?"), builtin::err_fn())
+            .bind_native(SymbolId::from("ls-env"), builtin::ls_env_fn());
 
         e
     }
@@ -87,6 +88,10 @@ impl<T: Extern, L: Locals> Env<T, L> {
         self.define(symbol, Val::Lambda(lambda));
         self
     }
+
+    pub fn iter(&self) -> EnvIter<'_, T, L> {
+        EnvIter(self.bindings.iter())
+    }
 }
 
 impl<T: Extern, L: Locals> std::clone::Clone for Env<T, L> {
@@ -100,6 +105,18 @@ impl<T: Extern, L: Locals> std::clone::Clone for Env<T, L> {
             bindings: self.bindings.clone(),
             parent,
         }
+    }
+}
+
+pub struct EnvIter<'a, T: Extern, L: Locals>(
+    std::collections::hash_map::Iter<'a, SymbolId, Val<T, L>>,
+);
+
+impl<'a, T: Extern, L: Locals> Iterator for EnvIter<'a, T, L> {
+    type Item = (&'a SymbolId, &'a Val<T, L>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
     }
 }
 
