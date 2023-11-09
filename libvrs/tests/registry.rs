@@ -25,6 +25,17 @@ async fn list_services() {
     let srv_b = Program::from_expr("(begin (register :service_b) (recv))").unwrap();
     let srv_b = rt.run(srv_b).await.unwrap();
 
+    let srv_c = Program::from_expr(
+        r#"(begin
+        (defn ping (x) x)
+        (defn pong (x) x)
+        (register :service_c :exports '(ping pong))
+        (recv)
+    )"#,
+    )
+    .unwrap();
+    let srv_c = rt.run(srv_c).await.unwrap();
+
     let prog = Program::from_expr("(ls-srv)").unwrap();
     let hdl = rt.run(prog).await.unwrap();
 
@@ -35,7 +46,7 @@ async fn list_services() {
         _ => panic!("Expected list as result"),
     };
 
-    assert_eq!(svcs.len(), 2);
+    assert_eq!(svcs.len(), 3);
     assert!(svcs.contains(&Val::List(vec![
         Val::keyword("name"),
         Val::keyword("service_a"),
@@ -47,6 +58,14 @@ async fn list_services() {
         Val::keyword("service_b"),
         Val::keyword("pid"),
         Val::Extern(Extern::ProcessId(srv_b.id())),
+    ])));
+    assert!(svcs.contains(&Val::List(vec![
+        Val::keyword("name"),
+        Val::keyword("service_c"),
+        Val::keyword("pid"),
+        Val::Extern(Extern::ProcessId(srv_c.id())),
+        Val::keyword("exports"),
+        Val::List(vec![Val::symbol("ping"), Val::symbol("pong"),])
     ])));
 }
 

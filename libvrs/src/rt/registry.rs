@@ -6,7 +6,8 @@ use tokio::sync::{mpsc, oneshot};
 use lyric::KeywordId;
 use tracing::error;
 
-use crate::{Error, ProcessExit, ProcessHandle, Result};
+use crate::rt::program::Val;
+use crate::{Error, Extern, ProcessExit, ProcessHandle, Result};
 
 use super::ProcessId;
 
@@ -31,8 +32,15 @@ pub struct EntryId(String);
 #[derive(Debug, Clone)]
 pub struct Entry {
     id: EntryId,
-    keyword: KeywordId,
+    registration: Registration,
     handle: ProcessHandle,
+}
+
+/// Struct carrying registration payload
+#[derive(Debug, Clone, PartialEq)]
+pub struct Registration {
+    keyword: KeywordId,
+    exports: Vec<Val>,
 }
 
 impl Registry {
@@ -50,10 +58,10 @@ impl Registry {
     }
 
     /// Register a given process
-    pub async fn register(&self, keyword: KeywordId, proc: ProcessHandle) -> Result<()> {
+    pub async fn register(&self, registration: Registration, proc: ProcessHandle) -> Result<()> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.tx
-            .send(Cmd::Register(keyword, proc, resp_tx))
+            .send(Cmd::Register(registration, proc, resp_tx))
             .await
             .map_err(|_| Error::NoMessageReceiver("registry task is dead".to_string()))?;
         resp_rx.await?
@@ -90,8 +98,8 @@ impl RegistryTask {
 
     async fn handle_cmd(&mut self, cmd: Cmd) {
         match cmd {
-            Cmd::Register(keyword, proc, resp_tx) => {
-                let _ = resp_tx.send(self.handle_register(keyword, proc));
+            Cmd::Register(registration, proc, resp_tx) => {
+                let _ = resp_tx.send(self.handle_register(registration, proc));
             }
             Cmd::Lookup(keyword, resp_tx) => {
                 let _ = resp_tx.send(self.entries.get(&keyword).cloned());
@@ -105,15 +113,16 @@ impl RegistryTask {
         }
     }
 
-    fn handle_register(&mut self, keyword: KeywordId, handle: ProcessHandle) -> Result<()> {
-        if self.entries.contains_key(&keyword) {
+    fn handle_register(&mut self, registration: Registration, handle: ProcessHandle) -> Result<()> {
+        let keyword = &registration.keyword;
+        if self.entries.contains_key(keyword) {
             return Err(Error::RegistryError(format!(
                 "Registered process exists for {}",
                 keyword
             )));
         }
 
-        let entry = Entry::new(keyword.clone(), handle.clone());
+        let entry = Entry::new(registration.clone(), handle.clone());
 
         // Notify on exi
         let entry_id = entry.id.clone();
@@ -129,7 +138,7 @@ impl RegistryTask {
             let _ = tx.send(Cmd::NotifyExit(kwd, entry_id, exit)).await;
         });
 
-        self.entries.insert(keyword, entry);
+        self.entries.insert(keyword.clone(), entry);
 
         Ok(())
     }
@@ -150,20 +159,53 @@ impl RegistryTask {
 }
 
 impl Entry {
-    fn new(keyword: KeywordId, handle: ProcessHandle) -> Self {
+    fn new(registration: Registration, handle: ProcessHandle) -> Self {
         Self {
-            keyword,
             id: EntryId::from(nanoid!()),
+            registration,
             handle,
         }
     }
 
     pub fn keyword(&self) -> &KeywordId {
-        &self.keyword
+        &self.registration.keyword
     }
 
     pub fn pid(&self) -> ProcessId {
         self.handle.id()
+    }
+}
+
+impl From<Entry> for Val {
+    fn from(value: Entry) -> Self {
+        let mut contents = vec![
+            Val::keyword("name"),
+            Val::Keyword(value.keyword().clone()),
+            Val::keyword("pid"),
+            Val::Extern(Extern::ProcessId(value.pid())),
+        ];
+
+        let exports = &value.registration.exports;
+        if !exports.is_empty() {
+            contents.push(Val::keyword("exports"));
+            contents.push(Val::List(exports.clone()));
+        }
+
+        Val::List(contents)
+    }
+}
+
+impl Registration {
+    pub fn new(keyword: KeywordId) -> Self {
+        Self {
+            keyword,
+            exports: vec![],
+        }
+    }
+
+    pub fn exports(&mut self, exports: Vec<Val>) -> &mut Self {
+        self.exports = exports;
+        self
     }
 }
 
@@ -174,7 +216,7 @@ impl From<String> for EntryId {
 }
 
 enum Cmd {
-    Register(KeywordId, ProcessHandle, oneshot::Sender<Result<()>>),
+    Register(Registration, ProcessHandle, oneshot::Sender<Result<()>>),
     Lookup(KeywordId, oneshot::Sender<Option<Entry>>),
     NotifyExit(KeywordId, EntryId, Result<ProcessExit>),
     GetAll(oneshot::Sender<Vec<Entry>>),
@@ -209,10 +251,10 @@ mod tests {
         assert_matches!(r.lookup(KeywordId::from("A")).await.unwrap(), None);
         assert_matches!(r.lookup(KeywordId::from("B")).await.unwrap(), None);
 
-        r.register(KeywordId::from("A"), hdl_a.clone())
+        r.register(Registration::new(KeywordId::from("A")), hdl_a.clone())
             .await
             .expect("registration should succeed");
-        r.register(KeywordId::from("B"), hdl_b.clone())
+        r.register(Registration::new(KeywordId::from("B")), hdl_b.clone())
             .await
             .expect("registration should succeed");
 
@@ -231,12 +273,13 @@ mod tests {
         let hdl_a = k.spawn_prog(prog.clone()).await.unwrap();
         let hdl_b = k.spawn_prog(prog).await.unwrap();
 
-        r.register(KeywordId::from("A"), hdl_a.clone())
+        r.register(Registration::new(KeywordId::from("A")), hdl_a.clone())
             .await
             .expect("registration should succeed");
 
         assert_matches!(
-            r.register(KeywordId::from("A"), hdl_b.clone()).await,
+            r.register(Registration::new(KeywordId::from("A")), hdl_b.clone())
+                .await,
             Err(Error::RegistryError(_)),
             "Registration for existing key should fail"
         );
@@ -250,7 +293,7 @@ mod tests {
         let prog = Program::from_expr("(recv)").unwrap();
         let hdl = k.spawn_prog(prog.clone()).await.unwrap();
 
-        r.register(KeywordId::from("A"), hdl.clone())
+        r.register(Registration::new(KeywordId::from("A")), hdl.clone())
             .await
             .expect("registration should succeed");
 
@@ -278,10 +321,15 @@ mod tests {
         let hdl_a = k.spawn_prog(prog.clone()).await.unwrap();
         let hdl_b = k.spawn_prog(prog).await.unwrap();
 
-        r.register(KeywordId::from("A"), hdl_a.clone())
+        let mut reg_a = Registration::new(KeywordId::from("A"));
+        reg_a.exports(vec![Val::keyword("export_a")]);
+        r.register(reg_a, hdl_a.clone())
             .await
             .expect("registration should succeed");
-        r.register(KeywordId::from("B"), hdl_b.clone())
+
+        let mut reg_b = Registration::new(KeywordId::from("B"));
+        reg_b.exports(vec![Val::keyword("export_b")]);
+        r.register(reg_b, hdl_b.clone())
             .await
             .expect("registration should succeed");
 
@@ -290,10 +338,14 @@ mod tests {
             .await
             .expect("Should be able to retrieve entries")
             .into_iter()
-            .map(|e| (e.keyword))
+            .map(|e| (e.registration))
             .collect();
-        assert!(entries.contains(&KeywordId::from("A")));
-        assert!(entries.contains(&KeywordId::from("B")));
+        assert!(entries.contains(
+            &Registration::new(KeywordId::from("A")).exports(vec![Val::keyword("export_a")])
+        ));
+        assert!(entries.contains(
+            &Registration::new(KeywordId::from("B")).exports(vec![Val::keyword("export_b")])
+        ));
 
         hdl_a.kill().await;
         hdl_a.join().await.expect("should complete");
@@ -303,7 +355,7 @@ mod tests {
             .await
             .expect("Should be able to retrieve entries")
             .into_iter()
-            .map(|e| (e.keyword))
+            .map(|e| (e.registration.keyword))
             .collect();
         assert!(
             !entries.contains(&KeywordId::from("A")),

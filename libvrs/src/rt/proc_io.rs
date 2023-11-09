@@ -1,7 +1,7 @@
 //! Process IO
 use super::kernel::WeakKernelHandle;
 use super::mailbox::MailboxHandle;
-use super::registry::Registry;
+use super::registry::{Registration, Registry};
 use super::ProcessId;
 use lyric::{Form, KeywordId};
 use std::time::Duration;
@@ -40,7 +40,7 @@ pub enum IOCmd {
     Recv(Option<Pattern>),
     Sleep(Duration),
     Spawn(Program),
-    RegisterAsService(KeywordId),
+    RegisterAsService(Registration),
     ListServices,
     FindService(KeywordId),
 }
@@ -123,7 +123,7 @@ impl ProcIO {
             IOCmd::Recv(pat) => self.handle_recv(pat).await,
             IOCmd::Sleep(duration) => self.sleep(duration).await,
             IOCmd::Spawn(prog) => self.spawn_prog(prog).await,
-            IOCmd::RegisterAsService(keyword) => self.register_self(keyword).await,
+            IOCmd::RegisterAsService(reg) => self.register_self(reg).await,
             IOCmd::ListServices => self.list_services().await,
             IOCmd::FindService(keyword) => self.find_service(keyword).await,
         }
@@ -228,13 +228,13 @@ impl ProcIO {
     }
 
     /// Register itself as a process
-    async fn register_self(&self, keyword: KeywordId) -> Result<Val> {
+    async fn register_self(&self, reg: Registration) -> Result<Val> {
         let hdl = self.self_handle.as_ref().expect("Dangling ProcIO");
 
         self.registry
             .as_ref()
             .ok_or(Error::NoIOResource("No registry for process".to_string()))?
-            .register(keyword, hdl.clone())
+            .register(reg, hdl.clone())
             .await?;
 
         Ok(Val::keyword("ok"))
@@ -248,19 +248,7 @@ impl ProcIO {
             .ok_or(Error::NoIOResource("No registry for process".to_string()))?
             .all()
             .await?;
-
-        let entry_values: Vec<_> = entries
-            .into_iter()
-            .map(|e| {
-                Val::List(vec![
-                    Val::keyword("name"),
-                    Val::Keyword(e.keyword().clone()),
-                    Val::keyword("pid"),
-                    Val::Extern(Extern::ProcessId(e.pid())),
-                ])
-            })
-            .collect();
-
+        let entry_values: Vec<_> = entries.into_iter().map(Val::from).collect();
         Ok(Val::List(entry_values))
     }
 

@@ -4,22 +4,37 @@ use lyric::{compile, kwargs, Error, KeywordId, Result, SymbolId};
 
 use crate::rt::proc_io::IOCmd;
 use crate::rt::program::{Extern, Fiber, Lambda, NativeFn, NativeFnOp, Val};
+use crate::rt::registry::Registration;
 
 /// Binding for register
 pub(crate) fn register_fn() -> NativeFn {
     NativeFn {
         func: |_, args| {
-            let keyword = match args {
-                [Val::Keyword(k)] => k.clone(),
+            let keyword = match args.first() {
+                Some(Val::Keyword(k)) => k.clone(),
                 _ => {
                     return Err(Error::UnexpectedArguments(
-                        "register expects single keyword argument".to_string(),
+                        "register expects a keyword argument as first argument".to_string(),
                     ))
                 }
             };
 
+            let mut reg = Registration::new(keyword);
+            match kwargs::get(&args[1..], &KeywordId::from("exports")) {
+                Some(Val::List(exports)) => {
+                    reg.exports(exports);
+                }
+                Some(val) => {
+                    return Err(Error::UnexpectedArguments(format!(
+                        ":exports must be a list - got {}",
+                        val
+                    )))
+                }
+                None => (),
+            }
+
             Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
-                IOCmd::RegisterAsService(keyword),
+                IOCmd::RegisterAsService(reg),
             )))))
         },
     }
