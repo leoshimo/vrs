@@ -1,6 +1,7 @@
 //! Service Bindings
 //! See also [super::registry]
-use lyric::{compile, kwargs, Error, KeywordId, Result, SymbolId};
+
+use lyric::{compile, kwargs, parse, Error, KeywordId, Result, SymbolId};
 
 use crate::rt::proc_io::IOCmd;
 use crate::rt::program::{Extern, Fiber, Lambda, NativeFn, NativeFnOp, Val};
@@ -79,6 +80,21 @@ pub(crate) fn find_srv_fn() -> NativeFn {
 /// Binding for `srv`
 pub(crate) fn srv_fn() -> NativeFn {
     NativeFn { func: srv }
+}
+
+// TODO: Rust macros for creating Vals - e.g. lambdas
+/// Binding for `bind-srv`
+pub(crate) fn bind_srv_fn() -> Lambda {
+    Lambda {
+        params: vec![SymbolId::from("svc_name")],
+        code: compile(
+            &parse("(map (info-srv srv_name :interface) (lambda (i) (def-bind-interface i)))")
+                .unwrap()
+                .into(),
+        )
+        .unwrap(),
+        parent: None,
+    }
 }
 
 // TODO: Define as lisp macro
