@@ -3,7 +3,7 @@
 
 use lyric::{compile, kwargs, parse, Error, KeywordId, Result, SymbolId};
 
-use crate::rt::proc_io::IOCmd;
+use crate::rt::proc_io::{IOCmd, ServiceQuery};
 use crate::rt::program::{Extern, Fiber, Lambda, NativeFn, NativeFnOp, Val};
 use crate::rt::registry::Registration;
 
@@ -71,7 +71,7 @@ pub(crate) fn find_srv_fn() -> NativeFn {
             };
 
             Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
-                IOCmd::FindService(keyword),
+                IOCmd::QueryService(keyword, ServiceQuery::Pid),
             )))))
         },
     }

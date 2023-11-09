@@ -105,8 +105,12 @@ async fn find_service_dropped() {
     // find-srv should return Nil after message
     let prog = Program::from_expr("(find-srv :service_b)").unwrap();
     let hdl = rt.run(prog).await.unwrap();
-    let val = hdl.join().await.unwrap().status.unwrap().unwrap();
-    assert_eq!(val, Val::Nil);
+    let val = hdl.join().await.unwrap().status;
+    assert_matches!(
+        val,
+        Err(Error::RegistryError(_)),
+        "unknown services return error"
+    );
 }
 
 #[tokio::test]
@@ -121,9 +125,13 @@ async fn find_service_unknown() {
 
     let prog = Program::from_expr("(find-srv :unknown)").unwrap();
     let hdl = rt.run(prog).await.unwrap();
-    let val = hdl.join().await.unwrap().status.unwrap().unwrap();
+    let val = hdl.join().await.unwrap().status;
 
-    assert_eq!(val, Val::Nil, "unknown services return nil");
+    assert_matches!(
+        val,
+        Err(Error::RegistryError(_)),
+        "unknown services return error"
+    );
 }
 
 #[tokio::test]

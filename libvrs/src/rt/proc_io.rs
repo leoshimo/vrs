@@ -42,7 +42,14 @@ pub enum IOCmd {
     Spawn(Program),
     RegisterAsService(Registration),
     ListServices,
-    FindService(KeywordId),
+    QueryService(KeywordId, ServiceQuery),
+}
+
+/// Options for QueryService
+#[derive(Debug, Clone, PartialEq)]
+pub enum ServiceQuery {
+    Pid,
+    Interface,
 }
 
 impl ProcIO {
@@ -125,7 +132,7 @@ impl ProcIO {
             IOCmd::Spawn(prog) => self.spawn_prog(prog).await,
             IOCmd::RegisterAsService(reg) => self.register_self(reg).await,
             IOCmd::ListServices => self.list_services().await,
-            IOCmd::FindService(keyword) => self.find_service(keyword).await,
+            IOCmd::QueryService(svc, info) => self.query_service(svc, info).await,
         }
     }
 
@@ -252,17 +259,18 @@ impl ProcIO {
         Ok(Val::List(entry_values))
     }
 
-    async fn find_service(&self, keyword: KeywordId) -> Result<Val> {
+    async fn query_service(&self, keyword: KeywordId, query: ServiceQuery) -> Result<Val> {
         let entry = self
             .registry
             .as_ref()
             .ok_or(Error::NoIOResource("No registry for process".to_string()))?
             .lookup(keyword)
-            .await?;
+            .await?
+            .ok_or(Error::RegistryError("No service found".to_string()))?;
 
-        match entry {
-            Some(e) => Ok(Val::Extern(Extern::ProcessId(e.pid()))),
-            None => Ok(Val::Nil),
+        match query {
+            ServiceQuery::Pid => Ok(Val::Extern(Extern::ProcessId(entry.pid()))),
+            ServiceQuery::Interface => Ok(Val::List(entry.interface().to_vec())),
         }
     }
 }

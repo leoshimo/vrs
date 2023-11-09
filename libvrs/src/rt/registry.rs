@@ -174,6 +174,10 @@ impl Entry {
     pub fn pid(&self) -> ProcessId {
         self.handle.id()
     }
+
+    pub fn interface(&self) -> &Vec<Val> {
+        &self.registration.interface
+    }
 }
 
 impl From<Entry> for Val {
