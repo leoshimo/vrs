@@ -120,14 +120,9 @@ fn srv(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
         })
         .collect::<Result<Vec<_>>>()?;
 
-    let register_form = Val::List(vec![
-        Val::symbol("register"),
-        name,
-        Val::keyword("exports"),
-        Val::List(vec![Val::symbol("quote"), exports.clone()]),
-    ]);
-
+    let mut interface = vec![];
     let mut match_form = vec![Val::symbol("match"), Val::symbol("msg")];
+
     {
         let env = f.cur_env().lock().unwrap();
 
@@ -143,10 +138,9 @@ fn srv(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
                     sym, val
                 ))),
             }?;
-            match_form.push(Val::List(vec![
-                lambda_pattern(sym, &lambda),
-                lambda_call(sym, &lambda),
-            ]));
+            let pattern = lambda_pattern(sym, &lambda);
+            interface.push(pattern.clone());
+            match_form.push(Val::List(vec![pattern, lambda_call(sym, &lambda)]));
         }
     }
     // catch-all
@@ -160,6 +154,13 @@ fn srv(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
             ]),
         ]),
     ]));
+
+    let register_form = Val::List(vec![
+        Val::symbol("register"),
+        name,
+        Val::keyword("interface"),
+        Val::List(vec![Val::symbol("quote"), Val::List(interface)]),
+    ]);
 
     // TODO: Rust macros plz
     let ast = Val::List(vec![
