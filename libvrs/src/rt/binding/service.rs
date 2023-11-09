@@ -87,7 +87,7 @@ fn srv(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
     //     (srv :name :SRV_NAME :exports '(sym_a sym_b))
     // to
     //     (begin
-    //         (register :launcher)
+    //         (register :launcher :exports '(sym_a sym_b))
     //         (loop
     //             (def (r src msg) (recv))
     //             (def resp
@@ -104,14 +104,14 @@ fn srv(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
     let exports = kwargs::get(args, &KeywordId::from("exports")).ok_or(
         Error::UnexpectedArguments("Missing :exports keyword argument".to_string()),
     )?;
-    let exports = match exports {
-        Val::List(symbols) => Ok(symbols),
+    let symbols = match exports {
+        Val::List(ref symbols) => Ok(symbols),
         _ => Err(Error::UnexpectedArguments(
             ":exports keyword argument must be a list".to_string(),
         )),
     }?;
-    let exports = exports
-        .into_iter()
+    let symbols = symbols
+        .iter()
         .map(|e| match e {
             Val::Symbol(s) => Ok(s),
             _ => Err(Error::UnexpectedArguments(
@@ -120,14 +120,19 @@ fn srv(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
         })
         .collect::<Result<Vec<_>>>()?;
 
-    let register_form = Val::List(vec![Val::symbol("register"), name]);
+    let register_form = Val::List(vec![
+        Val::symbol("register"),
+        name,
+        Val::keyword("exports"),
+        Val::List(vec![Val::symbol("quote"), exports.clone()]),
+    ]);
 
     let mut match_form = vec![Val::symbol("match"), Val::symbol("msg")];
     {
         let env = f.cur_env().lock().unwrap();
 
-        for sym in exports {
-            let val = env.get(&sym).ok_or(Error::InvalidExpression(format!(
+        for sym in symbols {
+            let val = env.get(sym).ok_or(Error::InvalidExpression(format!(
                 "No symbol bound to {}",
                 sym
             )))?;
@@ -139,8 +144,8 @@ fn srv(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
                 ))),
             }?;
             match_form.push(Val::List(vec![
-                lambda_pattern(&sym, &lambda),
-                lambda_call(&sym, &lambda),
+                lambda_pattern(sym, &lambda),
+                lambda_call(sym, &lambda),
             ]));
         }
     }

@@ -341,10 +341,10 @@ mod tests {
             .map(|e| (e.registration))
             .collect();
         assert!(entries.contains(
-            &Registration::new(KeywordId::from("A")).exports(vec![Val::keyword("export_a")])
+            Registration::new(KeywordId::from("A")).exports(vec![Val::keyword("export_a")])
         ));
         assert!(entries.contains(
-            &Registration::new(KeywordId::from("B")).exports(vec![Val::keyword("export_b")])
+            Registration::new(KeywordId::from("B")).exports(vec![Val::keyword("export_b")])
         ));
 
         hdl_a.kill().await;
