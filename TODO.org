@@ -8,9 +8,18 @@ next: Client / Runtime interactions v2
 ** Runtime Process Ergonomics
 - [X] Headless Process Spawning
 - [X] Service Discovery / Mgmt
-- [ ] IPC via =srv= / =bind=
+- [X] IPC via =srv= / =bind=
+
+** Live On
 - [ ] Init File
 
+** Tech Debt
+- [ ] Lyric Macros
+- [ ] Rust Macros
+
+* wishlist
+Record of "I want to be able to" thoughts
+** Open a visual structured editor for building interfaces from source, with changes reflected in source
 * runtime
 ** DONE Conn-less Process Spawning
 Goal: Non-connection-backed =spawn= from =kernel.rs=
@@ -28,7 +37,7 @@ Convenience APIs to see running services and some level of introspection
 - [X] =ls-srv=
 - [X] =find-srv=
 
-** TODO IPC - =srv= and =bind=
+** DONE IPC - =srv= and =bind-srv=
 
 Goal: Provide better wrappers over =call=
 
@@ -52,7 +61,7 @@ Maybe also cover imports / exported interface and discoverability
      :export '(get_favs, add_favs))
 
 # *** client side (gets imports!)
-(link :launcher)
+(bind-srv :launcher)
 #+end_src
 
 ** TODO Dotfiles / Init Scripts

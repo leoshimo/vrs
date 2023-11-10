@@ -29,6 +29,7 @@ pub(crate) use open::open_file_fn;
 pub(crate) use open::open_url_fn;
 
 pub(crate) use service::bind_srv_fn;
+pub(crate) use service::def_bind_interface;
 pub(crate) use service::find_srv_fn;
 pub(crate) use service::info_srv_fn;
 pub(crate) use service::ls_srv_fn;

@@ -93,6 +93,11 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
         &mut self.locals
     }
 
+    /// Get global environment
+    pub fn global_env(&self) -> &Arc<Mutex<Env<T, L>>> {
+        &self.global
+    }
+
     /// Get current environment
     pub fn cur_env(&self) -> &Arc<Mutex<Env<T, L>>> {
         &self.top().env

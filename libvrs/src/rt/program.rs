@@ -121,6 +121,10 @@ fn program_env() -> Env {
     {
         e.bind_native(SymbolId::from("srv"), binding::srv_fn())
             .bind_lambda(SymbolId::from("bind-srv"), binding::bind_srv_fn())
+            .bind_native(
+                SymbolId::from("def-bind-interface"),
+                binding::def_bind_interface(),
+            )
             .bind_native(SymbolId::from("info-srv"), binding::info_srv_fn());
     }
 

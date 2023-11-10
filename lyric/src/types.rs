@@ -153,6 +153,19 @@ impl SymbolId {
     pub fn to_keyword(self) -> KeywordId {
         KeywordId::from(self.0)
     }
+
+}
+
+impl KeywordId {
+    /// Returns inner ID as string slice
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Returns symbol as keyword
+    pub fn to_symbol(self) -> SymbolId {
+        SymbolId::from(self.0)
+    }
 }
 
 impl<T: Extern, L: Locals> PartialEq for Lambda<T, L> {
