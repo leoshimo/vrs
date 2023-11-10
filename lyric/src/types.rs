@@ -153,7 +153,6 @@ impl SymbolId {
     pub fn to_keyword(self) -> KeywordId {
         KeywordId::from(self.0)
     }
-
 }
 
 impl KeywordId {
