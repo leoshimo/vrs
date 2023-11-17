@@ -2,24 +2,29 @@
 
 * roadmap
 
-curr: Runtime Process Ergonomics
-next: Client / Runtime interactions v2
-
-** Runtime Process Ergonomics
-- [X] Headless Process Spawning
-- [X] Service Discovery / Mgmt
-- [X] IPC via =srv= / =bind=
+current: Client / Runtime Hypermedia
 
 ** Live On
-- [ ] Init File
 
-** Tech Debt
+- [ ] Init File for Daemon
+- [ ] Parellel Development / Release Instances
+- [ ] Daemon Installation Hook
+- [ ] Supervisors for restarting terminated processes
+
+** Lyric Language
+
 - [ ] Lyric Macros
-- [ ] Rust Macros
+
+** Nice-to-Have
+
+- [ ] Rust Macros to compress Lyric implementation
+- [ ] Pretty Printing Code / S-Expressions
 
 * wishlist
 Record of "I want to be able to" thoughts
 ** Open a visual structured editor for building interfaces from source, with changes reflected in source
+** =(interactive)=-like mechanics for dealing with common user-input arguments
+E.g. =(completing-read)= and =(interactive "f")= in Emacs
 * runtime
 ** DONE Conn-less Process Spawning
 Goal: Non-connection-backed =spawn= from =kernel.rs=
@@ -64,16 +69,6 @@ Maybe also cover imports / exported interface and discoverability
 (bind-srv :launcher)
 #+end_src
 
-** TODO Dotfiles / Init Scripts
-** TODO File IO for S-Expressions
-
-Read / Write S-Expressions to File
-Goal: Replace hard-coded data in =launcher.ll=
-
-** TODO Supervisors and Links
-** TODO Runtime Live-On
-- [ ] =vrsd= does not crash if process crashes (?)
-- [ ] =vrsd= can run in parallel - =dev= and =prod=
 ** TODO Hypermedia Client
 Goal: Build CLI Hypermedia Client over VRS
 See also - "Revisit Client Connection"
@@ -87,6 +82,29 @@ See Also: CLI Client Shell
 - [ ] DOM API - Set Content of "Page"
 - [ ] DOM API - Get Element with ID
 
+** TODO Supervisors and Links
+** TODO Supervision Trees
+Goal: Spawn Link to be notified of errors in spawn-ed processes
+
+Purpose:
+- Service Mgmt on Startup (?)
+- Restarting on error
+
+** TODO Dotfiles / Init Scripts
+** TODO File IO for S-Expressions
+
+Read / Write S-Expressions to File
+Goal: Replace hard-coded data in =launcher.ll=
+
+** TODO Command IO - Better =exec=
+
+Goal: Better interface over =Command= to access:
+- Process output
+- Exit code
+
+** TODO Runtime Live-On
+- [ ] =vrsd= does not crash if process crashes (?)
+- [ ] =vrsd= can run in parallel - =dev= and =prod=
 ** TODO Revisit Runtime / Client Boundary
 Goal: Revisit protocol b/t/ Runtime / Client w/ New Learnings
 
@@ -116,23 +134,10 @@ Similar to =read= and =input()= working in shell + python respectively
 - Proof-of-Concept: Pub/Sub listening to "counter" variable on new task execution model
 - Reactivity of PubSub over PubSub
 - Method to access pubsub topic via =vrsctl=
-** TODO Supervision Trees
-Goal: Spawn Link to be notified of errors in spawn-ed processes
-
-Purpose:
-- Service Mgmt on Startup (?)
-- Restarting on error
-
 ** TODO Preemptive Multitasking
 
 - Start a process that infinite loops, =(loop 5)=
 - Show that other screen is still responsive
-
-** TODO Better =exec=
-
-Goal: Better interface over =Command= to access:
-- Process output
-- Exit code
 
 ** TODO Universal Entities, Search, Indexing
 Goal: Unified Interface to persistent storage
@@ -149,6 +154,7 @@ meno on this item"
 ** TODO General User IO
 Give VRs capability to see (web pages, screen), Hear (user, text) and prompt for
 input (text, voice, selection)
+** TODO Sqlite IO for S-Expressions
 * lyric lang
 ** DONE Add =cond=
 Add =cond= macro to avoid pyramid of =if=.
@@ -258,7 +264,6 @@ Goal: Recovering from process or host failure
 Goal: Moving snapshot of running program from machine to machine
 ** TODO Agent Programs
 * testing
-** TODO Test Cases for Last Week Features
 ** TODO More Test Cases for Message Passing
 - [ ] Test Cases:
    - [ ] Calling =recv= FIRST, then =send=
