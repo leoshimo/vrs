@@ -2,23 +2,35 @@
 
 * roadmap
 
-current: Client / Runtime Hypermedia
+Current: Hypermedia Client and VRSJMP Command Bar Client
 
-** Live On
+** Hypermedia Client - vrsjmp
 
-- [ ] Init File for Daemon
+- [ ] Hypermedia Client Design
+- [ ] VRSJMP Command Bar Client
+
+** Runtime Core v0.2
+
+Goal: Build Core Runtime Features
+
+- [ ] Init File
+- [ ] File IO for Simple Storage
+- [ ] Command IO
+- [ ] Process Links and Supervisor
+- [ ] Rust Macros for Code Compression
+- [ ] Lyric Macros
 - [ ] Parellel Development / Release Instances
 - [ ] Daemon Installation Hook
-- [ ] Supervisors for restarting terminated processes
+  
+** VRS Cloud - Replace Things / Are.na
 
-** Lyric Language
+Goal: Deploy VRS to the Cloud as a Rust Backend Service
+This is in service of desktop + web + mobile replacement for Things / Org Mode
 
-- [ ] Lyric Macros
+** Lispy DX
 
-** Nice-to-Have
-
-- [ ] Rust Macros to compress Lyric implementation
-- [ ] Pretty Printing Code / S-Expressions
+Goal: Replicate Emacs-like Development Workflow to build VRS software
+E.g. Emacs Eval, SLIME-like workflows for molding Software
 
 * wishlist
 Record of "I want to be able to" thoughts
@@ -170,8 +182,10 @@ Test: Make sure that =(a b a)= only matches =(1 2 1)= but not =(1 2 3)=
 ** TODO Macros
 - [ ] [[https://www.youtube.com/watch?v=M4qj2ictRpg&t=22s][Gavin - Macros in ELisp]]
 - [ ] [[https://www.youtube.com/watch?v=_WLauBkO5rI][Emacs Elements - Macros]]
-** TODO Pipeline Operator
+** TODO Pipeline Macros / Threading Operator
 (Streaming?)
+https://clojure.org/guides/threading_macros
+- Thread first, thread last, etc
 ** TODO Colocated Docstring for =defn=
 ** TODO Conditional Operators =not=, =and=, and =or=
 =and EXPR...= - left-to-right, and stop if one expr evaluates to =#f=. Otherwise =#t=
@@ -386,6 +400,7 @@ Extend to visual elements? UI:
 ** TODO Compact Bytecode
 ** TODO Tail-Call Optimization
 * bugs
+** TODO Busy Looper sometimes Crashes Runtime
 ** TODO =(begin)= should push =nil= if there are no body statements
 ** TODO =(if ...)= without =else-form= should return =nil=
 ** TODO =(loop 0)= blocks new connection only via REPL, but not =vrsctl -c "(loop 0)"=
