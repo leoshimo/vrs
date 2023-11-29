@@ -233,6 +233,7 @@ The design is focused on:
 - Ease of Automation and Testing
 
 ** Uniform Hypermedia-Driven Interface
+
 The hypermedia format should have a minimal, uniform interface.
 
 The interface between client implementations should be simple and minimal, so
@@ -261,6 +262,10 @@ The extension of using the REPL to manipulate the "document" is to allow mental
 models when *using* the software directly translate to being able to program the
 software, in the same way CLI interactions translates to shell scripting, and
 using Emacs translates to programming Emacs via buffer primitive.
+
+Unlike JavaScript, which uses event handlers in JavaScript to hook interactive
+behavior, HyperLyric document themselves contain the code that defines the
+behavior on interaction, similar to anchor tags and form tags.
 
 ** Goals
 
