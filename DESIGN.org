@@ -415,10 +415,11 @@ Target-Action Links
   i.e. data shaped a certain way can be passed to some function.
 - Like Embark - allow chaining actions based on the shape of data interactively
 
-- [ ] Read / store data
-- [ ] Allow links between pieces of data for a specific "entity" -  data graph.
-- [ ] Invoke functionality from linked entity data directly, like Emacs Embark
-- [ ] Proactively suggests links and functionality
+- Read / store data
+- Allow links between pieces of data for a specific "entity" -  data graph.
+- Invoke functionality from linked entity data directly, like Emacs Embark
+- Proactively suggests links and functionality
+
 ** Ideas
 
 An interactive application is: Functions that modify state, Functions that
