@@ -1,6 +1,6 @@
 #+TITLE: Design Notes
 
-Dumping ground for high level design notes
+Scratch pad for high level design notes and ideas
 
 * Influences
 
@@ -220,3 +220,210 @@ initiated execution of fiber.
 A fiber can later be resumed when the event that fiber was paused for occurs,
 such as IO, message-passing, etc.
 
+* HyperLyric
+
+HyperLyric is the hypermedia format between the runtime and interactive client shells.
+
+The design is focused on:
+- Enabling speedy + simple development of interactive applications
+- Supporting many thin, general purpose, client-shell application backed by same
+  application code.
+- Supporting client-specific, multimodal software experiences without unnecessary
+  complexity on client or runtime programs.
+- Ease of Automation and Testing
+
+** Uniform Hypermedia-Driven Interface
+The hypermedia format should have a minimal, uniform interface.
+
+The interface between client implementations should be simple and minimal, so
+building new client shells requires minimal effort.
+
+The interface should provide minimal set of markup, hypermedia controls, and
+general-purpose input mechanisms so new software experiences can be built
+without clients and runtime programs being updated in lockstep.
+
+The interface should also be focused on being multimodal - i.e. the hypermedia
+format should allow both GUI-driven and voice-driven client shells to leverage
+the same semantic markup.
+
+Common input mechanisms should be supported, such as Emacs =read= and
+=completing-read= APIs, which should prompt user for input in a client-dependent
+interface.
+
+As a consequence of leveraging uniform hypermedia, it should be simple to build
+tooling and automation on top of this interface - the data and interactions
+available on that data should be represented in the markup.
+
+For example, It should be possible to interact with interactive VRS applications
+via REPL, using text-based representation of the markup, during development.
+
+The extension of using the REPL to manipulate the "document" is to allow mental
+models when *using* the software directly translate to being able to program the
+software, in the same way CLI interactions translates to shell scripting, and
+using Emacs translates to programming Emacs via buffer primitive.
+
+** Goals
+
+*Declarative*
+The interface programming model is *declarative*, borrowing from
+functional-reactive programming patterns from Elm, Phoenix LiveView and React.
+
+This should also enable ease of testing and rapid UI iteration in isolation.
+
+*Rich Linking and Object Store*
+See also: Object Store
+
+The format should enable explicit links (interactions added to application by
+programmer) and implicit links (interactions natural for the data itself).
+
+*Thin Clients*
+Instead of having to replicate rich interactive experiences per client shell
+implementation (i.e. build thick client applicationz), Hypermedia should allow
+thin general-purpose clients, like a slim web browser.
+
+Rich interactivity is enabled by a interactive interface process that runs in
+the runtime itself, a la Phoenix LiveView
+
+*Rapid Interactive Dev Loop*
+The hypermedia format and tooling should enable interactive development loop for
+building and testing UI.
+
+** Conceptual Analogies to Emacs and Web Browsers
+
+HyperLyric is to VRS what buffers are to Emacs, and HTML document / DOM is to
+Web Browsers.
+
+It is the representation for data, interface, and behavior.
+
+In a sense, each client is a minimal pseudo-browser for presenting interfaces
+for given HyperLyric data.
+
+** Inspirations
+
+Hypermedia Driven Web Applications
+[[https://github.com/phoenixframework/phoenix_live_view][Phoenix LiveView]]
+Emacs
+[[https://guide.elm-lang.org/architecture/][The Elm Architecture]]
+[[https://htmx.org][HTMX]]
+
+** Lifecycle Overview
+
+When a hypermedia client connects to runtime, a client process representing the
+user interface is spawned in the runtime. All client has its own bidirectional channel
+between the client and runtime's process for that client.
+
+The client process communicates with other processes running in the runtime, and
+sends user interface hypermedia over the channel. The hypermedia contains
+self-describing data and hypermedia controls.
+
+Client renders the hypermedia format in client-dependent format, e.g:
+- A TUI client shell renders markup as plaintext.
+- A GUI client shell renders markup in Native UI or Browser-based Renderer.
+- A voice client shell "renders" markup as STT audio.
+
+When the user interacts with the interface, registered events are sent from the
+hypermedia client to the client interface process, which updates internal state,
+and pushes updated hypermedia data back to client if needed.
+
+The updated markup is received by hypermedia client, which itself updates what
+is shown to the user.
+
+The connection is bidirectional:
+- Client can dispatch commands, which sends messages to interactive process
+- Runtime can notify clients via Pub / Sub topics the client registered itself for
+
+** Features
+
+Element Selector
+- API to specify elements on page, similar to CSS selectors
+- Used to specify targets for different interactions, e.g. toggling visibility of =#element=
+
+Navigation
+- TODO: What Navigation Primitives make sense? URLs? Stacks of "Views"?
+
+General Purpose Inputs
+- High-level primitives like Emacs =read= and =completing-read= allow triggering
+  standardized input behavior in a way that is appropriate for hypermedia client
+  implementation
+
+* Object Store
+
+*What is it?*
+General Purpose, Object Store that's focused on linking data and functionality
+on that data.
+
+At its heart, it hopes to allow rich interop and workflows across different
+pieces of software in the runtime.
+
+If a "program" in VRS is:
+- Data represented in Object Store
+- Functions that have side effects on data in object store
+- Functions that generate hypermedia interface on data in object store
+
+It should be possible that data, functionality and interfaces between different
+pieces of software can compose more naturally.
+
+Principle: Programs (including data, capabilities, and interface) should be
+composable in ways that the wasn't thought about when original program was
+written.
+
+The format allows explicit links (interactions added to application by
+programmer) and implicit links (interactions natural for the data itself).
+
+** Inspirations
+
+[[https://github.com/oantolin/embark][Emacs Embark]]
+[[https://mail.gnu.org/archive/html/hyperbole-users/2019-01/msg00037.html][GNU Hyperbole]]
+ECS Patterns in Game Dev
+
+#+begin_quote
+Rather than manually specifying relationships between bits of information, we
+need a system that can see these connections simply by taking context and
+content into account... Hyperbole itself, however, should be thought of as an
+extensible "information enabler", automatically turning inert documents into
+active ones, through the process of recognizing implicit buttons and giving you
+multiple ways to interact with those buttons. It's just like what Wiki did for
+text, but now for lots of other things, and in many more ways.
+- John Wiegley
+#+end_quote
+
+#+begin_quote
+humans must too often carry their data from program to program... Why should
+humans do the work? Usually there is one obvious thing to do with a piece of
+data, and the data itself suggests what this is.
+- Rob Pike
+
+http://doc.cat-v.org/plan_9/4th_edition/papers/plumb
+#+end_quote
+
+** Features
+
+Target-Action Links
+- API to associate a collection of actions with specific types of data -
+  i.e. data shaped a certain way can be passed to some function.
+- Like Embark - allow chaining actions based on the shape of data interactively
+
+- [ ] Read / store data
+- [ ] Allow links between pieces of data for a specific "entity" -  data graph.
+- [ ] Invoke functionality from linked entity data directly, like Emacs Embark
+- [ ] Proactively suggests links and functionality
+** Ideas
+
+An interactive application is: Functions that modify state, Functions that
+create markup from state.
+
+Like Embark - Support workflows like =embark-act= and =embark-collect= across a
+collection of VRS applications
+
+Entity system that automatically enabled dynamic interface generation and interaction?
+
+Features like Emacs =(interactive)= that allows an interface to be created from
+the function implementing that capability directly.
+
+Reusable Interface Components
+- Rendering should allow composition and reuse - a view of data can be used
+  across "applications" or interactive shells without being tied down to
+  specific application
+
+Allow easy "linking" experience - i.e. in one software experience, I can select
+an entity, search for related entity, and link them all within same workflow.
