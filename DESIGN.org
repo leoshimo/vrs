@@ -48,7 +48,7 @@ for convenience, but the channel is a bidirectional.
 
 How the runtime is started may be platform dependent:
 
-- On desktop, runtime daemon runs via typical service management (`systemd`, `launchd`, etc).
+- On desktop, runtime daemon runs via typical service management (=systemd=, =launchd=, etc).
 - On cloud, runtime may be always running as a service.
 - On mobile, a in-process runtime may be spun up during application initialization.
 
@@ -77,7 +77,7 @@ It should support:
 
 The client API is largely implemented by client library.
 
-Like `libdbus`, the underlying transport should be opaque to client programs -
+Like =libdbus=, the underlying transport should be opaque to client programs -
 it may use lower-level IPC mechanisms like unix domain sockets, or TCP, without
 affecting API surface between client and client library.
 
@@ -89,7 +89,7 @@ TODO: Add notes on hypermedia client
 
 ** vrsctl - CLI client
 
-The `vrsctl` CLI is lightweight client to runtime that offers 1-1 mapping to
+The =vrsctl= CLI is lightweight client to runtime that offers 1-1 mapping to
 client API.
 
 Per invocation, it will:
@@ -98,7 +98,7 @@ Per invocation, it will:
 3. Wait for response(s)
 4. Close connection to runtime when stdin closes and all requests were processed.
 
-CLI can be used to bootstrap new clients that is able to launch `vrsctl`
+CLI can be used to bootstrap new clients that is able to launch =vrsctl=
 directly, or as a development tool.
 
 * Lyric Lang
@@ -133,7 +133,7 @@ standard, institutionalized patterns - with engineers acting as "human
 compilers" to write this code out by hand. Why not let the computer write that
 code via higher-level intermediate language?
 
-See also - [Greeenspun's Tenth Rule](https://en.wikipedia.org/wiki/Greenspun's_tenth_rule)
+See also - [[https://en.wikipedia.org/wiki/Greenspun's_tenth_rule][Greenspun's tenth rule - Wikipedia]]
 
 ** Lisp as the Uniform Interface
 
@@ -151,7 +151,7 @@ modules together.
 Lisp is a practical choice for highly interactive, moldable,
 application-specific progamming environments.
 
-[Twitter rant](https://twitter.com/leoshimo/status/1694375158897574227)
+[[https://twitter.com/leoshimo/status/1694375158897574227][leoshimo - Twitter Rant on Lisp]]
 
 *** Lisp as Hypermedia
 
@@ -173,7 +173,7 @@ v0.1 sketch of Lisp as Hypermedia
 * Runtime Program Execution
 
 The runtime spawns and manages processes. These are not OS processes, but
-lightweight threads of execution like [Erlang Processes](https://www.erlang.org/docs/22/reference_manual/processes.html).
+lightweight threads of execution like [[https://www.erlang.org/docs/22/reference_manual/processes.html][Erlang -- Processes]].
 
 Each process has its own Lisp environment for evaluating S-expressions.
 
