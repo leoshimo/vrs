@@ -310,6 +310,20 @@ It is the representation for data, interface, and behavior.
 In a sense, each client is a minimal pseudo-browser for presenting interfaces
 for given HyperLyric data.
 
+** Client as a Pseudobrowser
+
+It may be helpful to conceptualize the client shells as a pseudo-web-browser of
+sorts, as far as runtime is concerned.
+
+While runtime processes may respond with HyperLyric data, the client manages the
+"tabs" of this markup across variety of different sources, similar to a web browser.
+
+In this way, the contract between client and runtime stays simple - there is a
+bidirectional channel which is used for RPC and Pub/Sub traffic. For example,
+there can be a collection of topics published from the runtime, which client
+subscribes to. Each of those topics can contain the Hyperlyric markup
+representing the "page".
+
 ** Inspirations
 
 - Hypermedia Driven Web Applications
