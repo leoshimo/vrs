@@ -177,19 +177,19 @@ lightweight threads of execution like [Erlang Processes](https://www.erlang.org/
 
 Each process has its own Lisp environment for evaluating S-expressions.
 
-Unlike Node, which uses callbacks to implement continuations, `lyric` is built
+Unlike Node, which uses callbacks to implement continuations, =lyric= is built
 to support preemptive and cooperative multitasking during evaluation, similar to
 BEAM VM.
 
 Instead of a subscription + callback mechanism, the process's code describes
 when IO is polled, when mailbox is queried, etc.
 
-`lyric` and the runtime provides conveniences for typical patterns,
+=lyric= and the runtime provides conveniences for typical patterns,
 e.g. implementing long-running services, supervisors, request-response, etc.
 
 * Process, Bytecode, and Fibers
 
-The programs written in `lyric` support yielding - pausing and continuing
+The programs written in =lyric= support yielding - pausing and continuing
 execution of bytecode sequences.
 
 This makes it possible for runtime to drive evaluation of program via
@@ -198,7 +198,7 @@ execution, dispatches appropriate async IO, and continues execution once the IO
 resource is ready.
 
 The key motivation for this is to not tie an OS thread per paused program. A
-`lyric` program waiting for IO does not block a thread, since it's runtime state
+=lyric= program waiting for IO does not block a thread, since it's runtime state
 can be captured as a data structure.
 
 E.g. A 10,000 sleeping processes "at rest" does not use 10,000 threads.
