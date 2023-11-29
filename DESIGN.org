@@ -273,26 +273,30 @@ anchor tags and form tags.
 ** Goals
 
 *Declarative*
+
 The interface programming model is *declarative*, borrowing from
 functional-reactive programming patterns from Elm, Phoenix LiveView and React.
 
 This should also enable ease of testing and rapid UI iteration in isolation.
 
 *Rich Linking and Object Store*
+
 See also: Object Store
 
 The format should enable explicit links (interactions added to application by
 programmer) and implicit links (interactions natural for the data itself).
 
 *Thin Clients*
+
 Instead of having to replicate rich interactive experiences per client shell
 implementation (i.e. build thick client applicationz), Hypermedia should allow
-thin general-purpose clients, like a slim web browser.
+thin general-purpose clients, i.e a slim web browser of sorts.
 
-Rich interactivity is enabled by a interactive interface process that runs in
+Rich interactivity is enabled by an interactive interface process that runs in
 the runtime itself, a la Phoenix LiveView
 
 *Rapid Interactive Dev Loop*
+
 The hypermedia format and tooling should enable interactive development loop for
 building and testing UI.
 
