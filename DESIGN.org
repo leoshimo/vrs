@@ -312,17 +312,17 @@ for given HyperLyric data.
 
 ** Inspirations
 
-Hypermedia Driven Web Applications
-[[https://github.com/phoenixframework/phoenix_live_view][Phoenix LiveView]]
-Emacs
-[[https://guide.elm-lang.org/architecture/][The Elm Architecture]]
-[[https://htmx.org][HTMX]]
+- Hypermedia Driven Web Applications
+- [[https://github.com/phoenixframework/phoenix_live_view][Phoenix LiveView]]
+- Emacs
+- [[https://guide.elm-lang.org/architecture/][The Elm Architecture]]
+- [[https://htmx.org][HTMX]]
 
 ** Lifecycle Overview
 
 When a hypermedia client connects to runtime, a client process representing the
-user interface is spawned in the runtime. All client has its own bidirectional channel
-between the client and runtime's process for that client.
+user interface is spawned in the runtime. There is a dedicated bidirectional
+channel between the client and runtime's process for that client.
 
 The client process communicates with other processes running in the runtime, and
 sends user interface hypermedia over the channel. The hypermedia contains
@@ -384,9 +384,9 @@ programmer) and implicit links (interactions natural for the data itself).
 
 ** Inspirations
 
-[[https://github.com/oantolin/embark][Emacs Embark]]
-[[https://mail.gnu.org/archive/html/hyperbole-users/2019-01/msg00037.html][GNU Hyperbole]]
-ECS Patterns in Game Dev
+- [[https://github.com/oantolin/embark][Emacs Embark]]
+- [[https://mail.gnu.org/archive/html/hyperbole-users/2019-01/msg00037.html][GNU Hyperbole]]
+- ECS Patterns in Game Dev
 
 #+begin_quote
 Rather than manually specifying relationships between bits of information, we
