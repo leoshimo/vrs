@@ -1,46 +1,49 @@
 {
-  "build": {
-    "beforeDevCommand": "",
-    "beforeBuildCommand": "",
-    "devPath": "../src",
-    "distDir": "../src",
-    "withGlobalTauri": true
-  },
-  "package": {
-    "productName": "vrsjmp",
-    "version": "0.0.0"
-  },
-  "tauri": {
-    "allowlist": {
-      "all": false,
-      "shell": {
-        "all": false,
-        "open": true
-      }
+    "build": {
+        "beforeDevCommand": "",
+        "beforeBuildCommand": "",
+        "devPath": "../src",
+        "distDir": "../src",
+        "withGlobalTauri": true
     },
-    "bundle": {
-      "active": true,
-      "targets": "all",
-      "identifier": "com.tauri.dev",
-      "icon": [
-        "icons/32x32.png",
-        "icons/128x128.png",
-        "icons/128x128@2x.png",
-        "icons/icon.icns",
-        "icons/icon.ico"
-      ]
+    "package": {
+        "productName": "vrsjmp",
+        "version": "0.0.1"
     },
-    "security": {
-      "csp": null
-    },
-    "windows": [
-      {
-        "fullscreen": false,
-        "resizable": true,
-        "title": "vrsjmp",
-        "width": 800,
-        "height": 600
-      }
-    ]
-  }
+    "tauri": {
+        "macOSPrivateApi": true,
+        "allowlist": {
+            "all": false
+        },
+        "bundle": {
+            "active": true,
+            "targets": "all",
+            "identifier": "com.vrs.vrsjmp",
+            "icon": [
+                "icons/32x32.png",
+                "icons/128x128.png",
+                "icons/128x128@2x.png",
+                "icons/icon.icns",
+                "icons/icon.ico"
+            ]
+        },
+        "security": {
+            "csp": null
+        },
+        "windows": [
+            {
+                "fullscreen": false,
+                "resizable": false,
+                "maximizable": false,
+                "minimizable": false,
+                "closable": false,
+                "transparent": true,
+                "title": "vrsjmp",
+                "decorations": false,
+                "width": 800,
+                "height": 600,
+                "center": true
+            }
+        ]
+    }
 }
