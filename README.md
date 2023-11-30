@@ -38,5 +38,6 @@ likely always be so.
 
 - `libvrs`: The `vrs` library crate shared by runtime and client implementations
 - `vrsd`: A runtime implementation as a system daemon
-- `vrsctl`: A thin CLI client over `libvrs`
 - `lyric`: Embedded Lisp Dialect and Virtual Machine
+- `vrsctl`: A thin CLI client over `libvrs`
+- `vrsjmp`: A GUI launch bar client
