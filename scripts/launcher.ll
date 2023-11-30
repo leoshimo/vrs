@@ -28,6 +28,7 @@
 (add_item "Kindle" '(open_app "Kindle"))
 (add_item "Send to Kindle" '(open_url "https://www.amazon.com/gp/sendtokindle"))
 (add_item "RC - Presentations" '(open_url "https://presentations.recurse.com"))
+(add_item "AWS Console" '(open_url "http://console.aws.amazon.com"))
 (add_item "Restart vrsd" '(exec "pkill" "-ax" "vrsd"))
 
 (srv :name :launcher
