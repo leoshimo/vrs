@@ -3,11 +3,14 @@
 use rustyline::{
     history::DefaultHistory,
     validate::{ValidationResult, Validator},
-    Completer, Editor, Helper, Highlighter, Hinter, Result,
+    Completer, Helper, Highlighter, Hinter, Result,
 };
 
+/// Custom rustyline::Editor
+pub(crate) type Editor = rustyline::Editor<ReplEditor, DefaultHistory>;
+
 /// Create a line editor
-pub fn editor() -> Result<Editor<ReplEditor, DefaultHistory>> {
+pub fn editor() -> Result<Editor> {
     let editor = ReplEditor {};
     let mut rl = rustyline::Editor::new()?;
     rl.set_helper(Some(editor));

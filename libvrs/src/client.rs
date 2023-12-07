@@ -7,7 +7,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
 
 /// Handle for client event loop
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Client {
     /// Sender half to send messages to event loop
     evloop_tx: mpsc::Sender<Event>,
@@ -35,11 +35,6 @@ impl Client {
         let ev = Event::SendRequest { contents, resp_tx };
         self.evloop_tx.send(ev).await?;
         Ok(resp_rx.await?)
-    }
-
-    /// Future that determines whether or not clien is closed
-    pub async fn on_disconnect(&self) {
-        self.evloop_tx.closed().await
     }
 
     /// Shutdown

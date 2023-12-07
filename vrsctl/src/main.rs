@@ -1,14 +1,11 @@
 mod editor;
+mod repl;
 
 use anyhow::{Context, Result};
 use clap::{arg, command};
-use lyric::Form;
-use rustyline::error::ReadlineError;
 
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
-use std::process::exit;
 use tokio::net::UnixStream;
 use tracing::debug;
 use vrs::client::Client;
@@ -27,22 +24,14 @@ async fn main() -> Result<()> {
 
     debug!("Connected to runtime: {:?}", conn);
     let conn = Connection::new(conn);
-    let client = Client::new(conn);
-
-    // Hack to detect disconnect w/ non-async rustyline
-    let clone = client.clone();
-    tokio::spawn(async move {
-        clone.on_disconnect().await;
-        eprintln!("Disconnected from runtime");
-        exit(1);
-    });
+    let mut client = Client::new(conn);
 
     if let Some(cmd) = args.get_one::<String>("command") {
-        run_cmd(client, cmd).await
+        run_cmd(&mut client, cmd).await
     } else if let Some(file) = args.get_one::<String>("file") {
-        run_file(client, file).await
+        run_file(&mut client, file).await
     } else {
-        run_repl(client).await
+        repl::run(&mut client).await
     }
 }
 
@@ -54,7 +43,7 @@ fn cli() -> clap::Command {
 }
 
 /// Run a single request
-async fn run_cmd(mut client: Client, cmd: &str) -> Result<()> {
+async fn run_cmd(client: &mut Client, cmd: &str) -> Result<()> {
     let f = lyric::parse(cmd)?;
     let resp = client.request(f).await?;
     match resp.contents {
@@ -64,7 +53,8 @@ async fn run_cmd(mut client: Client, cmd: &str) -> Result<()> {
     Ok(())
 }
 
-async fn run_file(mut client: Client, file: &str) -> Result<()> {
+/// Run a script file
+async fn run_file(client: &mut Client, file: &str) -> Result<()> {
     let f = File::open(file).with_context(|| format!("Failed to open {}", file))?;
     let mut f = BufReader::new(f);
     let mut line = String::new();
@@ -108,68 +98,4 @@ async fn run_file(mut client: Client, file: &str) -> Result<()> {
     }
 
     Ok(())
-}
-
-/// Run an interactive REPL
-async fn run_repl(mut client: Client) -> Result<()> {
-    let mut rl = editor::editor()?;
-    if let Some(history_file) = history_file() {
-        if let Err(e) = rl.load_history(&history_file) {
-            eprintln!("Failed to load {} - {}", history_file.to_string_lossy(), e);
-        }
-    }
-
-    loop {
-        match rl.readline("vrs> ") {
-            Ok(line) => {
-                if line.starts_with('#') {
-                    continue; // skip shebang
-                }
-
-                let _ = rl.add_history_entry(line.as_str());
-
-                let f = match lyric::parse(&line) {
-                    Ok(f) => f,
-                    Err(e) => {
-                        eprintln!("{}", e);
-                        continue;
-                    }
-                };
-                match client.request(f).await {
-                    Ok(resp) => match resp.contents {
-                        // TODO: Bringup different formats for clients - e.g. REPL should use text format only
-                        Ok(Form::RawString(s)) => println!("{}", s),
-                        Ok(c) => println!("{}", c),
-                        Err(e) => eprintln!("{}", e),
-                    },
-                    Err(e) => {
-                        eprintln!("{}", e);
-                    }
-                }
-            }
-            Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => break,
-            Err(err) => {
-                println!("Error: {:?}", err);
-                break;
-            }
-        }
-    }
-
-    if let Some(history_file) = history_file() {
-        if let Err(e) = rl.save_history(&history_file) {
-            eprintln!("Failed to save {} - {}", history_file.to_string_lossy(), e);
-        }
-    }
-
-    client.shutdown().await;
-
-    Ok(())
-}
-
-/// Path to file to use for history
-fn history_file() -> Option<PathBuf> {
-    let dir = dirs::data_local_dir()
-        .or_else(dirs::data_dir)
-        .or_else(dirs::home_dir)?;
-    Some(dir.as_path().join(".vrsctl_history"))
 }
