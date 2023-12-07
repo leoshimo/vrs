@@ -24,15 +24,31 @@ async fn main() -> Result<()> {
 
     debug!("Connected to runtime: {:?}", conn);
     let conn = Connection::new(conn);
-    let mut client = Client::new(conn);
+    let client = Client::new(conn);
 
-    if let Some(cmd) = args.get_one::<String>("command") {
-        run_cmd(&mut client, cmd).await
-    } else if let Some(file) = args.get_one::<String>("file") {
-        run_file(&mut client, file).await
-    } else {
-        repl::run(&mut client).await
+    let run = async {
+        if let Some(cmd) = args.get_one::<String>("command") {
+            run_cmd(&client, cmd).await
+        } else if let Some(file) = args.get_one::<String>("file") {
+            run_file(&client, file).await
+        } else {
+            repl::run(&client).await
+        }
+    };
+
+    tokio::select! {
+        biased;
+        res = run => {
+            if let Err(e) = res {
+                eprintln!("Terminated with error: {e}");
+            }
+        },
+        _ = client.closed() => {
+            eprintln!("Connection closed");
+        }
     }
+
+    Ok(())
 }
 
 /// The clap CLI interface
@@ -43,7 +59,7 @@ fn cli() -> clap::Command {
 }
 
 /// Run a single request
-async fn run_cmd(client: &mut Client, cmd: &str) -> Result<()> {
+async fn run_cmd(client: &Client, cmd: &str) -> Result<()> {
     let f = lyric::parse(cmd)?;
     let resp = client.request(f).await?;
     match resp.contents {
@@ -54,7 +70,7 @@ async fn run_cmd(client: &mut Client, cmd: &str) -> Result<()> {
 }
 
 /// Run a script file
-async fn run_file(client: &mut Client, file: &str) -> Result<()> {
+async fn run_file(client: &Client, file: &str) -> Result<()> {
     let f = File::open(file).with_context(|| format!("Failed to open {}", file))?;
     let mut f = BufReader::new(f);
     let mut line = String::new();
