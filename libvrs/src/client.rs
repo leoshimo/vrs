@@ -37,11 +37,6 @@ impl Client {
         Ok(resp_rx.await?)
     }
 
-    /// Returns whether or not client is active
-    pub fn is_active(&self) -> bool {
-        !self.evloop_tx.is_closed() // tx is open as long as event loop is running
-    }
-
     /// Future that determines whether or not clien is closed
     pub async fn on_disconnect(&self) {
         self.evloop_tx.closed().await
