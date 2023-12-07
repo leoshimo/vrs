@@ -1,10 +1,7 @@
 //! Headless client implementation for vrs runtime
 use std::collections::HashMap;
 
-use crate::{
-    connection::{Connection, Message, Request, Response},
-    Subscription,
-};
+use crate::connection::{Connection, Message, Request, Response};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
@@ -43,15 +40,10 @@ pub enum Event {
     /// Event for sending request to remote
     SendRequest {
         req: lyric::Form,
-        resp_tx: oneshot::Sender<Response>,
+        tx: oneshot::Sender<Response>,
     },
     /// Event when receiving response from remote
     RecvResponse(Response),
-    /// Subscribe to given topic
-    Subscribe {
-        topic: lyric::KeywordId,
-        resp_tx: oneshot::Sender<Subscription>,
-    },
 }
 
 /// The state of active [Client]
@@ -93,7 +85,7 @@ impl Client {
         debug!("request req = {}", req);
         let (resp_tx, resp_rx) = oneshot::channel();
         self.hdl_tx
-            .send(Event::SendRequest { req, resp_tx })
+            .send(Event::SendRequest { req, tx: resp_tx })
             .await?;
         Ok(resp_rx.await?)
     }
@@ -140,10 +132,9 @@ impl State {
         match e {
             Event::SendRequest {
                 req: contents,
-                resp_tx,
+                tx: resp_tx,
             } => self.handle_request(contents, resp_tx).await,
             Event::RecvResponse(resp) => self.handle_recv_response(resp).await,
-            Event::Subscribe { topic, resp_tx } => self.handle_subscribe(topic, resp_tx).await,
         }
     }
 
@@ -174,15 +165,6 @@ impl State {
                 resp
             ))),
         }
-    }
-
-    /// Handle a subscription request
-    async fn handle_subscribe(
-        &self,
-        topic: lyric::KeywordId,
-        resp_tx: oneshot::Sender<Subscription>,
-    ) -> Result<(), Error> {
-        todo!()
     }
 }
 
