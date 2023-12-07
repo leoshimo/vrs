@@ -30,6 +30,6 @@ fn send_resp(_f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
         }
     };
     Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
-        IOCmd::SendRequest(val),
+        IOCmd::SendResponse(val),
     )))))
 }

@@ -101,14 +101,10 @@ impl Connection {
         debug!("shutdown {:?}", self);
         self.stream.into_inner().shutdown().await
     }
+}
 
-    // TODO: Should conn be generic over sent / recvd data? Right now every user is asymmetrical:
-    // - Client end always sends req, recv resp
-    // - Runtime end always recv req, send resp
-    // Overhead of having to handle all Message types:
-    // - client.rs - receiving request from runtime
-    // - process.rs - receiving response from client
-
+// Convenience APIs
+impl Connection {
     /// Send a request
     pub async fn send_req(&mut self, req: Request) -> Result<(), std::io::Error> {
         self.send(&Message::Request(req)).await

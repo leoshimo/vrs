@@ -31,7 +31,7 @@ pub(crate) struct ProcIO {
 #[derive(Debug, Clone, PartialEq)]
 pub enum IOCmd {
     RecvRequest,
-    SendRequest(Val),
+    SendResponse(Val),
     ListProcesses,
     KillProcess(ProcessId),
     SendMessage(ProcessId, Val),
@@ -96,32 +96,8 @@ impl ProcIO {
     /// Poll for IO event
     pub(crate) async fn dispatch_io(&mut self, cmd: IOCmd) -> Result<Val> {
         match cmd {
-            IOCmd::RecvRequest => {
-                let conn = self.conn.as_mut().ok_or(Error::IOFailed)?;
-                if self.pending.is_some() {
-                    return Err(Error::IOFailed); // HACK: only one pending at a time
-                }
-
-                let req = conn
-                    .recv_req()
-                    .await
-                    .ok_or(Error::ConnectionClosed)?
-                    .map_err(|e| Error::IOError(format!("{}", e)))?;
-                self.pending = Some(req.req_id);
-                Ok(req.contents.into())
-            }
-            IOCmd::SendRequest(v) => {
-                let conn = self.conn.as_mut().ok_or(Error::IOFailed)?;
-                let pending = self.pending.take().ok_or(Error::IOFailed)?;
-                let contents: lyric::Result<Form> = v.try_into();
-                conn.send_resp(Response {
-                    req_id: pending,
-                    contents: contents.map_err(ConnError::EvaluationError),
-                })
-                .await
-                .map_err(|e| Error::IOError(format!("{}", e)))?;
-                Ok(Val::keyword("ok"))
-            }
+            IOCmd::RecvRequest => self.recv_request().await,
+            IOCmd::SendResponse(v) => self.send_response(v).await,
             IOCmd::ListProcesses => self.list_processes().await,
             IOCmd::KillProcess(pid) => self.kill_process(pid).await,
             IOCmd::SendMessage(dst, val) => self.send_message(dst, val).await,
@@ -272,5 +248,33 @@ impl ProcIO {
             ServiceQuery::Pid => Ok(Val::Extern(Extern::ProcessId(entry.pid()))),
             ServiceQuery::Interface => Ok(Val::List(entry.interface().to_vec())),
         }
+    }
+
+    async fn recv_request(&mut self) -> Result<Val> {
+        let conn = self.conn.as_mut().ok_or(Error::IOFailed)?;
+        if self.pending.is_some() {
+            return Err(Error::IOFailed); // HACK: only one pending at a time. Needs Client-equivalent on Runtime-side
+        }
+
+        let req = conn
+            .recv_req()
+            .await
+            .ok_or(Error::ConnectionClosed)?
+            .map_err(|e| Error::IOError(format!("{}", e)))?;
+        self.pending = Some(req.req_id);
+        Ok(req.contents.into())
+    }
+
+    async fn send_response(&mut self, v: Val) -> Result<Val> {
+        let conn = self.conn.as_mut().ok_or(Error::IOFailed)?;
+        let pending = self.pending.take().ok_or(Error::IOFailed)?;
+        let contents: lyric::Result<Form> = v.try_into();
+        conn.send_resp(Response {
+            req_id: pending,
+            contents: contents.map_err(ConnError::EvaluationError),
+        })
+        .await
+        .map_err(|e| Error::IOError(format!("{}", e)))?;
+        Ok(Val::keyword("ok"))
     }
 }
