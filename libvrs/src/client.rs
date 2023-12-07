@@ -187,8 +187,8 @@ mod test {
     use assert_matches::assert_matches;
     use lyric::Form;
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn handle_request_response() {
+    #[tokio::test]
+    async fn request_response() {
         let (local, mut remote) = Connection::pair().unwrap();
 
         // Echo back response
@@ -224,8 +224,25 @@ mod test {
         );
     }
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn handle_conn_drop() {
+    #[tokio::test]
+    async fn closed_after_remote_conn_drop() {
+        use std::time::Duration;
+        use tokio::time::timeout;
+
+        let (local, remote) = Connection::pair().unwrap();
+        let client = Client::new(local);
+
+        let closed = client.closed();
+
+        drop(remote); // drop remote conn
+
+        timeout(Duration::from_millis(10), closed)
+            .await
+            .expect("client.closed() should complete when remote connection is dropped");
+    }
+
+    #[tokio::test]
+    async fn request_errs_remote_conn_drop() {
         use std::time::Duration;
         use tokio::time::timeout;
 
@@ -234,7 +251,7 @@ mod test {
         // Remote drops `remote` after first request
         tokio::spawn(async move {
             let _ = remote.recv().await;
-            // remote is dropped
+            // remote is dropped w/o response
         });
 
         let client = Client::new(local);
