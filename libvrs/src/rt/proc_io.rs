@@ -261,7 +261,7 @@ impl ProcIO {
             .await
             .ok_or(Error::ConnectionClosed)?
             .map_err(|e| Error::IOError(format!("{}", e)))?;
-        self.pending = Some(req.req_id);
+        self.pending = Some(req.id);
         Ok(req.contents.into())
     }
 

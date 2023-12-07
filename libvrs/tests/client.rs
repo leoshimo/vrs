@@ -5,7 +5,7 @@ use vrs::{Client, Connection, Response, Runtime};
 async fn runtime_simple() {
     let runtime = Runtime::new();
     let (local, remote) = Connection::pair().unwrap();
-    let mut remote = Client::new(remote);
+    let remote = Client::new(remote);
 
     runtime
         .handle_conn(local)
@@ -30,7 +30,7 @@ async fn runtime_remote_request_multi() {
 
     let runtime = Runtime::new();
     let (local, remote) = Connection::pair().unwrap();
-    let mut client = Client::new(remote);
+    let client = Client::new(remote);
 
     runtime
         .handle_conn(local)

@@ -28,7 +28,7 @@ pub enum Message {
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct Request {
     /// Unique ID assigned to request
-    pub req_id: u32,
+    pub id: u32,
     /// Contents of request
     pub contents: lyric::Form,
 }

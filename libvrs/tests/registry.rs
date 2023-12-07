@@ -204,7 +204,7 @@ async fn registry_updates_after_exit() {
     // Message srv_b, which should exit
     conn_client
         .send_req(Request {
-            req_id: 0,
+            id: 0,
             contents: lyric::parse(&format!("(send (pid {}) :hi)", srv_b.id().inner())).unwrap(),
         })
         .await
@@ -257,7 +257,7 @@ async fn registry_updates_after_kill() {
     // Kill srv_a
     conn_client
         .send_req(Request {
-            req_id: 0,
+            id: 0,
             contents: lyric::parse(&format!("(kill (pid {}))", srv_a.id().inner())).unwrap(),
         })
         .await

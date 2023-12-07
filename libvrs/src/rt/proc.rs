@@ -313,7 +313,7 @@ mod tests {
 
         let _ = remote
             .send_req(Request {
-                req_id: 0,
+                id: 0,
                 contents: Form::string("Hello world"),
             })
             .await;
@@ -338,7 +338,7 @@ mod tests {
 
         let _ = remote
             .send_req(Request {
-                req_id: 10,
+                id: 10,
                 contents: Form::string("Hello world"),
             })
             .await;

@@ -70,7 +70,7 @@ impl Client {
     }
 
     /// Dispatch a request
-    pub async fn request(&mut self, contents: lyric::Form) -> Result<Response, Error> {
+    pub async fn request(&self, contents: lyric::Form) -> Result<Response, Error> {
         debug!("request contents = {:?}", contents);
         let (resp_tx, resp_rx) = oneshot::channel();
         let ev = Event::SendRequest {
@@ -126,11 +126,11 @@ impl State {
                 resp_tx,
             } => {
                 let req = Request {
-                    req_id: self.next_req_id,
+                    id: self.next_req_id,
                     contents,
                 };
                 self.next_req_id += 1;
-                self.inflight_reqs.insert(req.req_id, resp_tx);
+                self.inflight_reqs.insert(req.id, resp_tx);
                 let _ = self.conn.send(&Message::Request(req)).await;
             }
             RecvResponse(resp) => match self.inflight_reqs.remove(&resp.req_id) {
@@ -166,22 +166,20 @@ impl From<Message> for Event {
 mod test {
     use super::*;
     use crate::connection::Connection;
+    use assert_matches::assert_matches;
+    use lyric::Form;
 
     #[tokio::test(flavor = "multi_thread")]
     async fn handle_request_response() {
         let (local, mut remote) = Connection::pair().unwrap();
 
-        // Remote echos back requests
+        // Echo back response
         tokio::spawn(async move {
             while let Some(msg) = remote.recv().await {
                 if let Ok(Message::Request(req)) = msg {
-                    let message = match req.contents {
-                        lyric::Form::String(s) => s,
-                        _ => todo!(),
-                    };
                     let resp = Response {
-                        req_id: req.req_id,
-                        contents: Ok(lyric::Form::String(format!("reply {}", message))),
+                        req_id: req.id,
+                        contents: Ok(req.contents),
                     };
                     remote
                         .send(&Message::Response(resp))
@@ -191,24 +189,21 @@ mod test {
             }
         });
 
-        let mut client = Client::new(local);
-        let req = client
-            .request(lyric::Form::string("one"))
-            .await
-            .expect("Should receive reply");
-        assert_eq!(req.contents, Ok(lyric::Form::string("reply one")));
+        let client = Client::new(local);
+        let req1 = client.request(lyric::Form::string("one"));
+        let req2 = client.request(lyric::Form::string("two"));
+        let req3 = client.request(lyric::Form::string("three"));
 
-        let req = client
-            .request(lyric::Form::string("two"))
-            .await
-            .expect("Should receive reply");
-        assert_eq!(req.contents, Ok(lyric::Form::string("reply two")));
-
-        let req = client
-            .request(lyric::Form::string("three"))
-            .await
-            .expect("Should receive reply");
-        assert_eq!(req.contents, Ok(lyric::Form::string("reply three")));
+        assert_matches!(
+            tokio::try_join!(req2, req1, req3).unwrap(),
+            (
+                Response { contents: Ok(two), .. },
+                Response { contents: Ok(one), .. },
+                Response { contents: Ok(three), .. },
+            ) if one == Form::string("one")
+                && two == Form::string("two")
+                && three == Form::string("three")
+        );
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -224,7 +219,7 @@ mod test {
             // remote is dropped
         });
 
-        let mut client = Client::new(local);
+        let client = Client::new(local);
 
         let req = client.request(lyric::Form::string("hi"));
         let resp = timeout(Duration::from_millis(10), req)

@@ -235,7 +235,7 @@ mod tests {
     #[tokio::test]
     async fn kernel_proc_for_conn() {
         let (local, remote) = Connection::pair().unwrap();
-        let mut client = Client::new(remote);
+        let client = Client::new(remote);
 
         let k = start();
         let _ = k
@@ -370,7 +370,7 @@ mod tests {
 
         remote
             .send_req(Request {
-                req_id: 0,
+                id: 0,
                 contents: lyric::parse(&format!("(kill (pid {}))", proc_other.id().inner()))
                     .unwrap(),
             })
