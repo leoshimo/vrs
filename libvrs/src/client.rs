@@ -1,7 +1,10 @@
 //! Headless client implementation for vrs runtime
 use std::collections::HashMap;
 
-use crate::connection::{Connection, Message, Request, Response};
+use crate::{
+    connection::{Connection, Message, Request, Response},
+    Subscription,
+};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
@@ -44,6 +47,11 @@ pub enum Event {
     },
     /// Event when receiving response from remote
     RecvResponse(Response),
+    /// Subscribe to given topic
+    Subscribe {
+        topic: lyric::KeywordId,
+        resp_tx: oneshot::Sender<Subscription>,
+    },
 }
 
 /// The state of active [Client]
@@ -135,6 +143,7 @@ impl State {
                 resp_tx,
             } => self.handle_request(contents, resp_tx).await,
             Event::RecvResponse(resp) => self.handle_recv_response(resp).await,
+            Event::Subscribe { topic, resp_tx } => self.handle_subscribe(topic, resp_tx).await,
         }
     }
 
@@ -166,6 +175,15 @@ impl State {
             ))),
         }
     }
+
+    /// Handle a subscription request
+    async fn handle_subscribe(
+        &self,
+        topic: lyric::KeywordId,
+        resp_tx: oneshot::Sender<Subscription>,
+    ) -> Result<(), Error> {
+        todo!()
+    }
 }
 
 impl TryFrom<Message> for Event {
@@ -185,44 +203,6 @@ mod test {
     use super::*;
     use crate::connection::Connection;
     use assert_matches::assert_matches;
-    use lyric::Form;
-
-    #[tokio::test]
-    async fn request_response() {
-        let (local, mut remote) = Connection::pair().unwrap();
-
-        // Echo back response
-        tokio::spawn(async move {
-            while let Some(msg) = remote.recv().await {
-                if let Ok(Message::Request(req)) = msg {
-                    let resp = Response {
-                        req_id: req.id,
-                        contents: Ok(req.contents),
-                    };
-                    remote
-                        .send(&Message::Response(resp))
-                        .await
-                        .expect("messsage should send");
-                }
-            }
-        });
-
-        let client = Client::new(local);
-        let req1 = client.request(lyric::Form::string("one"));
-        let req2 = client.request(lyric::Form::string("two"));
-        let req3 = client.request(lyric::Form::string("three"));
-
-        assert_matches!(
-            tokio::try_join!(req2, req1, req3).unwrap(),
-            (
-                Response { contents: Ok(two), .. },
-                Response { contents: Ok(one), .. },
-                Response { contents: Ok(three), .. },
-            ) if one == Form::string("one")
-                && two == Form::string("two")
-                && three == Form::string("three")
-        );
-    }
 
     #[tokio::test]
     async fn closed_after_remote_conn_drop() {

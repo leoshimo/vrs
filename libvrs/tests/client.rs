@@ -1,4 +1,6 @@
 //! E2E tests for Runtime and Client
+use assert_matches::assert_matches;
+use lyric::Form;
 use vrs::{Client, Connection, Response, Runtime};
 
 #[tokio::test]
@@ -37,27 +39,53 @@ async fn runtime_remote_request_multi() {
         .await
         .expect("Connection should be handled");
 
-    assert!(
-        matches!(
-            client.request(p("(def message \"Hello world\")").unwrap()).await,
-            Ok(Response { contents, .. }) if contents == Ok(lyric::Form::string("Hello world"))
-        ),
+    assert_matches!(
+        client.request(p("(def message \"Hello world\")").unwrap()).await,
+        Ok(Response { contents, .. }) if contents == Ok(lyric::Form::string("Hello world")),
         "defining a message binding should return its value"
     );
-    assert!(
-        matches!(
-            client
-                .request(p("(def echo (lambda (x) x))").unwrap())
-                .await,
-            Ok(Response { .. })
-        ),
+    assert_matches!(
+        client
+            .request(p("(def echo (lambda (x) x))").unwrap())
+            .await,
+        Ok(Response { .. }),
         "defining a echo binding is successful"
     );
-    assert!(
-        matches!(
-            client.request(p("(echo message)").unwrap()).await,
-            Ok(Response { contents, .. }) if contents == Ok(lyric::Form::string("Hello world"))
-        ),
+    assert_matches!(
+        client.request(p("(echo message)").unwrap()).await,
+        Ok(Response { contents, .. }) if contents == Ok(lyric::Form::string("Hello world")),
         "evaluating a function call passing defined argument symbols should return result"
+    );
+}
+
+#[tokio::test]
+async fn request_response_parallel() {
+    let (local, remote) = Connection::pair().unwrap();
+
+    let rt = Runtime::new();
+    let _ = rt.handle_conn(remote).await.unwrap();
+
+    let client = Client::new(local);
+
+    let req1 = client.request(lyric::parse("(+ 0 1)").unwrap());
+    let req2 = client.request(lyric::parse("(+ 1 1)").unwrap());
+    let req3 = client.request(lyric::parse("(+ 2 1)").unwrap());
+
+    assert_matches!(
+        tokio::try_join!(req2, req1, req3).unwrap(),
+        (
+            Response {
+                contents: Ok(Form::Int(2)),
+                ..
+            },
+            Response {
+                contents: Ok(Form::Int(1)),
+                ..
+            },
+            Response {
+                contents: Ok(Form::Int(3)),
+                ..
+            },
+        )
     );
 }

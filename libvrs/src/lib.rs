@@ -1,12 +1,15 @@
 use std::path::PathBuf;
 
+mod client;
 mod connection;
+mod rt;
+mod sub;
+
 pub use connection::{Connection, Request, Response};
 
-mod client;
 pub use client::Client;
+pub use sub::Subscription;
 
-mod rt;
 pub use rt::program::{
     Bytecode, Env, Extern, Lambda, Locals, NativeFn, NativeFnOp, Pattern, Program, Val,
 };
