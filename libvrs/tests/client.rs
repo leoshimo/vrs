@@ -4,7 +4,7 @@ use lyric::Form;
 use vrs::{Client, Connection, Response, Runtime};
 
 #[tokio::test]
-async fn runtime_simple() {
+async fn request_response() {
     let runtime = Runtime::new();
     let (local, remote) = Connection::pair().unwrap();
     let remote = Client::new(remote);
@@ -27,7 +27,7 @@ async fn runtime_simple() {
 }
 
 #[tokio::test]
-async fn runtime_remote_request_multi() {
+async fn request_response_multi() {
     use lyric::parse as p;
 
     let runtime = Runtime::new();
