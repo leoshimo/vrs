@@ -6,63 +6,31 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
 
-/// Handle for client event loop
+/// Handle for vrs client
 #[derive(Debug)]
 pub struct Client {
-    /// Sender half to send messages to event loop
-    evloop_tx: mpsc::Sender<Event>,
+    /// Sender half to send messages to shared task
+    hdl_tx: mpsc::Sender<Event>,
     /// Cancellation token to shutdown event loop and handle
-    evloop_cancel_token: CancellationToken,
-}
-
-impl Client {
-    /// Create new client from connection transport between client and runtime
-    pub fn new(conn: Connection) -> Self {
-        let (evloop_tx, evloop_rx) = mpsc::channel(32);
-        let evloop_cancel_token = CancellationToken::new();
-        let evloop = EventLoop::new(conn, evloop_cancel_token.clone());
-        tokio::spawn(run(evloop, evloop_rx));
-        Self {
-            evloop_tx,
-            evloop_cancel_token,
-        }
-    }
-
-    /// Dispatch a request
-    pub async fn request(&mut self, contents: lyric::Form) -> Result<Response, Error> {
-        debug!("send request contents = {:?}", contents);
-        let (resp_tx, resp_rx) = oneshot::channel();
-        let ev = Event::SendRequest { contents, resp_tx };
-        self.evloop_tx.send(ev).await?;
-        Ok(resp_rx.await?)
-    }
-
-    /// Shutdown
-    pub async fn shutdown(&self) {
-        self.evloop_cancel_token.cancel();
-        let _ = self.evloop_tx.closed().await; // wait until shutdown
-    }
+    cancel_token: CancellationToken,
 }
 
 /// Errors from interacting with [Client]
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("Failed to send request")]
-    RequestSendError(#[from] tokio::sync::mpsc::error::SendError<Event>),
+    #[error("Failed to on mpsc - {0}")]
+    MpscSendError(#[from] tokio::sync::mpsc::error::SendError<Event>),
 
-    #[error("Failed to receive response to request")]
-    RequestRecvError(#[from] tokio::sync::oneshot::error::RecvError),
-
-    #[error("Receied unexpected message - {0}")]
-    UnexpectedMessage(String),
+    #[error("Failed to recv on oneshot - {0}")]
+    OneShotRecvError(#[from] tokio::sync::oneshot::error::RecvError),
 }
 
-/// Events processed in event loop
+/// Messages processed by event loop
 #[derive(Debug)]
 pub enum Event {
     /// Event for sending request to remote
     SendRequest {
-        contents: lyric::Form,
+        req: lyric::Form,
         resp_tx: oneshot::Sender<Response>,
     },
     /// Event when receiving response from remote
@@ -75,26 +43,77 @@ pub enum Event {
     DisconnectedFromRuntime,
 }
 
-/// The state managed by client side event loop. The [Client] is a handle to this [EventLoop]
+/// The state of active [Client]
 #[derive(Debug)]
-struct EventLoop {
-    /// The connection between runtime
+struct State {
+    /// The connection to runtime
     conn: Connection,
     /// Maps req_ids to Sender channel for responses
     inflight_reqs: HashMap<u32, oneshot::Sender<Response>>,
     /// Next request id to use
     next_req_id: u32,
     /// Cancellation token used to shutdown event loop
-    cancellation_token: CancellationToken,
+    cancel_token: CancellationToken,
 }
 
-impl EventLoop {
-    fn new(conn: Connection, cancellation_token: CancellationToken) -> Self {
+impl Client {
+    /// Create new client from connection transport between client and runtime
+    pub fn new(conn: Connection) -> Self {
+        let (hdl_tx, hdl_rx) = mpsc::channel(32);
+        let cancel_token = CancellationToken::new();
+        let state = State::new(conn, cancel_token.clone());
+        tokio::spawn(run(state, hdl_rx));
+        Self {
+            hdl_tx,
+            cancel_token,
+        }
+    }
+
+    /// Dispatch a request
+    pub async fn request(&mut self, contents: lyric::Form) -> Result<Response, Error> {
+        debug!("request contents = {:?}", contents);
+        let (resp_tx, resp_rx) = oneshot::channel();
+        let ev = Event::SendRequest {
+            req: contents,
+            resp_tx,
+        };
+        self.hdl_tx.send(ev).await?;
+        Ok(resp_rx.await?)
+    }
+
+    /// Initiate Shutdown. The future completes when shutdown is complete
+    pub async fn shutdown(&self) {
+        debug!("shutdown - start");
+        self.cancel_token.cancel();
+        let _ = self.hdl_tx.closed().await; // wait until rx drop
+        debug!("shutdown - done");
+    }
+}
+
+/// Start client side event loop
+async fn run(mut state: State, mut hdl_rx: mpsc::Receiver<Event>) {
+    loop {
+        let ev = tokio::select! {
+            Some(e) = hdl_rx.recv() => e,
+            msg = state.conn.recv() => match msg {
+                Some(msg) => msg.map(Event::from).unwrap_or_else(Event::RecvError),
+                None => Event::DisconnectedFromRuntime,
+            },
+            _ = state.cancel_token.cancelled() => {
+                break;
+            }
+        };
+        state.handle_event(ev).await;
+    }
+}
+
+impl State {
+    fn new(conn: Connection, cancel_token: CancellationToken) -> Self {
         Self {
             conn,
             next_req_id: 0,
             inflight_reqs: HashMap::new(),
-            cancellation_token,
+            cancel_token,
         }
     }
 
@@ -102,7 +121,10 @@ impl EventLoop {
         debug!("received {:?}", e);
         use Event::*;
         match e {
-            SendRequest { contents, resp_tx } => {
+            SendRequest {
+                req: contents,
+                resp_tx,
+            } => {
                 let req = Request {
                     req_id: self.next_req_id,
                     contents,
@@ -125,7 +147,7 @@ impl EventLoop {
             RecvRequest { .. } => panic!("Unimplemented - received request from runtime"),
             DisconnectedFromRuntime => {
                 debug!("shutting down event loop...");
-                self.cancellation_token.cancel();
+                self.cancel_token.cancel();
             }
         }
     }
@@ -140,27 +162,9 @@ impl From<Message> for Event {
     }
 }
 
-/// Start client side event loop
-async fn run(mut evloop: EventLoop, mut evloop_rx: mpsc::Receiver<Event>) {
-    loop {
-        let ev = tokio::select! {
-            Some(e) = evloop_rx.recv() => e,
-            msg = evloop.conn.recv() => match msg {
-                Some(msg) => msg.map(Event::from).unwrap_or_else(Event::RecvError),
-                None => Event::DisconnectedFromRuntime,
-            },
-            _ = evloop.cancellation_token.cancelled() => {
-                break;
-            }
-        };
-        evloop.handle_event(ev).await;
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::client::Message;
     use crate::connection::Connection;
 
     #[tokio::test(flavor = "multi_thread")]
@@ -227,6 +231,6 @@ mod test {
             .await
             .expect("Request should be notified that remote connection was dropped before timeout");
 
-        assert!(matches!(resp, Err(Error::RequestRecvError(_))));
+        assert!(matches!(resp, Err(Error::OneShotRecvError(_))));
     }
 }
