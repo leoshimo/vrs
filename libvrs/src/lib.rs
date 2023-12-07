@@ -3,12 +3,12 @@ use std::path::PathBuf;
 mod client;
 mod connection;
 mod rt;
-mod sub;
+mod subscription;
 
 pub use connection::{Connection, Request, Response};
 
 pub use client::Client;
-pub use sub::Subscription;
+pub use subscription::Subscription;
 
 pub use rt::program::{
     Bytecode, Env, Extern, Lambda, Locals, NativeFn, NativeFnOp, Pattern, Program, Val,
