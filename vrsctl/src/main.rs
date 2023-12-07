@@ -8,8 +8,8 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use tokio::net::UnixStream;
 use tracing::debug;
-use vrs::client::Client;
-use vrs::connection::Connection;
+use vrs::Client;
+use vrs::Connection;
 
 #[tokio::main]
 async fn main() -> Result<()> {

@@ -19,19 +19,19 @@ pub struct Client {
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Failed to send on mpsc - {0}")]
-    MpscSendError(#[from] tokio::sync::mpsc::error::SendError<Event>),
+    FailedToSend(#[from] tokio::sync::mpsc::error::SendError<Event>),
 
     #[error("Failed to recv on oneshot - {0}")]
-    OneShotRecvError(#[from] tokio::sync::oneshot::error::RecvError),
+    FailedToRecv(#[from] tokio::sync::oneshot::error::RecvError),
 
     #[error("{0}")]
-    IOError(#[from] std::io::Error),
+    IO(#[from] std::io::Error),
 
     #[error("Internal inconsistency - {0}")]
-    InternalError(String),
+    Internal(String),
 
     #[error("Connection disconnected")]
-    DisconnectedError,
+    Disconnected,
 }
 
 /// Messages processed by event loop
@@ -111,7 +111,7 @@ async fn run(mut state: State, mut hdl_rx: mpsc::Receiver<Event>) -> Result<(), 
             Some(e) = hdl_rx.recv() => e,
             msg = state.conn.recv() => match msg {
                 Some(msg) => msg.map(Event::try_from)??,
-                None => return Err(Error::DisconnectedError),
+                None => return Err(Error::Disconnected),
             },
         };
         state.handle_event(ev).await?;
@@ -160,7 +160,7 @@ impl State {
                 let _ = tx.send(resp);
                 Ok(())
             }
-            None => Err(Error::InternalError(format!(
+            None => Err(Error::Internal(format!(
                 "Received unexpected response for request - {:?}",
                 resp
             ))),
@@ -173,7 +173,7 @@ impl TryFrom<Message> for Event {
     fn try_from(value: Message) -> Result<Self, Self::Error> {
         match value {
             Message::Response(resp) => Ok(Self::RecvResponse(resp)),
-            Message::Request(_) => Err(Error::InternalError(
+            Message::Request(_) => Err(Error::Internal(
                 "Client unexpectedly received Message::Request".to_string(),
             )),
         }
@@ -263,7 +263,7 @@ mod test {
 
         assert_matches!(
             resp,
-            Err(Error::OneShotRecvError(_)),
+            Err(Error::FailedToRecv(_)),
             "Request should error when connection terminates"
         );
     }

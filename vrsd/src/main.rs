@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use tokio::net::UnixListener;
 use tracing::{error, info};
-use vrs::connection::Connection;
+use vrs::Connection;
 use vrs::Runtime;
 
 #[tokio::main]

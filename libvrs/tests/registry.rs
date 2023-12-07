@@ -1,8 +1,7 @@
 //! E2E Tests involving Process Registry
 
 use assert_matches::assert_matches;
-use vrs::rt::program::Val;
-use vrs::{Connection, Error, Extern, Program, Request, Runtime};
+use vrs::{Connection, Error, Extern, Program, Request, Runtime, Val};
 
 #[tokio::test]
 async fn list_services_empty() {

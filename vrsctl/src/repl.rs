@@ -49,7 +49,7 @@ pub(crate) async fn run(client: &Client) -> Result<()> {
         match client.request(f).await {
             Ok(resp) => match resp.contents {
                 // TODO: Bringup different formats for clients - e.g. REPL should use text format only
-                Ok(Form::RawString(s)) => printer.print(format!("{s}"))?,
+                Ok(Form::RawString(s)) => printer.print(s)?,
                 Ok(c) => printer.print(format!("{c}"))?,
                 Err(e) => eprintln!("{}", e),
             },
