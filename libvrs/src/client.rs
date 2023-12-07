@@ -203,6 +203,36 @@ mod test {
     use super::*;
     use crate::connection::Connection;
     use assert_matches::assert_matches;
+    use lyric::Form;
+
+    #[tokio::test]
+    async fn request_response() {
+        let (local, mut remote) = Connection::pair().unwrap();
+
+        tokio::spawn(async move {
+            loop {
+                match remote.recv_req().await {
+                    Some(Ok(req)) => {
+                        let _ = remote
+                            .send_resp(Response {
+                                req_id: req.id,
+                                contents: Ok(Form::string("response")),
+                            })
+                            .await;
+                    }
+                    _ => panic!("Unexpected recv on connection"),
+                }
+            }
+        });
+
+        let client = Client::new(local);
+        let resp = client.request(Form::string("request")).await.unwrap();
+
+        assert_matches!(
+            resp,
+            Response { contents: Ok(contents), .. } if contents == Form::string("response")
+        );
+    }
 
     #[tokio::test]
     async fn closed_after_remote_conn_drop() {
