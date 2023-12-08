@@ -1,5 +1,5 @@
 //! Pattern Matching
-use crate::{Extern, Locals, SymbolId, Val};
+use crate::{Extern, Locals, Result, SymbolId, Val};
 use std::collections::HashMap;
 
 /// Pattern matching predicate
@@ -21,6 +21,12 @@ where
 {
     pub fn from_val(inner: Val<T, L>) -> Self {
         Self { inner }
+    }
+
+    pub fn from_expr(expr: &str) -> Result<Self> {
+        Ok(Self {
+            inner: Val::from_expr(expr)?,
+        })
     }
 
     /// Check if pattern matches given value

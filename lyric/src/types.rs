@@ -1,6 +1,6 @@
 //! Types in Lisp virtual machine
 use crate::codegen::Inst;
-use crate::{Env, Error, Fiber, Ref, Result};
+use crate::{parse, Env, Error, Fiber, Ref, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
@@ -103,6 +103,16 @@ pub trait Locals: std::fmt::Debug + std::cmp::PartialEq + std::clone::Clone {}
 
 /// Trait alias impl for [Locals]
 impl<T> Locals for T where T: std::fmt::Debug + std::cmp::PartialEq + std::clone::Clone {}
+
+impl<T, L> Val<T, L>
+where
+    T: Extern,
+    L: Locals,
+{
+    pub fn from_expr(expr: &str) -> Result<Self> {
+        expr.try_into()
+    }
+}
 
 impl Form {
     /// Shorhand for constructing [Form::String]
@@ -271,6 +281,14 @@ impl<T: Extern, L: Locals> std::fmt::Debug for Lambda<T, L> {
             .collect::<Vec<_>>()
             .join(" ");
         write!(f, "Form::Lambda({} ...)", params)
+    }
+}
+
+impl<T: Extern, L: Locals> TryFrom<&str> for Val<T, L> {
+    type Error = Error;
+
+    fn try_from(value: &str) -> Result<Self> {
+        Ok(parse(value)?.into())
     }
 }
 

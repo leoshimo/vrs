@@ -111,7 +111,7 @@ impl Mailbox {
         }
     }
 
-    /// Dequeue message in FIFO order
+    /// Handle a poll for message matching given [Pattern] that will be sent to `tx`
     fn handle_poll(&mut self, pattern: Option<Pattern>, tx: oneshot::Sender<Message>) {
         match self.pop_match(&pattern) {
             Some(msg) => {
@@ -163,7 +163,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn received() {
+    async fn all() {
         let mb = Mailbox::spawn(0.into());
 
         mb.push(Message::new(1.into(), Val::symbol("one")))
@@ -212,9 +212,8 @@ mod tests {
         let mb_clone = mb.clone();
         let hdl = tokio::spawn(async move { mb_clone.poll(None).await });
 
+        yield_now().await; // yield on current task to let poll run
         assert!(!hdl.is_finished(), "Task should block on poll");
-
-        yield_now().await; // yield on current task to let 2nd poll run
 
         mb.push(Message::new(1.into(), Val::symbol("hi")))
             .await
@@ -227,6 +226,83 @@ mod tests {
         );
     }
 
-    // TODO: Test that mailbox errors terminate process
-    // TODO: Test for recv w/ pattern match predicates (non-matching ignored + preserved)
+    #[tokio::test]
+    async fn poll_after_push_pattern() {
+        let mb = Mailbox::spawn(0.into());
+
+        let msg1 = Message::new(1.into(), Val::from_expr("(:one 1)").unwrap());
+        let msg2 = Message::new(2.into(), Val::from_expr("(:two 2)").unwrap());
+        let msg3 = Message::new(3.into(), Val::from_expr("(:three 3)").unwrap());
+        let msg4 = Message::new(3.into(), Val::from_expr("(:four 4)").unwrap());
+
+        mb.push(msg1.clone()).await.unwrap();
+        mb.push(msg2.clone()).await.unwrap();
+        mb.push(msg3.clone()).await.unwrap();
+        mb.push(msg4.clone()).await.unwrap();
+
+        let pat_two = Pattern::from_expr("(:two _)").unwrap();
+        assert_eq!(
+            mb.poll(Some(pat_two)).await.unwrap(),
+            msg2,
+            "Should return with matching message"
+        );
+
+        assert_eq!(
+            mb.all().await.unwrap(),
+            vec![msg1.clone(), msg3.clone(), msg4.clone()],
+            "Should still have unmatched messages"
+        );
+
+        assert_eq!(
+            mb.poll(Some(Pattern::from_expr("(a b)").unwrap()))
+                .await
+                .unwrap(),
+            msg1,
+            "If multiple messages match, earlier messages one should be returned first"
+        );
+
+        assert_eq!(
+            mb.all().await.unwrap(),
+            vec![msg3, msg4],
+            "Should still have unmatched messages"
+        );
+    }
+
+    #[tokio::test]
+    async fn poll_before_push_pattern() {
+        let mb = Mailbox::spawn(0.into());
+
+        let mbc = mb.clone();
+        let hdl = tokio::spawn(async move {
+            vec![
+                mbc.poll(Some(Pattern::from_expr("(:four _)").unwrap()))
+                    .await
+                    .unwrap(),
+                mbc.poll(Some(Pattern::from_expr("(a b)").unwrap()))
+                    .await
+                    .unwrap(),
+                mbc.poll(Some(Pattern::from_expr("(a b c)").unwrap()))
+                    .await
+                    .unwrap(),
+            ]
+        });
+
+        yield_now().await;
+        assert!(!hdl.is_finished(), "mb.poll task should not be finished");
+
+        // Message sequences
+        let msg1 = Message::new(1.into(), Val::from_expr("(:one 1)").unwrap()); // matches 2nd poll
+        let msg2 = Message::new(2.into(), Val::from_expr("(:two 2 2)").unwrap()); // matches 3rd poll
+        let msg3 = Message::new(3.into(), Val::from_expr("(:three 3)").unwrap()); // ignored
+        let msg4 = Message::new(4.into(), Val::from_expr("(:four 4)").unwrap()); // matches 1st poll
+        let msg5 = Message::new(5.into(), Val::from_expr("(:five 5 5)").unwrap()); // ignored
+        mb.push(msg1.clone()).await.unwrap();
+        mb.push(msg2.clone()).await.unwrap();
+        mb.push(msg3.clone()).await.unwrap();
+        mb.push(msg4.clone()).await.unwrap();
+        mb.push(msg5.clone()).await.unwrap();
+
+        assert_eq!(hdl.await.unwrap(), vec![msg4, msg1, msg2]);
+        assert_eq!(mb.all().await.unwrap(), vec![msg3, msg5]);
+    }
 }
