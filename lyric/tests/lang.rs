@@ -793,6 +793,62 @@ fn eval_match() {
             Val::List(vec![Val::Int(3), Val::Int(7),])
         );
     }
+
+    {
+        let prog = r#"(begin
+            (defn extract (x)
+                (match x
+                    ((:first (a b c)) a)
+                    ((:second (a b c)) b)
+                    ((:third (a b c)) c)))
+            (list
+                (extract '(:first (1 2 3)))
+                (extract '(:second (1 2 3)))
+                (extract '(:third (1 2 3)))
+            )
+        )
+        "#;
+
+        assert_eq!(
+            eval_expr(prog).unwrap(),
+            Val::List(vec![Val::Int(1), Val::Int(2), Val::Int(3),])
+        );
+    }
+
+    {
+        // match w/ nesting
+        let prog = r#"(begin
+            (defn matcher (x)
+                (match x
+                    ((a (a (a))) :one)
+                    ((a (b (c))) :two)
+                    (((a) (a) (a)) :three)
+                    (((a) (b) (c)) :four)
+                    ((((a) (a) (a))) :five)
+                    ((((a) (b) (c))) :six)))
+            (list
+                (matcher '(1 (1 (1))))
+                (matcher '(1 (2 (3))))
+                (matcher '((1) (1) (1)))
+                (matcher '((1) (2) (3)))
+                (matcher '(((1) (1) (1))))
+                (matcher '(((1) (2) (3))))
+            )
+        )
+        "#;
+
+        assert_eq!(
+            eval_expr(prog).unwrap(),
+            Val::List(vec![
+                Val::keyword("one"),
+                Val::keyword("two"),
+                Val::keyword("three"),
+                Val::keyword("four"),
+                Val::keyword("five"),
+                Val::keyword("six"),
+            ])
+        );
+    }
 }
 
 // TODO: Test - if with blocks
