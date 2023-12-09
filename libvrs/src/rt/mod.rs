@@ -2,6 +2,7 @@ mod binding;
 mod error;
 mod kernel;
 pub mod program;
+mod pubsub;
 mod registry;
 mod runtime;
 

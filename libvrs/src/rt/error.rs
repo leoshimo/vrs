@@ -50,6 +50,9 @@ pub enum Error {
     #[error("No mailbox")]
     NoMailbox,
 
+    #[error("Dead pubsub")]
+    DeadPubSub,
+
     #[error("Exec error - {0}")]
     ExecError(String),
 

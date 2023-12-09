@@ -124,7 +124,7 @@ impl RegistryTask {
 
         let entry = Entry::new(registration.clone(), handle.clone());
 
-        // Notify on exi
+        // Notify on exit
         let entry_id = entry.id.clone();
         let on_exit = handle.join();
         let weak_tx = self.weak_tx.clone();
