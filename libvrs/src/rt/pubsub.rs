@@ -8,7 +8,12 @@ use std::collections::HashMap;
 
 use crate::{Error, Result, Val};
 use lyric::KeywordId;
-use tokio::sync::{mpsc, oneshot, watch};
+use tokio::sync::{
+    broadcast::{self, error::RecvError},
+    mpsc, oneshot,
+};
+
+use tracing::warn;
 
 /// Handle to spawned [PubSub] task
 #[derive(Debug, Clone)]
@@ -26,14 +31,15 @@ pub(crate) struct PubSub {
 /// Drop to unsubscribe
 #[derive(Debug)]
 pub(crate) struct Subscription {
-    rx: watch::Receiver<Val>,
+    id: KeywordId,
+    rx: broadcast::Receiver<Val>,
 }
 
 /// Internal data structure for managing active subscriptions
 #[derive(Debug)]
 struct Topic {
     id: KeywordId,
-    tx: watch::Sender<Val>,
+    tx: broadcast::Sender<Val>,
 }
 
 #[derive(Debug)]
@@ -127,9 +133,10 @@ impl PubSub {
     }
 
     /// Handle a new add subscription to add
-    fn handle_subscribe(&mut self, topic_name: KeywordId) -> Result<Subscription> {
-        let topic = self.get_topic(topic_name);
+    fn handle_subscribe(&mut self, topic_id: KeywordId) -> Result<Subscription> {
+        let topic = self.get_topic(&topic_id);
         let sub = Subscription {
+            id: topic_id,
             rx: topic.tx.subscribe(),
         };
         Ok(sub)
@@ -137,7 +144,7 @@ impl PubSub {
 
     /// Publish new value on given topic
     fn handle_publish(&mut self, topic_id: KeywordId, val: Val) -> Result<()> {
-        let topic = self.get_topic(topic_id);
+        let topic = self.get_topic(&topic_id);
         let _ = topic.tx.send(val);
         Ok(())
     }
@@ -149,23 +156,28 @@ impl PubSub {
     }
 
     /// Retrieve matching [Topic], or create a new one for topic id
-    fn get_topic(&mut self, id: KeywordId) -> &Topic {
-        if !self.topics.contains_key(&id) {
-            let (tx, _) = watch::channel(Val::Nil);
+    fn get_topic(&mut self, id: &KeywordId) -> &Topic {
+        if !self.topics.contains_key(id) {
+            let (tx, _) = broadcast::channel(32);
             let topic = Topic { id: id.clone(), tx };
             self.topics.insert(id.clone(), topic);
         }
-
-        self.topics.get(&id).expect("should contain key")
+        self.topics.get(id).expect("should contain key")
     }
 }
 
 impl Subscription {
     /// Future that completes when a new event is received for subscription
-    pub(crate) async fn next(&mut self) -> Option<Val> {
-        match self.rx.changed().await {
-            Ok(_) => Some(self.rx.borrow_and_update().clone()),
-            Err(_) => None, // changed() returns Err iff Sender is dropped
+    pub(crate) async fn recv(&mut self) -> Option<Val> {
+        loop {
+            match self.rx.recv().await {
+                Ok(v) => return Some(v),
+                Err(RecvError::Lagged(_)) => {
+                    warn!("Lagged on topic id = {}", self.id);
+                    continue;
+                }
+                Err(RecvError::Closed) => return None,
+            }
         }
     }
 }
@@ -183,7 +195,7 @@ mod tests {
         let topic = KeywordId::from("topic");
         let mut sub = ps.subscribe(&topic).await.unwrap();
         ps.publish(&topic, Val::string("hi")).await.unwrap();
-        assert_eq!(sub.next().await.unwrap(), Val::string("hi"))
+        assert_eq!(sub.recv().await.unwrap(), Val::string("hi"))
     }
 
     #[tokio::test]
@@ -194,25 +206,41 @@ mod tests {
         ps.publish(&topic, Val::string("hi")).await.unwrap();
         let mut sub = ps.subscribe(&topic).await.unwrap();
 
-        timeout(Duration::from_millis(0), sub.next())
+        timeout(Duration::from_millis(0), sub.recv())
             .await
             .expect_err("Subscription should not see value before subscribe");
     }
 
     #[tokio::test]
-    async fn next_only_sees_recent() {
+    async fn subscription_captures_history() {
         let ps = PubSub::spawn();
         let topic = KeywordId::from("topic");
 
-        let mut sub = ps.subscribe(&topic).await.unwrap();
+        ps.publish(&topic, Val::Int(0)).await.unwrap();
+
+        let mut sub1 = ps.subscribe(&topic).await.unwrap(); // 1st sub
+
         ps.publish(&topic, Val::Int(1)).await.unwrap();
         ps.publish(&topic, Val::Int(2)).await.unwrap();
+
+        let mut sub2 = ps.subscribe(&topic).await.unwrap(); // 2nd sub
+
         ps.publish(&topic, Val::Int(3)).await.unwrap();
 
         assert_eq!(
-            sub.next().await.unwrap(),
+            (
+                sub1.recv().await.unwrap(),
+                sub1.recv().await.unwrap(),
+                sub1.recv().await.unwrap(),
+            ),
+            (Val::Int(1), Val::Int(2), Val::Int(3)),
+            "sub1 should receive 3 values after subscribing",
+        );
+
+        assert_eq!(
+            sub2.recv().await.unwrap(),
             Val::Int(3),
-            "Subscription should only deliver most recent value if next was not polled"
+            "sub2 should only see last value after subscribing",
         );
     }
 
@@ -232,8 +260,13 @@ mod tests {
         ps.publish(&str_topic, Val::string("two")).await.unwrap();
         ps.publish(&str_topic, Val::string("three")).await.unwrap();
 
-        assert_eq!(strings.next().await.unwrap(), Val::string("three"));
-        assert_eq!(numbers.next().await.unwrap(), Val::Int(3));
+        assert_eq!(strings.recv().await.unwrap(), Val::string("one"));
+        assert_eq!(strings.recv().await.unwrap(), Val::string("two"));
+        assert_eq!(strings.recv().await.unwrap(), Val::string("three"));
+
+        assert_eq!(numbers.recv().await.unwrap(), Val::Int(1));
+        assert_eq!(numbers.recv().await.unwrap(), Val::Int(2));
+        assert_eq!(numbers.recv().await.unwrap(), Val::Int(3));
     }
 
     #[tokio::test]
@@ -249,7 +282,7 @@ mod tests {
             let mut sub = ps.subscribe(&topic).await.unwrap(); // subscribe in current task, then move sub into task, or messages may be lost
             tokio::spawn(async move {
                 let mut res = vec![];
-                while let Some(v) = sub.next().await {
+                while let Some(v) = sub.recv().await {
                     res.push(v);
                 }
                 res
@@ -283,7 +316,7 @@ mod tests {
             let mut sub = ps.subscribe(&topic).await.unwrap(); // must subscribe in current task
             tokio::spawn(async move {
                 let mut res = vec![];
-                while let Some(v) = sub.next().await {
+                while let Some(v) = sub.recv().await {
                     res.push(v);
                 }
                 res
@@ -299,7 +332,7 @@ mod tests {
             let mut sub = ps.subscribe(&topic).await.unwrap(); // must subscribe in current task
             tokio::spawn(async move {
                 let mut res = vec![];
-                while let Some(v) = sub.next().await {
+                while let Some(v) = sub.recv().await {
                     res.push(v);
                 }
                 res
