@@ -154,5 +154,11 @@ fn program_env() -> Env {
             .bind_native(SymbolId::from("ls-srv"), binding::ls_srv_fn());
     }
 
+    {
+        e.bind_native(SymbolId::from("subscribe"), binding::subscribe_fn())
+            .bind_native(SymbolId::from("unsubscribe"), binding::unsubscribe_fn())
+            .bind_native(SymbolId::from("publish"), binding::publish_fn());
+    }
+
     e
 }

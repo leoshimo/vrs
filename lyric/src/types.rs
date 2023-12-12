@@ -112,6 +112,38 @@ where
     pub fn from_expr(expr: &str) -> Result<Self> {
         expr.try_into()
     }
+
+    pub fn as_string(&self) -> Result<&String> {
+        if let Val::String(inner) = &self {
+            Ok(inner)
+        } else {
+            Err(Error::UnexpectedType("expected string".to_string()))
+        }
+    }
+
+    pub fn as_symbol(&self) -> Result<&SymbolId> {
+        if let Val::Symbol(inner) = &self {
+            Ok(inner)
+        } else {
+            Err(Error::UnexpectedType("expected symbol".to_string()))
+        }
+    }
+
+    pub fn as_keyword(&self) -> Result<&KeywordId> {
+        if let Val::Keyword(inner) = &self {
+            Ok(inner)
+        } else {
+            Err(Error::UnexpectedType("expected keyword".to_string()))
+        }
+    }
+
+    pub fn as_list(&self) -> Result<&Vec<Val<T, L>>> {
+        if let Val::List(inner) = &self {
+            Ok(inner)
+        } else {
+            Err(Error::UnexpectedType("expected keyword".to_string()))
+        }
+    }
 }
 
 impl Form {

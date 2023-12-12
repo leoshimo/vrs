@@ -1,5 +1,5 @@
 //! A fiber of execution that can be cooperatively scheduled via yielding.
-use tracing::{debug, warn};
+use tracing::warn;
 
 use super::{Env, Inst};
 use crate::{
@@ -187,15 +187,15 @@ fn run<T: Extern, L: Locals>(f: &mut Fiber<T, L>) -> Result<FiberState<T, L>> {
         f.top_mut().ip += 1;
 
         // TODO(dev): Add fiber debug flag
-        debug!(
-            "frame {} ip {}: {}\n\t{}",
-            f.cframes.len() - 1,
-            f.top().ip - 1,
-            inst,
-            f.stack
-                .iter()
-                .fold(String::new(), |acc, e| acc + &e.to_string() + ", ")
-        );
+        // debug!(
+        //     "frame {} ip {}: {}\n\t{}",
+        //     f.cframes.len() - 1,
+        //     f.top().ip - 1,
+        //     inst,
+        //     f.stack
+        //         .iter()
+        //         .fold(String::new(), |acc, e| acc + &e.to_string() + ", ")
+        // );
 
         let res = || -> Result<()> {
             match inst {

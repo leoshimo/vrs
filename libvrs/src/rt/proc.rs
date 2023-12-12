@@ -1,7 +1,8 @@
 use super::kernel::WeakKernelHandle;
 use super::mailbox::Message;
 use super::proc_io::ProcIO;
-use super::program::{Extern, Locals, Val};
+use super::program::{Extern, Fiber, Locals, Val};
+use super::pubsub::PubSubHandle;
 use super::registry::Registry;
 use crate::rt::mailbox::{Mailbox, MailboxHandle};
 use crate::rt::{Error, Result};
@@ -83,6 +84,12 @@ impl Process {
         self
     }
 
+    /// Set pubsub handle for process
+    pub(crate) fn pubsub(mut self, pubsub: PubSubHandle) -> Self {
+        self.io.pubsub(pubsub);
+        self
+    }
+
     /// Spawn a process
     pub(crate) fn spawn(mut self, procs: &mut ProcessSet) -> Result<ProcessHandle> {
         info!("proc spawn - {}", self.id);
@@ -125,7 +132,7 @@ impl Process {
                                         status: Ok(ProcessResult::Cancelled)
                                     })
                                 },
-                                io_result = Self::handle_yield(v, &mut io) => {
+                                io_result = Self::handle_yield(&mut fiber, v, &mut io) => {
                                     debug!("proc yield result - {:?} {:?}", self.id, io_result);
 
                                     let io_result = match io_result {
@@ -170,12 +177,12 @@ impl Process {
     }
 
     /// Handle a yield signal from fiber
-    async fn handle_yield(val: Val, io: &mut ProcIO) -> Result<Val> {
+    async fn handle_yield(fiber: &mut Fiber, val: Val, io: &mut ProcIO) -> Result<Val> {
         let iocmd = match val {
             Val::Extern(Extern::IOCmd(cmd)) => cmd,
             _ => return Err(Error::UnexpectedYield),
         };
-        io.dispatch_io(*iocmd).await
+        io.dispatch_io(fiber, *iocmd).await
     }
 }
 

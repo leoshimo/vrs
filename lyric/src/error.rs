@@ -21,6 +21,9 @@ pub enum Error {
     #[error("Unexpected arguments - {0}")]
     UnexpectedArguments(String),
 
+    #[error("Unexpected type - {0}")]
+    UnexpectedType(String),
+
     #[error("Invalid form to expr - {0}")]
     InvalidFormToExpr(String),
 

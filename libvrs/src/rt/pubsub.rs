@@ -13,7 +13,7 @@ use tokio::sync::{
     mpsc, oneshot,
 };
 
-use tracing::warn;
+use tracing::{info, warn};
 
 /// Handle to spawned [PubSub] task
 #[derive(Debug, Clone)]
@@ -62,6 +62,7 @@ enum Cmd {
 impl PubSubHandle {
     /// Establish a subscription for given handle
     pub(crate) async fn subscribe(&self, topic: &KeywordId) -> Result<Subscription> {
+        info!("subscribe {topic}");
         let (resp_tx, resp_rx) = oneshot::channel();
         self.tx
             .send(Cmd::Subscribe {
@@ -75,6 +76,7 @@ impl PubSubHandle {
 
     /// Publish a new value for given handle
     pub(crate) async fn publish(&self, topic: &KeywordId, val: Val) -> Result<()> {
+        info!("publish {topic} {val}");
         let (resp_tx, resp_rx) = oneshot::channel();
         self.tx
             .send(Cmd::Publish {
@@ -89,6 +91,7 @@ impl PubSubHandle {
 
     /// Clear topic
     pub(crate) async fn clear(&self, topic: &KeywordId) -> Result<()> {
+        info!("clear {topic}");
         let (resp_tx, resp_rx) = oneshot::channel();
         self.tx
             .send(Cmd::Clear {
@@ -151,7 +154,9 @@ impl PubSub {
 
     /// Handle a clear request
     fn handle_clear(&mut self, topic_id: KeywordId) -> Result<()> {
-        self.topics.remove(&topic_id);
+        if self.topics.remove(&topic_id).is_none() {
+            warn!("clearing unknown topic: {topic_id}");
+        }
         Ok(())
     }
 

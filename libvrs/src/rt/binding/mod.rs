@@ -2,6 +2,7 @@ mod conn;
 mod mailbox;
 mod open;
 mod proc;
+mod pubsub;
 mod registry;
 mod service;
 mod system;
@@ -35,3 +36,7 @@ pub(crate) use service::info_srv_fn;
 pub(crate) use service::ls_srv_fn;
 pub(crate) use service::register_fn;
 pub(crate) use service::srv_fn;
+
+pub(crate) use pubsub::publish_fn;
+pub(crate) use pubsub::subscribe_fn;
+pub(crate) use pubsub::unsubscribe_fn;

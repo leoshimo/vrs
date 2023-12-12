@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use super::mailbox::Message;
 use super::proc::{ProcessExit, ProcessHandle, ProcessSet};
 use super::program;
+use super::pubsub::{PubSub, PubSubHandle};
 use super::registry::Registry;
 use crate::rt::{proc::Process, Error, ProcessId, Result};
 use crate::{Connection, Program};
@@ -138,6 +139,7 @@ struct Kernel {
     proc_hdls: HashMap<ProcessId, ProcessHandle>,
     next_proc_id: usize,
     registry: Registry,
+    pubsub: PubSubHandle,
 }
 
 impl Kernel {
@@ -148,6 +150,7 @@ impl Kernel {
             proc_hdls: HashMap::new(),
             next_proc_id: 0,
             registry: Registry::spawn(),
+            pubsub: PubSub::spawn(),
         }
     }
 
@@ -183,6 +186,7 @@ impl Kernel {
         let hdl = proc
             .kernel(self.weak_hdl.clone())
             .registry(self.registry.clone())
+            .pubsub(self.pubsub.clone())
             .spawn(&mut self.procs)?;
         self.proc_hdls.insert(hdl.id(), hdl.clone());
         Ok(hdl)
