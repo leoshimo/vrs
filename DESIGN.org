@@ -220,7 +220,7 @@ initiated execution of fiber.
 A fiber can later be resumed when the event that fiber was paused for occurs,
 such as IO, message-passing, etc.
 
-* HyperLyric
+* Hypermedia
 
 HyperLyric is the hypermedia format between the runtime and interactive client shells.
 
@@ -454,3 +454,18 @@ Reusable Interface Components
 
 Allow easy "linking" experience - i.e. in one software experience, I can select
 an entity, search for related entity, and link them all within same workflow.
+
+* Internals
+** Async Tasks in Runtime
+
+A high level mental model for async tasks in runtime is:
+
+- A single kernel task
+- A collection of shared system services:
+   - A single service registry task
+   - A single pubsub task
+- Kernel task manages multiple process tasks
+- Each process task has:
+   - A dedicated mailbox task
+   - A optional controlling terminal task
+   - Handles to kernel and shared services such as service registry and pubsub
