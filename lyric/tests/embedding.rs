@@ -1,8 +1,7 @@
 //! Tests for embedding in host application
 
 use assert_matches::assert_matches;
-use lyric::{parse, Error, FiberState, Inst, NativeFn, NativeFnOp, SymbolId};
-use FiberState::*;
+use lyric::{parse, Error, Inst, NativeFn, NativeFnOp, SymbolId};
 
 type Fiber = lyric::Fiber<Ext, Locals>;
 type Val = lyric::Val<Ext, Locals>;
@@ -12,7 +11,7 @@ type Env = lyric::Env<Ext, Locals>;
 enum Ext {
     SendConn(Vec<Val>),
     RecvConn,
-    EchoYield(Vec<Val>),
+    Echo(Vec<Val>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -37,14 +36,14 @@ impl std::fmt::Display for Ext {
 #[test]
 fn fiber_simple() {
     let mut f = Fiber::from_expr("\"hello world\"", env(), locals()).unwrap();
-    assert_eq!(f.resume(), Ok(Done(Val::string("hello world"))));
+    assert_eq!(f.start(), Ok(Val::string("hello world")));
 }
 
 #[test]
 fn fiber_invalid_expr() {
     assert_matches!(
         Fiber::from_expr("- jibberish )(", env(), locals()),
-        Err(Error::FailedToLex(_))
+        Err(Error::IncompleteExpression(_))
     );
 }
 
@@ -52,7 +51,7 @@ fn fiber_invalid_expr() {
 fn fiber_empty_bytecode() {
     let mut f = Fiber::from_bytecode(vec![], env(), locals());
     assert_matches!(
-        f.resume(),
+        f.start(),
         Err(Error::UnexpectedStack(_)),
         "Executing empty bytecode panics, since there is nothing to return"
     );
@@ -65,7 +64,7 @@ fn fiber_invalid_bytecode() {
         env(),
         locals(),
     );
-    assert_matches!(f.resume(), Err(Error::UnexpectedStack(_)));
+    assert_matches!(f.start(), Err(Error::UnexpectedStack(_)));
 }
 
 #[test]
@@ -83,12 +82,12 @@ fn fiber_yielding() {
     "#;
     let mut f = Fiber::from_expr(prog, env(), locals()).unwrap();
 
-    assert_eq!(f.resume().unwrap(), Yield(Val::Int(0)));
-    assert_eq!(f.resume_from_yield(Val::Nil).unwrap(), Yield(Val::Int(1)));
-    assert_eq!(f.resume_from_yield(Val::Nil).unwrap(), Yield(Val::Int(2)));
-    assert_eq!(f.resume_from_yield(Val::Nil).unwrap(), Yield(Val::Int(3)));
-    assert_eq!(f.resume_from_yield(Val::Nil).unwrap(), Yield(Val::Int(4)));
-    assert_eq!(f.resume_from_yield(Val::Nil).unwrap(), Yield(Val::Int(5)));
+    assert_eq!(f.start().unwrap(), Val::Int(0));
+    assert_eq!(f.resume(Val::Nil).unwrap(), Val::Int(1));
+    assert_eq!(f.resume(Val::Nil).unwrap(), Val::Int(2));
+    assert_eq!(f.resume(Val::Nil).unwrap(), Val::Int(3));
+    assert_eq!(f.resume(Val::Nil).unwrap(), Val::Int(4));
+    assert_eq!(f.resume(Val::Nil).unwrap(), Val::Int(5));
 
     // TODO: Use fiber_yielding as test case for tail-call optimization (shouldn't grow number of CallFrames)
 }
@@ -107,27 +106,12 @@ fn fiber_yielding_by_arg() {
     "#;
     let mut f = Fiber::from_expr(prog, env(), locals()).unwrap();
 
-    assert_eq!(f.resume().unwrap(), Yield(Val::Int(0)));
-    assert_eq!(
-        f.resume_from_yield(Val::Int(1)).unwrap(),
-        Yield(Val::Int(1))
-    );
-    assert_eq!(
-        f.resume_from_yield(Val::Int(2)).unwrap(),
-        Yield(Val::Int(3))
-    );
-    assert_eq!(
-        f.resume_from_yield(Val::Int(3)).unwrap(),
-        Yield(Val::Int(6))
-    );
-    assert_eq!(
-        f.resume_from_yield(Val::Int(4)).unwrap(),
-        Yield(Val::Int(10))
-    );
-    assert_eq!(
-        f.resume_from_yield(Val::Int(5)).unwrap(),
-        Yield(Val::Int(15))
-    );
+    assert_eq!(f.start().unwrap(), Val::Int(0));
+    assert_eq!(f.resume(Val::Int(1)).unwrap(), Val::Int(1));
+    assert_eq!(f.resume(Val::Int(2)).unwrap(), Val::Int(3));
+    assert_eq!(f.resume(Val::Int(3)).unwrap(), Val::Int(6));
+    assert_eq!(f.resume(Val::Int(4)).unwrap(), Val::Int(10));
+    assert_eq!(f.resume(Val::Int(5)).unwrap(), Val::Int(15));
 }
 
 #[test]
@@ -136,22 +120,19 @@ fn fiber_yielding_native_binding() {
     env.bind_native(
         SymbolId::from("echo_yield"),
         NativeFn {
-            func: |_, x| Ok(NativeFnOp::Yield(Val::Extern(Ext::EchoYield(x.to_vec())))),
+            func: |_, x| Ok(NativeFnOp::Yield(Val::Extern(Ext::Echo(x.to_vec())))),
         },
     );
 
     let mut f = Fiber::from_expr("(echo_yield :one :two)", env, locals()).unwrap();
 
     assert_eq!(
-        f.resume().unwrap(),
-        Yield(Val::Extern(Ext::EchoYield(vec![
-            Val::keyword("one"),
-            Val::keyword("two"),
-        ])))
+        f.start().unwrap(),
+        Val::Extern(Ext::Echo(vec![Val::keyword("one"), Val::keyword("two"),]))
     );
     assert_eq!(
-        f.resume_from_yield(Val::string("Hello world")).unwrap(),
-        Done(Val::string("Hello world")),
+        f.resume(Val::string("Hello world")).unwrap(),
+        Val::string("Hello world"),
     );
 }
 
@@ -165,19 +146,10 @@ fn fiber_looping_yield() {
 
     let mut f = Fiber::from_expr(prog, env(), locals()).unwrap();
 
-    assert_eq!(f.resume().unwrap(), Yield(Val::Int(0)));
-    assert_eq!(
-        f.resume_from_yield(Val::Int(1)).unwrap(),
-        Yield(Val::Int(1))
-    );
-    assert_eq!(
-        f.resume_from_yield(Val::Int(2)).unwrap(),
-        Yield(Val::Int(3))
-    );
-    assert_eq!(
-        f.resume_from_yield(Val::Int(3)).unwrap(),
-        Yield(Val::Int(6))
-    );
+    assert_eq!(f.start().unwrap(), Val::Int(0));
+    assert_eq!(f.resume(Val::Int(1)).unwrap(), Val::Int(1));
+    assert_eq!(f.resume(Val::Int(2)).unwrap(), Val::Int(3));
+    assert_eq!(f.resume(Val::Int(3)).unwrap(), Val::Int(6));
 }
 
 #[test]
@@ -202,44 +174,33 @@ fn fiber_conn_recv_try_eval_sim() {
     );
 
     let mut f = Fiber::from_expr(prog, env, locals()).unwrap();
-    assert_eq!(f.resume().unwrap(), Yield(Val::Extern(Ext::RecvConn)));
+    assert_eq!(f.start().unwrap(), Val::Extern(Ext::RecvConn));
 
     assert_eq!(
-        f.resume_from_yield(parse("(def x (+ 1 2))").unwrap().into())
-            .unwrap(),
-        Yield(Val::Extern(Ext::SendConn(vec![Val::Int(3)]))),
+        f.resume(parse("(def x (+ 1 2))").unwrap().into()).unwrap(),
+        Val::Extern(Ext::SendConn(vec![Val::Int(3)])),
         "Should receive send_conn signal w/ eval-ed expr"
     );
-    assert_eq!(
-        f.resume_from_yield(Val::Nil).unwrap(),
-        Yield(Val::Extern(Ext::RecvConn))
-    );
+    assert_eq!(f.resume(Val::Nil).unwrap(), Val::Extern(Ext::RecvConn));
 
     assert_eq!(
-        f.resume_from_yield(parse("x").unwrap().into()).unwrap(),
-        Yield(Val::Extern(Ext::SendConn(vec![Val::Int(3)]))),
+        f.resume(parse("x").unwrap().into()).unwrap(),
+        Val::Extern(Ext::SendConn(vec![Val::Int(3)])),
     );
-    assert_eq!(
-        f.resume_from_yield(Val::Nil).unwrap(),
-        Yield(Val::Extern(Ext::RecvConn))
-    );
+    assert_eq!(f.resume(Val::Nil).unwrap(), Val::Extern(Ext::RecvConn));
 
     assert_eq!(
-        f.resume_from_yield(Val::symbol("jibberish")).unwrap(),
-        Yield(Val::Extern(Ext::SendConn(vec![Val::Error(
-            Error::UndefinedSymbol(SymbolId::from("jibberish"))
-        )]))),
+        f.resume(Val::symbol("jibberish")).unwrap(),
+        Val::Extern(Ext::SendConn(vec![Val::Error(Error::UndefinedSymbol(
+            SymbolId::from("jibberish")
+        ))])),
         "Error should return error as a value via pcall"
     );
-    assert_eq!(
-        f.resume_from_yield(Val::Nil).unwrap(),
-        Yield(Val::Extern(Ext::RecvConn))
-    );
+    assert_eq!(f.resume(Val::Nil).unwrap(), Val::Extern(Ext::RecvConn));
 
     assert_eq!(
-        f.resume_from_yield(parse("(set x (+ x x))").unwrap().into())
-            .unwrap(),
-        Yield(Val::Extern(Ext::SendConn(vec![Val::Int(6)]))),
+        f.resume(parse("(set x (+ x x))").unwrap().into()).unwrap(),
+        Val::Extern(Ext::SendConn(vec![Val::Int(6)])),
         "Environment should be preserved after error"
     );
 }
@@ -278,6 +239,6 @@ fn get_set_locals() {
     );
 
     let mut f = Fiber::from_expr(prog, env, Locals { val: 15 }).unwrap();
-    assert_eq!(f.resume().unwrap(), FiberState::Done(Val::Int(42)));
+    assert_eq!(f.start().unwrap(), Val::Int(42));
     assert_eq!(f.locals().val, 42);
 }

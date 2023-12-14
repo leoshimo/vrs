@@ -1,5 +1,4 @@
-//! A fiber of execution that can be cooperatively scheduled via yielding.
-use tracing::warn;
+//! A fiber of execution that can be driven by caller as a coroutine.
 
 use super::{Env, Inst};
 use crate::{
@@ -7,123 +6,34 @@ use crate::{
     Pattern, Result, Val,
 };
 use std::sync::{Arc, Mutex};
+use tracing::warn;
 
-/// A single, cooperativly scheduled sequence of execution
+/// The state of fiber
+#[derive(Debug, PartialEq)]
+pub enum FiberState {
+    /// Fiber was created, and can be started.
+    New,
+    /// Fiber is paused, and can be resumed
+    Paused,
+    /// Fiber is currently running
+    Running,
+    /// Fiber has completeed execution, and cannot be resumed
+    Done,
+}
+
+/// A single, cooperativly scheduled sequence of execution with its own stack
+/// and environment.  The fiber can be a value in Lyric environment, and
+/// interacted as a coroutine to implement generators, etc.
+///
+/// Fibers executing at the root-level may rely on convenience primitives like
+/// [lyric::Process] to drive execution forward
 #[derive(Debug)]
 pub struct Fiber<T: Extern, L: Locals> {
+    state: FiberState,
     cframes: Vec<CallFrame<T, L>>,
     stack: Vec<Val<T, L>>,
     global: Arc<Mutex<Env<T, L>>>,
-    is_yielding: bool,
     locals: L,
-}
-
-/// Result from fiber execution
-#[derive(Debug, PartialEq)]
-pub enum FiberState<T: Extern, L: Locals> {
-    Yield(Val<T, L>),
-    Done(Val<T, L>),
-}
-
-impl<T: Extern, L: Locals> Fiber<T, L> {
-    /// Create a new fiber from given bytecode
-    pub fn from_bytecode(bytecode: Bytecode<T, L>, env: Env<T, L>, locals: L) -> Self {
-        let global = Arc::new(Mutex::new(env));
-        Fiber {
-            stack: vec![],
-            cframes: vec![CallFrame::from_bytecode(
-                Arc::clone(&global),
-                bytecode,
-                0,
-                None,
-            )],
-            global,
-            locals,
-            is_yielding: false,
-        }
-    }
-
-    /// Create a new fiber from value
-    pub fn from_val(val: &Val<T, L>, env: Env<T, L>, locals: L) -> Result<Self> {
-        let bytecode = compile(val)?;
-        Ok(Fiber::from_bytecode(bytecode, env, locals))
-    }
-
-    /// Create a new fiber from given expressino
-    pub fn from_expr(expr: &str, env: Env<T, L>, locals: L) -> Result<Self> {
-        let val: Val<T, L> = parse(expr)?.into();
-        Fiber::from_val(&val, env, locals)
-    }
-
-    /// Start execution of a fiber
-    pub fn resume(&mut self) -> Result<FiberState<T, L>> {
-        // TODO: Better safeguards for resume vs resume_from_yield
-        if self.is_yielding {
-            return Err(Error::UnexpectedResume(
-                "resuming a yielding fiber without value".to_string(),
-            ));
-        }
-        run(self)
-    }
-
-    /// Resume a yielded fiber
-    pub fn resume_from_yield(&mut self, v: Val<T, L>) -> Result<FiberState<T, L>> {
-        if !self.is_yielding {
-            return Err(Error::UnexpectedResume(
-                "resuming a nonyielding fiber".to_string(),
-            ));
-        }
-        self.is_yielding = false;
-        self.stack.push(v);
-        run(self)
-    }
-
-    /// Check if stack is empty
-    pub fn is_stack_empty(&self) -> bool {
-        self.stack.is_empty()
-    }
-
-    /// Get locals for fiber
-    pub fn locals(&self) -> &L {
-        &self.locals
-    }
-
-    /// Get mutable locals for fiber
-    pub fn locals_mut(&mut self) -> &mut L {
-        &mut self.locals
-    }
-
-    /// Get global environment
-    pub fn global_env(&self) -> &Arc<Mutex<Env<T, L>>> {
-        &self.global
-    }
-
-    /// Get current environment
-    pub fn cur_env(&self) -> &Arc<Mutex<Env<T, L>>> {
-        &self.top().env
-    }
-
-    /// Reference to top of callstack
-    fn top(&self) -> &CallFrame<T, L> {
-        self.cframes.last().expect("Fiber has no callframes!")
-    }
-
-    /// Reference to top of callstack
-    fn top_mut(&mut self) -> &mut CallFrame<T, L> {
-        self.cframes.last_mut().expect("Fiber has no callframes!")
-    }
-
-    /// Get the current instruction
-    fn inst(&self) -> Result<&Inst<T, L>> {
-        let top = self.top();
-        let inst = top.code.get(top.ip).ok_or(Error::NoMoreBytecode)?;
-        Ok(inst)
-    }
-
-    /// Exhausted all call frames
-    fn at_end(&self) -> bool {
-        self.cframes.len() == 1 && self.cframes.last().unwrap().is_done()
-    }
 }
 
 /// Single call frame of fiber
@@ -139,6 +49,335 @@ struct CallFrame<T: Extern, L: Locals> {
     stack_len: usize,
     /// Length of callframe of fiber to unwind to on error, if any
     unwind_cf_len: Option<usize>,
+}
+
+impl<T: Extern, L: Locals> Fiber<T, L> {
+    /// Create a new fiber from given bytecode
+    pub fn from_bytecode(bytecode: Bytecode<T, L>, env: Env<T, L>, locals: L) -> Self {
+        let global = Arc::new(Mutex::new(env));
+        Fiber {
+            state: FiberState::New,
+            stack: vec![],
+            cframes: vec![CallFrame::from_bytecode(
+                Arc::clone(&global),
+                bytecode,
+                0,
+                None,
+            )],
+            global,
+            locals,
+        }
+    }
+
+    /// Create a new fiber from value
+    pub fn from_val(val: &Val<T, L>, env: Env<T, L>, locals: L) -> Result<Self> {
+        let bytecode = compile(val)?;
+        Ok(Fiber::from_bytecode(bytecode, env, locals))
+    }
+
+    /// Create a new fiber from given expressino
+    pub fn from_expr(expr: &str, env: Env<T, L>, locals: L) -> Result<Self> {
+        let val: Val<T, L> = parse(expr)?.into();
+        Fiber::from_val(&val, env, locals)
+    }
+
+    // TODO: Safeguard start / resume via typestate pat?
+
+    /// Start a fiber execution
+    pub fn start(&mut self) -> Result<Val<T, L>> {
+        if self.state != FiberState::New {
+            return Err(Error::UnexpectedResume(
+                "starting a fiber that is not new".to_string(),
+            ));
+        }
+        self.run()
+    }
+
+    /// Resume a paused fiber execution
+    pub fn resume(&mut self, val: Val<T, L>) -> Result<Val<T, L>> {
+        if self.state != FiberState::Paused {
+            return Err(Error::UnexpectedResume(
+                "resuming a fiber that is not paused".to_string(),
+            ));
+        }
+        self.stack.push(val);
+        self.run()
+    }
+
+    /// Whether or not fiber is done running
+    pub fn is_done(&self) -> bool {
+        self.state == FiberState::Done
+    }
+
+    /// Get current environment
+    pub fn cur_env(&self) -> &Arc<Mutex<Env<T, L>>> {
+        &self.cf().env
+    }
+
+    /// Get the global environment
+    pub fn global_env(&self) -> &Arc<Mutex<Env<T, L>>> {
+        &self.global
+    }
+
+    /// Local storage
+    pub fn locals(&self) -> &L {
+        &self.locals
+    }
+
+    /// Mutable Local storage
+    pub fn locals_mut(&mut self) -> &mut L {
+        &mut self.locals
+    }
+}
+
+impl<T: Extern, L: Locals> Fiber<T, L> {
+    /// Run a fiber execution until it:
+    /// - completes with a value
+    /// - completes with an error
+    /// - becomes paused
+    fn run(&mut self) -> Result<Val<T, L>> {
+        self.state = FiberState::Running;
+        while self.state == FiberState::Running {
+            // TODO(dev): Bytecode debugging utilities
+            // tracing::debug!("{self:?}");
+
+            if let Err(e) = self.step() {
+                // Catch unwind or exit w/ error
+                let unwind_len = match self.cf().unwind_cf_len {
+                    None => {
+                        self.state = FiberState::Done;
+                        return Err(e);
+                    }
+                    Some(l) => l,
+                };
+                let stack_len = self.cframes[unwind_len].stack_len;
+                self.cframes.truncate(unwind_len);
+                self.stack.truncate(stack_len);
+                self.stack.push(Val::Error(e));
+            }
+
+            // Cleanup for implicit returns in call frames
+            // Must be after unwinding or catching context is lost
+            while self.cframes.len() > 1 && self.cf().at_return() {
+                let cf = self.cframes.pop().unwrap();
+                if self.stack.len() != cf.stack_len + 1 {
+                    panic!("Unexpected state during execution - all function are expected to have stack effect of 1");
+                }
+            }
+        }
+
+        match &self.state {
+            FiberState::Paused => {
+                let res = self.stack.pop().ok_or(Error::UnexpectedStack(
+                    "Stack should contain result for terminated fiber".to_string(),
+                ))?;
+                Ok(res)
+            }
+            FiberState::Done => {
+                let res = self.stack.pop().ok_or(Error::UnexpectedStack(
+                    "Stack should contain result for terminated fiber".to_string(),
+                ))?;
+                if !self.stack.is_empty() {
+                    warn!("Fiber terminated with nonempty stack {:?}", self.stack);
+                }
+                Ok(res)
+            }
+            s => panic!("Fiber::run exiting in unexpected state - {s:?}"),
+        }
+    }
+
+    /// Run a single fetch-decode-execute cycle
+    fn step(&mut self) -> Result<()> {
+        let inst = match self.inst() {
+            Some(i) => i.clone(),
+            None => {
+                self.state = FiberState::Done;
+                return Ok(());
+            }
+        };
+        self.cf_mut().ip += 1;
+
+        match inst {
+            Inst::PushConst(form) => {
+                self.stack.push(form);
+            }
+            Inst::DefSym(s) => {
+                let value = self.stack.last().ok_or(Error::UnexpectedStack(
+                    "Stack should contain value to bind".to_string(),
+                ))?;
+                self.cur_env()
+                    .lock()
+                    .unwrap()
+                    .define(s.clone(), value.clone());
+            }
+            Inst::DefBind => {
+                let pat = self.stack.pop().ok_or(Error::UnexpectedStack(
+                    "Stack should contain pattern to bind to".to_string(),
+                ))?;
+                let val = self.stack.last().ok_or(Error::UnexpectedStack(
+                    "Stack should contain value to bind".to_string(),
+                ))?;
+
+                let m = Pattern::from_val(pat)
+                    .matches(val)
+                    .ok_or(Error::InvalidPatternMatch)?;
+
+                let mut env = self.cur_env().lock().unwrap();
+                for (s, v) in m.into_iter() {
+                    env.define(s, v.clone());
+                }
+            }
+            Inst::SetSym(s) => {
+                let value = self.stack.last().ok_or(Error::UnexpectedStack(
+                    "Stack should contain value to bind".to_string(),
+                ))?;
+                self.cur_env().lock().unwrap().set(&s, value.clone())?
+            }
+            Inst::GetSym(s) => {
+                let value = self
+                    .cur_env()
+                    .clone()
+                    .lock()
+                    .unwrap()
+                    .get(&s)
+                    .ok_or(Error::UndefinedSymbol(s))?;
+                self.stack.push(value.clone());
+            }
+            Inst::MakeFunc => {
+                let code = match self.stack.pop() {
+                    Some(Val::Bytecode(b)) => Ok(b),
+                    _ => Err(Error::UnexpectedStack(
+                        "Missing function bytecode".to_string(),
+                    )),
+                }?;
+                let params = match self.stack.pop() {
+                    Some(Val::List(p)) => Ok(p),
+                    _ => Err(Error::UnexpectedStack("Missing parameter list".to_string())),
+                }?;
+
+                let params = params
+                    .into_iter()
+                    .map(|f| match f {
+                        Val::Symbol(s) => Ok(s),
+                        _ => Err(Error::UnexpectedStack(
+                            "Unexpected parameter list".to_string(),
+                        )),
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+
+                self.stack.push(Val::Lambda(Lambda {
+                    params,
+                    code,
+                    parent: Some(Arc::clone(&self.cf().env)),
+                }));
+            }
+            Inst::CallFunc(nargs) => {
+                let mut args = vec![];
+                for _ in 0..nargs {
+                    let v = self.stack.pop().ok_or(Error::UnexpectedStack(
+                        "Missing expected {nargs} args".to_string(),
+                    ))?;
+                    args.push(v);
+                }
+                let args = args.into_iter().rev();
+
+                match self.stack.pop() {
+                    Some(Val::Lambda(l)) => {
+                        let parent_env = l.parent.unwrap_or_else(|| Arc::clone(&self.global));
+                        let mut fn_env = Env::extend(&parent_env);
+                        for (s, arg) in l.params.into_iter().zip(args) {
+                            fn_env.define(s, arg);
+                        }
+                        self.cframes.push(CallFrame::from_bytecode(
+                            Arc::new(Mutex::new(fn_env)),
+                            l.code,
+                            self.stack.len(),
+                            self.cf().unwind_cf_len,
+                        ))
+                    }
+                    Some(Val::NativeFn(n)) => {
+                        let v = (n.func)(self, &args.collect::<Vec<_>>())?;
+                        match v {
+                            NativeFnOp::Return(v) => self.stack.push(v),
+                            NativeFnOp::Yield(v) => {
+                                self.stack.push(v);
+                                self.state = FiberState::Paused;
+                            }
+                            NativeFnOp::Exec(code) => self.cframes.push(CallFrame::from_bytecode(
+                                Arc::clone(self.cur_env()),
+                                code,
+                                self.stack.len(),
+                                self.cf().unwind_cf_len,
+                            )),
+                        }
+                    }
+                    // TODO: Move into NativeFnAsync (?) Remove Yield keyword out of NativeFs
+                    Some(obj) => {
+                        return Err(Error::UnexpectedStack(format!(
+                            "Not a function object - {}",
+                            obj
+                        )));
+                    }
+                    _ => {
+                        return Err(Error::UnexpectedStack("Stack is empty".to_string()));
+                    }
+                };
+            }
+            Inst::Eval(protected) => {
+                // set new protected frame or inherit
+                let unwind_cf_len = match protected {
+                    true => Some(self.cframes.len()),
+                    false => self.cf().unwind_cf_len,
+                };
+                let val = self.stack.pop().ok_or(Error::UnexpectedStack(
+                    "Did not find form to eval on stack".to_string(),
+                ))?;
+                let bc = compile(&val)?;
+                self.cframes.push(CallFrame::from_bytecode(
+                    Arc::clone(self.cur_env()),
+                    bc,
+                    self.stack.len(),
+                    unwind_cf_len,
+                ));
+            }
+            Inst::PopTop => {
+                if self.stack.pop().is_none() {
+                    return Err(Error::UnexpectedStack(
+                        "Attempting to pop empty stack".to_string(),
+                    ));
+                }
+            }
+            Inst::JumpFwd(fwd) => self.cf_mut().ip += fwd,
+            Inst::JumpBck(back) => self.cf_mut().ip -= back,
+            Inst::PopJumpFwdIfTrue(offset) => {
+                let v = self.stack.pop().ok_or(Error::UnexpectedStack(
+                    "Expected conditional expression on stack".to_string(),
+                ))?;
+                if is_true(&v)? {
+                    self.cf_mut().ip += offset;
+                }
+            }
+            Inst::YieldTop => self.state = FiberState::Paused,
+        };
+
+        Ok(())
+    }
+
+    /// Next instruction in fiber, or None if fiber is complete
+    fn inst(&self) -> Option<&Inst<T, L>> {
+        let cf = self.cf();
+        cf.code.get(cf.ip)
+    }
+
+    /// Top callframe
+    fn cf(&self) -> &CallFrame<T, L> {
+        self.cframes.last().expect("Fiber has no callframes!")
+    }
+
+    /// Mutable top callframe
+    fn cf_mut(&mut self) -> &mut CallFrame<T, L> {
+        self.cframes.last_mut().expect("Fiber has no callframes!")
+    }
 }
 
 impl<T: Extern, L: Locals> CallFrame<T, L> {
@@ -158,306 +397,136 @@ impl<T: Extern, L: Locals> CallFrame<T, L> {
         }
     }
 
-    /// Whether or not call frame should return (i.e. on last call frame execution)
-    fn is_done(&self) -> bool {
+    /// Whether or not call frame is at implicit return
+    fn at_return(&self) -> bool {
         self.ip == self.code.len()
-    }
-}
-
-// TODO: Refactor - Fiber Internals for `run`
-/// Run the fiber until it completes or yields
-fn run<T: Extern, L: Locals>(f: &mut Fiber<T, L>) -> Result<FiberState<T, L>> {
-    loop {
-        if f.is_yielding {
-            let res = f.stack.pop().ok_or(Error::UnexpectedStack(
-                "Stack should contain result for terminated fiber".to_string(),
-            ))?;
-            return Ok(FiberState::Yield(res));
-        } else if f.at_end() {
-            let res = f.stack.pop().ok_or(Error::UnexpectedStack(
-                "Stack should contain result for terminated fiber".to_string(),
-            ))?;
-            if !f.stack.is_empty() {
-                warn!("Fiber terminated with nonempty stack {:?}", f.stack);
-            }
-            return Ok(FiberState::Done(res));
-        }
-
-        let inst = f.inst()?.clone(); // TODO(opt): Defer cloning until args need cloning
-        f.top_mut().ip += 1;
-
-        // TODO(dev): Add fiber debug flag
-        // debug!(
-        //     "frame {} ip {}: {}\n\t{}",
-        //     f.cframes.len() - 1,
-        //     f.top().ip - 1,
-        //     inst,
-        //     f.stack
-        //         .iter()
-        //         .fold(String::new(), |acc, e| acc + &e.to_string() + ", ")
-        // );
-
-        let res = || -> Result<()> {
-            match inst {
-                Inst::PushConst(form) => {
-                    f.stack.push(form);
-                }
-                Inst::DefSym(s) => {
-                    let value = f.stack.last().ok_or(Error::UnexpectedStack(
-                        "Expected stack to be nonempty".to_string(),
-                    ))?;
-                    f.top().env.lock().unwrap().define(s, value.clone());
-                }
-                Inst::DefBind => {
-                    let pat = f.stack.pop().ok_or(Error::UnexpectedStack(
-                        "Expected stack to be nonempty".to_string(),
-                    ))?;
-                    let val = f.stack.last().ok_or(Error::UnexpectedStack(
-                        "Expected stack to be nonempty".to_string(),
-                    ))?;
-
-                    let m = Pattern::from_val(pat)
-                        .matches(val)
-                        .ok_or(Error::InvalidPatternMatch)?;
-
-                    let mut env = f.top().env.lock().unwrap();
-                    for (s, v) in m.into_iter() {
-                        env.define(s, v.clone());
-                    }
-                }
-                Inst::SetSym(s) => {
-                    let value = f.stack.last().ok_or(Error::UnexpectedStack(
-                        "Expected stack to be nonempty".to_string(),
-                    ))?;
-                    f.top().env.lock().unwrap().set(&s, value.clone())?
-                }
-                Inst::GetSym(s) => {
-                    let value = f
-                        .top()
-                        .env
-                        .clone()
-                        .lock()
-                        .unwrap()
-                        .get(&s)
-                        .ok_or(Error::UndefinedSymbol(s))?;
-                    f.stack.push(value.clone());
-                }
-                Inst::MakeFunc => {
-                    let code = match f.stack.pop() {
-                        Some(Val::Bytecode(b)) => Ok(b),
-                        _ => Err(Error::UnexpectedStack(
-                            "Missing function bytecode".to_string(),
-                        )),
-                    }?;
-
-                    let params = match f.stack.pop() {
-                        Some(Val::List(p)) => Ok(p),
-                        _ => Err(Error::UnexpectedStack("Missing parameter list".to_string())),
-                    }?;
-
-                    let params = params
-                        .into_iter()
-                        .map(|f| match f {
-                            Val::Symbol(s) => Ok(s),
-                            _ => Err(Error::UnexpectedStack(
-                                "Unexpected parameter list".to_string(),
-                            )),
-                        })
-                        .collect::<Result<Vec<_>>>()?;
-
-                    f.stack.push(Val::Lambda(Lambda {
-                        params,
-                        code,
-                        parent: Some(Arc::clone(&f.top().env)),
-                    }));
-                }
-                Inst::CallFunc(nargs) => {
-                    let mut args = vec![];
-                    for _ in 0..nargs {
-                        let v = f.stack.pop().ok_or(Error::UnexpectedStack(
-                            "Missing expected {nargs} args".to_string(),
-                        ))?;
-                        args.push(v);
-                    }
-                    let args = args.into_iter().rev();
-
-                    match f.stack.pop() {
-                        Some(Val::NativeFn(n)) => {
-                            let v = (n.func)(f, &args.collect::<Vec<_>>())?;
-                            match v {
-                                NativeFnOp::Return(v) => f.stack.push(v),
-                                NativeFnOp::Yield(v) => {
-                                    f.stack.push(v);
-                                    f.is_yielding = true;
-                                }
-                                NativeFnOp::Exec(code) => {
-                                    let cur_env = &f.top().env;
-                                    f.cframes.push(CallFrame::from_bytecode(
-                                        Arc::clone(cur_env),
-                                        code,
-                                        f.stack.len(),
-                                        f.top().unwind_cf_len,
-                                    ))
-                                }
-                            }
-                        }
-                        Some(Val::Lambda(l)) => {
-                            let parent_env = l.parent.unwrap_or_else(|| Arc::clone(&f.global));
-                            let mut fn_env = Env::extend(&parent_env);
-                            for (s, arg) in l.params.into_iter().zip(args) {
-                                fn_env.define(s, arg);
-                            }
-                            f.cframes.push(CallFrame::from_bytecode(
-                                Arc::new(Mutex::new(fn_env)),
-                                l.code,
-                                f.stack.len(),
-                                f.top().unwind_cf_len,
-                            ))
-                        }
-                        Some(obj) => {
-                            return Err(Error::UnexpectedStack(format!(
-                                "Not a function object - {}",
-                                obj
-                            )));
-                        }
-                        _ => {
-                            return Err(Error::UnexpectedStack("Stack is empty".to_string()));
-                        }
-                    };
-                }
-                Inst::Eval(protected) => {
-                    // set new protected frame or inherit
-                    let unwind_cf_len = match protected {
-                        true => Some(f.cframes.len()),
-                        false => f.top().unwind_cf_len,
-                    };
-                    let val = f.stack.pop().ok_or(Error::UnexpectedStack(
-                        "Did not find form to eval on stack".to_string(),
-                    ))?;
-                    let bc = compile(&val)?;
-                    let cur_env = &f.top().env;
-                    f.cframes.push(CallFrame::from_bytecode(
-                        Arc::clone(cur_env),
-                        bc,
-                        f.stack.len(),
-                        unwind_cf_len,
-                    ));
-                }
-                Inst::PopTop => {
-                    if f.stack.pop().is_none() {
-                        return Err(Error::UnexpectedStack(
-                            "Attempting to pop empty stack".to_string(),
-                        ));
-                    }
-                }
-                Inst::JumpFwd(fwd) => f.top_mut().ip += fwd,
-                Inst::PopJumpFwdIfTrue(offset) => {
-                    let v = f.stack.pop().ok_or(Error::UnexpectedStack(
-                        "Expected conditional expression on stack".to_string(),
-                    ))?;
-                    if is_true(&v)? {
-                        f.top_mut().ip += offset;
-                    }
-                }
-                Inst::JumpBck(back) => f.top_mut().ip -= back,
-                Inst::YieldTop => f.is_yielding = true,
-            };
-
-            Ok(())
-        }();
-
-        // Error during execution of inst - unwind or error out
-        if let Err(e) = res {
-            let unwind_len = match f.top().unwind_cf_len {
-                Some(l) => l,
-                None => return Err(e),
-            };
-            let stack_len = f.cframes[unwind_len].stack_len;
-            f.cframes.truncate(unwind_len);
-            f.stack.truncate(stack_len);
-            f.stack.push(Val::Error(e));
-        }
-
-        // Implicit returns - Pop completed frames except root
-        while f.cframes.len() > 1 && f.top().is_done() {
-            let cf = f.cframes.pop().unwrap();
-            if f.stack.len() != cf.stack_len + 1 {
-                panic!("Unexpected state during execution - all function are expected to have stack effect of 1");
-            }
-        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::FiberState::*;
-    use super::Inst::*;
     use super::*;
-    use crate::SymbolId;
     use assert_matches::assert_matches;
-    use tracing_test::traced_test;
     use void::Void;
+
+    use super::Inst::*;
+    use crate::SymbolId;
 
     type Fiber = super::Fiber<Void, ()>;
     type Val = super::Val<Void, ()>;
     type Env = super::Env<Void, ()>;
 
     #[test]
-    #[traced_test]
-    fn fiber_load_const_return() {
-        let mut f = Fiber::from_bytecode(vec![PushConst(Val::Int(5))], Env::standard(), ());
-        assert_eq!(f.resume().unwrap(), Done(Val::Int(5)));
+    fn empty() {
+        let mut f = Fiber::from_bytecode(vec![], Env::standard(), ());
 
-        let mut f = Fiber::from_bytecode(vec![PushConst(Val::string("Hi"))], Env::standard(), ());
-        assert_eq!(f.resume().unwrap(), Done(Val::string("Hi")));
-
-        assert!(!logs_contain("ERROR"));
-        assert!(!logs_contain("WARN"));
+        assert!(!f.is_done());
+        assert_matches!(f.start(), Err(Error::UnexpectedStack(_)));
+        assert!(f.is_done());
     }
 
     #[test]
-    #[traced_test]
+    fn done_with_result() {
+        let mut f = Fiber::from_bytecode(vec![PushConst(Val::Int(5))], Env::standard(), ());
+
+        assert!(!f.is_done());
+        assert!(f.start().is_ok());
+        assert!(f.is_done());
+
+        assert_matches!(
+            f.start(),
+            Err(Error::UnexpectedResume(_)),
+            "Should not be able to start after result"
+        );
+        assert_matches!(
+            f.resume(Val::Nil),
+            Err(Error::UnexpectedResume(_)),
+            "Should not be able to resume after result"
+        );
+    }
+
+    #[test]
+    fn done_with_error() {
+        let mut f = Fiber::from_bytecode(
+            vec![
+                GetSym(SymbolId::from("x")),
+                // rest should be ignored after err
+                PopTop,
+                PopTop,
+                PopTop,
+            ],
+            Env::standard(),
+            (),
+        );
+
+        assert!(f.start().is_err());
+        assert!(f.is_done());
+
+        assert_matches!(
+            f.start(),
+            Err(Error::UnexpectedResume(_)),
+            "Should not be able to start after error"
+        );
+        assert_matches!(
+            f.resume(Val::Nil),
+            Err(Error::UnexpectedResume(_)),
+            "Should not be able to resume after error"
+        );
+    }
+
+    #[test]
+    fn push_const() {
+        {
+            let mut f = Fiber::from_bytecode(vec![PushConst(Val::Int(5))], Env::standard(), ());
+            assert!(!f.is_done());
+            assert_eq!(f.start().unwrap(), Val::Int(5));
+            assert!(f.is_done());
+        }
+
+        {
+            let mut f =
+                Fiber::from_bytecode(vec![PushConst(Val::string("Hi"))], Env::standard(), ());
+            assert_eq!(f.start().unwrap(), Val::string("Hi"));
+        }
+    }
+
+    #[test]
     fn def_symbol() {
-        // fiber for (def x 5)
         let mut f = Fiber::from_bytecode(
             vec![PushConst(Val::Int(5)), DefSym(SymbolId::from("x"))],
             Env::standard(),
             (),
         );
-        assert_eq!(f.resume().unwrap(), Done(Val::Int(5)));
+
+        assert_eq!(f.start().unwrap(), Val::Int(5));
         assert_eq!(
-            f.top().env.lock().unwrap().get(&SymbolId::from("x")),
+            f.cf().env.lock().unwrap().get(&SymbolId::from("x")),
             Some(Val::Int(5)),
             "symbol should be defined in env"
         );
-
-        assert!(!logs_contain("ERROR"));
-        assert!(!logs_contain("WARN"));
     }
 
     #[test]
-    #[traced_test]
     fn get_symbol() {
         let mut f = Fiber::from_bytecode(vec![GetSym(SymbolId::from("x"))], Env::standard(), ());
-        f.top()
+        f.cf()
             .env
             .lock()
             .unwrap()
             .define(SymbolId::from("x"), Val::string("hi"));
-        assert_eq!(f.resume().unwrap(), Done(Val::string("hi")));
+        assert_eq!(f.start().unwrap(), Val::string("hi"));
+        assert!(f.is_done());
     }
 
     #[test]
-    #[traced_test]
     fn get_symbol_undefined() {
         let mut f = Fiber::from_bytecode(vec![GetSym(SymbolId::from("x"))], Env::standard(), ());
-        assert_matches!(f.resume(), Err(Error::UndefinedSymbol(_)));
-        assert!(!logs_contain("ERROR"));
-        assert!(!logs_contain("WARN"));
+
+        assert_matches!(f.start(), Err(Error::UndefinedSymbol(_)));
+        assert!(f.is_done(), "Should be done after error");
     }
 
     #[test]
-    #[traced_test]
     fn set_symbol() {
         let mut f = Fiber::from_bytecode(
             vec![
@@ -467,17 +536,17 @@ mod tests {
             Env::standard(),
             (),
         );
-        f.top()
+        f.cf()
             .env
             .lock()
             .unwrap()
             .define(SymbolId::from("x"), Val::string("original"));
 
-        assert_eq!(f.resume().unwrap(), Done(Val::string("updated")));
+        assert_eq!(f.start().unwrap(), Val::string("updated"));
+        assert!(f.is_done());
     }
 
     #[test]
-    #[traced_test]
     fn set_symbol_undefined() {
         let mut f = Fiber::from_bytecode(
             vec![PushConst(Val::string("value")), SetSym(SymbolId::from("x"))],
@@ -485,14 +554,11 @@ mod tests {
             (),
         );
 
-        assert_matches!(f.resume(), Err(Error::UndefinedSymbol(_)));
-
-        assert!(!logs_contain("ERROR"));
-        assert!(!logs_contain("WARN"));
+        assert_matches!(f.start(), Err(Error::UndefinedSymbol(_)));
+        assert!(f.is_done());
     }
 
     #[test]
-    #[traced_test]
     fn make_func() {
         let mut f = Fiber::from_bytecode(
             vec![
@@ -505,17 +571,14 @@ mod tests {
         );
 
         assert_matches!(
-            f.resume().unwrap(),
-            Done(Val::Lambda(l)) if l.params == vec![SymbolId::from("x")] && l.code == vec![GetSym(SymbolId::from("x"))],
+            f.start().unwrap(),
+            Val::Lambda(l) if l.params == vec![SymbolId::from("x")] && l.code == vec![GetSym(SymbolId::from("x"))],
             "A function object was created"
         );
-
-        assert!(!logs_contain("ERROR"));
-        assert!(!logs_contain("WARN"));
+        assert!(f.is_done());
     }
 
     #[test]
-    #[traced_test]
     fn call_func() {
         let mut f = Fiber::from_bytecode(
             vec![
@@ -531,14 +594,11 @@ mod tests {
             (),
         );
 
-        assert_eq!(f.resume().unwrap(), Done(Val::string("hello")));
-
-        assert!(!logs_contain("ERROR"));
-        assert!(!logs_contain("WARN"));
+        assert_eq!(f.start().unwrap(), Val::string("hello"));
+        assert!(f.is_done());
     }
 
     #[test]
-    #[traced_test]
     fn call_func_lambda() {
         // ((lambda (x) x) "hello")
         let mut f = Fiber::from_bytecode(
@@ -553,14 +613,11 @@ mod tests {
             (),
         );
 
-        assert_eq!(f.resume().unwrap(), Done(Val::string("hello")));
-
-        assert!(!logs_contain("ERROR"));
-        assert!(!logs_contain("WARN"));
+        assert_eq!(f.start().unwrap(), Val::string("hello"));
+        assert!(f.is_done())
     }
 
     #[test]
-    #[traced_test]
     fn call_func_nested() {
         // Call outer lambda w/ arg
         // (((lambda () (lambda (x) x))) "hello")
@@ -580,7 +637,8 @@ mod tests {
             Env::standard(),
             (),
         );
-        assert_eq!(f.resume().unwrap(), Done(Val::string("hello")));
+        assert_eq!(f.start().unwrap(), Val::string("hello"));
+        assert!(f.is_done());
 
         // Call inner lambda w/ arg
         // (((lambda (x) (lambda () x)) "hello"))
@@ -600,14 +658,11 @@ mod tests {
             Env::standard(),
             (),
         );
-        assert_eq!(f.resume().unwrap(), Done(Val::string("hello")));
-
-        assert!(!logs_contain("ERROR"));
-        assert!(!logs_contain("WARN"));
+        assert_eq!(f.start().unwrap(), Val::string("hello"));
+        assert!(f.is_done())
     }
 
     #[test]
-    #[traced_test]
     fn pop_top() {
         let mut f = Fiber::from_bytecode(
             vec![
@@ -618,24 +673,17 @@ mod tests {
             Env::standard(),
             (),
         );
-        assert_eq!(f.resume().unwrap(), Done(Val::string("this")));
-
-        assert!(!logs_contain("ERROR"));
-        assert!(!logs_contain("WARN"));
+        assert_eq!(f.start().unwrap(), Val::string("this"));
+        assert!(f.is_done())
     }
 
     #[test]
-    #[traced_test]
     fn pop_top_empty() {
         let mut f = Fiber::from_bytecode(vec![PopTop], Env::standard(), ());
-        assert_matches!(f.resume(), Err(Error::UnexpectedStack(_)));
-
-        assert!(!logs_contain("ERROR"));
-        assert!(!logs_contain("WARN"));
+        assert_matches!(f.start(), Err(Error::UnexpectedStack(_)));
     }
 
     #[test]
-    #[traced_test]
     fn jump_fwd() {
         let mut f = Fiber::from_bytecode(
             vec![
@@ -651,14 +699,11 @@ mod tests {
             (),
         );
 
-        assert_eq!(f.resume().unwrap(), Done(Val::string("this")));
-
-        assert!(!logs_contain("ERROR"));
-        assert!(!logs_contain("WARN"));
+        assert_eq!(f.start().unwrap(), Val::string("this"));
+        assert!(f.is_done())
     }
 
     #[test]
-    #[traced_test]
     fn pop_jump_fwd_true() {
         let mut f = Fiber::from_bytecode(
             vec![
@@ -672,14 +717,11 @@ mod tests {
             (),
         );
 
-        assert_eq!(f.resume().unwrap(), Done(Val::string("this")));
-
-        assert!(!logs_contain("ERROR"));
-        assert!(!logs_contain("WARN"));
+        assert_eq!(f.start().unwrap(), Val::string("this"));
+        assert!(f.is_done())
     }
 
     #[test]
-    #[traced_test]
     fn pop_jump_fwd_false() {
         let mut f = Fiber::from_bytecode(
             vec![
@@ -693,14 +735,11 @@ mod tests {
             (),
         );
 
-        assert_eq!(f.resume().unwrap(), Done(Val::string("this")));
-
-        assert!(!logs_contain("ERROR"));
-        assert!(!logs_contain("WARN"));
+        assert_eq!(f.start().unwrap(), Val::string("this"));
+        assert!(f.is_done())
     }
 
     #[test]
-    #[traced_test]
     fn jump_back() {
         let mut f = Fiber::from_bytecode(
             vec![
@@ -719,26 +758,27 @@ mod tests {
             (),
         );
 
-        assert_eq!(f.resume().unwrap(), Done(Val::Int(1)));
+        assert_eq!(f.start().unwrap(), Val::Int(1));
+        assert!(f.is_done())
     }
 
     #[test]
-    #[traced_test]
     fn yield_once() {
         let mut f = Fiber::from_bytecode(
             vec![PushConst(Val::string("before")), YieldTop],
             Env::standard(),
             (),
         );
-        assert_eq!(f.resume().unwrap(), Yield(Val::string("before")));
+        assert_eq!(f.start().unwrap(), Val::string("before"));
+        assert!(!f.is_done());
         assert_eq!(
-            f.resume_from_yield(Val::string("after")).unwrap(),
-            Done(Val::string("after"))
+            f.resume(Val::string("after")).unwrap(),
+            Val::string("after")
         );
+        assert!(f.is_done());
     }
 
     #[test]
-    #[traced_test]
     fn yield_infinite() {
         let mut f = Fiber::from_bytecode(
             vec![
@@ -758,22 +798,24 @@ mod tests {
             (),
         );
 
-        assert_eq!(f.resume().unwrap(), Yield(Val::Int(1)));
-        assert_eq!(f.resume_from_yield(Val::Nil).unwrap(), Yield(Val::Int(2)));
-        assert_eq!(f.resume_from_yield(Val::Nil).unwrap(), Yield(Val::Int(3)));
-        assert_eq!(f.resume_from_yield(Val::Nil).unwrap(), Yield(Val::Int(4)));
-        assert_eq!(f.resume_from_yield(Val::Nil).unwrap(), Yield(Val::Int(5)));
+        assert_eq!(f.start().unwrap(), Val::Int(1));
+        assert_eq!(f.resume(Val::Nil).unwrap(), Val::Int(2));
+        assert_eq!(f.resume(Val::Nil).unwrap(), Val::Int(3));
+        assert_eq!(f.resume(Val::Nil).unwrap(), Val::Int(4));
+        assert_eq!(f.resume(Val::Nil).unwrap(), Val::Int(5));
+
+        assert!(!f.is_done(), "infinitely yielding fiber is not done");
     }
 
     #[test]
-    #[traced_test]
     fn eval() {
         let mut f = Fiber::from_bytecode(
             vec![PushConst(Val::Int(42)), Eval(false)],
             Env::standard(),
             (),
         );
-        assert_eq!(f.resume().unwrap(), Done(Val::Int(42)));
+        assert_eq!(f.start().unwrap(), Val::Int(42));
+        assert!(f.is_done());
 
         let mut f = Fiber::from_bytecode(
             vec![
@@ -792,24 +834,24 @@ mod tests {
         );
 
         assert_eq!(
-            f.resume().unwrap(),
-            Done(Val::List(vec![
+            f.start().unwrap(),
+            Val::List(vec![
                 Val::keyword("a"),
                 Val::keyword("b"),
                 Val::keyword("c"),
-            ]))
+            ])
         );
+        assert!(f.is_done())
     }
 
     #[test]
-    #[traced_test]
     fn eval_error() {
         let mut f = Fiber::from_bytecode(
             vec![PushConst(Val::symbol("jibberish")), Eval(false)],
             Env::standard(),
             (),
         );
-        assert_matches!(f.resume(), Err(Error::UndefinedSymbol(_)));
+        assert_matches!(f.start(), Err(Error::UndefinedSymbol(_)));
 
         let mut f = Fiber::from_bytecode(
             vec![
@@ -824,11 +866,10 @@ mod tests {
             Env::standard(),
             (),
         );
-        assert_matches!(f.resume(), Err(Error::UndefinedSymbol(_)));
+        assert_matches!(f.start(), Err(Error::UndefinedSymbol(_)));
     }
 
     #[test]
-    #[traced_test]
     fn yield_loop() {
         let mut f = Fiber::from_bytecode(
             vec![PushConst(Val::string("hi")), YieldTop, PopTop, JumpBck(4)],
@@ -836,28 +877,13 @@ mod tests {
             (),
         );
 
-        assert_eq!(f.resume().unwrap(), Yield(Val::string("hi")));
-        assert!(f.is_stack_empty());
+        assert_eq!(f.start().unwrap(), Val::string("hi"));
 
-        assert_eq!(
-            f.resume_from_yield(Val::Nil).unwrap(),
-            Yield(Val::string("hi"))
-        );
-        assert_eq!(
-            f.resume_from_yield(Val::Nil).unwrap(),
-            Yield(Val::string("hi"))
-        );
-        assert_eq!(
-            f.resume_from_yield(Val::Nil).unwrap(),
-            Yield(Val::string("hi"))
-        );
-        assert_eq!(
-            f.resume_from_yield(Val::Nil).unwrap(),
-            Yield(Val::string("hi"))
-        );
-
-        assert!(f.is_stack_empty());
+        assert_eq!(f.resume(Val::Nil).unwrap(), Val::string("hi"));
+        assert_eq!(f.resume(Val::Nil).unwrap(), Val::string("hi"));
+        assert_eq!(f.resume(Val::Nil).unwrap(), Val::string("hi"));
+        assert_eq!(f.resume(Val::Nil).unwrap(), Val::string("hi"));
     }
 
-    // TODO: Add Test case for NativeFnOp::Call
+    // // TODO: Add Test case for NativeFnOp::Call
 }

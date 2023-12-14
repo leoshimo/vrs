@@ -8,7 +8,6 @@ use crate::rt::mailbox::{Mailbox, MailboxHandle};
 use crate::rt::{Error, Result};
 use crate::{Connection, Program};
 use futures::future::{FutureExt, Shared};
-use lyric::FiberState;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinSet;
 use tracing::{debug, error, info};
@@ -114,42 +113,39 @@ impl Process {
         procs.spawn(async move {
             let exit: Result<_> = async {
                 let mut io = self.io;
-                let mut state = fiber.resume()?;
+                let mut v = fiber.start()?;
                 loop {
-                    match state {
-                        FiberState::Done(v) => {
-                            return Ok(ProcessExit {
-                                id: self.id,
-                                status: Ok(ProcessResult::Done(v)),
-                            })
-                        }
-                        FiberState::Yield(v) => {
-                            debug!("proc yield - {:?} {:?}", self.id, v);
-                            tokio::select!(
-                                Some(msg) = msg_rx.recv() => match msg {
-                                    Event::Kill => return Ok(ProcessExit {
-                                        id: self.id,
-                                        status: Ok(ProcessResult::Cancelled)
-                                    })
-                                },
-                                io_result = Self::handle_yield(&mut fiber, v, &mut io) => {
-                                    debug!("proc yield result - {:?} {:?}", self.id, io_result);
+                    if fiber.is_done() {
+                        return Ok(ProcessExit {
+                            id: self.id,
+                            status: Ok(ProcessResult::Done(v)),
+                        });
+                    } else {
+                        debug!("proc yield - {:?} {:?}", self.id, v);
+                        tokio::select!(
+                            Some(msg) = msg_rx.recv() => match msg {
+                                Event::Kill => return Ok(ProcessExit {
+                                    id: self.id,
+                                    status: Ok(ProcessResult::Cancelled)
+                                })
+                            },
+                            io_result = Self::handle_yield(&mut fiber, v, &mut io) => {
+                                debug!("proc yield result - {:?} {:?}", self.id, io_result);
 
-                                    let io_result = match io_result {
-                                        Ok(r) => Ok(r),
-                                        Err(Error::ConnectionClosed) => {
-                                            return Ok(ProcessExit {
-                                                id: self.id,
-                                                status: Ok(ProcessResult::Disconnected)
-                                            })
-                                        }
-                                        Err(e) => Err(e),
-                                    }?;
+                                let io_result = match io_result {
+                                    Ok(r) => Ok(r),
+                                    Err(Error::ConnectionClosed) => {
+                                        return Ok(ProcessExit {
+                                            id: self.id,
+                                            status: Ok(ProcessResult::Disconnected)
+                                        })
+                                    }
+                                    Err(e) => Err(e),
+                                }?;
 
-                                    state = fiber.resume_from_yield(io_result)?;
-                                }
-                            );
-                        }
+                                v = fiber.resume(io_result)?;
+                            }
+                        );
                     }
                 }
             }

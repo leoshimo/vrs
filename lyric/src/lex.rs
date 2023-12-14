@@ -68,44 +68,45 @@ impl Tokens<'_> {
     fn next_int(&mut self) -> Result<Token> {
         let expr: String =
             std::iter::from_fn(|| self.inner.next_if(|ch| !is_symbol_delimiter(ch))).collect();
-        let num = expr
-            .parse::<i32>()
-            .map_err(|_| Error::FailedToLex(format!("Unable to parse integer - {expr}")))?;
+        let num = expr.parse::<i32>().map_err(|_| {
+            Error::IncompleteExpression(format!("Unable to parse integer - {expr}"))
+        })?;
         Ok(Token::Int(num))
     }
 
     /// Parse next punctuation
     fn next_punct(&mut self) -> Result<Token> {
-        let ch = self
-            .inner
-            .next()
-            .ok_or(Error::FailedToLex("Expected punctuation".to_string()))?;
+        let ch = self.inner.next().ok_or(Error::IncompleteExpression(
+            "Expected punctuation".to_string(),
+        ))?;
         match ch {
             '(' => Ok(Token::ParenLeft),
             ')' => Ok(Token::ParenRight),
             '\'' => Ok(Token::Quote),
-            _ => Err(Error::FailedToLex(format!("Unexpected punctuation - {ch}"))),
+            _ => Err(Error::IncompleteExpression(format!(
+                "Unexpected punctuation - {ch}"
+            ))),
         }
     }
 
     /// Parse next string
     fn next_string(&mut self) -> Result<Token> {
-        let ch = self.inner.next().ok_or(Error::FailedToLex(
+        let ch = self.inner.next().ok_or(Error::IncompleteExpression(
             "Expected opening string quotation".to_string(),
         ))?;
         if ch != '\"' {
-            return Err(Error::FailedToLex(format!(
+            return Err(Error::IncompleteExpression(format!(
                 "Expected opening string quotation - found {ch}"
             )));
         }
 
         let expr: String = std::iter::from_fn(|| self.inner.next_if(|ch| *ch != '\"')).collect();
 
-        let ch = self.inner.next().ok_or(Error::FailedToLex(
+        let ch = self.inner.next().ok_or(Error::IncompleteExpression(
             "Expected closing string quotation".to_string(),
         ))?;
         if ch != '\"' {
-            return Err(Error::FailedToLex(format!(
+            return Err(Error::IncompleteExpression(format!(
                 "Expected closing string quotation - found {ch}"
             )));
         }
@@ -115,11 +116,11 @@ impl Tokens<'_> {
 
     /// Parse keyword
     fn next_keyword(&mut self) -> Result<Token> {
-        let ch = self.inner.next().ok_or(Error::FailedToLex(
+        let ch = self.inner.next().ok_or(Error::IncompleteExpression(
             "Expected symbol : for start of keyword".to_string(),
         ))?;
         if ch != ':' {
-            return Err(Error::FailedToLex(format!(
+            return Err(Error::IncompleteExpression(format!(
                 "Expected symbol : for keyword - found {}",
                 ch
             )));

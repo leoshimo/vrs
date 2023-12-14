@@ -11,7 +11,9 @@ pub fn parse(expr: &str) -> Result<Form> {
     let mut tokens = lex(expr)?.into_iter().peekable();
     let form = parse_form(&mut tokens)?;
     if tokens.peek().is_some() {
-        return Err(Error::FailedToParse("Unterminated expression".to_string()));
+        return Err(Error::IncompleteExpression(
+            "Unterminated expression".to_string(),
+        ));
     }
     Ok(form)
 }
@@ -48,7 +50,7 @@ where
             Form::List(items)
         }
         Token::ParenRight => {
-            return Err(Error::FailedToParse(
+            return Err(Error::IncompleteExpression(
                 "Unexpected closing parenthesis while parsing expression".to_string(),
             ))
         }
@@ -251,7 +253,7 @@ mod tests {
     #[test]
     fn parse_partial_form() {
         assert!(
-            matches!(parse("1 2 3"), Err(Error::FailedToParse(_))),
+            matches!(parse("1 2 3"), Err(Error::IncompleteExpression(_))),
             "parse should fail if entire expression cannot be consumed as single form"
         );
     }

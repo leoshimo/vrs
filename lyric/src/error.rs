@@ -3,17 +3,11 @@ use serde::{Deserialize, Serialize};
 
 #[derive(thiserror::Error, Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Error {
-    #[error("Failed to lex - {0}")]
-    FailedToLex(String),
-
-    #[error("Failed to parse - {0}")]
-    FailedToParse(String),
-
     #[error("Incomplete expression - {0}")]
     IncompleteExpression(String),
 
-    #[error("Missing procedure")]
-    MissingProcedure,
+    #[error("Invalid expression - {0}")]
+    InvalidExpression(String),
 
     #[error("Undefined symbol - {0}")]
     UndefinedSymbol(SymbolId),
@@ -24,23 +18,9 @@ pub enum Error {
     #[error("Unexpected type - {0}")]
     UnexpectedType(String),
 
-    #[error("Invalid form to expr - {0}")]
-    InvalidFormToExpr(String),
-
-    /// A fiber that is already running was asked to start
-    #[error("Fiber is already running")]
-    AlreadyRunning,
-
-    /// Executed past end of fiber
-    #[error("Exceeded fiber instructions")]
-    NoMoreBytecode,
-
     /// Unexpected state on stack
     #[error("Unexpected stack state - {0}")]
     UnexpectedStack(String),
-
-    #[error("Invalid expression - {0}")]
-    InvalidExpression(String),
 
     #[error("Unexpected resume of fiber - {0}")]
     UnexpectedResume(String),

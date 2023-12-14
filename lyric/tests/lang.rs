@@ -1,7 +1,6 @@
 //! Tests for implementation of language
 
 use assert_matches::assert_matches;
-use lyric::fiber::FiberState;
 use lyric::{Error, NativeFn, NativeFnOp, Result, SymbolId};
 use void::Void;
 
@@ -22,13 +21,9 @@ fn eval_expr(e: &str) -> Result<Val> {
     let mut f = Fiber::from_expr(e, env, ())?;
 
     // TODO: Think about ergonomics here
-    let res = match f.resume()? {
-        FiberState::Done(res) => res,
-        FiberState::Yield(_) => panic!("fiber is not complete"),
-    };
-
-    if !f.is_stack_empty() {
-        panic!("fiber completed with nonempty stack");
+    let res = f.start()?;
+    if !f.is_done() {
+        panic!("fiber is not complete");
     }
 
     Ok(res)
