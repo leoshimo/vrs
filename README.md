@@ -31,8 +31,9 @@ Its key principles are:
 
 ## Status
 
-vrs is a digital playground for aggressive experimentation and design - and
-likely always be so.
+vrs is a sandbox project, focused on play and experimentation in a pure-fun,
+pure-utility environment. While I live-on vrs everyday, the platform is very
+volatile in both concepts and implementation. Be warned!
 
 ## Structure
 
