@@ -2,6 +2,7 @@ mod codegen;
 mod error;
 mod lex;
 mod parse;
+mod proc;
 
 pub mod builtin;
 pub mod env;
