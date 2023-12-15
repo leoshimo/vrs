@@ -17,7 +17,7 @@ pub use codegen::Inst;
 pub use env::Env;
 pub use error::Error;
 pub use fiber::Fiber;
-pub use fiber::FiberState;
+pub use fiber::Status;
 pub use parse::parse;
 pub use pmatch::Pattern;
 pub use types::Bytecode;

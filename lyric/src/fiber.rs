@@ -8,9 +8,9 @@ use crate::{
 use std::sync::{Arc, Mutex};
 use tracing::warn;
 
-/// The state of fiber
+/// The status of fiber
 #[derive(Debug, PartialEq)]
-pub enum FiberState {
+pub enum Status {
     /// Fiber was created, and can be started.
     New,
     /// Fiber is paused, and can be resumed
@@ -29,7 +29,7 @@ pub enum FiberState {
 /// [lyric::Process] to drive execution forward
 #[derive(Debug)]
 pub struct Fiber<T: Extern, L: Locals> {
-    state: FiberState,
+    status: Status,
     cframes: Vec<CallFrame<T, L>>,
     stack: Vec<Val<T, L>>,
     global: Arc<Mutex<Env<T, L>>>,
@@ -56,7 +56,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
     pub fn from_bytecode(bytecode: Bytecode<T, L>, env: Env<T, L>, locals: L) -> Self {
         let global = Arc::new(Mutex::new(env));
         Fiber {
-            state: FiberState::New,
+            status: Status::New,
             stack: vec![],
             cframes: vec![CallFrame::from_bytecode(
                 Arc::clone(&global),
@@ -85,7 +85,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
 
     /// Start a fiber execution
     pub fn start(&mut self) -> Result<Val<T, L>> {
-        if self.state != FiberState::New {
+        if self.status != Status::New {
             return Err(Error::UnexpectedResume(
                 "starting a fiber that is not new".to_string(),
             ));
@@ -95,7 +95,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
 
     /// Resume a paused fiber execution
     pub fn resume(&mut self, val: Val<T, L>) -> Result<Val<T, L>> {
-        if self.state != FiberState::Paused {
+        if self.status != Status::Paused {
             return Err(Error::UnexpectedResume(
                 "resuming a fiber that is not paused".to_string(),
             ));
@@ -106,7 +106,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
 
     /// Whether or not fiber is done running
     pub fn is_done(&self) -> bool {
-        self.state == FiberState::Done
+        self.status == Status::Done
     }
 
     /// Get current environment
@@ -136,8 +136,8 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
     /// - completes with an error
     /// - becomes paused
     fn run(&mut self) -> Result<Val<T, L>> {
-        self.state = FiberState::Running;
-        while self.state == FiberState::Running {
+        self.status = Status::Running;
+        while self.status == Status::Running {
             // TODO(dev): Bytecode debugging utilities
             // tracing::debug!("{self:?}");
 
@@ -145,7 +145,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                 // Catch unwind or exit w/ error
                 let unwind_len = match self.cf().unwind_cf_len {
                     None => {
-                        self.state = FiberState::Done;
+                        self.status = Status::Done;
                         return Err(e);
                     }
                     Some(l) => l,
@@ -166,14 +166,14 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
             }
         }
 
-        match &self.state {
-            FiberState::Paused => {
+        match &self.status {
+            Status::Paused => {
                 let res = self.stack.pop().ok_or(Error::UnexpectedStack(
                     "Stack should contain result for terminated fiber".to_string(),
                 ))?;
                 Ok(res)
             }
-            FiberState::Done => {
+            Status::Done => {
                 let res = self.stack.pop().ok_or(Error::UnexpectedStack(
                     "Stack should contain result for terminated fiber".to_string(),
                 ))?;
@@ -191,7 +191,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
         let inst = match self.inst() {
             Some(i) => i.clone(),
             None => {
-                self.state = FiberState::Done;
+                self.status = Status::Done;
                 return Ok(());
             }
         };
@@ -301,7 +301,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                             NativeFnOp::Return(v) => self.stack.push(v),
                             NativeFnOp::Yield(v) => {
                                 self.stack.push(v);
-                                self.state = FiberState::Paused;
+                                self.status = Status::Paused;
                             }
                             NativeFnOp::Exec(code) => self.cframes.push(CallFrame::from_bytecode(
                                 Arc::clone(self.cur_env()),
@@ -357,7 +357,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                     self.cf_mut().ip += offset;
                 }
             }
-            Inst::YieldTop => self.state = FiberState::Paused,
+            Inst::YieldTop => self.status = Status::Paused,
         };
 
         Ok(())
