@@ -8,19 +8,6 @@ use crate::{
 use std::sync::{Arc, Mutex};
 use tracing::warn;
 
-/// The status of fiber
-#[derive(Debug, PartialEq)]
-pub enum Status {
-    /// Fiber was created, and can be started.
-    New,
-    /// Fiber is paused, and can be resumed
-    Paused,
-    /// Fiber is currently running
-    Running,
-    /// Fiber has completeed execution, and cannot be resumed
-    Done,
-}
-
 /// A single, cooperativly scheduled sequence of execution with its own stack
 /// and environment.  The fiber can be a value in Lyric environment, and
 /// interacted as a coroutine to implement generators, etc.
@@ -35,6 +22,33 @@ pub struct Fiber<T: Extern, L: Locals> {
     global: Arc<Mutex<Env<T, L>>>,
     locals: L,
 }
+
+/// The status of fiber
+#[derive(Debug, PartialEq)]
+pub enum Status {
+    /// Fiber was created, and can be started.
+    New,
+    /// Fiber is paused, and can be resumed
+    Paused,
+    /// Fiber is currently running
+    Running,
+    /// Fiber has completeed execution, and cannot be resumed
+    Done,
+}
+
+/// The signal from stretch of fiber execution
+#[derive(Debug, PartialEq)]
+pub enum Signal<T: Extern, L: Locals> {
+    /// Fiber completed with value
+    Done(Val<T, L>),
+    /// Fiber yielded a value
+    Yield(Val<T, L>),
+    // /// Fiber must be resumed after awaiting future
+    // Await(Box<PollFn<T, L>>),
+}
+
+// type PollFn<T, L> =
+//     dyn for<'a> FnOnce(&'a mut Fiber<T, L>) -> (dyn Future<Output = Val<T, L>> + Send + 'a);
 
 /// Single call frame of fiber
 #[derive(Debug)]
@@ -84,7 +98,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
     // TODO: Safeguard start / resume via typestate pat?
 
     /// Start a fiber execution
-    pub fn start(&mut self) -> Result<Val<T, L>> {
+    pub fn start(&mut self) -> Result<Signal<T, L>> {
         if self.status != Status::New {
             return Err(Error::UnexpectedResume(
                 "starting a fiber that is not new".to_string(),
@@ -94,7 +108,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
     }
 
     /// Resume a paused fiber execution
-    pub fn resume(&mut self, val: Val<T, L>) -> Result<Val<T, L>> {
+    pub fn resume(&mut self, val: Val<T, L>) -> Result<Signal<T, L>> {
         if self.status != Status::Paused {
             return Err(Error::UnexpectedResume(
                 "resuming a fiber that is not paused".to_string(),
@@ -135,7 +149,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
     /// - completes with a value
     /// - completes with an error
     /// - becomes paused
-    fn run(&mut self) -> Result<Val<T, L>> {
+    fn run(&mut self) -> Result<Signal<T, L>> {
         self.status = Status::Running;
         while self.status == Status::Running {
             // TODO(dev): Bytecode debugging utilities
@@ -171,7 +185,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                 let res = self.stack.pop().ok_or(Error::UnexpectedStack(
                     "Stack should contain result for terminated fiber".to_string(),
                 ))?;
-                Ok(res)
+                Ok(Signal::Yield(res))
             }
             Status::Done => {
                 let res = self.stack.pop().ok_or(Error::UnexpectedStack(
@@ -180,7 +194,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                 if !self.stack.is_empty() {
                     warn!("Fiber terminated with nonempty stack {:?}", self.stack);
                 }
-                Ok(res)
+                Ok(Signal::Done(res))
             }
             s => panic!("Fiber::run exiting in unexpected state - {s:?}"),
         }
@@ -479,14 +493,14 @@ mod tests {
         {
             let mut f = Fiber::from_bytecode(vec![PushConst(Val::Int(5))], Env::standard(), ());
             assert!(!f.is_done());
-            assert_eq!(f.start().unwrap(), Val::Int(5));
+            assert_eq!(f.start().unwrap(), Signal::Done(Val::Int(5)));
             assert!(f.is_done());
         }
 
         {
             let mut f =
                 Fiber::from_bytecode(vec![PushConst(Val::string("Hi"))], Env::standard(), ());
-            assert_eq!(f.start().unwrap(), Val::string("Hi"));
+            assert_eq!(f.start().unwrap(), Signal::Done(Val::string("Hi")));
         }
     }
 
@@ -498,7 +512,7 @@ mod tests {
             (),
         );
 
-        assert_eq!(f.start().unwrap(), Val::Int(5));
+        assert_eq!(f.start().unwrap(), Signal::Done(Val::Int(5)));
         assert_eq!(
             f.cf().env.lock().unwrap().get(&SymbolId::from("x")),
             Some(Val::Int(5)),
@@ -514,7 +528,7 @@ mod tests {
             .lock()
             .unwrap()
             .define(SymbolId::from("x"), Val::string("hi"));
-        assert_eq!(f.start().unwrap(), Val::string("hi"));
+        assert_eq!(f.start().unwrap(), Signal::Done(Val::string("hi")));
         assert!(f.is_done());
     }
 
@@ -542,7 +556,7 @@ mod tests {
             .unwrap()
             .define(SymbolId::from("x"), Val::string("original"));
 
-        assert_eq!(f.start().unwrap(), Val::string("updated"));
+        assert_eq!(f.start().unwrap(), Signal::Done(Val::string("updated")));
         assert!(f.is_done());
     }
 
@@ -572,7 +586,7 @@ mod tests {
 
         assert_matches!(
             f.start().unwrap(),
-            Val::Lambda(l) if l.params == vec![SymbolId::from("x")] && l.code == vec![GetSym(SymbolId::from("x"))],
+            Signal::Done(Val::Lambda(l)) if l.params == vec![SymbolId::from("x")] && l.code == vec![GetSym(SymbolId::from("x"))],
             "A function object was created"
         );
         assert!(f.is_done());
@@ -594,7 +608,7 @@ mod tests {
             (),
         );
 
-        assert_eq!(f.start().unwrap(), Val::string("hello"));
+        assert_eq!(f.start().unwrap(), Signal::Done(Val::string("hello")));
         assert!(f.is_done());
     }
 
@@ -613,7 +627,7 @@ mod tests {
             (),
         );
 
-        assert_eq!(f.start().unwrap(), Val::string("hello"));
+        assert_eq!(f.start().unwrap(), Signal::Done(Val::string("hello")));
         assert!(f.is_done())
     }
 
@@ -637,7 +651,7 @@ mod tests {
             Env::standard(),
             (),
         );
-        assert_eq!(f.start().unwrap(), Val::string("hello"));
+        assert_eq!(f.start().unwrap(), Signal::Done(Val::string("hello")));
         assert!(f.is_done());
 
         // Call inner lambda w/ arg
@@ -658,7 +672,7 @@ mod tests {
             Env::standard(),
             (),
         );
-        assert_eq!(f.start().unwrap(), Val::string("hello"));
+        assert_eq!(f.start().unwrap(), Signal::Done(Val::string("hello")));
         assert!(f.is_done())
     }
 
@@ -673,7 +687,7 @@ mod tests {
             Env::standard(),
             (),
         );
-        assert_eq!(f.start().unwrap(), Val::string("this"));
+        assert_eq!(f.start().unwrap(), Signal::Done(Val::string("this")));
         assert!(f.is_done())
     }
 
@@ -699,7 +713,7 @@ mod tests {
             (),
         );
 
-        assert_eq!(f.start().unwrap(), Val::string("this"));
+        assert_eq!(f.start().unwrap(), Signal::Done(Val::string("this")));
         assert!(f.is_done())
     }
 
@@ -717,7 +731,7 @@ mod tests {
             (),
         );
 
-        assert_eq!(f.start().unwrap(), Val::string("this"));
+        assert_eq!(f.start().unwrap(), Signal::Done(Val::string("this")));
         assert!(f.is_done())
     }
 
@@ -735,7 +749,7 @@ mod tests {
             (),
         );
 
-        assert_eq!(f.start().unwrap(), Val::string("this"));
+        assert_eq!(f.start().unwrap(), Signal::Done(Val::string("this")));
         assert!(f.is_done())
     }
 
@@ -758,7 +772,7 @@ mod tests {
             (),
         );
 
-        assert_eq!(f.start().unwrap(), Val::Int(1));
+        assert_eq!(f.start().unwrap(), Signal::Done(Val::Int(1)));
         assert!(f.is_done())
     }
 
@@ -769,11 +783,11 @@ mod tests {
             Env::standard(),
             (),
         );
-        assert_eq!(f.start().unwrap(), Val::string("before"));
+        assert_eq!(f.start().unwrap(), Signal::Yield(Val::string("before")));
         assert!(!f.is_done());
         assert_eq!(
             f.resume(Val::string("after")).unwrap(),
-            Val::string("after")
+            Signal::Done(Val::string("after"))
         );
         assert!(f.is_done());
     }
@@ -798,11 +812,11 @@ mod tests {
             (),
         );
 
-        assert_eq!(f.start().unwrap(), Val::Int(1));
-        assert_eq!(f.resume(Val::Nil).unwrap(), Val::Int(2));
-        assert_eq!(f.resume(Val::Nil).unwrap(), Val::Int(3));
-        assert_eq!(f.resume(Val::Nil).unwrap(), Val::Int(4));
-        assert_eq!(f.resume(Val::Nil).unwrap(), Val::Int(5));
+        assert_eq!(f.start().unwrap(), Signal::Yield(Val::Int(1)));
+        assert_eq!(f.resume(Val::Nil).unwrap(), Signal::Yield(Val::Int(2)));
+        assert_eq!(f.resume(Val::Nil).unwrap(), Signal::Yield(Val::Int(3)));
+        assert_eq!(f.resume(Val::Nil).unwrap(), Signal::Yield(Val::Int(4)));
+        assert_eq!(f.resume(Val::Nil).unwrap(), Signal::Yield(Val::Int(5)));
 
         assert!(!f.is_done(), "infinitely yielding fiber is not done");
     }
@@ -814,7 +828,7 @@ mod tests {
             Env::standard(),
             (),
         );
-        assert_eq!(f.start().unwrap(), Val::Int(42));
+        assert_eq!(f.start().unwrap(), Signal::Done(Val::Int(42)));
         assert!(f.is_done());
 
         let mut f = Fiber::from_bytecode(
@@ -835,11 +849,11 @@ mod tests {
 
         assert_eq!(
             f.start().unwrap(),
-            Val::List(vec![
+            Signal::Done(Val::List(vec![
                 Val::keyword("a"),
                 Val::keyword("b"),
                 Val::keyword("c"),
-            ])
+            ]))
         );
         assert!(f.is_done())
     }
@@ -877,12 +891,24 @@ mod tests {
             (),
         );
 
-        assert_eq!(f.start().unwrap(), Val::string("hi"));
+        assert_eq!(f.start().unwrap(), Signal::Yield(Val::string("hi")));
 
-        assert_eq!(f.resume(Val::Nil).unwrap(), Val::string("hi"));
-        assert_eq!(f.resume(Val::Nil).unwrap(), Val::string("hi"));
-        assert_eq!(f.resume(Val::Nil).unwrap(), Val::string("hi"));
-        assert_eq!(f.resume(Val::Nil).unwrap(), Val::string("hi"));
+        assert_eq!(
+            f.resume(Val::Nil).unwrap(),
+            Signal::Yield(Val::string("hi"))
+        );
+        assert_eq!(
+            f.resume(Val::Nil).unwrap(),
+            Signal::Yield(Val::string("hi"))
+        );
+        assert_eq!(
+            f.resume(Val::Nil).unwrap(),
+            Signal::Yield(Val::string("hi"))
+        );
+        assert_eq!(
+            f.resume(Val::Nil).unwrap(),
+            Signal::Yield(Val::string("hi"))
+        );
     }
 
     // // TODO: Add Test case for NativeFnOp::Call

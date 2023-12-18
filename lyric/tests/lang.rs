@@ -1,7 +1,7 @@
 //! Tests for implementation of language
 
 use assert_matches::assert_matches;
-use lyric::{Error, NativeFn, NativeFnOp, Result, SymbolId};
+use lyric::{Error, NativeFn, NativeFnOp, Result, Signal, SymbolId};
 use void::Void;
 
 type Fiber = lyric::Fiber<Void, ()>;
@@ -21,10 +21,10 @@ fn eval_expr(e: &str) -> Result<Val> {
     let mut f = Fiber::from_expr(e, env, ())?;
 
     // TODO: Think about ergonomics here
-    let res = f.start()?;
-    if !f.is_done() {
-        panic!("fiber is not complete");
-    }
+    let res = match f.start()? {
+        Signal::Done(res) => res,
+        Signal::Yield(_) => panic!("fiber is not complete"),
+    };
 
     Ok(res)
 }
