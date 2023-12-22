@@ -12,5 +12,5 @@ mod proc_io;
 
 pub use error::Error;
 pub type Result<T> = std::result::Result<T, Error>;
-pub use proc::{ProcessExit, ProcessHandle, ProcessId, ProcessResult};
+pub use proc::{ProcessExit, ProcessHandle, ProcessId, ProcessResult, ProcessSet, Process};
 pub use runtime::Runtime;

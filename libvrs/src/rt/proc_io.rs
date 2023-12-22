@@ -1,10 +1,10 @@
+#![allow(dead_code)] // TODO: Migrate to NativeAsyncFn bindings
 //! Process IO
 use super::kernel::WeakKernelHandle;
 use super::mailbox::{MailboxHandle, Message};
 use super::pubsub::PubSubHandle;
 use super::registry::{Registration, Registry};
 use super::ProcessId;
-use lyric::{Form, KeywordId};
 use std::time::Duration;
 use tokio::process::Command;
 use tokio::time;
@@ -14,7 +14,7 @@ use crate::connection::Error as ConnError;
 
 use crate::{Connection, ProcessHandle, Program, Response};
 
-use super::program::{Extern, Fiber, Pattern, Val};
+use super::program::{Extern, Fiber, Pattern, Val, Form, KeywordId};
 use crate::rt::{Error, Result};
 
 /// Handles process IO requests

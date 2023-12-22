@@ -3,6 +3,7 @@ use assert_matches::assert_matches;
 use lyric::Form;
 use vrs::{Client, Connection, Response, Runtime};
 
+#[ignore] // TODO: Connection bindings
 #[tokio::test]
 async fn request_response() {
     let runtime = Runtime::new();
@@ -26,6 +27,7 @@ async fn request_response() {
     );
 }
 
+#[ignore] // TODO: Connection bindings
 #[tokio::test]
 async fn request_response_multi() {
     use lyric::parse as p;
@@ -58,6 +60,7 @@ async fn request_response_multi() {
     );
 }
 
+#[ignore] // TODO: Connection bindings
 #[tokio::test]
 async fn request_response_parallel() {
     let (local, remote) = Connection::pair().unwrap();

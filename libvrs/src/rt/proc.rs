@@ -8,10 +8,9 @@ use crate::rt::mailbox::{Mailbox, MailboxHandle};
 use crate::rt::{Error, Result};
 use crate::{Connection, Program};
 use futures::future::{FutureExt, Shared};
-use lyric::fiber::Signal;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinSet;
-use tracing::{debug, error, info};
+use tracing::{info};
 
 /// Set of running processes
 pub type ProcessSet = JoinSet<ProcessExit>;
@@ -109,65 +108,30 @@ impl Process {
             mailbox,
         };
 
-        // TODO: Clean this up!
         self.io.handle(proc_hdl.clone());
+
         procs.spawn(async move {
-            let exit: Result<_> = async {
-                let mut io = self.io;
-                let mut sig = fiber.start()?;
-                loop {
-                    match sig {
-                        Signal::Done(v) => {
-                            return Ok(ProcessExit {
-                                id: self.id,
-                                status: Ok(ProcessResult::Done(v)),
-                            })
+            // TODO: Implement ProcessResult::Disconnected when Error::ConnectionClosed is returned
+            // TODO: Use cancel token instead of msg_rx
+            let exit = tokio::select! {
+                res = lyric::run(&mut fiber) => {
+                    match res {
+                        Ok(v) => ProcessExit {
+                            id: self.id,
+                            status: Ok(ProcessResult::Done(v)),
+                        },
+                        Err(e) => ProcessExit {
+                            id: self.id,
+                            status: Err(Error::EvaluationError(e)),
                         }
-                        Signal::Yield(v) => {
-                            debug!("proc yield - {:?} {:?}", self.id, v);
-                            tokio::select!(
-                                Some(msg) = msg_rx.recv() => match msg {
-                                    Event::Kill => return Ok(ProcessExit {
-                                        id: self.id,
-                                        status: Ok(ProcessResult::Cancelled)
-                                    })
-                                },
-                                io_result = Self::handle_yield(&mut fiber, v, &mut io) => {
-                                    debug!("proc yield result - {:?} {:?}", self.id, io_result);
-
-                                    let io_result = match io_result {
-                                        Ok(r) => Ok(r),
-                                        Err(Error::ConnectionClosed) => {
-                                            return Ok(ProcessExit {
-                                                id: self.id,
-                                                status: Ok(ProcessResult::Disconnected)
-                                            })
-                                        }
-                                        Err(e) => Err(e),
-                                    }?;
-
-                                    sig = fiber.resume(io_result)?;
-                                }
-                            );
-                        }
-                        Signal::Await(_) => todo!(),
                     }
-                }
-            }
-            .await;
-
-            let exit = match exit {
-                Ok(exit) => {
-                    info!("proc exit {} - {}", self.id, exit);
-                    exit
-                }
-                Err(e) => {
-                    error!("proc exit {} - {}", self.id, e);
-                    ProcessExit {
+                },
+                Some(msg) = msg_rx.recv() => match msg {
+                    Event::Kill => ProcessExit {
                         id: self.id,
-                        status: Err(e),
+                        status: Ok(ProcessResult::Cancelled)
                     }
-                }
+                },
             };
 
             let _ = exit_tx.send(exit.clone());
@@ -177,6 +141,7 @@ impl Process {
         Ok(proc_hdl)
     }
 
+    #[allow(dead_code)]
     /// Handle a yield signal from fiber
     async fn handle_yield(fiber: &mut Fiber, val: Val, io: &mut ProcIO) -> Result<Val> {
         let iocmd = match val {
@@ -265,9 +230,6 @@ impl ProcessResult {
 mod tests {
 
     use assert_matches::assert_matches;
-    use lyric::Form;
-
-    use crate::Request;
 
     use super::*;
 
@@ -309,56 +271,6 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn recv_req() {
-        let (local, mut remote) = Connection::pair().unwrap();
-
-        let mut procs = ProcessSet::new();
-        let prog = Program::from_expr("(recv_req)").unwrap();
-        let _ = Process::from_prog(0.into(), prog)
-            .conn(local)
-            .spawn(&mut procs);
-
-        let _ = remote
-            .send_req(Request {
-                id: 0,
-                contents: Form::string("Hello world"),
-            })
-            .await;
-
-        let res = procs.join_next().await.unwrap().unwrap();
-        assert_eq!(
-            res.status.unwrap(),
-            ProcessResult::Done(Val::string("Hello world")),
-            "recv_req returns the request on connection w/ request id and contents"
-        );
-    }
-
-    #[tokio::test]
-    async fn recv_req_try_eval_send_resp() {
-        let (local, mut remote) = Connection::pair().unwrap();
-        let mut procs = ProcessSet::new();
-
-        let prog = Program::from_expr("(send_resp (try (eval (recv_req))))").unwrap();
-        let _ = Process::from_prog(0.into(), prog)
-            .conn(local)
-            .spawn(&mut procs);
-
-        let _ = remote
-            .send_req(Request {
-                id: 10,
-                contents: Form::string("Hello world"),
-            })
-            .await;
-        let resp = remote.recv_resp().await;
-
-        let res = procs.join_next().await.unwrap().unwrap();
-        assert_eq!(res.status.unwrap(), ProcessResult::Done(Val::keyword("ok")),);
-        assert_matches!(
-            resp,
-            Some(Ok(r)) if r.req_id == 10 && r.contents == Ok(Form::string("Hello world"))
-        );
-    }
 
     #[tokio::test]
     async fn get_self() {

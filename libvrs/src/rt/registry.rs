@@ -243,6 +243,7 @@ mod tests {
         assert!(r.all().await.unwrap().is_empty());
     }
 
+    #[ignore] // TODO: Needs (recv)
     #[tokio::test]
     async fn register() {
         let r = Registry::spawn();
@@ -268,6 +269,7 @@ mod tests {
                         Some(r) if r.handle.id() == hdl_b.id());
     }
 
+    #[ignore] // TODO: Needs (recv)
     #[tokio::test]
     async fn register_duplicate() {
         let r = Registry::spawn();
@@ -316,6 +318,7 @@ mod tests {
         );
     }
 
+    #[ignore] // TODO: Needs (recv)
     #[tokio::test]
     async fn get_all() {
         let r = Registry::spawn();

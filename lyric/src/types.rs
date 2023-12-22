@@ -253,7 +253,7 @@ impl<T: Extern, L: Locals> NativeAsyncFn<T, L> {
 }
 
 impl<T: Extern, L: Locals> NativeAsyncCall<T, L> {
-    pub(crate) async fn apply<'a>(self, f: &'a mut Fiber<T, L>) -> Result<Val<T, L>> {
+    pub(crate) async fn apply(self, f: &mut Fiber<T, L>) -> Result<Val<T, L>> {
         Pin::from((self.func)(f, self.args)).await
     }
 }

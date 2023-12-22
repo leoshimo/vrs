@@ -11,7 +11,7 @@ pub use client::Client;
 pub use rt::program::{
     Bytecode, Env, Extern, Lambda, Locals, NativeFn, NativeFnOp, Pattern, Program, Val,
 };
-pub use rt::{Error, ProcessExit, ProcessHandle, ProcessResult, Result, Runtime};
+pub use rt::{Error, ProcessExit, ProcessHandle, ProcessResult, Result, Runtime}; // TODO: Should rt reexport from lib?
 
 /// The path to runtime socket
 pub fn runtime_socket() -> Option<PathBuf> {

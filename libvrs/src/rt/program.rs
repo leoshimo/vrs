@@ -13,6 +13,12 @@ pub struct Program {
     env: Env,
 }
 
+/// Form for vrs
+pub type Form = lyric::Form;
+
+/// Reexport KeywordId for vrs
+pub type KeywordId = lyric::KeywordId;
+
 /// Values used in programs
 pub type Val = lyric::Val<Extern, Locals>;
 
