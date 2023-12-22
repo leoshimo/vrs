@@ -1,6 +1,7 @@
 //! A fiber of execution that can be driven by caller as a coroutine.
 
 use super::{Env, Inst};
+use crate::types::NativeAsyncCall;
 use crate::{
     builtin::cond::is_true, compile, parse, Bytecode, Error, Extern, Lambda, Locals, NativeFnOp,
     Pattern, Result, Val,
@@ -37,18 +38,26 @@ pub enum Status {
 }
 
 /// The signal from stretch of fiber execution
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub enum Signal<T: Extern, L: Locals> {
     /// Fiber completed with value
     Done(Val<T, L>),
     /// Fiber yielded a value
     Yield(Val<T, L>),
-    // /// Fiber must be resumed after awaiting future
-    // Await(Box<PollFn<T, L>>),
+    /// Fiber must be resumed after awaiting future
+    Await(NativeAsyncCall<T, L>),
 }
 
-// type PollFn<T, L> =
-//     dyn for<'a> FnOnce(&'a mut Fiber<T, L>) -> (dyn Future<Output = Val<T, L>> + Send + 'a);
+impl<T: Extern, L: Locals> std::cmp::PartialEq for Signal<T, L> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Signal::Done(lhs), Signal::Done(rhs)) => lhs == rhs,
+            (Signal::Yield(lhs), Signal::Yield(rhs)) => lhs == rhs,
+            (Signal::Await(lhs), Signal::Await(rhs)) => lhs == rhs,
+            _ => false,
+        }
+    }
+}
 
 /// Single call frame of fiber
 #[derive(Debug)]
@@ -145,6 +154,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
 }
 
 impl<T: Extern, L: Locals> Fiber<T, L> {
+
     /// Run a fiber execution until it:
     /// - completes with a value
     /// - completes with an error
@@ -183,9 +193,23 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
         match &self.status {
             Status::Paused => {
                 let res = self.stack.pop().ok_or(Error::UnexpectedStack(
-                    "Stack should contain result for terminated fiber".to_string(),
+                    "Stack should contain result for paused fiber".to_string(),
                 ))?;
-                Ok(Signal::Yield(res))
+                if let Val::NativeAsyncFn(fun) = res {
+                    // TODO: Hack: Pass NativeAsyncFn and arguments off VM stack.
+                    // TODO: Reevaluate run, step, and run::run
+                    let args = self
+                        .stack
+                        .pop()
+                        .ok_or(Error::UnexpectedStack(
+                            "Stack should arguments for native async fn".to_string(),
+                        ))?
+                        .to_list()?;
+                    let call = fun.call(args);
+                    Ok(Signal::Await(call))
+                } else {
+                    Ok(Signal::Yield(res))
+                }
             }
             Status::Done => {
                 let res = self.stack.pop().ok_or(Error::UnexpectedStack(
@@ -325,7 +349,12 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                             )),
                         }
                     }
-                    // TODO: Move into NativeFnAsync (?) Remove Yield keyword out of NativeFs
+                    Some(Val::NativeAsyncFn(fun)) => {
+                        // TODO: Hack - pass to parent scope via stack
+                        self.stack.push(Val::List(args.collect::<Vec<_>>()));
+                        self.stack.push(Val::NativeAsyncFn(fun));
+                        self.status = Status::Paused;
+                    }
                     Some(obj) => {
                         return Err(Error::UnexpectedStack(format!(
                             "Not a function object - {}",

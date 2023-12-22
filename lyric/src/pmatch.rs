@@ -64,7 +64,7 @@ where
                 _ => false,
             },
             Nil | Bool(_) | Int(_) | String(_) | Keyword(_) | Lambda(_) | NativeFn(_)
-            | Bytecode(_) | Error(_) | Ref(_) | Extern(_) => pat == val,
+            | NativeAsyncFn(_) | Bytecode(_) | Error(_) | Ref(_) | Extern(_) => pat == val,
         }
     }
 }

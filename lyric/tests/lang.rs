@@ -23,7 +23,7 @@ fn eval_expr(e: &str) -> Result<Val> {
     // TODO: Think about ergonomics here
     let res = match f.start()? {
         Signal::Done(res) => res,
-        Signal::Yield(_) => panic!("fiber is not complete"),
+        Signal::Yield(_) | Signal::Await(_) => panic!("fiber is not complete"),
     };
 
     Ok(res)

@@ -150,6 +150,7 @@ impl Process {
                                 }
                             );
                         }
+                        Signal::Await(_) => todo!(),
                     }
                 }
             }

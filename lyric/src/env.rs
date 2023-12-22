@@ -1,4 +1,4 @@
-use crate::{builtin, Error, Extern, Lambda, Locals, NativeFn, SymbolId, Val};
+use crate::{builtin, Error, Extern, Lambda, Locals, NativeAsyncFn, NativeFn, SymbolId, Val};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -80,6 +80,16 @@ impl<T: Extern, L: Locals> Env<T, L> {
     /// Convenience to bind native functions
     pub fn bind_native(&mut self, symbol: SymbolId, nativefn: NativeFn<T, L>) -> &mut Self {
         self.define(symbol, Val::NativeFn(nativefn));
+        self
+    }
+
+    /// Convenience to bind native functions
+    pub fn bind_native_async(
+        &mut self,
+        symbol: SymbolId,
+        nativefn: NativeAsyncFn<T, L>,
+    ) -> &mut Self {
+        self.define(symbol, Val::NativeAsyncFn(nativefn));
         self
     }
 

@@ -27,4 +27,7 @@ pub enum Error {
 
     #[error("Invalid pattern match")]
     InvalidPatternMatch,
+
+    #[error("Unexpected top-level fiber yield")]
+    UnexpectedTopLevelYield,
 }

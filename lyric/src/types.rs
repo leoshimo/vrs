@@ -2,6 +2,7 @@
 use crate::codegen::Inst;
 use crate::{parse, Env, Error, Fiber, Ref, Result};
 use serde::{Deserialize, Serialize};
+use std::future::Future;
 use std::sync::{Arc, Mutex};
 
 /// All values in VM that can be manipulated
@@ -25,6 +26,8 @@ pub enum Val<T: Extern, L: Locals> {
     Lambda(Lambda<T, L>),
     /// A callable native function object
     NativeFn(NativeFn<T, L>),
+    /// A callable async native function object
+    NativeAsyncFn(NativeAsyncFn<T, L>),
     /// Compiled bytecode sequence
     Bytecode(Bytecode<T, L>),
     /// Error as a value
@@ -61,11 +64,13 @@ pub struct Lambda<T: Extern, L: Locals> {
 }
 
 /// A native founction bound to given symbol
-#[allow(clippy::type_complexity)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct NativeFn<T: Extern, L: Locals> {
-    pub func: fn(&mut Fiber<T, L>, &[Val<T, L>]) -> Result<NativeFnOp<T, L>>,
+    pub func: NativeFnSig<T, L>,
 }
+
+/// Type for NativeFn functions
+pub type NativeFnSig<T, L> = fn(&mut Fiber<T, L>, &[Val<T, L>]) -> Result<NativeFnOp<T, L>>;
 
 /// Result of executing native function value
 #[derive(Debug, Clone, PartialEq)]
@@ -77,6 +82,26 @@ pub enum NativeFnOp<T: Extern, L: Locals> {
     /// Execute bytecode-level instructions
     Exec(Bytecode<T, L>),
 }
+
+/// A native async function
+#[derive(Debug, Clone, PartialEq)]
+pub struct NativeAsyncFn<T: Extern, L: Locals> {
+    pub func: NativeAsyncFnSig<T, L>,
+}
+
+/// A deferred call to native async fn
+#[derive(Debug, Clone, PartialEq)]
+pub struct NativeAsyncCall<T: Extern, L: Locals> {
+    pub args: Vec<Val<T, L>>,
+    pub func: NativeAsyncFnSig<T, L>,
+}
+
+/// Signature for native async functions
+type NativeAsyncFnSig<T, L> =
+    for<'a> fn(&'a mut Fiber<T, L>, Vec<Val<T, L>>) -> ValFuture<'a, T, L>;
+
+/// Boxed Val Future
+type ValFuture<'a, T, L> = Box<dyn Future<Output = Result<Val<T, L>>> + 'a>;
 
 /// Identifier for Symbol
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -141,7 +166,15 @@ where
         if let Val::List(inner) = &self {
             Ok(inner)
         } else {
-            Err(Error::UnexpectedType("expected keyword".to_string()))
+            Err(Error::UnexpectedType("expected list".to_string()))
+        }
+    }
+
+    pub fn to_list(self) -> Result<Vec<Val<T, L>>> {
+        if let Val::List(inner) = self {
+            Ok(inner)
+        } else {
+            Err(Error::UnexpectedType("expected list".to_string()))
         }
     }
 }
@@ -209,6 +242,24 @@ impl KeywordId {
     }
 }
 
+impl<T: Extern, L: Locals> NativeAsyncFn<T, L> {
+    pub(crate) fn call(&self, args: Vec<Val<T, L>>) -> NativeAsyncCall<T, L> {
+        NativeAsyncCall {
+            args,
+            func: self.func,
+        }
+    }
+}
+
+impl<T: Extern, L: Locals> NativeAsyncCall<T, L> {
+    pub(crate) fn apply<'a>(
+        self,
+        f: &'a mut Fiber<T, L>,
+    ) -> Box<dyn Future<Output = Result<Val<T, L>>> + 'a> {
+        (self.func)(f, self.args)
+    }
+}
+
 impl<T: Extern, L: Locals> PartialEq for Lambda<T, L> {
     fn eq(&self, other: &Self) -> bool {
         self.params == other.params
@@ -256,6 +307,7 @@ where
                     .join(" ")
             ),
             Val::NativeFn(_) => write!(f, "<nativefn>"),
+            Val::NativeAsyncFn(_) => write!(f, "<nativeasyncfn>"),
             Val::Bytecode(_) => write!(f, "<bytecode>"),
             Val::Error(e) => write!(f, "<error {e}>"),
             Val::Ref(r) => write!(f, "<ref {}>", r.0),
@@ -360,6 +412,7 @@ impl<T: Extern, L: Locals> TryFrom<Val<T, L>> for Form {
             | Val::Bytecode(_)
             | Val::Lambda(_)
             | Val::NativeFn(_)
+            | Val::NativeAsyncFn(_)
             | Val::Extern(_) => Ok(Form::RawString(value.to_string())),
         }
     }
