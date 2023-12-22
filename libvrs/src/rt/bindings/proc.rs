@@ -115,7 +115,23 @@ pub(crate) fn spawn_fn() -> NativeFn {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{rt::kernel, ProcessResult};
+    use crate::rt::{kernel, ProcessResult};
+
+    #[tokio::test]
+    async fn self_pid() {
+        let k = kernel::start();
+        let hdl = k
+            .spawn_prog(Program::from_expr("(self)").unwrap())
+            .await
+            .expect("Kernel should spawn new process");
+
+        let pid = hdl.id();
+        let res = hdl.join().await.unwrap();
+        assert_eq!(
+            res.status.unwrap(),
+            ProcessResult::Done(Val::Extern(Extern::ProcessId(pid)))
+        );
+    }
 
     #[tokio::test]
     async fn sleep() {

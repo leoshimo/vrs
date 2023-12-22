@@ -272,16 +272,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_self() {
+    async fn process_pid() {
         let mut procs = ProcessSet::new();
 
         let prog = Program::from_expr("(self)").unwrap();
-        let _ = Process::from_prog(99.into(), prog).spawn(&mut procs);
+        let hdl = Process::from_prog(99.into(), prog)
+            .spawn(&mut procs)
+            .unwrap();
+
+        assert_eq!(hdl.id(), 99.into(), "ProcessHandle should have matching ID");
 
         let res = procs.join_next().await.unwrap().unwrap();
         assert_eq!(
             res.status.unwrap(),
-            ProcessResult::Done(Val::Extern(Extern::ProcessId(99.into())))
+            ProcessResult::Done(Val::Extern(Extern::ProcessId(99.into()))),
+            "(self) should return assigned PID"
         );
     }
 
