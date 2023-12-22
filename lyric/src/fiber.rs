@@ -154,7 +154,6 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
 }
 
 impl<T: Extern, L: Locals> Fiber<T, L> {
-
     /// Run a fiber execution until it:
     /// - completes with a value
     /// - completes with an error
