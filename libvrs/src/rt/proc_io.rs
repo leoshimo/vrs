@@ -5,9 +5,7 @@ use super::mailbox::{MailboxHandle, Message};
 use super::pubsub::PubSubHandle;
 use super::registry::{Registration, Registry};
 use super::ProcessId;
-use std::time::Duration;
 use tokio::process::Command;
-use tokio::time;
 use tracing::{debug, error};
 
 use crate::connection::Error as ConnError;
@@ -34,17 +32,21 @@ pub(crate) struct ProcIO {
 pub enum IOCmd {
     RecvRequest,
     SendResponse(Val),
+
     ListProcesses,
     KillProcess(ProcessId),
-    SendMessage(ProcessId, Val),
-    ListMessages,
-    Exec(String, Vec<String>),
-    Recv(Option<Pattern>),
-    Sleep(Duration),
     Spawn(Program),
+
+    SendMessage(ProcessId, Val),
+    Recv(Option<Pattern>),
+    ListMessages,
+
+    Exec(String, Vec<String>),
+
     RegisterAsService(Registration),
     ListServices,
     QueryService(KeywordId, ServiceQuery),
+
     Subscribe(KeywordId),
     Publish(KeywordId, Val),
 }
@@ -114,7 +116,6 @@ impl ProcIO {
             IOCmd::ListMessages => self.list_message().await,
             IOCmd::Exec(prog, args) => self.exec(prog, args).await,
             IOCmd::Recv(pat) => self.handle_recv(pat).await,
-            IOCmd::Sleep(duration) => self.sleep(duration).await,
             IOCmd::Spawn(prog) => self.spawn_prog(prog).await,
             IOCmd::RegisterAsService(reg) => self.register_self(reg).await,
             IOCmd::ListServices => self.list_services().await,
@@ -201,13 +202,6 @@ impl ProcIO {
                 exit_status
             )))
         }
-    }
-
-    /// Sleep process
-    async fn sleep(&self, duration: Duration) -> Result<Val> {
-        debug!("sleep {:?}", &duration);
-        time::sleep(duration).await;
-        Ok(Val::keyword("ok"))
     }
 
     /// Spawn given process

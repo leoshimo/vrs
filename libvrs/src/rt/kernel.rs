@@ -285,12 +285,11 @@ mod tests {
         );
     }
 
-    #[ignore] // TODO: Needs (recv) OR loop
     #[tokio::test]
     async fn kernel_spawn_kill() {
         let k = start();
         let hdl = k
-            .spawn_prog(Program::from_expr("(recv)").unwrap())
+            .spawn_prog(Program::from_expr("(loop (sleep 1))").unwrap())
             .await
             .expect("Kernel should spawn new process");
         assert_eq!(k.procs().await.unwrap(), vec![hdl.id()]);
@@ -331,7 +330,7 @@ mod tests {
         let k = start();
         let weak_k = k.downgrade();
         let _ = k
-            .spawn_prog(Program::from_expr("(recv)").unwrap())
+            .spawn_prog(Program::from_expr("(loop (sleep 1))").unwrap())
             .await
             .expect("Kernel should spawn new process");
 
@@ -342,30 +341,25 @@ mod tests {
         assert_matches!(weak_k.upgrade(), None);
     }
 
-    #[ignore] // TODO: Depends on recv
     #[tokio::test]
     async fn kill_proc_from_kernel() {
-        let (local, _remote) = Connection::pair().unwrap();
         let k = start();
         let proc = k
-            .spawn_for_conn(local)
+            .spawn_prog(Program::from_expr("(loop (sleep 1))").unwrap())
             .await
             .expect("Kernel should spawn new process");
 
         k.kill_proc(proc.id()).await.unwrap();
-        let proc_exit = tokio::spawn(async move { proc.join().await });
-
-        let exit = timeout(Duration::from_millis(5), proc_exit)
+        let exit = timeout(Duration::from_millis(5), proc.join())
             .await
             .expect("Process should terminate")
-            .unwrap()
             .unwrap();
 
         assert_eq!(exit.status.unwrap(), ProcessResult::Cancelled);
         assert!(k.procs().await.unwrap().is_empty(),);
     }
 
-    #[ignore] // TODO: Depends on recv
+    #[ignore] // TODO: Depends on kill binding
     #[tokio::test]
     async fn kill_proc_from_proc() {
         let (local, mut remote) = Connection::pair().unwrap();
@@ -399,9 +393,8 @@ mod tests {
         );
     }
 
-    #[ignore] // TODO: Requires recv
+    #[ignore] // TODO: Messaging between from processes (recv)
     #[tokio::test]
-    #[tracing_test::traced_test]
     async fn spawn_progs() {
         let k = start();
 
