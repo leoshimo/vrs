@@ -3,6 +3,7 @@ use crate::codegen::Inst;
 use crate::{parse, Env, Error, Fiber, Ref, Result};
 use serde::{Deserialize, Serialize};
 use std::future::Future;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 
 /// All values in VM that can be manipulated
@@ -101,7 +102,7 @@ type NativeAsyncFnSig<T, L> =
     for<'a> fn(&'a mut Fiber<T, L>, Vec<Val<T, L>>) -> ValFuture<'a, T, L>;
 
 /// Boxed Val Future
-type ValFuture<'a, T, L> = Box<dyn Future<Output = Result<Val<T, L>>> + 'a>;
+type ValFuture<'a, T, L> = Box<dyn Future<Output = Result<Val<T, L>>> + 'a + Send>;
 
 /// Identifier for Symbol
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -252,11 +253,8 @@ impl<T: Extern, L: Locals> NativeAsyncFn<T, L> {
 }
 
 impl<T: Extern, L: Locals> NativeAsyncCall<T, L> {
-    pub(crate) fn apply<'a>(
-        self,
-        f: &'a mut Fiber<T, L>,
-    ) -> Box<dyn Future<Output = Result<Val<T, L>>> + 'a> {
-        (self.func)(f, self.args)
+    pub(crate) async fn apply<'a>(self, f: &'a mut Fiber<T, L>) -> Result<Val<T, L>> {
+        Pin::from((self.func)(f, self.args)).await
     }
 }
 

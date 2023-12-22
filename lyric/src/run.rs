@@ -10,7 +10,6 @@
 //! via future to take advantage of async IO if it is available.
 
 use crate::{Error, Extern, Fiber, Locals, Result, Signal, Val};
-use std::pin::Pin;
 
 /// Run the fiber to completion as a Future
 pub async fn run<T, L>(f: &mut Fiber<T, L>) -> Result<Val<T, L>>
@@ -24,10 +23,9 @@ where
             Signal::Done(v) => return Ok(v),
             Signal::Yield(_) => return Err(Error::UnexpectedTopLevelYield),
             Signal::Await(call) => {
-                let fut = Pin::from(call.apply(f));
                 // TODO: Should errors in fut properly update `Fiber::state`?
                 // TODO: Jiggle code between fiber::run and run::run
-                let poll_res = fut.await?;
+                let poll_res = call.apply(f).await?;
                 res = f.resume(poll_res)?;
             }
         }
@@ -179,5 +177,14 @@ mod tests {
 
         let mut f = Fiber::from_expr(prog, env, ()).unwrap();
         assert_matches!(run(&mut f).await, Err(Error::UnexpectedArguments(s)) if s == "Cannot be called with argument 3");
+    }
+
+    #[tokio::test]
+    async fn run_is_send() {
+        fn require_send<T: Send>(_t: &T) {}
+
+        let prog = r#"(def x 4)"#;
+        let mut f = Fiber::from_expr(prog, Env::standard(), ()).unwrap();
+        require_send(&run(&mut f));
     }
 }
