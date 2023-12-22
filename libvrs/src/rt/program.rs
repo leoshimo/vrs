@@ -2,7 +2,7 @@
 
 use lyric::{Error, Result, SymbolId};
 
-use super::binding;
+use super::bindings;
 use super::proc::ProcessId;
 use super::proc_io::IOCmd;
 
@@ -113,57 +113,57 @@ fn program_env() -> Env {
     let mut e = Env::standard();
 
     {
-        e.bind_native(SymbolId::from("recv_req"), binding::recv_req_fn())
-            .bind_native(SymbolId::from("send_resp"), binding::send_resp_fn());
+        e.bind_native(SymbolId::from("recv_req"), bindings::recv_req_fn())
+            .bind_native(SymbolId::from("send_resp"), bindings::send_resp_fn());
     }
 
     {
-        e.bind_native(SymbolId::from("recv"), binding::recv_fn())
-            .bind_native(SymbolId::from("ls-msgs"), binding::ls_msgs_fn())
-            .bind_native(SymbolId::from("send"), binding::send_fn())
-            .bind_lambda(SymbolId::from("call"), binding::call_fn());
+        e.bind_native(SymbolId::from("recv"), bindings::recv_fn())
+            .bind_native(SymbolId::from("ls-msgs"), bindings::ls_msgs_fn())
+            .bind_native(SymbolId::from("send"), bindings::send_fn())
+            .bind_lambda(SymbolId::from("call"), bindings::call_fn());
     }
 
     {
-        e.bind_native(SymbolId::from("srv"), binding::srv_fn())
-            .bind_lambda(SymbolId::from("bind-srv"), binding::bind_srv_fn())
+        e.bind_native(SymbolId::from("srv"), bindings::srv_fn())
+            .bind_lambda(SymbolId::from("bind-srv"), bindings::bind_srv_fn())
             .bind_native(
                 SymbolId::from("def-bind-interface"),
-                binding::def_bind_interface(),
+                bindings::def_bind_interface(),
             )
-            .bind_native(SymbolId::from("info-srv"), binding::info_srv_fn());
+            .bind_native(SymbolId::from("info-srv"), bindings::info_srv_fn());
     }
 
     {
-        e.bind_native(SymbolId::from("kill"), binding::kill_fn())
-            .bind_native(SymbolId::from("pid"), binding::pid_fn())
-            .bind_native(SymbolId::from("ps"), binding::ps_fn())
-            .bind_native(SymbolId::from("self"), binding::self_fn())
-            .bind_native(SymbolId::from("sleep"), binding::sleep_fn())
-            .bind_native(SymbolId::from("spawn"), binding::spawn_fn());
+        e.bind_native(SymbolId::from("kill"), bindings::kill_fn())
+            .bind_native(SymbolId::from("pid"), bindings::pid_fn())
+            .bind_native(SymbolId::from("ps"), bindings::ps_fn())
+            .bind_native(SymbolId::from("self"), bindings::self_fn())
+            .bind_native(SymbolId::from("sleep"), bindings::sleep_fn())
+            .bind_native(SymbolId::from("spawn"), bindings::spawn_fn());
     }
 
     {
-        e.bind_native(SymbolId::from("exec"), binding::exec_fn())
-            .bind_native(SymbolId::from("shell_expand"), binding::shell_expand_fn());
+        e.bind_native(SymbolId::from("exec"), bindings::exec_fn())
+            .bind_native(SymbolId::from("shell_expand"), bindings::shell_expand_fn());
     }
 
     {
-        e.bind_lambda(SymbolId::from("open_app"), binding::open_app_fn())
-            .bind_lambda(SymbolId::from("open_file"), binding::open_file_fn())
-            .bind_lambda(SymbolId::from("open_url"), binding::open_url_fn());
+        e.bind_lambda(SymbolId::from("open_app"), bindings::open_app_fn())
+            .bind_lambda(SymbolId::from("open_file"), bindings::open_file_fn())
+            .bind_lambda(SymbolId::from("open_url"), bindings::open_url_fn());
     }
 
     {
-        e.bind_native(SymbolId::from("register"), binding::register_fn())
-            .bind_native(SymbolId::from("find-srv"), binding::find_srv_fn())
-            .bind_native(SymbolId::from("ls-srv"), binding::ls_srv_fn());
+        e.bind_native(SymbolId::from("register"), bindings::register_fn())
+            .bind_native(SymbolId::from("find-srv"), bindings::find_srv_fn())
+            .bind_native(SymbolId::from("ls-srv"), bindings::ls_srv_fn());
     }
 
     {
-        e.bind_native(SymbolId::from("subscribe"), binding::subscribe_fn())
-            .bind_native(SymbolId::from("unsubscribe"), binding::unsubscribe_fn())
-            .bind_native(SymbolId::from("publish"), binding::publish_fn());
+        e.bind_native(SymbolId::from("subscribe"), bindings::subscribe_fn())
+            .bind_native(SymbolId::from("unsubscribe"), bindings::unsubscribe_fn())
+            .bind_native(SymbolId::from("publish"), bindings::publish_fn());
     }
 
     e

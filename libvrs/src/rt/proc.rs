@@ -10,7 +10,7 @@ use crate::{Connection, Program};
 use futures::future::{FutureExt, Shared};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinSet;
-use tracing::{info};
+use tracing::info;
 
 /// Set of running processes
 pub type ProcessSet = JoinSet<ProcessExit>;
@@ -270,7 +270,6 @@ mod tests {
             "processes should not share environment by default",
         );
     }
-
 
     #[tokio::test]
     async fn get_self() {

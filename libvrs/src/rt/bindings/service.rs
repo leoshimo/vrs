@@ -347,7 +347,7 @@ fn lambda_stub_for_interface(
 mod tests {
     use lyric::Inst;
 
-    use crate::rt::binding::service::lambda_stub_for_interface;
+    use crate::rt::bindings::service::lambda_stub_for_interface;
 
     use super::*;
 

@@ -37,9 +37,9 @@ fn send_resp(_f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Connection, Program, Request, ProcessResult};
-    use crate::rt::{ProcessSet, Process};
     use crate::rt::program::Form;
+    use crate::rt::{Process, ProcessSet};
+    use crate::{Connection, ProcessResult, Program, Request};
     use assert_matches::assert_matches;
 
     #[ignore]

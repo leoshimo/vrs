@@ -14,7 +14,7 @@ use crate::connection::Error as ConnError;
 
 use crate::{Connection, ProcessHandle, Program, Response};
 
-use super::program::{Extern, Fiber, Pattern, Val, Form, KeywordId};
+use super::program::{Extern, Fiber, Form, KeywordId, Pattern, Val};
 use crate::rt::{Error, Result};
 
 /// Handles process IO requests
@@ -45,7 +45,6 @@ pub enum IOCmd {
     RegisterAsService(Registration),
     ListServices,
     QueryService(KeywordId, ServiceQuery),
-
     Subscribe(KeywordId),
     Publish(KeywordId, Val),
 }
