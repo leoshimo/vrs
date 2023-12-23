@@ -8,17 +8,16 @@ use super::ProcessId;
 use tokio::process::Command;
 use tracing::{debug, error};
 
-use crate::connection::Error as ConnError;
+use crate::{ProcessHandle, Program};
 
-use crate::{Connection, ProcessHandle, Program, Response};
-
-use super::program::{Extern, Fiber, Form, KeywordId, Pattern, Val};
+use super::program::{Extern, Fiber, KeywordId, Pattern, Val};
 use crate::rt::{Error, Result};
 
 /// Handles process IO requests
+#[derive(Debug, Clone)]
 pub(crate) struct ProcIO {
     pid: ProcessId,
-    conn: Option<Connection>,
+    // conn: Option<Connection>,
     pending: Option<u32>,
     mailbox: Option<MailboxHandle>,
     registry: Option<Registry>,
@@ -30,9 +29,8 @@ pub(crate) struct ProcIO {
 /// Set of IO command ProcIO can handle
 #[derive(Debug, Clone, PartialEq)]
 pub enum IOCmd {
-    RecvRequest,
-    SendResponse(Val),
-
+    // RecvRequest,
+    // SendResponse(Val),
     ListProcesses,
     KillProcess(ProcessId),
     Spawn(Program),
@@ -63,7 +61,6 @@ impl ProcIO {
     pub(crate) fn new(pid: ProcessId) -> Self {
         Self {
             pid,
-            conn: None,
             pending: None,
             kernel: None,
             registry: None,
@@ -71,12 +68,6 @@ impl ProcIO {
             mailbox: None,
             self_handle: None,
         }
-    }
-
-    /// Set connection on IO
-    pub(crate) fn conn(&mut self, conn: Connection) -> &mut Self {
-        self.conn = Some(conn);
-        self
     }
 
     /// Set kernel handle
@@ -108,8 +99,8 @@ impl ProcIO {
     /// Poll for IO event
     pub(crate) async fn dispatch_io(&mut self, _fiber: &mut Fiber, cmd: IOCmd) -> Result<Val> {
         match cmd {
-            IOCmd::RecvRequest => self.recv_request().await,
-            IOCmd::SendResponse(v) => self.send_response(v).await,
+            // IOCmd::RecvRequest => self.recv_request().await,
+            // IOCmd::SendResponse(v) => self.send_response(v).await,
             IOCmd::ListProcesses => self.list_processes().await,
             IOCmd::KillProcess(pid) => self.kill_process(pid).await,
             IOCmd::SendMessage(dst, val) => self.send_message(dst, val).await,
@@ -256,33 +247,33 @@ impl ProcIO {
         }
     }
 
-    async fn recv_request(&mut self) -> Result<Val> {
-        let conn = self.conn.as_mut().ok_or(Error::IOFailed)?;
-        if self.pending.is_some() {
-            return Err(Error::IOFailed); // HACK: only one pending at a time. Needs Client-equivalent on Runtime-side
-        }
+    // async fn recv_request(&mut self) -> Result<Val> {
+    //     let conn = self.conn.as_mut().ok_or(Error::IOFailed)?;
+    //     if self.pending.is_some() {
+    //         return Err(Error::IOFailed); // HACK: only one pending at a time. Needs Client-equivalent on Runtime-side
+    //     }
 
-        let req = conn
-            .recv_req()
-            .await
-            .ok_or(Error::ConnectionClosed)?
-            .map_err(|e| Error::IOError(format!("{}", e)))?;
-        self.pending = Some(req.id);
-        Ok(req.contents.into())
-    }
+    //     let req = conn
+    //         .recv_req()
+    //         .await
+    //         .ok_or(Error::ConnectionClosed)?
+    //         .map_err(|e| Error::IOError(format!("{}", e)))?;
+    //     self.pending = Some(req.id);
+    //     Ok(req.contents.into())
+    // }
 
-    async fn send_response(&mut self, v: Val) -> Result<Val> {
-        let conn = self.conn.as_mut().ok_or(Error::IOFailed)?;
-        let pending = self.pending.take().ok_or(Error::IOFailed)?;
-        let contents: lyric::Result<Form> = v.try_into();
-        conn.send_resp(Response {
-            req_id: pending,
-            contents: contents.map_err(ConnError::EvaluationError),
-        })
-        .await
-        .map_err(|e| Error::IOError(format!("{}", e)))?;
-        Ok(Val::keyword("ok"))
-    }
+    // async fn send_response(&mut self, v: Val) -> Result<Val> {
+    //     let conn = self.conn.as_mut().ok_or(Error::IOFailed)?;
+    //     let pending = self.pending.take().ok_or(Error::IOFailed)?;
+    //     let contents: lyric::Result<Form> = v.try_into();
+    //     conn.send_resp(Response {
+    //         req_id: pending,
+    //         contents: contents.map_err(ConnError::EvaluationError),
+    //     })
+    //     .await
+    //     .map_err(|e| Error::IOError(format!("{}", e)))?;
+    //     Ok(Val::keyword("ok"))
+    // }
 
     async fn subscribe(&self, topic: KeywordId) -> Result<Val> {
         let pubsub = self

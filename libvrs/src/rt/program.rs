@@ -1,10 +1,11 @@
+#![allow(dead_code)]
 //! Program that specifies a process
 
 use lyric::{Error, Result, SymbolId};
 
 use super::bindings;
 use super::proc::ProcessId;
-use super::proc_io::IOCmd;
+use super::proc_io::{IOCmd, ProcIO};
 
 /// Program used to spawn new processes
 #[derive(Debug, Clone)]
@@ -54,10 +55,19 @@ pub enum Extern {
 }
 
 /// Locals for Program Fiber
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Locals {
     /// Id of process owning fiber
     pub(crate) pid: ProcessId,
+    /// IO sources
+    pub(crate) io: ProcIO,
+}
+
+impl std::cmp::PartialEq for Locals {
+    fn eq(&self, other: &Self) -> bool {
+        use std::ptr;
+        self.pid == other.pid && ptr::eq(&self.io, &other.io)
+    }
 }
 
 impl Program {

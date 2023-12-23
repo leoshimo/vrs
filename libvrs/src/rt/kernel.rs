@@ -163,9 +163,8 @@ impl Kernel {
                 let _ = tx.send(hdl);
                 Ok(())
             }
-            Event::SpawnConnProc(conn, tx) => {
-                let proc =
-                    Process::from_prog(self.next_pid(), program::connection_program()).conn(conn);
+            Event::SpawnConnProc(_, tx) => {
+                let proc = Process::from_prog(self.next_pid(), program::connection_program());
                 let hdl = self.spawn(proc)?;
                 let _ = tx.send(hdl);
                 Ok(())
@@ -308,19 +307,15 @@ mod tests {
 
     #[tokio::test]
     async fn kernel_drop() {
-        let (local, _remote) = Connection::pair().unwrap();
         let k = start();
         let hdl = k
-            .spawn_for_conn(local)
+            .spawn_prog(Program::from_expr("(loop (sleep 0))").unwrap())
             .await
             .expect("Kernel should spawn new process");
 
         drop(k); // drop kernel
 
-        let proc_exit = tokio::spawn(async move {
-            let _ = hdl.join().await;
-        });
-        let _ = timeout(Duration::from_millis(5), proc_exit)
+        let _ = timeout(Duration::from_millis(5), hdl.join())
             .await
             .expect("Process should terminate for dropped kernel before timeout");
     }

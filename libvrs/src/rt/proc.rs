@@ -6,7 +6,7 @@ use super::pubsub::PubSubHandle;
 use super::registry::Registry;
 use crate::rt::mailbox::{Mailbox, MailboxHandle};
 use crate::rt::{Error, Result};
-use crate::{Connection, Program};
+use crate::Program;
 use futures::future::{FutureExt, Shared};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinSet;
@@ -24,7 +24,6 @@ pub struct Process {
     id: ProcessId,
     prog: Program,
     locals: Locals,
-    io: ProcIO,
 }
 
 /// A handle to [Process]
@@ -57,35 +56,29 @@ pub struct ProcessExit {
 impl Process {
     /// Create a new process for program
     pub(crate) fn from_prog(id: ProcessId, prog: Program) -> Self {
+        let io = ProcIO::new(id);
         Self {
             id,
             prog,
-            locals: Locals { pid: id },
-            io: ProcIO::new(id),
+            locals: Locals { pid: id, io },
         }
-    }
-
-    /// Set connection on process
-    pub(crate) fn conn(mut self, conn: Connection) -> Self {
-        self.io.conn(conn);
-        self
     }
 
     /// Set kernel handle for process
     pub(crate) fn kernel(mut self, k: WeakKernelHandle) -> Self {
-        self.io.kernel(k);
+        self.locals.io.kernel(k);
         self
     }
 
     /// Set registry handle for process
     pub(crate) fn registry(mut self, r: Registry) -> Self {
-        self.io.registry(r);
+        self.locals.io.registry(r);
         self
     }
 
     /// Set pubsub handle for process
     pub(crate) fn pubsub(mut self, pubsub: PubSubHandle) -> Self {
-        self.io.pubsub(pubsub);
+        self.locals.io.pubsub(pubsub);
         self
     }
 
@@ -96,10 +89,8 @@ impl Process {
         let (exit_tx, exit_rx) = oneshot::channel();
         let (msg_tx, mut msg_rx) = mpsc::channel(32);
 
-        let mut fiber = self.prog.into_fiber(self.locals);
-
         let mailbox: MailboxHandle = Mailbox::spawn(self.id);
-        self.io.mailbox(mailbox.clone());
+        self.locals.io.mailbox(mailbox.clone());
 
         let proc_hdl = ProcessHandle {
             id: self.id,
@@ -107,8 +98,9 @@ impl Process {
             exit_rx: exit_rx.shared(),
             mailbox,
         };
+        self.locals.io.handle(proc_hdl.clone());
 
-        self.io.handle(proc_hdl.clone());
+        let mut fiber = self.prog.into_fiber(self.locals);
 
         procs.spawn(async move {
             // TODO: Implement ProcessResult::Disconnected when Error::ConnectionClosed is returned
