@@ -88,6 +88,12 @@ impl Registry {
     }
 }
 
+impl std::cmp::PartialEq for Registry {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(&self.tx, &other.tx)
+    }
+}
+
 impl RegistryTask {
     fn new(weak_tx: mpsc::WeakSender<Cmd>) -> Self {
         Self {

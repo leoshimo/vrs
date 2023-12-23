@@ -104,6 +104,12 @@ impl PubSubHandle {
     }
 }
 
+impl std::cmp::PartialEq for PubSubHandle {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(&self.tx, &other.tx)
+    }
+}
+
 impl PubSub {
     /// Spawn a new global pubsub task
     pub(crate) fn spawn() -> PubSubHandle {

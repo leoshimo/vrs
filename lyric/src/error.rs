@@ -30,4 +30,7 @@ pub enum Error {
 
     #[error("Unexpected top-level fiber yield")]
     UnexpectedTopLevelYield,
+
+    #[error("Runtime error - {0}")]
+    Runtime(String),
 }

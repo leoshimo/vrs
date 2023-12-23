@@ -56,29 +56,28 @@ pub struct ProcessExit {
 impl Process {
     /// Create a new process for program
     pub(crate) fn from_prog(id: ProcessId, prog: Program) -> Self {
-        let io = ProcIO::new(id);
         Self {
             id,
             prog,
-            locals: Locals { pid: id, io },
+            locals: Locals::new(id),
         }
     }
 
     /// Set kernel handle for process
     pub(crate) fn kernel(mut self, k: WeakKernelHandle) -> Self {
-        self.locals.io.kernel(k);
+        self.locals.kernel(k);
         self
     }
 
     /// Set registry handle for process
     pub(crate) fn registry(mut self, r: Registry) -> Self {
-        self.locals.io.registry(r);
+        self.locals.registry(r);
         self
     }
 
     /// Set pubsub handle for process
     pub(crate) fn pubsub(mut self, pubsub: PubSubHandle) -> Self {
-        self.locals.io.pubsub(pubsub);
+        self.locals.pubsub(pubsub);
         self
     }
 
@@ -90,15 +89,13 @@ impl Process {
         let (msg_tx, mut msg_rx) = mpsc::channel(32);
 
         let mailbox: MailboxHandle = Mailbox::spawn(self.id);
-        self.locals.io.mailbox(mailbox.clone());
-
         let proc_hdl = ProcessHandle {
             id: self.id,
             hdl_tx: msg_tx,
             exit_rx: exit_rx.shared(),
             mailbox,
         };
-        self.locals.io.handle(proc_hdl.clone());
+        self.locals.handle(proc_hdl.clone());
 
         let mut fiber = self.prog.into_fiber(self.locals);
 
@@ -163,6 +160,12 @@ impl ProcessHandle {
     /// Send a new message to process's mailbox
     pub(crate) async fn notify_message(&self, msg: Message) {
         let _ = self.mailbox.push(msg).await;
+    }
+}
+
+impl std::cmp::PartialEq for ProcessHandle {
+    fn eq(&self, other: &Self) -> bool {
+        self.id() == other.id()
     }
 }
 

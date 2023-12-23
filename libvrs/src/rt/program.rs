@@ -3,9 +3,14 @@
 
 use lyric::{Error, Result, SymbolId};
 
+use crate::ProcessHandle;
+
 use super::bindings;
+use super::kernel::WeakKernelHandle;
 use super::proc::ProcessId;
-use super::proc_io::{IOCmd, ProcIO};
+use super::proc_io::IOCmd;
+use super::pubsub::PubSubHandle;
+use super::registry::Registry;
 
 /// Program used to spawn new processes
 #[derive(Debug, Clone)]
@@ -55,19 +60,18 @@ pub enum Extern {
 }
 
 /// Locals for Program Fiber
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Locals {
     /// Id of process owning fiber
     pub(crate) pid: ProcessId,
-    /// IO sources
-    pub(crate) io: ProcIO,
-}
-
-impl std::cmp::PartialEq for Locals {
-    fn eq(&self, other: &Self) -> bool {
-        use std::ptr;
-        self.pid == other.pid && ptr::eq(&self.io, &other.io)
-    }
+    /// Handle to kernel process
+    pub(crate) kernel: Option<WeakKernelHandle>,
+    /// Handle to process registry
+    pub(crate) registry: Option<Registry>,
+    /// Handle to pubsub
+    pub(crate) pubsub: Option<PubSubHandle>,
+    /// Handle to current process
+    pub(crate) self_handle: Option<ProcessHandle>,
 }
 
 impl Program {
@@ -115,6 +119,39 @@ pub fn connection_program() -> Program {
         .expect("Connection program should compile")
 }
 
+impl Locals {
+    pub(crate) fn new(pid: ProcessId) -> Self {
+        Self {
+            pid,
+            kernel: None,
+            registry: None,
+            pubsub: None,
+            self_handle: None,
+        }
+    }
+
+    pub(crate) fn kernel(&mut self, kernel: WeakKernelHandle) -> &mut Self {
+        self.kernel = Some(kernel);
+        self
+    }
+
+    pub(crate) fn registry(&mut self, registry: Registry) -> &mut Self {
+        self.registry = Some(registry);
+        self
+    }
+
+    pub(crate) fn pubsub(&mut self, pubsub: PubSubHandle) -> &mut Self {
+        self.pubsub = Some(pubsub);
+        self
+    }
+
+    pub(crate) fn handle(&mut self, handle: ProcessHandle) -> &mut Self {
+        //
+        self.self_handle = Some(handle);
+        self
+    }
+}
+
 impl PartialEq for Program {
     fn eq(&self, _other: &Self) -> bool {
         false
@@ -150,7 +187,7 @@ fn program_env() -> Env {
     {
         e.bind_native(SymbolId::from("kill"), bindings::kill_fn())
             .bind_native(SymbolId::from("pid"), bindings::pid_fn())
-            .bind_native(SymbolId::from("ps"), bindings::ps_fn())
+            .bind_native_async(SymbolId::from("ps"), bindings::ps_fn())
             .bind_native(SymbolId::from("self"), bindings::self_fn())
             .bind_native_async(SymbolId::from("sleep"), bindings::sleep_fn())
             .bind_native(SymbolId::from("spawn"), bindings::spawn_fn());

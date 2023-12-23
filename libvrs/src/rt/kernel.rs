@@ -121,6 +121,12 @@ impl WeakKernelHandle {
     }
 }
 
+impl std::cmp::PartialEq for WeakKernelHandle {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(&self.ev_tx, &other.ev_tx)
+    }
+}
+
 /// Messages for [Kernel]
 #[derive(Debug)]
 pub enum Event {

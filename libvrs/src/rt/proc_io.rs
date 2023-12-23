@@ -31,7 +31,8 @@ pub(crate) struct ProcIO {
 pub enum IOCmd {
     // RecvRequest,
     // SendResponse(Val),
-    ListProcesses,
+
+    // ListProcesses,
     KillProcess(ProcessId),
     Spawn(Program),
 
@@ -101,7 +102,6 @@ impl ProcIO {
         match cmd {
             // IOCmd::RecvRequest => self.recv_request().await,
             // IOCmd::SendResponse(v) => self.send_response(v).await,
-            IOCmd::ListProcesses => self.list_processes().await,
             IOCmd::KillProcess(pid) => self.kill_process(pid).await,
             IOCmd::SendMessage(dst, val) => self.send_message(dst, val).await,
             IOCmd::ListMessages => self.list_message().await,
@@ -114,22 +114,6 @@ impl ProcIO {
             IOCmd::Subscribe(topic) => self.subscribe(topic).await,
             IOCmd::Publish(topic, val) => self.publish(topic, val).await,
         }
-    }
-
-    /// List Processes
-    async fn list_processes(&self) -> Result<Val> {
-        let kernel = self
-            .kernel
-            .as_ref()
-            .and_then(|k| k.upgrade())
-            .ok_or(Error::NoKernel)?;
-        let procs = kernel
-            .procs()
-            .await?
-            .into_iter()
-            .map(|pid| Val::Extern(Extern::ProcessId(pid)))
-            .collect::<Vec<_>>();
-        Ok(Val::List(procs))
     }
 
     /// Kill process

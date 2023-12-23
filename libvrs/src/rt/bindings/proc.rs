@@ -1,8 +1,8 @@
 //! Process Management Bindings
 use crate::rt::proc_io::IOCmd;
-use crate::rt::program::{Extern, NativeAsyncFn, NativeFn, NativeFnOp, Program, Val};
+use crate::rt::program::{Extern, Fiber, NativeAsyncFn, NativeFn, NativeFnOp, Program, Val};
 use crate::rt::ProcessId;
-use lyric::Error;
+use lyric::{Error, Result};
 use std::time::Duration;
 use tokio::time;
 use tracing::debug;
@@ -37,13 +37,9 @@ pub(crate) fn pid_fn() -> NativeFn {
 }
 
 /// Binding to list processes
-pub(crate) fn ps_fn() -> NativeFn {
-    NativeFn {
-        func: |_, _| {
-            Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
-                IOCmd::ListProcesses,
-            )))))
-        },
+pub(crate) fn ps_fn() -> NativeAsyncFn {
+    NativeAsyncFn {
+        func: |f, _| Box::new(ps_impl(f)),
     }
 }
 
@@ -112,13 +108,34 @@ pub(crate) fn spawn_fn() -> NativeFn {
     }
 }
 
+/// Implementation for ps
+async fn ps_impl(fiber: &mut Fiber) -> Result<Val> {
+    let kernel = fiber
+        .locals()
+        .kernel
+        .as_ref()
+        .and_then(|k| k.upgrade())
+        .ok_or(Error::Runtime(
+            "Kernel is missing for process".into(),
+        ))?;
+    let procs = kernel
+        .procs()
+        .await
+        .map_err(|e| Error::Runtime(format!("{e}")))?
+        .into_iter()
+        .map(|pid| Val::Extern(Extern::ProcessId(pid)))
+        .collect::<Vec<_>>();
+    Ok(Val::List(procs))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::rt::{kernel, ProcessResult};
+    use assert_matches::assert_matches;
 
     #[tokio::test]
-    async fn self_pid() {
+    async fn binding_self() {
         let k = kernel::start();
         let hdl = k
             .spawn_prog(Program::from_expr("(self)").unwrap())
@@ -147,6 +164,23 @@ mod tests {
         assert_eq!(
             exit.status.unwrap(),
             ProcessResult::Done(Val::keyword("ok"))
+        );
+    }
+
+    #[tokio::test]
+    async fn ps() {
+        let k = kernel::start();
+        let hdl = k
+            .spawn_prog(Program::from_expr("(ps)").unwrap())
+            .await
+            .unwrap();
+
+        let pid = Val::Extern(Extern::ProcessId(hdl.id()));
+        let exit = hdl.join().await.unwrap();
+        assert_matches!(
+            exit.status.unwrap(),
+            ProcessResult::Done(Val::List(pids)) if
+                pids.contains(&pid)
         );
     }
 }
