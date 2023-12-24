@@ -5,8 +5,7 @@ use super::mailbox::{MailboxHandle, Message};
 use super::pubsub::PubSubHandle;
 use super::registry::{Registration, Registry};
 use super::ProcessId;
-use tokio::process::Command;
-use tracing::{debug, error};
+use tracing::error;
 
 use crate::ProcessHandle;
 
@@ -31,8 +30,6 @@ pub(crate) struct ProcIO {
 pub enum IOCmd {
     // RecvRequest,
     // SendResponse(Val),
-    Exec(String, Vec<String>),
-
     RegisterAsService(Registration),
     ListServices,
     QueryService(KeywordId, ServiceQuery),
@@ -93,36 +90,11 @@ impl ProcIO {
         match cmd {
             // IOCmd::RecvRequest => self.recv_request().await,
             // IOCmd::SendResponse(v) => self.send_response(v).await,
-            IOCmd::Exec(prog, args) => self.exec(prog, args).await,
             IOCmd::RegisterAsService(reg) => self.register_self(reg).await,
             IOCmd::ListServices => self.list_services().await,
             IOCmd::QueryService(svc, info) => self.query_service(svc, info).await,
             IOCmd::Subscribe(topic) => self.subscribe(topic).await,
             IOCmd::Publish(topic, val) => self.publish(topic, val).await,
-        }
-    }
-
-    /// Execute specified program
-    async fn exec(&self, prog: String, args: Vec<String>) -> Result<Val> {
-        debug!("exec {:?} {:?}", &prog, &args);
-        let mut cmd = Command::new(prog.clone())
-            .args(args.clone())
-            .spawn()
-            .map_err(|e| Error::IOError(format!("{}", e)))?;
-        let exit_status = cmd
-            .wait()
-            .await
-            .map_err(|e| Error::IOError(format!("{}", e)))?;
-
-        if exit_status.success() {
-            debug!("exec {:?} {:?} - {:?}", prog, args, exit_status);
-            Ok(Val::keyword("ok"))
-        } else {
-            error!("exec {:?} {:?} - {:?}", prog, args, exit_status);
-            Err(Error::ExecError(format!(
-                "Failed to execute - {}",
-                exit_status
-            )))
         }
     }
 
