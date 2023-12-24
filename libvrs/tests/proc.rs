@@ -4,7 +4,6 @@ use std::time::Duration;
 use tokio::time::timeout;
 use vrs::{Extern, ProcessResult, Program, Runtime, Val};
 
-#[ignore] // TODO: Spawn bindings
 #[tokio::test]
 async fn spawn_pid_is_different() {
     let rt = Runtime::new();
@@ -35,7 +34,6 @@ async fn spawn_pid_is_different() {
     )
 }
 
-#[ignore] // TODO: Spawn bindings
 #[tokio::test]
 async fn spawn_env_isolated() {
     let rt = Runtime::new();

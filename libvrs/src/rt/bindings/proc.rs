@@ -1,5 +1,4 @@
 //! Process Management Bindings
-use crate::rt::proc_io::IOCmd;
 use crate::rt::program::{Extern, Fiber, NativeAsyncFn, NativeFn, NativeFnOp, Program, Val};
 use crate::rt::ProcessId;
 use lyric::{Error, Result};
@@ -44,23 +43,9 @@ pub(crate) fn ps_fn() -> NativeAsyncFn {
 }
 
 /// Binding to kill process
-pub(crate) fn kill_fn() -> NativeFn {
-    NativeFn {
-        func: |_, args| {
-            let pid = match args {
-                [Val::Extern(Extern::ProcessId(pid))] => *pid,
-                [Val::Int(pid)] => ProcessId::from(*pid as usize),
-                _ => {
-                    return Err(Error::UnexpectedArguments(
-                        "kill should have one integer argument".to_string(),
-                    ))
-                }
-            };
-
-            Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
-                IOCmd::KillProcess(pid),
-            )))))
-        },
+pub(crate) fn kill_fn() -> NativeAsyncFn {
+    NativeAsyncFn {
+        func: |f, args| Box::new(kill_impl(f, args)),
     }
 }
 
@@ -88,36 +73,20 @@ pub(crate) fn sleep_fn() -> NativeAsyncFn {
 }
 
 /// Binding for spawn
-pub(crate) fn spawn_fn() -> NativeFn {
-    NativeFn {
-        func: |_, args| {
-            let lambda = match args {
-                [Val::Lambda(l)] => l.clone(),
-                _ => {
-                    return Err(Error::UnexpectedArguments(
-                        "spawn expects single lambda".to_string(),
-                    ))
-                }
-            };
-
-            let prog = Program::from_lambda(lambda)?;
-            Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
-                IOCmd::Spawn(prog),
-            )))))
-        },
+pub(crate) fn spawn_fn() -> NativeAsyncFn {
+    NativeAsyncFn {
+        func: |f, args| Box::new(spawn_impl(f, args)),
     }
 }
 
-/// Implementation for ps
+/// Implementation for (ps)
 async fn ps_impl(fiber: &mut Fiber) -> Result<Val> {
     let kernel = fiber
         .locals()
         .kernel
         .as_ref()
         .and_then(|k| k.upgrade())
-        .ok_or(Error::Runtime(
-            "Kernel is missing for process".into(),
-        ))?;
+        .ok_or(Error::Runtime("Kernel is missing for process".into()))?;
     let procs = kernel
         .procs()
         .await
@@ -126,6 +95,54 @@ async fn ps_impl(fiber: &mut Fiber) -> Result<Val> {
         .map(|pid| Val::Extern(Extern::ProcessId(pid)))
         .collect::<Vec<_>>();
     Ok(Val::List(procs))
+}
+
+/// Implementation for (kill PID)
+async fn kill_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
+    let pid = match args[..] {
+        [Val::Extern(Extern::ProcessId(pid))] => pid,
+        [Val::Int(pid)] => ProcessId::from(pid as usize),
+        _ => {
+            return Err(Error::UnexpectedArguments(
+                "kill should have one integer argument".to_string(),
+            ))
+        }
+    };
+    let kernel = fiber
+        .locals()
+        .kernel
+        .as_ref()
+        .and_then(|k| k.upgrade())
+        .ok_or(Error::Runtime("Kernel is missing for process".to_string()))?;
+    kernel
+        .kill_proc(pid)
+        .await
+        .map_err(|e| Error::Runtime(format!("{e}")))?;
+    Ok(Val::keyword("ok"))
+}
+
+/// Implementation for (spawn PROG)
+async fn spawn_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
+    let lambda = match args.as_slice() {
+        [Val::Lambda(l)] => l.clone(),
+        _ => {
+            return Err(Error::UnexpectedArguments(
+                "spawn expects single lambda".to_string(),
+            ))
+        }
+    };
+    let prog = Program::from_lambda(lambda)?;
+    let kernel = fiber
+        .locals()
+        .kernel
+        .as_ref()
+        .and_then(|k| k.upgrade())
+        .ok_or(Error::Runtime("Kernel is missing for process".to_string()))?;
+    let hdl = kernel
+        .spawn_prog(prog)
+        .await
+        .map_err(|e| Error::Runtime(format!("{e}")))?;
+    Ok(Val::Extern(Extern::ProcessId(hdl.id())))
 }
 
 #[cfg(test)]
@@ -181,6 +198,70 @@ mod tests {
             exit.status.unwrap(),
             ProcessResult::Done(Val::List(pids)) if
                 pids.contains(&pid)
+        );
+    }
+
+    #[tokio::test]
+    async fn kill() {
+        use tokio::time;
+
+        let k = kernel::start();
+
+        let kill_target = k
+            .spawn_prog(Program::from_expr("(loop (sleep 0))").unwrap())
+            .await
+            .unwrap();
+
+        let kill_src = k
+            .spawn_prog(
+                Program::from_expr(&format!("(kill (pid {}))", kill_target.id().inner())).unwrap(),
+            )
+            .await
+            .unwrap();
+
+        kill_src.join().await.expect("kill_src should terminate");
+
+        let killed_exit = time::timeout(Duration::from_millis(0), kill_target.join())
+            .await
+            .expect("kill_target process should terminate")
+            .unwrap();
+        assert_eq!(killed_exit.status.unwrap(), ProcessResult::Cancelled);
+    }
+
+    #[tokio::test]
+    async fn binding_spawn() {
+        let k = kernel::start();
+
+        let prog = r#"(begin
+            (spawn (lambda () (loop (sleep 0)))) # spawn infinite loop
+        )"#;
+        let hdl = k
+            .spawn_prog(Program::from_expr(prog).unwrap())
+            .await
+            .unwrap();
+
+        let origin_pid = hdl.id();
+
+        let exit = hdl.join().await.unwrap();
+
+        let spawned_pid = match exit.status.unwrap() {
+            ProcessResult::Done(Val::Extern(Extern::ProcessId(spawned_pid))) => spawned_pid,
+            _ => panic!("Process should terminate w/ PID return value of (spawn ...)"),
+        };
+
+        assert!(
+            origin_pid != spawned_pid,
+            "Origin and spawned PID should be different"
+        );
+
+        let running = k.procs().await.unwrap();
+        assert!(
+            !running.contains(&origin_pid),
+            "Origin pid should be terminated"
+        );
+        assert!(
+            running.contains(&spawned_pid),
+            "Spawned pid should still be running"
         );
     }
 }

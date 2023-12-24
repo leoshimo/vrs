@@ -8,9 +8,9 @@ use super::ProcessId;
 use tokio::process::Command;
 use tracing::{debug, error};
 
-use crate::{ProcessHandle, Program};
+use crate::ProcessHandle;
 
-use super::program::{Extern, Fiber, KeywordId, Pattern, Val};
+use super::program::{Extern, Fiber, KeywordId, Val};
 use crate::rt::{Error, Result};
 
 /// Handles process IO requests
@@ -31,15 +31,6 @@ pub(crate) struct ProcIO {
 pub enum IOCmd {
     // RecvRequest,
     // SendResponse(Val),
-
-    // ListProcesses,
-    KillProcess(ProcessId),
-    Spawn(Program),
-
-    SendMessage(ProcessId, Val),
-    Recv(Option<Pattern>),
-    ListMessages,
-
     Exec(String, Vec<String>),
 
     RegisterAsService(Registration),
@@ -102,57 +93,13 @@ impl ProcIO {
         match cmd {
             // IOCmd::RecvRequest => self.recv_request().await,
             // IOCmd::SendResponse(v) => self.send_response(v).await,
-            IOCmd::KillProcess(pid) => self.kill_process(pid).await,
-            IOCmd::SendMessage(dst, val) => self.send_message(dst, val).await,
-            IOCmd::ListMessages => self.list_message().await,
             IOCmd::Exec(prog, args) => self.exec(prog, args).await,
-            IOCmd::Recv(pat) => self.handle_recv(pat).await,
-            IOCmd::Spawn(prog) => self.spawn_prog(prog).await,
             IOCmd::RegisterAsService(reg) => self.register_self(reg).await,
             IOCmd::ListServices => self.list_services().await,
             IOCmd::QueryService(svc, info) => self.query_service(svc, info).await,
             IOCmd::Subscribe(topic) => self.subscribe(topic).await,
             IOCmd::Publish(topic, val) => self.publish(topic, val).await,
         }
-    }
-
-    /// Kill process
-    async fn kill_process(&self, pid: ProcessId) -> Result<Val> {
-        let kernel = self
-            .kernel
-            .as_ref()
-            .and_then(|k| k.upgrade())
-            .ok_or(Error::NoKernel)?;
-        kernel.kill_proc(pid).await?;
-        Ok(Val::keyword("ok"))
-    }
-
-    /// Send message to another process
-    async fn send_message(&self, dst: ProcessId, msg: Val) -> Result<Val> {
-        let kernel = self
-            .kernel
-            .as_ref()
-            .and_then(|k| k.upgrade())
-            .ok_or(Error::NoKernel)?;
-        kernel.send_message(self.pid, dst, msg.clone()).await?;
-        Ok(msg)
-    }
-
-    /// Handle recv command
-    async fn handle_recv(&self, pat: Option<Pattern>) -> Result<Val> {
-        let mailbox = self.mailbox.as_ref().ok_or(Error::NoMailbox)?;
-        let msg = mailbox.poll(pat).await?;
-        Ok(msg.contents)
-    }
-
-    /// List messages in mailbox
-    async fn list_message(&self) -> Result<Val> {
-        let mailbox = self.mailbox.as_ref().ok_or(Error::NoMailbox)?;
-
-        let msgs = mailbox.all().await?;
-        let msg_vals = msgs.into_iter().map(|m| m.contents).collect();
-
-        Ok(Val::List(msg_vals))
     }
 
     /// Execute specified program
@@ -177,18 +124,6 @@ impl ProcIO {
                 exit_status
             )))
         }
-    }
-
-    /// Spawn given process
-    async fn spawn_prog(&self, prog: Program) -> Result<Val> {
-        debug!("spawn_prog {:?}", &prog);
-        let kernel = self
-            .kernel
-            .as_ref()
-            .and_then(|k| k.upgrade())
-            .ok_or(Error::NoKernel)?;
-        let hdl = kernel.spawn_prog(prog).await?;
-        Ok(Val::Extern(Extern::ProcessId(hdl.id())))
     }
 
     /// Register itself as a process

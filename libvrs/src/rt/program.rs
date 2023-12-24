@@ -185,12 +185,12 @@ fn program_env() -> Env {
     }
 
     {
-        e.bind_native(SymbolId::from("kill"), bindings::kill_fn())
+        e.bind_native_async(SymbolId::from("kill"), bindings::kill_fn())
             .bind_native(SymbolId::from("pid"), bindings::pid_fn())
             .bind_native_async(SymbolId::from("ps"), bindings::ps_fn())
             .bind_native(SymbolId::from("self"), bindings::self_fn())
             .bind_native_async(SymbolId::from("sleep"), bindings::sleep_fn())
-            .bind_native(SymbolId::from("spawn"), bindings::spawn_fn());
+            .bind_native_async(SymbolId::from("spawn"), bindings::spawn_fn());
     }
 
     {

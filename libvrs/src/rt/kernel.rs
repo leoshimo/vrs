@@ -233,7 +233,7 @@ impl Kernel {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Client, Connection, ProcessResult, Request};
+    use crate::{Client, Connection, ProcessResult};
     use assert_matches::assert_matches;
     use lyric::{parse as p, Form};
     use std::time::Duration;
@@ -360,37 +360,42 @@ mod tests {
         assert!(k.procs().await.unwrap().is_empty(),);
     }
 
-    #[ignore] // TODO: Depends on kill binding
     #[tokio::test]
     async fn kill_proc_from_proc() {
-        let (local, mut remote) = Connection::pair().unwrap();
-        let (local_other, _remote_other) = Connection::pair().unwrap();
+        use tokio::time;
+
         let k = start();
 
-        let proc = k.spawn_for_conn(local).await.unwrap();
-        let proc_other = k.spawn_for_conn(local_other).await.unwrap();
-
-        remote
-            .send_req(Request {
-                id: 0,
-                contents: lyric::parse(&format!("(kill (pid {}))", proc_other.id().inner()))
-                    .unwrap(),
-            })
+        let kill_target = k
+            .spawn_prog(Program::from_expr("(loop (sleep 0))").unwrap())
             .await
             .unwrap();
 
-        let proc_exit = tokio::spawn(async move { proc_other.join().await });
-        let killed_exit = timeout(Duration::from_millis(5), proc_exit)
-            .await
-            .expect("Killed process should terminate")
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(killed_exit.status.unwrap(), ProcessResult::Cancelled);
         assert_eq!(
             k.procs().await.unwrap(),
-            vec![proc.id()],
-            "Only remaining process should be tracked by kernel",
+            vec![kill_target.id()],
+            "kernel procs should have running kill_target pid"
+        );
+
+        let kill_src = k
+            .spawn_prog(
+                Program::from_expr(&format!("(kill (pid {}))", kill_target.id().inner())).unwrap(),
+            )
+            .await
+            .unwrap();
+
+        kill_src.join().await.expect("kill_src should terminate");
+
+        let killed_exit = time::timeout(Duration::from_millis(0), kill_target.join())
+            .await
+            .expect("kill_target process should terminate")
+            .unwrap();
+        assert_eq!(killed_exit.status.unwrap(), ProcessResult::Cancelled);
+
+        assert_eq!(
+            k.procs().await.unwrap(),
+            vec![],
+            "kernel proc should no longer track kill_target"
         );
     }
 
