@@ -168,9 +168,9 @@ fn program_env() -> Env {
     }
 
     {
-        e.bind_native(SymbolId::from("recv"), bindings::recv_fn())
-            .bind_native(SymbolId::from("ls-msgs"), bindings::ls_msgs_fn())
-            .bind_native(SymbolId::from("send"), bindings::send_fn())
+        e.bind_native_async(SymbolId::from("recv"), bindings::recv_fn())
+            .bind_native_async(SymbolId::from("ls-msgs"), bindings::ls_msgs_fn())
+            .bind_native_async(SymbolId::from("send"), bindings::send_fn())
             .bind_lambda(SymbolId::from("call"), bindings::call_fn());
     }
 

@@ -161,6 +161,11 @@ impl ProcessHandle {
     pub(crate) async fn notify_message(&self, msg: Message) {
         let _ = self.mailbox.push(msg).await;
     }
+
+    /// Get reference to process mailbox
+    pub(crate) fn mailbox(&self) -> &MailboxHandle {
+        &self.mailbox
+    }
 }
 
 impl std::cmp::PartialEq for ProcessHandle {

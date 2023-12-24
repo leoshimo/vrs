@@ -394,7 +394,6 @@ mod tests {
         );
     }
 
-    #[ignore] // TODO: Messaging between from processes (recv)
     #[tokio::test]
     async fn spawn_progs() {
         let k = start();
