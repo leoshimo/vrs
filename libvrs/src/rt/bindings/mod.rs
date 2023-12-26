@@ -39,4 +39,3 @@ pub(crate) use service::srv_fn;
 
 pub(crate) use pubsub::publish_fn;
 pub(crate) use pubsub::subscribe_fn;
-pub(crate) use pubsub::unsubscribe_fn;

@@ -1,11 +1,10 @@
 #![allow(dead_code)] // TODO: Migrate to NativeAsyncFn bindings
 //! Process IO
 use super::kernel::WeakKernelHandle;
-use super::mailbox::{MailboxHandle, Message};
+use super::mailbox::MailboxHandle;
 use super::pubsub::PubSubHandle;
 use super::registry::{Registration, Registry};
 use super::ProcessId;
-use tracing::error;
 
 use crate::ProcessHandle;
 
@@ -33,9 +32,6 @@ pub enum IOCmd {
     RegisterAsService(Registration),
     ListServices,
     QueryService(KeywordId, ServiceQuery),
-
-    Subscribe(KeywordId),
-    Publish(KeywordId, Val),
 }
 
 /// Options for QueryService
@@ -93,8 +89,6 @@ impl ProcIO {
             IOCmd::RegisterAsService(reg) => self.register_self(reg).await,
             IOCmd::ListServices => self.list_services().await,
             IOCmd::QueryService(svc, info) => self.query_service(svc, info).await,
-            IOCmd::Subscribe(topic) => self.subscribe(topic).await,
-            IOCmd::Publish(topic, val) => self.publish(topic, val).await,
         }
     }
 
@@ -165,47 +159,4 @@ impl ProcIO {
     //     .map_err(|e| Error::IOError(format!("{}", e)))?;
     //     Ok(Val::keyword("ok"))
     // }
-
-    async fn subscribe(&self, topic: KeywordId) -> Result<Val> {
-        let pubsub = self
-            .pubsub
-            .as_ref()
-            .ok_or(Error::NoIOResource("no pubsub for process".to_string()))?;
-        let mb = self.mailbox.as_ref().ok_or(Error::NoMailbox)?.clone();
-        let mut sub = pubsub.subscribe(&topic).await?;
-
-        // TODO: Should process keep track of active subscriptions via some task handle?
-        tokio::spawn(async move {
-            while let Some(ev) = sub.recv().await {
-                let msg = Message {
-                    contents: Val::List(vec![
-                        Val::keyword("topic_updated"),
-                        Val::Keyword(topic.clone()),
-                        ev,
-                    ]),
-                };
-                if let Err(e) = mb.push(msg).await {
-                    error!("Error while pushing subscription event to mailbox - {e}");
-                }
-            }
-        });
-
-        Ok(Val::keyword("ok"))
-    }
-
-    // TODO: Implement unsubscribe? ls-subs?
-
-    async fn publish(&self, topic: KeywordId, val: Val) -> Result<Val> {
-        let pubsub = self
-            .pubsub
-            .as_ref()
-            .ok_or(Error::NoIOResource("no pubsub for process".to_string()))?;
-
-        pubsub
-            .publish(&topic, val)
-            .await
-            .map_err(|e| Error::ProcessIOError(format!("Failed to publish on pubsub - {e}")))?;
-
-        Ok(Val::keyword("ok"))
-    }
 }

@@ -211,9 +211,8 @@ fn program_env() -> Env {
     }
 
     {
-        e.bind_native(SymbolId::from("subscribe"), bindings::subscribe_fn())
-            .bind_native(SymbolId::from("unsubscribe"), bindings::unsubscribe_fn())
-            .bind_native(SymbolId::from("publish"), bindings::publish_fn());
+        e.bind_native_async(SymbolId::from("subscribe"), bindings::subscribe_fn())
+            .bind_native_async(SymbolId::from("publish"), bindings::publish_fn());
     }
 
     e

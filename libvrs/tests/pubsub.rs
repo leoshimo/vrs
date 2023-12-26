@@ -2,7 +2,6 @@ use std::time::Duration;
 use tokio::time::timeout;
 use vrs::{ProcessResult, Program, Runtime, Val};
 
-#[ignore] // TODO: Pubsub Bindings
 #[tokio::test]
 async fn single_process_pubsub() {
     let rt = Runtime::new();
@@ -36,8 +35,8 @@ async fn single_process_pubsub() {
     );
 }
 
-#[ignore] // TODO: Pubsub Bindings
 #[tokio::test]
+#[tracing_test::traced_test]
 async fn two_process_pubsub() {
     let rt = Runtime::new();
 
