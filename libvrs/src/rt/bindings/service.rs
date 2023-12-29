@@ -3,77 +3,98 @@
 
 use lyric::{compile, kwargs, parse, Error, KeywordId, Result, SymbolId};
 
-use crate::rt::proc_io::{IOCmd, ServiceQuery};
-use crate::rt::program::{Extern, Fiber, Lambda, NativeFn, NativeFnOp, Val};
+use crate::rt::proc_io::ServiceQuery;
+use crate::rt::program::{Extern, Fiber, Lambda, NativeAsyncFn, NativeFn, NativeFnOp, Val};
 use crate::rt::registry::Registration;
 
 /// Binding for register
-pub(crate) fn register_fn() -> NativeFn {
-    NativeFn {
-        func: |_, args| {
-            let keyword = match args.first() {
-                Some(Val::Keyword(k)) => k.clone(),
-                _ => {
-                    return Err(Error::UnexpectedArguments(
-                        "register expects a keyword argument as first argument".to_string(),
-                    ))
-                }
-            };
-
-            let mut reg = Registration::new(keyword);
-            match kwargs::get(&args[1..], &KeywordId::from("interface")) {
-                Some(Val::List(interface)) => {
-                    reg.interface(interface);
-                }
-                Some(val) => {
-                    return Err(Error::UnexpectedArguments(format!(
-                        ":interface must be a list - got {}",
-                        val
-                    )))
-                }
-                None => (),
-            }
-
-            Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
-                IOCmd::RegisterAsService(reg),
-            )))))
-        },
+pub(crate) fn register_fn() -> NativeAsyncFn {
+    NativeAsyncFn {
+        func: |f, args| Box::new(register_impl(f, args)),
     }
+}
+
+/// Implementation for (register NAME [:exports EXPORT_LIST])
+async fn register_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
+    let keyword = match args.first() {
+        Some(Val::Keyword(k)) => k.clone(),
+        _ => {
+            return Err(Error::UnexpectedArguments(
+                "register expects a keyword argument as first argument".to_string(),
+            ))
+        }
+    };
+
+    let mut reg = Registration::new(keyword);
+    match kwargs::get(&args[1..], &KeywordId::from("interface")) {
+        Some(Val::List(interface)) => {
+            reg.interface(interface);
+        }
+        Some(val) => {
+            return Err(Error::UnexpectedArguments(format!(
+                ":interface must be a list - got {}",
+                val
+            )))
+        }
+        None => (),
+    }
+
+    let hdl = fiber
+        .locals()
+        .self_handle
+        .as_ref()
+        .expect("process should have self handle");
+
+    let registry = fiber
+        .locals()
+        .registry
+        .as_ref()
+        .expect("process should have registry handle");
+
+    registry
+        .register(reg, hdl.clone())
+        .await
+        .map_err(|e| Error::Runtime(format!("{e}")))?;
+
+    Ok(Val::keyword("ok"))
 }
 
 /// Binding for ls-srv
-pub(crate) fn ls_srv_fn() -> NativeFn {
-    NativeFn {
-        func: |_, args| {
-            if !args.is_empty() {
-                return Err(Error::UnexpectedArguments(
-                    "ls-srv expects no arguments".to_string(),
-                ));
-            }
-            Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
-                IOCmd::ListServices,
-            )))))
-        },
+pub(crate) fn ls_srv_fn() -> NativeAsyncFn {
+    NativeAsyncFn {
+        func: |f, args| Box::new(ls_srv_impl(f, args)),
     }
 }
 
-/// Binding for find-srv
-pub(crate) fn find_srv_fn() -> NativeFn {
-    NativeFn {
-        func: |_, args| {
-            let keyword = match args {
-                [Val::Keyword(k)] => k.clone(),
-                _ => {
-                    return Err(Error::UnexpectedArguments(
-                        "find-srv expects single keyword argument".to_string(),
-                    ))
-                }
-            };
+/// Implementation of (ls-srv)
+async fn ls_srv_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
+    if !args.is_empty() {
+        return Err(Error::UnexpectedArguments(
+            "ls-srv expects no arguments".to_string(),
+        ));
+    }
 
-            Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
-                IOCmd::QueryService(keyword, ServiceQuery::Pid),
-            )))))
-        },
+    let register = fiber
+        .locals()
+        .registry
+        .as_ref()
+        .expect("process should have registry handle");
+
+    let entries = register
+        .all()
+        .await
+        .map_err(|e| Error::Runtime(format!("{e}")))?;
+
+    let entry_values: Vec<_> = entries.into_iter().map(Val::from).collect();
+    Ok(Val::List(entry_values))
+}
+
+/// Binding for find-srv
+pub(crate) fn find_srv_fn() -> Lambda {
+    Lambda {
+        params: vec![SymbolId::from("srv_name")],
+        code: compile(&parse("(info-srv srv_name :pid)").unwrap().into()).unwrap(),
+        parent: None,
     }
 }
 
@@ -100,33 +121,47 @@ pub(crate) fn bind_srv_fn() -> Lambda {
 }
 
 /// Binding for info-srv
-pub(crate) fn info_srv_fn() -> NativeFn {
-    NativeFn {
-        func: |_, args| {
-            let (keyword, query) = match args {
-                [Val::Keyword(k), Val::Keyword(q)] => (k, q),
-                _ => {
-                    return Err(Error::UnexpectedArguments(
-                        "info-srv expects single keyword argument".to_string(),
-                    ))
-                }
-            };
+pub(crate) fn info_srv_fn() -> NativeAsyncFn {
+    NativeAsyncFn {
+        func: |f, args| Box::new(info_srv_impl(f, args)),
+    }
+}
 
-            let query = match query.as_str() {
-                "pid" => ServiceQuery::Pid,
-                "interface" => ServiceQuery::Interface,
-                q => {
-                    return Err(Error::UnexpectedArguments(format!(
-                        "info-srv got unexpected query: {}",
-                        q
-                    )))
-                }
-            };
+/// Implementation for (info-srv NAME ATTR)
+async fn info_srv_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
+    let (keyword, query) = match &args[..] {
+        [Val::Keyword(k), Val::Keyword(q)] => (k, q),
+        _ => {
+            return Err(Error::UnexpectedArguments(
+                "info-srv expects single keyword argument".to_string(),
+            ))
+        }
+    };
 
-            Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
-                IOCmd::QueryService(keyword.clone(), query),
-            )))))
-        },
+    let query = match query.as_str() {
+        "pid" => ServiceQuery::Pid,
+        "interface" => ServiceQuery::Interface,
+        q => {
+            return Err(Error::UnexpectedArguments(format!(
+                "info-srv got unexpected query: {}",
+                q
+            )))
+        }
+    };
+
+    let entry = fiber
+        .locals()
+        .registry
+        .as_ref()
+        .expect("no registry for process")
+        .lookup(keyword.clone())
+        .await
+        .map_err(|e| Error::Runtime(format!("{e}")))?
+        .ok_or(Error::Runtime(format!("No service found for {keyword}")))?;
+
+    match query {
+        ServiceQuery::Pid => Ok(Val::Extern(Extern::ProcessId(entry.pid()))),
+        ServiceQuery::Interface => Ok(Val::List(entry.interface().to_vec())),
     }
 }
 

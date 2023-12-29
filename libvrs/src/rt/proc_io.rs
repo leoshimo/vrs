@@ -3,7 +3,7 @@
 use super::kernel::WeakKernelHandle;
 use super::mailbox::MailboxHandle;
 use super::pubsub::PubSubHandle;
-use super::registry::{Registration, Registry};
+use super::registry::Registry;
 use super::ProcessId;
 
 use crate::ProcessHandle;
@@ -29,9 +29,6 @@ pub(crate) struct ProcIO {
 pub enum IOCmd {
     // RecvRequest,
     // SendResponse(Val),
-    RegisterAsService(Registration),
-    ListServices,
-    QueryService(KeywordId, ServiceQuery),
 }
 
 /// Options for QueryService
@@ -86,35 +83,7 @@ impl ProcIO {
         match cmd {
             // IOCmd::RecvRequest => self.recv_request().await,
             // IOCmd::SendResponse(v) => self.send_response(v).await,
-            IOCmd::RegisterAsService(reg) => self.register_self(reg).await,
-            IOCmd::ListServices => self.list_services().await,
-            IOCmd::QueryService(svc, info) => self.query_service(svc, info).await,
         }
-    }
-
-    /// Register itself as a process
-    async fn register_self(&self, reg: Registration) -> Result<Val> {
-        let hdl = self.self_handle.as_ref().expect("Dangling ProcIO");
-
-        self.registry
-            .as_ref()
-            .ok_or(Error::NoIOResource("No registry for process".to_string()))?
-            .register(reg, hdl.clone())
-            .await?;
-
-        Ok(Val::keyword("ok"))
-    }
-
-    /// Retrieve available services as
-    async fn list_services(&self) -> Result<Val> {
-        let entries = self
-            .registry
-            .as_ref()
-            .ok_or(Error::NoIOResource("No registry for process".to_string()))?
-            .all()
-            .await?;
-        let entry_values: Vec<_> = entries.into_iter().map(Val::from).collect();
-        Ok(Val::List(entry_values))
     }
 
     async fn query_service(&self, keyword: KeywordId, query: ServiceQuery) -> Result<Val> {

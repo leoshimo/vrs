@@ -178,19 +178,6 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                 self.stack.truncate(stack_len);
                 self.stack.push(Val::Error(e));
             }
-
-            // Cleanup for implicit returns in call frames
-            // - Must be after unwinding or catching context is lost
-            // - Must only occur while running (i.e. don't clean during pauses during yield / await)
-            let is_running = self.status == Status::Running;
-            while is_running && self.cframes.len() > 1 && self.cf().at_return() {
-                let cf = self.cframes.last().unwrap();
-                if self.stack.len() != cf.stack_len + 1 {
-                    // tracing::debug!("panic {:?}", self);
-                    panic!("Unexpected state during execution - all function are expected to have stack effect of 1. Was {}", cf.stack_len + 1);
-                }
-                let _ = self.cframes.pop();
-            }
         }
 
         match &self.status {
@@ -229,6 +216,15 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
 
     /// Run a single fetch-decode-execute cycle
     fn step(&mut self) -> Result<()> {
+        while self.cframes.len() > 1 && self.cf().at_return() {
+            let cf = self.cframes.last().unwrap();
+            if self.stack.len() != cf.stack_len + 1 {
+                // tracing::debug!("panic {:?}", self);
+                panic!("Unexpected state during execution - all function are expected to have stack effect of 1. Was {}", cf.stack_len + 1);
+            }
+            let _ = self.cframes.pop();
+        }
+
         let inst = match self.inst() {
             Some(i) => i.clone(),
             None => {

@@ -2,7 +2,6 @@
 
 use vrs::{ProcessResult, Program, Runtime, Val};
 
-#[ignore] // TODO: Service Bindings
 #[tokio::test]
 async fn srv_echo() {
     let rt = Runtime::new();
@@ -36,7 +35,6 @@ async fn srv_echo() {
     );
 }
 
-#[ignore] // TODO: Service Bindings
 #[tokio::test]
 async fn srv_multi_export() {
     let rt = Runtime::new();
@@ -63,7 +61,6 @@ async fn srv_multi_export() {
     );
 }
 
-#[ignore] // TODO: Service Bindings
 #[tokio::test]
 async fn srv_echo_invalid_msg() {
     let rt = Runtime::new();
@@ -88,7 +85,6 @@ async fn srv_echo_invalid_msg() {
     );
 }
 
-#[ignore] // TODO: Service Bindings
 #[tokio::test]
 async fn srv_echo_invalid_arg() {
     let rt = Runtime::new();
@@ -114,7 +110,6 @@ async fn srv_echo_invalid_arg() {
     );
 }
 
-#[ignore] // TODO: Service Bindings
 #[tokio::test]
 async fn spawn_echo_svc() {
     let rt = Runtime::new();

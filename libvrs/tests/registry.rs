@@ -1,9 +1,10 @@
 //! E2E Tests involving Process Registry
 
 use assert_matches::assert_matches;
-use vrs::{Connection, Error, Extern, Program, Request, Runtime, Val};
+use std::time::Duration;
+use tokio::time::timeout;
+use vrs::{Error, Extern, Program, Runtime, Val};
 
-#[ignore] // TODO: Registry Bindings
 #[tokio::test]
 async fn list_services_empty() {
     let rt = Runtime::new();
@@ -15,7 +16,6 @@ async fn list_services_empty() {
     assert_eq!(val, Val::List(vec![]));
 }
 
-#[ignore] // TODO: Registry Bindings
 #[tokio::test]
 async fn list_services() {
     let rt = Runtime::new();
@@ -70,7 +70,6 @@ async fn list_services() {
     ])));
 }
 
-#[ignore] // TODO: Registry Bindings
 #[tokio::test]
 async fn find_service() {
     let rt = Runtime::new();
@@ -87,8 +86,8 @@ async fn find_service() {
     assert_eq!(val, Val::Extern(Extern::ProcessId(srv_a.id())),);
 }
 
-#[ignore] // TODO: Registry Bindings
 #[tokio::test]
+#[tracing_test::traced_test]
 async fn find_service_dropped() {
     let rt = Runtime::new();
 
@@ -103,7 +102,9 @@ async fn find_service_dropped() {
     let hdl = rt.run(prog).await.unwrap();
     let _ = hdl.join().await.unwrap().status.unwrap().unwrap();
 
-    srv_b.join().await.expect("srv_b should terminate");
+    let _ = timeout(Duration::from_secs(0), srv_b.join())
+        .await
+        .expect("srv_b should terminate");
 
     // find-srv should return Nil after message
     let prog = Program::from_expr("(find-srv :service_b)").unwrap();
@@ -111,12 +112,11 @@ async fn find_service_dropped() {
     let val = hdl.join().await.unwrap().status;
     assert_matches!(
         val,
-        Err(Error::RegistryError(_)),
+        Err(Error::EvaluationError(lyric::Error::Runtime(s))) if s == "No service found for :service_b",
         "unknown services return error"
     );
 }
 
-#[ignore] // TODO: Registry Bindings
 #[tokio::test]
 async fn find_service_unknown() {
     let rt = Runtime::new();
@@ -133,12 +133,11 @@ async fn find_service_unknown() {
 
     assert_matches!(
         val,
-        Err(Error::RegistryError(_)),
+        Err(Error::EvaluationError(lyric::Error::Runtime(s))) if s == "No service found for :unknown",
         "unknown services return error"
     );
 }
 
-#[ignore] // TODO: Registry Bindings
 #[tokio::test]
 async fn double_register_fails() {
     let rt = Runtime::new();
@@ -153,7 +152,7 @@ async fn double_register_fails() {
         let exit_status = srv_b.join().await.unwrap().status;
         assert_matches!(
             exit_status,
-            Err(Error::RegistryError(_)),
+            Err(Error::EvaluationError(lyric::Error::Runtime(s))) if s.ends_with("Registered process exists for :service_a"),
             "svc_b should fail with error"
         );
     }
@@ -181,10 +180,8 @@ async fn double_register_fails() {
     }
 }
 
-#[ignore] // TODO: Registry Bindings
 #[tokio::test]
 async fn registry_updates_after_exit() {
-    let (conn_rt, mut conn_client) = Connection::pair().unwrap();
     let rt = Runtime::new();
 
     let srv_a = Program::from_expr("(begin (register :service_a) (recv))").unwrap();
@@ -192,8 +189,6 @@ async fn registry_updates_after_exit() {
 
     let srv_b = Program::from_expr("(begin (register :service_b) (recv))").unwrap();
     let srv_b = rt.run(srv_b).await.unwrap();
-
-    let _ = rt.handle_conn(conn_rt).await.unwrap();
 
     {
         // Baseline
@@ -207,16 +202,13 @@ async fn registry_updates_after_exit() {
         assert_eq!(svcs.len(), 2);
     }
 
-    // Message srv_b, which should exit
-    conn_client
-        .send_req(Request {
-            id: 0,
-            contents: lyric::parse(&format!("(send (pid {}) :hi)", srv_b.id().inner())).unwrap(),
-        })
-        .await
-        .unwrap();
+    // Message srv_b, which should exit after first msg
+    let msg_b = Program::from_expr(&format!("(send (pid {}) :hi)", srv_b.id().inner())).unwrap();
+    rt.run(msg_b).await.expect("msg_b should start");
+
     srv_b.join().await.expect("srv_b should have exited");
 
+    // Verify srv_b is removed from registry
     {
         let prog = Program::from_expr("(ls-srv)").unwrap();
         let hdl = rt.run(prog).await.unwrap();
@@ -235,10 +227,8 @@ async fn registry_updates_after_exit() {
     }
 }
 
-#[ignore] // TODO: Registry Bindings
 #[tokio::test]
 async fn registry_updates_after_kill() {
-    let (conn_rt, mut conn_client) = Connection::pair().unwrap();
     let rt = Runtime::new();
 
     let srv_a = Program::from_expr("(begin (register :service_a) (recv))").unwrap();
@@ -246,8 +236,6 @@ async fn registry_updates_after_kill() {
 
     let srv_b = Program::from_expr("(begin (register :service_b) (recv))").unwrap();
     let srv_b = rt.run(srv_b).await.unwrap();
-
-    let _ = rt.handle_conn(conn_rt).await.unwrap();
 
     {
         // Baseline
@@ -262,13 +250,9 @@ async fn registry_updates_after_kill() {
     }
 
     // Kill srv_a
-    conn_client
-        .send_req(Request {
-            id: 0,
-            contents: lyric::parse(&format!("(kill (pid {}))", srv_a.id().inner())).unwrap(),
-        })
-        .await
-        .unwrap();
+    let kill_a = Program::from_expr(&format!("(kill (pid {}))", srv_a.id().inner())).unwrap();
+    rt.run(kill_a).await.expect("kill_a should start");
+
     srv_a.join().await.expect("srv_a should be killed");
 
     {

@@ -181,7 +181,7 @@ fn program_env() -> Env {
                 SymbolId::from("def-bind-interface"),
                 bindings::def_bind_interface(),
             )
-            .bind_native(SymbolId::from("info-srv"), bindings::info_srv_fn());
+            .bind_native_async(SymbolId::from("info-srv"), bindings::info_srv_fn());
     }
 
     {
@@ -205,9 +205,9 @@ fn program_env() -> Env {
     }
 
     {
-        e.bind_native(SymbolId::from("register"), bindings::register_fn())
-            .bind_native(SymbolId::from("find-srv"), bindings::find_srv_fn())
-            .bind_native(SymbolId::from("ls-srv"), bindings::ls_srv_fn());
+        e.bind_native_async(SymbolId::from("register"), bindings::register_fn())
+            .bind_lambda(SymbolId::from("find-srv"), bindings::find_srv_fn())
+            .bind_native_async(SymbolId::from("ls-srv"), bindings::ls_srv_fn());
     }
 
     {
