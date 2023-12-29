@@ -180,12 +180,16 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
             }
 
             // Cleanup for implicit returns in call frames
-            // Must be after unwinding or catching context is lost
-            while self.cframes.len() > 1 && self.cf().at_return() {
-                let cf = self.cframes.pop().unwrap();
+            // - Must be after unwinding or catching context is lost
+            // - Must only occur while running (i.e. don't clean during pauses during yield / await)
+            let is_running = self.status == Status::Running;
+            while is_running && self.cframes.len() > 1 && self.cf().at_return() {
+                let cf = self.cframes.last().unwrap();
                 if self.stack.len() != cf.stack_len + 1 {
-                    panic!("Unexpected state during execution - all function are expected to have stack effect of 1");
+                    // tracing::debug!("panic {:?}", self);
+                    panic!("Unexpected state during execution - all function are expected to have stack effect of 1. Was {}", cf.stack_len + 1);
                 }
+                let _ = self.cframes.pop();
             }
         }
 
@@ -232,6 +236,14 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                 return Ok(());
             }
         };
+
+        // let cf_idx = self.cframes.len() - 1;
+        // let cf_ip = self.cf().ip;
+        // debug!(
+        //     "{} inst - {cf_idx} {cf_ip} - {}\n\t{:?}",
+        //     self.id, inst, &self.stack
+        // );
+
         self.cf_mut().ip += 1;
 
         match inst {
