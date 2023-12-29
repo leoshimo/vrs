@@ -3,7 +3,6 @@ mod mailbox;
 mod open;
 mod proc;
 mod pubsub;
-mod registry;
 mod service;
 mod system;
 
