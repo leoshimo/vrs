@@ -8,7 +8,6 @@ use crate::ProcessHandle;
 use super::bindings;
 use super::kernel::WeakKernelHandle;
 use super::proc::ProcessId;
-use super::proc_io::IOCmd;
 use super::pubsub::PubSubHandle;
 use super::registry::Registry;
 
@@ -56,7 +55,6 @@ pub type Bytecode = lyric::Bytecode<Extern, Locals>;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Extern {
     ProcessId(ProcessId),
-    IOCmd(Box<IOCmd>),
 }
 
 /// Locals for Program Fiber

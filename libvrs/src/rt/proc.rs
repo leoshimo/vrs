@@ -1,7 +1,6 @@
 use super::kernel::WeakKernelHandle;
 use super::mailbox::Message;
-use super::proc_io::ProcIO;
-use super::program::{Extern, Fiber, Locals, Val};
+use super::program::{Extern, Locals, Val};
 use super::pubsub::PubSubHandle;
 use super::registry::Registry;
 use crate::rt::mailbox::{Mailbox, MailboxHandle};
@@ -129,16 +128,6 @@ impl Process {
 
         Ok(proc_hdl)
     }
-
-    #[allow(dead_code)]
-    /// Handle a yield signal from fiber
-    async fn handle_yield(fiber: &mut Fiber, val: Val, io: &mut ProcIO) -> Result<Val> {
-        let iocmd = match val {
-            Val::Extern(Extern::IOCmd(cmd)) => cmd,
-            _ => return Err(Error::UnexpectedYield),
-        };
-        io.dispatch_io(fiber, *iocmd).await
-    }
 }
 
 impl ProcessHandle {
@@ -201,7 +190,6 @@ impl std::fmt::Display for Extern {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Extern::ProcessId(pid) => write!(f, "{}", pid),
-            Extern::IOCmd(_) => write!(f, "<iocmd>"),
         }
     }
 }

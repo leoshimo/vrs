@@ -3,7 +3,6 @@
 
 use lyric::{compile, kwargs, parse, Error, KeywordId, Result, SymbolId};
 
-use crate::rt::proc_io::ServiceQuery;
 use crate::rt::program::{Extern, Fiber, Lambda, NativeAsyncFn, NativeFn, NativeFnOp, Val};
 use crate::rt::registry::Registration;
 
@@ -138,17 +137,6 @@ async fn info_srv_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
         }
     };
 
-    let query = match query.as_str() {
-        "pid" => ServiceQuery::Pid,
-        "interface" => ServiceQuery::Interface,
-        q => {
-            return Err(Error::UnexpectedArguments(format!(
-                "info-srv got unexpected query: {}",
-                q
-            )))
-        }
-    };
-
     let entry = fiber
         .locals()
         .registry
@@ -159,9 +147,13 @@ async fn info_srv_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
         .map_err(|e| Error::Runtime(format!("{e}")))?
         .ok_or(Error::Runtime(format!("No service found for {keyword}")))?;
 
-    match query {
-        ServiceQuery::Pid => Ok(Val::Extern(Extern::ProcessId(entry.pid()))),
-        ServiceQuery::Interface => Ok(Val::List(entry.interface().to_vec())),
+    match query.as_str() {
+        "pid" => Ok(Val::Extern(Extern::ProcessId(entry.pid()))),
+        "interface" => Ok(Val::List(entry.interface().to_vec())),
+        q => Err(Error::UnexpectedArguments(format!(
+            "info-srv got unexpected query: {}",
+            q
+        ))),
     }
 }
 

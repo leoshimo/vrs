@@ -8,7 +8,6 @@ mod runtime;
 
 mod mailbox;
 mod proc;
-mod proc_io;
 
 pub use error::Error;
 pub type Result<T> = std::result::Result<T, Error>;
