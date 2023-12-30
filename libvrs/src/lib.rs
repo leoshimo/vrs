@@ -14,7 +14,18 @@ pub use rt::program::{
 pub use rt::{Error, ProcessExit, ProcessHandle, ProcessResult, Result, Runtime}; // TODO: Should rt reexport from lib?
 
 /// The path to runtime socket
-pub fn runtime_socket() -> Option<PathBuf> {
-    let home = dirs::runtime_dir().or_else(dirs::home_dir)?;
-    Some(home.as_path().join("vrsd.socket"))
+pub fn runtime_socket() -> PathBuf {
+    let home = dirs::runtime_dir()
+        .or_else(dirs::home_dir)
+        .expect("Could not retrieve find runtime or home directory");
+    home.as_path().join(runtime_socket_name())
+}
+
+/// The name of runtime socket
+pub fn runtime_socket_name() -> &'static str {
+    if cfg!(debug_assertions) {
+        "vrsd-debug.socket"
+    } else {
+        "vrsd.socket"
+    }
 }

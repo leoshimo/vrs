@@ -8,8 +8,7 @@ use vrs::Runtime;
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
-    let path = vrs::runtime_socket()
-        .with_context(|| "No path to runtime socket is configured".to_string())?;
+    let path = vrs::runtime_socket();
     if path.exists() {
         std::fs::remove_file(&path)
             .with_context(|| format!("Failed to remove existing socket {}", path.display()))?;

@@ -6,6 +6,8 @@ use clap::{arg, command};
 
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::path::PathBuf;
+use std::str::FromStr;
 use tokio::net::UnixStream;
 use tracing::debug;
 use vrs::Client;
@@ -16,8 +18,11 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
     let args = cli().get_matches();
 
-    let path = vrs::runtime_socket()
-        .with_context(|| "No path to runtime socket is configured".to_string())?;
+    let path = args
+        .get_one::<String>("socket")
+        .map(|s| PathBuf::from_str(s))
+        .with_context(|| "No path to runtime socket is configured".to_string())??;
+
     let conn = UnixStream::connect(&path)
         .await
         .with_context(|| format!("Failed to connect to socket {}", path.display()))?;
@@ -56,6 +61,10 @@ fn cli() -> clap::Command {
     command!()
         .arg(arg!(command: -c --command <COMMAND> "If present, COMMAND is sent and program exits"))
         .arg(arg!(file: [FILE] "If present, executes contents of FILE"))
+        .arg(
+            arg!(socket: -S --socket [SOCKET] "Path to unix socket for vrsd")
+                .default_value(vrs::runtime_socket().into_os_string()),
+        )
 }
 
 /// Run a single request
