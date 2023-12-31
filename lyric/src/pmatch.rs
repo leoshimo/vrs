@@ -5,7 +5,14 @@ use std::collections::HashMap;
 /// Pattern matching predicate
 #[derive(Debug, Clone, PartialEq)]
 pub struct Pattern<T: Extern, L: Locals> {
-    inner: Val<T, L>,
+    inner: Pat<T, L>,
+}
+
+/// Internal implementation of pattern
+#[derive(Debug, Clone, PartialEq)]
+enum Pat<T: Extern, L: Locals> {
+    One(Val<T, L>),
+    Multi(Vec<Val<T, L>>),
 }
 
 /// Result of pattern match
@@ -19,13 +26,32 @@ where
     T: Extern,
     L: Locals,
 {
-    pub fn from_val(inner: Val<T, L>) -> Self {
-        Self { inner }
+    pub fn from_val(pat: Val<T, L>) -> Self {
+        Self {
+            inner: Pat::One(pat),
+        }
+    }
+
+    pub fn from_vals(patterns: Vec<Val<T, L>>) -> Self {
+        Self {
+            inner: Pat::Multi(patterns),
+        }
     }
 
     pub fn from_expr(expr: &str) -> Result<Self> {
         Ok(Self {
-            inner: Val::from_expr(expr)?,
+            inner: Pat::One(Val::from_expr(expr)?),
+        })
+    }
+
+    pub fn from_exprs(exprs: &[&str]) -> Result<Self> {
+        Ok(Self {
+            inner: Pat::Multi(
+                exprs
+                    .iter()
+                    .map(|p| Val::from_expr(p))
+                    .collect::<Result<_>>()?,
+            ),
         })
     }
 
@@ -36,11 +62,25 @@ where
 
     /// Extract matches
     pub fn matches(&self, val: &Val<T, L>) -> Option<Matches<T, L>> {
-        let mut matches = Matches::default();
-        if Self::matches_inner(&self.inner, val, &mut matches) {
-            Some(matches)
-        } else {
-            None
+        match &self.inner {
+            Pat::One(pat) => {
+                let mut matches = Matches::default();
+                if Self::matches_inner(pat, val, &mut matches) {
+                    Some(matches)
+                } else {
+                    None
+                }
+            }
+            Pat::Multi(patterns) => {
+                for pat in patterns {
+                    let mut matches = Matches::default();
+                    if Self::matches_inner(pat, val, &mut matches) {
+                        return Some(matches);
+                    }
+                }
+
+                None
+            }
         }
     }
 
@@ -412,6 +452,44 @@ mod tests {
                 .expect("should match");
             assert_eq!(m.bindings.len(), 1, "should have one binding for `a`");
             assert_eq!(m.bindings.get(&SymbolId::from("a")), Some(&v("1")));
+        }
+    }
+
+    #[test]
+    fn multi_pattern() {
+        let pat = Pattern::from_exprs(&["(:one a)", "(:two a b)", "(:three b c)"]).unwrap();
+
+        {
+            let m = pat.matches(&v("(:one 1)")).expect("should match");
+            assert_eq!(m.bindings.len(), 1);
+            assert_eq!(m.bindings.get(&SymbolId::from("a")), Some(&v("1")));
+        }
+
+        {
+            let m = pat.matches(&v("(:two 2 3)")).expect("should match");
+            assert_eq!(m.bindings.len(), 2);
+            assert_eq!(m.bindings.get(&SymbolId::from("a")), Some(&v("2")));
+            assert_eq!(m.bindings.get(&SymbolId::from("b")), Some(&v("3")));
+        }
+
+        {
+            let m = pat
+                .matches(&v("(:three (:one 1) (:two 2 3))"))
+                .expect("should match");
+            assert_eq!(m.bindings.len(), 2);
+            assert_eq!(
+                m.bindings.get(&SymbolId::from("a")),
+                None,
+                "Variables mentioned in other patterns should not be extracted"
+            );
+            assert_eq!(m.bindings.get(&SymbolId::from("b")), Some(&v("(:one 1)")));
+            assert_eq!(m.bindings.get(&SymbolId::from("c")), Some(&v("(:two 2 3)")));
+        }
+
+        {
+            assert!(!pat.is_match(&v("(:four :not :match)")));
+            assert!(!pat.is_match(&v("(:one :not :match)")));
+            assert!(!pat.is_match(&v("(:two :not :match :either)")));
         }
     }
 
