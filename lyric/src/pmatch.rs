@@ -493,6 +493,20 @@ mod tests {
         }
     }
 
+    #[test]
+    fn multi_pattern_earlier_patterns_match_first() {
+        let pat = Pattern::from_exprs(&["(a b)", "(a a)"]).unwrap();
+
+        let m = pat.matches(&v("(1 1)")).expect("should match (a b)");
+        assert_eq!(
+            m.bindings.len(),
+            2,
+            "Should have two bindings for (a b) - earlier patterns match first"
+        );
+        assert_eq!(m.bindings.get(&SymbolId::from("a")), Some(&v("1")),);
+        assert_eq!(m.bindings.get(&SymbolId::from("b")), Some(&v("1")),);
+    }
+
     fn v(expr: &str) -> Val {
         parse(expr).unwrap().into()
     }
