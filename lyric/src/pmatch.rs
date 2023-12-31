@@ -32,9 +32,9 @@ where
         }
     }
 
-    pub fn from_vals(patterns: Vec<Val<T, L>>) -> Self {
+    pub fn from_vals(patterns: &[Val<T, L>]) -> Self {
         Self {
-            inner: Pat::Multi(patterns),
+            inner: Pat::Multi(patterns.to_vec()),
         }
     }
 

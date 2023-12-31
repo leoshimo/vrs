@@ -87,11 +87,7 @@ async fn recv_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
     let pat = match &args[..] {
         [pat] => Some(Pattern::from_val(pat.clone())),
         [] => None,
-        _ => {
-            return Err(Error::UnexpectedArguments(
-                "recv expects one or no arguments - (recv [PATTERN])".to_string(),
-            ))
-        }
+        _ => Some(Pattern::from_vals(&args[..])),
     };
     let mailbox = fiber
         .locals()
@@ -333,6 +329,55 @@ mod tests {
                 )").unwrap()
             ),
             "(recv '(:one :two three)) should match (:one :two 3), (recv '(:four (five) ((six)))) should match (:four (5) ((6)))"
+        );
+    }
+
+    #[tokio::test]
+    async fn recv_with_multipattern() {
+        let k = kernel::start();
+
+        let prog = r#"(begin
+            (send (self) :one)
+            (send (self) :ignore)
+            (send (self) '(:two 2))
+            (send (self) '(:three :ignore))
+            (send (self) '(:four 4 5)) # ignored
+            (send (self) '(:four 4 4))
+            (send (self) '(:five 5 5 :ignore))
+            (list
+                  (recv :one
+                        '(:two _)
+                        '(:three 3)
+                        '(four a a)
+                        '(:five _ _))
+                  (recv :one
+                        '(:two _)
+                        '(:three 3)
+                        '(four a a)
+                        '(:five _ _))
+                  (recv :one
+                        '(:two _)
+                        '(:three 3)
+                        '(four a a)
+                        '(:five _ _))
+            ))
+        "#;
+        let hdl = k
+            .spawn_prog(Program::from_expr(prog).unwrap())
+            .await
+            .unwrap();
+
+        let exit = hdl.join().await.unwrap();
+        assert_eq!(
+            exit.status.unwrap(),
+            ProcessResult::Done(
+                Val::from_expr(
+                    "(:one
+                      (:two 2)
+                      (:four 4 4))"
+                )
+                .unwrap()
+            )
         );
     }
 }
