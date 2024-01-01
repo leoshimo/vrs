@@ -76,7 +76,7 @@ impl Program {
     pub fn from_bytecode(code: Bytecode) -> Self {
         Self {
             code,
-            env: program_env(),
+            env: proc_env(),
         }
     }
 
@@ -156,14 +156,9 @@ impl PartialEq for Program {
     }
 }
 
-/// Create new environment for programs
-fn program_env() -> Env {
+/// Create new environment for process programs
+pub fn proc_env() -> Env {
     let mut e = Env::standard();
-
-    {
-        e.bind_native(SymbolId::from("recv_req"), bindings::recv_req_fn())
-            .bind_native(SymbolId::from("send_resp"), bindings::send_resp_fn());
-    }
 
     {
         e.bind_native_async(SymbolId::from("recv"), bindings::recv_fn())
