@@ -140,6 +140,12 @@ impl Connection {
     }
 }
 
+impl std::cmp::PartialEq for Connection {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.stream.get_ref(), other.stream.get_ref())
+    }
+}
+
 impl std::fmt::Debug for Connection {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let fd = self.stream.get_ref().as_raw_fd();

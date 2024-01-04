@@ -1,22 +1,43 @@
+#![allow(dead_code)]
+#![allow(unused_variables)]
 //! Bindings for interacting with [Connection]
-use crate::rt::program::{Fiber, NativeFn, NativeFnOp, Val};
-use lyric::Result;
+use crate::rt::program::{Extern, Fiber, NativeAsyncFn, NativeFnOp, Val};
+use lyric::{Error, Result};
 
 /// Binding for `recv_req` to receive requests over client connection
-pub(crate) fn recv_req_fn() -> NativeFn {
-    NativeFn {
-        func: |_, _| {
-            Ok(lyric::NativeFnOp::Return(lyric::Val::Int(0)))
-            // Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
-            //     IOCmd::RecvRequest,
-            // )))))
-        },
+pub(crate) fn recv_req_fn() -> NativeAsyncFn {
+    NativeAsyncFn {
+        func: |f, args| Box::new(recv_req_impl(f, args)),
     }
 }
 
+/// Implementation of (RECV_REQ)
+async fn recv_req_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
+    let term = fiber.locals().term.as_ref().ok_or(Error::Runtime(
+        "recv_req failed - no connected terminal".to_string(),
+    ))?;
+
+    let req = term
+        .read_request()
+        .await
+        .map_err(|e| Error::Runtime(format!("recv_req error - {e}")))?;
+
+    Ok(Val::List(vec![
+        Val::Extern(Extern::RequestId(req.id)),
+        req.contents.into(),
+    ]))
+}
+
 /// Binding for `send_resp` to send responses over client connection
-pub(crate) fn send_resp_fn() -> NativeFn {
-    NativeFn { func: send_resp }
+pub(crate) fn send_resp_fn() -> NativeAsyncFn {
+    NativeAsyncFn {
+        func: |f, args| Box::new(send_resp_impl(f, args)),
+    }
+}
+
+/// Implementation of (SEND_RESP req_id form)
+async fn send_resp_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
+    Ok(Val::Nil)
 }
 
 /// Implements `send_resp`
@@ -96,3 +117,5 @@ fn send_resp(_f: &mut Fiber, _args: &[Val]) -> Result<NativeFnOp> {
 //     );
 // }
 // }
+
+// TODO: Test that term bindings are not available for standard processes

@@ -3,6 +3,7 @@ use super::mailbox::Message;
 use super::program::{Extern, Locals, Val};
 use super::pubsub::PubSubHandle;
 use super::registry::Registry;
+use super::term::TermHandle;
 use crate::rt::mailbox::{Mailbox, MailboxHandle};
 use crate::rt::{Error, Result};
 use crate::Program;
@@ -77,6 +78,12 @@ impl Process {
     /// Set pubsub handle for process
     pub(crate) fn pubsub(mut self, pubsub: PubSubHandle) -> Self {
         self.locals.pubsub(pubsub);
+        self
+    }
+
+    /// Set connection for process, if any
+    pub(crate) fn term(mut self, term: TermHandle) -> Self {
+        self.locals.term(term);
         self
     }
 
@@ -190,6 +197,7 @@ impl std::fmt::Display for Extern {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Extern::ProcessId(pid) => write!(f, "{}", pid),
+            Extern::RequestId(id) => write!(f, "<request_id {}>", id),
         }
     }
 }

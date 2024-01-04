@@ -6,6 +6,7 @@ use super::proc::{ProcessExit, ProcessHandle, ProcessSet};
 use super::program;
 use super::pubsub::{PubSub, PubSubHandle};
 use super::registry::Registry;
+use crate::rt::term::Term;
 use crate::rt::{proc::Process, Error, ProcessId, Result};
 use crate::{Connection, Program};
 use tokio::sync::{mpsc, oneshot};
@@ -169,8 +170,9 @@ impl Kernel {
                 let _ = tx.send(hdl);
                 Ok(())
             }
-            Event::SpawnConnProc(_, tx) => {
-                let proc = Process::from_prog(self.next_pid(), program::connection_program());
+            Event::SpawnConnProc(conn, tx) => {
+                let proc = Process::from_prog(self.next_pid(), program::connection_program())
+                    .term(Term::spawn(conn));
                 let hdl = self.spawn(proc)?;
                 let _ = tx.send(hdl);
                 Ok(())

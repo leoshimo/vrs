@@ -10,6 +10,7 @@ use super::kernel::WeakKernelHandle;
 use super::proc::ProcessId;
 use super::pubsub::PubSubHandle;
 use super::registry::Registry;
+use super::term::TermHandle;
 
 /// Program used to spawn new processes
 #[derive(Debug, Clone)]
@@ -55,6 +56,7 @@ pub type Bytecode = lyric::Bytecode<Extern, Locals>;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Extern {
     ProcessId(ProcessId),
+    RequestId(u32), // TODO: Type request id as RequestId
 }
 
 /// Locals for Program Fiber
@@ -70,6 +72,8 @@ pub struct Locals {
     pub(crate) pubsub: Option<PubSubHandle>,
     /// Handle to current process
     pub(crate) self_handle: Option<ProcessHandle>,
+    /// Handle to controlling terminal, if any
+    pub(crate) term: Option<TermHandle>,
 }
 
 impl Program {
@@ -100,10 +104,15 @@ impl Program {
         let mut prog = Self::from_bytecode(lambda.code);
         prog.env = match lambda.parent.as_ref() {
             Some(parent) => parent.as_ref().lock().unwrap().clone(),
-            None => program_env(),
+            None => proc_env(),
         };
 
         Ok(prog)
+    }
+
+    pub fn env(mut self, env: Env) -> Self {
+        self.env = env;
+        self
     }
 
     pub fn into_fiber(self, locals: Locals) -> Fiber {
@@ -113,8 +122,19 @@ impl Program {
 
 /// Create a new program for connections
 pub fn connection_program() -> Program {
-    Program::from_expr("(loop (send_resp (try (eval (recv_req)))))")
+    let mut env = proc_env();
+    env.bind_native_async(SymbolId::from("recv_req"), bindings::recv_req_fn())
+        .bind_native_async(SymbolId::from("send_resp"), bindings::send_resp_fn());
+
+    let prog = r#"
+        (loop
+            (def (req_id contents) (recv_req))
+            (send_resp req_id (try (eval contents))))
+    "#;
+
+    Program::from_expr(prog)
         .expect("Connection program should compile")
+        .env(env)
 }
 
 impl Locals {
@@ -125,6 +145,7 @@ impl Locals {
             registry: None,
             pubsub: None,
             self_handle: None,
+            term: None,
         }
     }
 
@@ -144,8 +165,12 @@ impl Locals {
     }
 
     pub(crate) fn handle(&mut self, handle: ProcessHandle) -> &mut Self {
-        //
         self.self_handle = Some(handle);
+        self
+    }
+
+    pub(crate) fn term(&mut self, term: TermHandle) -> &mut Self {
+        self.term = Some(term);
         self
     }
 }
