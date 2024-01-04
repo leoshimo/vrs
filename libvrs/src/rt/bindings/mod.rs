@@ -1,13 +1,13 @@
-mod conn;
 mod mailbox;
 mod open;
 mod proc;
 mod pubsub;
 mod service;
 mod system;
+mod term;
 
-pub(crate) use conn::recv_req_fn;
-pub(crate) use conn::send_resp_fn;
+pub(crate) use term::recv_req_fn;
+pub(crate) use term::send_resp_fn;
 
 pub(crate) use mailbox::call_fn;
 pub(crate) use mailbox::ls_msgs_fn;
