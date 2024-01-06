@@ -1,10 +1,20 @@
 //! Headless client implementation for vrs runtime
+
+mod error;
+
 use std::collections::HashMap;
 
-use crate::connection::{Connection, Message, Request, Response};
-use tokio::sync::{mpsc, oneshot};
+use crate::{
+    connection::{Connection, Message, Request, Response, SubscriptionRequest, SubscriptionUpdate},
+    rt::program::{Form, KeywordId},
+};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
+
+use self::error::Error;
+
+pub type Result<T> = std::result::Result<T, Error>;
 
 /// Handle for vrs client
 #[derive(Debug)]
@@ -13,25 +23,6 @@ pub struct Client {
     hdl_tx: mpsc::Sender<Event>,
     /// Cancellation token to shutdown async task
     cancel: CancellationToken,
-}
-
-/// Errors from interacting with [Client]
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    #[error("Failed to send on mpsc - {0}")]
-    FailedToSend(#[from] tokio::sync::mpsc::error::SendError<Event>),
-
-    #[error("Failed to recv on oneshot - {0}")]
-    FailedToRecv(#[from] tokio::sync::oneshot::error::RecvError),
-
-    #[error("{0}")]
-    IO(#[from] std::io::Error),
-
-    #[error("Internal inconsistency - {0}")]
-    Internal(String),
-
-    #[error("Connection disconnected")]
-    Disconnected,
 }
 
 /// Messages processed by event loop
@@ -44,6 +35,11 @@ pub enum Event {
     },
     /// Event when receiving response from remote
     RecvResponse(Response),
+
+    /// Subscribe command
+    SubscribeRequest(KeywordId, oneshot::Sender<Result<Subscription>>),
+    /// Topic update for active subscription
+    RecvSubscriptionUpdate(SubscriptionUpdate),
 }
 
 /// The state of active [Client]
@@ -51,10 +47,33 @@ pub enum Event {
 struct State {
     /// The connection to runtime
     conn: Connection,
-    /// Maps req_ids to Sender channel for responses
-    inflight_reqs: HashMap<u32, oneshot::Sender<Response>>,
+
     /// Next request id to use
     next_req_id: u32,
+    /// Maps req_ids to Sender channel for responses
+    inflight_reqs: HashMap<u32, oneshot::Sender<Response>>,
+
+    /// Active subscriptions managed by client
+    sub_txs: HashMap<KeywordId, broadcast::Sender<Form>>,
+}
+
+/// An active subscription channel watched by client
+#[derive(Debug)]
+pub struct Subscription {
+    topic: KeywordId,
+    rx: broadcast::Receiver<Form>,
+}
+
+impl Subscription {
+    /// Retrieve the topic
+    pub fn topic(&self) -> &KeywordId {
+        &self.topic
+    }
+
+    /// Receive next event of subscription
+    pub async fn recv(&mut self) -> Result<Form> {
+        Ok(self.rx.recv().await?)
+    }
 }
 
 impl Client {
@@ -81,13 +100,22 @@ impl Client {
     }
 
     /// Dispatch a request
-    pub async fn request(&self, req: lyric::Form) -> Result<Response, Error> {
+    pub async fn request(&self, req: lyric::Form) -> Result<Response> {
         debug!("request req = {}", req);
         let (resp_tx, resp_rx) = oneshot::channel();
         self.hdl_tx
             .send(Event::SendRequest { req, tx: resp_tx })
             .await?;
         Ok(resp_rx.await?)
+    }
+
+    /// Subscribe to a new topic
+    pub async fn subscribe(&self, topic: KeywordId) -> Result<Subscription> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.hdl_tx
+            .send(Event::SubscribeRequest(topic, resp_tx))
+            .await?;
+        resp_rx.await?
     }
 
     /// Detect if client has terminated
@@ -105,7 +133,7 @@ impl Client {
 }
 
 /// Run client task over command channel and connection
-async fn run(mut state: State, mut hdl_rx: mpsc::Receiver<Event>) -> Result<(), Error> {
+async fn run(mut state: State, mut hdl_rx: mpsc::Receiver<Event>) -> Result<()> {
     loop {
         let ev = tokio::select! {
             Some(e) = hdl_rx.recv() => e,
@@ -124,10 +152,11 @@ impl State {
             conn,
             next_req_id: 0,
             inflight_reqs: HashMap::new(),
+            sub_txs: Default::default(),
         }
     }
 
-    async fn handle_event(&mut self, e: Event) -> Result<(), Error> {
+    async fn handle_event(&mut self, e: Event) -> Result<()> {
         debug!("handle_event e = {:?}", e);
         match e {
             Event::SendRequest {
@@ -135,6 +164,15 @@ impl State {
                 tx: resp_tx,
             } => self.handle_request(contents, resp_tx).await,
             Event::RecvResponse(resp) => self.handle_recv_response(resp).await,
+            Event::SubscribeRequest(topic, resp_tx) => {
+                let res = self.handle_subscribe(topic).await;
+                let _ = resp_tx.send(res);
+                Ok(())
+            }
+            Event::RecvSubscriptionUpdate(update) => {
+                self.handle_sub_update(update);
+                Ok(())
+            }
         }
     }
 
@@ -143,7 +181,7 @@ impl State {
         &mut self,
         contents: lyric::Form,
         resp_tx: oneshot::Sender<Response>,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let req = Request {
             id: self.next_req_id,
             contents,
@@ -154,7 +192,7 @@ impl State {
     }
 
     /// Handle a recv response event
-    async fn handle_recv_response(&mut self, resp: Response) -> Result<(), Error> {
+    async fn handle_recv_response(&mut self, resp: Response) -> Result<()> {
         match self.inflight_reqs.remove(&resp.req_id) {
             Some(tx) => {
                 let _ = tx.send(resp);
@@ -166,16 +204,55 @@ impl State {
             ))),
         }
     }
+
+    /// Handle a subscription request
+    async fn handle_subscribe(&mut self, topic: KeywordId) -> Result<Subscription> {
+        match self.sub_txs.get(&topic) {
+            Some(tx) => Ok(Subscription {
+                topic,
+                rx: tx.subscribe(),
+            }),
+            None => {
+                let (tx, rx) = broadcast::channel(32);
+                self.sub_txs.insert(topic.clone(), tx);
+                self.conn
+                    .send(&Message::SubscriptionRequest(SubscriptionRequest {
+                        topic: topic.clone(),
+                    }))
+                    .await?;
+                Ok(Subscription { topic, rx })
+            }
+        }
+    }
+
+    /// Handle topic updated over conn
+    fn handle_sub_update(&self, update: SubscriptionUpdate) {
+        match self.sub_txs.get(&update.topic) {
+            Some(s) => {
+                if let Err(e) = s.send(update.contents) {
+                    error!("Error while sending update - {e}");
+                }
+            }
+            None => {
+                warn!(
+                    "Received topic_updated for unsubscribed topic - {}",
+                    update.topic
+                );
+            }
+        }
+    }
 }
 
 impl TryFrom<Message> for Event {
     type Error = Error;
-    fn try_from(value: Message) -> Result<Self, Self::Error> {
+    fn try_from(value: Message) -> Result<Self> {
         match value {
             Message::Response(resp) => Ok(Self::RecvResponse(resp)),
-            Message::Request(_) => Err(Error::Internal(
-                "Client unexpectedly received Message::Request".to_string(),
-            )),
+            Message::SubscriptionUpdate(update) => Ok(Self::RecvSubscriptionUpdate(update)),
+            Message::Request(_) | Message::SubscriptionRequest(_) => Err(Error::Internal(format!(
+                "Client unexpectedly received {:?}",
+                value
+            ))),
         }
     }
 }
@@ -183,9 +260,10 @@ impl TryFrom<Message> for Event {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::connection::Connection;
+    use crate::connection::{Connection, SubscriptionRequest};
     use assert_matches::assert_matches;
     use lyric::Form;
+    use tokio::task::yield_now;
 
     #[tokio::test]
     async fn request_response() {
@@ -259,4 +337,117 @@ mod test {
             "Request should error when connection terminates"
         );
     }
+
+    #[tokio::test]
+    async fn subscribe() {
+        let (local, mut remote) = Connection::pair().unwrap();
+        let client = Client::new(local);
+
+        let mut sub = client.subscribe(KeywordId::from("my_topic")).await.unwrap();
+        assert_eq!(
+            sub.topic(),
+            &KeywordId::from("my_topic"),
+            "subscription should have matching topic"
+        );
+
+        let msg = remote
+            .recv()
+            .await
+            .expect("should receive message")
+            .unwrap();
+        assert_eq!(
+            msg,
+            Message::SubscriptionRequest(SubscriptionRequest {
+                topic: KeywordId::from("my_topic")
+            }),
+            "remote should receive corresponding subscribe request"
+        );
+
+        remote
+            .send(&Message::SubscriptionUpdate(SubscriptionUpdate {
+                topic: KeywordId::from("not_my_topic"),
+                contents: Form::string("goodbye"),
+            }))
+            .await
+            .unwrap();
+
+        remote
+            .send(&Message::SubscriptionUpdate(SubscriptionUpdate {
+                topic: KeywordId::from("my_topic"),
+                contents: Form::string("hello"),
+            }))
+            .await
+            .unwrap();
+
+        let res = sub.recv().await.unwrap();
+        assert_eq!(res, Form::string("hello"));
+    }
+
+    #[tokio::test]
+    async fn subscribe_multi() {
+        let (local, mut remote) = Connection::pair().unwrap();
+        let client = Client::new(local);
+
+        let sub1 = client.subscribe(KeywordId::from("topic1")).await.unwrap();
+        let sub2 = client.subscribe(KeywordId::from("topic2")).await.unwrap();
+
+        let sub_task = |mut sub: Subscription| {
+            tokio::spawn(async move {
+                let mut forms = vec![];
+                while let Ok(f) = sub.recv().await {
+                    yield_now().await;
+                    if f == Form::Nil {
+                        break;
+                    }
+                    forms.push(f);
+                    yield_now().await;
+                }
+                forms
+            })
+        };
+
+        let sub1_task = sub_task(sub1);
+        let sub2_task = sub_task(sub2);
+
+        for contents in [
+            Form::string("one"),
+            Form::string("two"),
+            Form::string("three"),
+            Form::Nil,
+        ] {
+            remote
+                .send(&Message::SubscriptionUpdate(SubscriptionUpdate {
+                    topic: KeywordId::from("topic1"),
+                    contents,
+                }))
+                .await
+                .unwrap();
+        }
+
+        for contents in [Form::Int(4), Form::Int(5), Form::Int(6), Form::Nil] {
+            remote
+                .send(&Message::SubscriptionUpdate(SubscriptionUpdate {
+                    topic: KeywordId::from("topic2"),
+                    contents,
+                }))
+                .await
+                .unwrap();
+        }
+
+        assert_eq!(
+            sub1_task.await.unwrap(),
+            vec![
+                Form::string("one"),
+                Form::string("two"),
+                Form::string("three"),
+            ],
+            "should receive forms for topic in order"
+        );
+        assert_eq!(
+            sub2_task.await.unwrap(),
+            vec![Form::Int(4), Form::Int(5), Form::Int(6),]
+        );
+    }
+
+    // TODO: Check dropping last subscription messages runtime that client is fully unsubscribed
 }

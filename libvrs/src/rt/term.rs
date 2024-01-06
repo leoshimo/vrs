@@ -116,7 +116,9 @@ impl Term {
             .map_err(|e| Error::IOError(format!("{e}")))?;
         let req = match msg {
             Message::Request(req) => req,
-            Message::Response(_) => {
+            Message::Response(_)
+            | Message::SubscriptionRequest(_)
+            | Message::SubscriptionUpdate(_) => {
                 return Err(Error::IOError(format!("Unexpected message: {:?}", msg)));
             }
         };

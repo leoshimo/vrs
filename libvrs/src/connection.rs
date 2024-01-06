@@ -11,6 +11,9 @@ use tokio_util::codec::Framed;
 use tokio_util::codec::LengthDelimitedCodec;
 use tracing::debug;
 
+use crate::rt::program::Form;
+use crate::rt::program::KeywordId;
+
 /// Connection that can be used to send [crate::connection::Message]
 /// TODO: Use AsyncRead + AsyncWrite traits instead of UnixStream
 pub struct Connection {
@@ -22,6 +25,8 @@ pub struct Connection {
 pub enum Message {
     Request(Request),
     Response(Response),
+    SubscriptionRequest(SubscriptionRequest),
+    SubscriptionUpdate(SubscriptionUpdate),
 }
 
 /// Outgoing Requests
@@ -31,6 +36,19 @@ pub struct Request {
     pub id: u32,
     /// Contents of request
     pub contents: lyric::Form,
+}
+
+/// Client request for new subscriptions
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub struct SubscriptionRequest {
+    pub(crate) topic: KeywordId,
+}
+
+/// Runtime response for subscription topic changes
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub struct SubscriptionUpdate {
+    pub(crate) topic: KeywordId,
+    pub(crate) contents: Form,
 }
 
 /// Incoming response
@@ -120,7 +138,9 @@ impl Connection {
         let msg = self.recv().await?;
         match msg {
             Ok(Message::Request(r)) => Some(Ok(r)),
-            Ok(Message::Response(_)) => {
+            Ok(Message::Response(_))
+            | Ok(Message::SubscriptionRequest(_))
+            | Ok(Message::SubscriptionUpdate(_)) => {
                 panic!("Expected request, but received response over connection")
             }
             Err(e) => Some(Err(e)),
@@ -132,7 +152,9 @@ impl Connection {
         let msg = self.recv().await?;
         match msg {
             Ok(Message::Response(r)) => Some(Ok(r)),
-            Ok(Message::Request(_)) => {
+            Ok(Message::Request(_))
+            | Ok(Message::SubscriptionRequest(_))
+            | Ok(Message::SubscriptionUpdate(_)) => {
                 panic!("Expected response, but received request over connection")
             }
             Err(e) => Some(Err(e)),
