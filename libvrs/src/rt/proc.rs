@@ -42,8 +42,6 @@ pub enum ProcessResult {
     Done(Val),
     /// Cancelled for closed event loop
     Cancelled,
-    /// Completed for disconnected connection
-    Disconnected,
 }
 
 /// A record of process exiting
@@ -206,7 +204,6 @@ impl std::fmt::Display for ProcessExit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.status {
             Ok(ProcessResult::Done(v)) => write!(f, "DONE - {v}"),
-            Ok(ProcessResult::Disconnected) => write!(f, "DISCONNECTED"),
             Ok(ProcessResult::Cancelled) => write!(f, "CANCELLED"),
             Err(e) => write!(f, "ERROR - {e}"),
         }

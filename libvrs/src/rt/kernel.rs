@@ -243,7 +243,6 @@ mod tests {
 
     use super::*;
 
-    #[ignore] // TODO: Controlling terminal test
     #[tokio::test]
     async fn kernel_proc_for_conn() {
         let (local, remote) = Connection::pair().unwrap();
@@ -268,7 +267,6 @@ mod tests {
         assert_eq!(resp.contents, Ok(Form::string("Hello world")));
     }
 
-    #[ignore] // TODO: Controlling terminal test
     #[tokio::test]
     async fn kernel_spawn_conn_drop() {
         let (local, remote) = Connection::pair().unwrap();
@@ -282,10 +280,12 @@ mod tests {
 
         drop(remote); // remote terminates
 
-        assert_eq!(
-            hdl.join().await.unwrap().status.unwrap(),
-            ProcessResult::Disconnected
-        );
+        let exit = timeout(Duration::from_millis(5), hdl.join())
+            .await
+            .expect("Should not timeout - process should exit for error")
+            .expect("Join should succeed");
+
+        assert_matches!(exit.status, Err(_));
         assert!(
             k.procs().await.unwrap().is_empty(),
             "Should terminate conn process for dropped conn"
