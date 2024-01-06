@@ -1,13 +1,12 @@
-#![allow(dead_code)]
 //! Controlling Terminal for Processes
 
 use std::collections::VecDeque;
 
 use crate::connection::Message;
 use crate::rt::{Error, Result};
-use crate::{Connection, Request};
+use crate::{Connection, Request, Response};
 use tokio::sync::{mpsc, oneshot};
-use tracing::{debug, error};
+use tracing::error;
 
 /// Controlling terminal
 #[derive(Debug)]
@@ -27,6 +26,28 @@ pub struct TermHandle {
 #[derive(Debug)]
 enum Cmd {
     ReadRequest(oneshot::Sender<Request>),
+    SendResponse(Response),
+}
+
+impl TermHandle {
+    /// Read request from terminal
+    pub(crate) async fn read_request(&self) -> Result<Request> {
+        let (req_tx, req_rx) = oneshot::channel();
+        self.tx
+            .send(Cmd::ReadRequest(req_tx))
+            .await
+            .map_err(|e| Error::NoMessageReceiver(format!("read_request failed - {e}")))?;
+        Ok(req_rx.await?)
+    }
+
+    /// Send response for given request id
+    pub(crate) async fn send_response(&self, resp: Response) -> Result<()> {
+        self.tx
+            .send(Cmd::SendResponse(resp))
+            .await
+            .map_err(|e| Error::NoMessageReceiver(format!("send_response failed - {e}")))?;
+        Ok(())
+    }
 }
 
 impl Term {
@@ -65,6 +86,10 @@ impl Term {
                         None => break,
                     };
                     match cmd {
+                        Cmd::SendResponse(resp) => {
+                            self.conn.send_resp(resp).await
+                                .map_err(|e| Error::IOError(format!("{}", e)))?;
+                        }
                         Cmd::ReadRequest(req_tx) => {
                             match self.req_queue.pop_front() {
                                 Some(req) => {
@@ -78,8 +103,6 @@ impl Term {
                     }
                 }
             }
-
-            debug!("{:?}", self);
         }
         Ok(())
     }
@@ -101,18 +124,6 @@ impl Term {
     }
 }
 
-impl TermHandle {
-    /// Read request from terminal
-    pub(crate) async fn read_request(&self) -> Result<Request> {
-        let (req_tx, req_rx) = oneshot::channel();
-        self.tx
-            .send(Cmd::ReadRequest(req_tx))
-            .await
-            .map_err(|e| Error::NoMessageReceiver(format!("read_request failed - {e}")))?;
-        Ok(req_rx.await?)
-    }
-}
-
 impl std::cmp::PartialEq for TermHandle {
     fn eq(&self, other: &Self) -> bool {
         std::ptr::eq(&self.tx, &other.tx)
@@ -124,6 +135,7 @@ mod tests {
     use crate::rt::program::Form;
 
     use super::*;
+    use assert_matches::assert_matches;
     use std::time::Duration;
     use tokio::{task::yield_now, time::timeout};
 
@@ -237,6 +249,44 @@ mod tests {
         assert_eq!(reqs, expected, "Requests are returned in order");
     }
 
-    // TODO: Test that read_request fails if connection is dropped
-    // TODO: Test that process is killed after connection is disconnected (?)
+    #[tokio::test]
+    async fn read_request_dropped_remote() {
+        let (remote, local) = Connection::pair().unwrap();
+        let t = Term::spawn(local);
+
+        let t_task = tokio::spawn(async move { t.read_request().await });
+
+        drop(remote);
+
+        let res = t_task.await.unwrap();
+        assert_matches!(res, Err(_));
+    }
+
+    #[tokio::test]
+    async fn send_response() {
+        let (local, mut remote) = Connection::pair().unwrap();
+        let t = Term::spawn(local);
+
+        t.send_response(Response {
+            req_id: 99,
+            contents: Ok(Form::string("Hello")),
+        })
+        .await
+        .unwrap();
+
+        let received = remote
+            .recv_resp()
+            .await
+            .expect("Should be Some")
+            .expect("Should be Ok");
+        assert_eq!(
+            received,
+            Response {
+                req_id: 99,
+                contents: Ok(Form::string("Hello"))
+            }
+        );
+    }
+
+    // TODO: Test that client process is killed after connection is disconnected (?)
 }

@@ -1,18 +1,19 @@
-#![allow(dead_code)]
-#![allow(unused_variables)]
 //! Bindings for interacting with [Connection]
-use crate::rt::program::{Extern, Fiber, NativeAsyncFn, NativeFnOp, Val};
+use crate::{
+    rt::program::{Extern, Fiber, NativeAsyncFn, Val},
+    Response,
+};
 use lyric::{Error, Result};
 
 /// Binding for `recv_req` to receive requests over client connection
 pub(crate) fn recv_req_fn() -> NativeAsyncFn {
     NativeAsyncFn {
-        func: |f, args| Box::new(recv_req_impl(f, args)),
+        func: |f, _| Box::new(recv_req_impl(f)),
     }
 }
 
 /// Implementation of (RECV_REQ)
-async fn recv_req_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
+async fn recv_req_impl(fiber: &mut Fiber) -> Result<Val> {
     let term = fiber.locals().term.as_ref().ok_or(Error::Runtime(
         "recv_req failed - no connected terminal".to_string(),
     ))?;
@@ -35,25 +36,34 @@ pub(crate) fn send_resp_fn() -> NativeAsyncFn {
     }
 }
 
-/// Implementation of (SEND_RESP req_id form)
-async fn send_resp_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
-    Ok(Val::Nil)
-}
-
 /// Implements `send_resp`
-fn send_resp(_f: &mut Fiber, _args: &[Val]) -> Result<NativeFnOp> {
-    Ok(lyric::NativeFnOp::Return(lyric::Val::Int(0)))
-    // let val = match args {
-    //     [v] => v.clone(),
-    //     _ => {
-    //         return Err(Error::UnexpectedArguments(
-    //             "send_conn expects two arguments".to_string(),
-    //         ))
-    //     }
-    // };
-    // Ok(NativeFnOp::Yield(Val::Extern(Extern::IOCmd(Box::new(
-    //     IOCmd::SendResponse(val),
-    // )))))
+async fn send_resp_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
+    let (req_id, contents) = match &args[..] {
+        [Val::Extern(Extern::RequestId(req_id)), c] => (req_id, c),
+        _ => {
+            return Err(Error::UnexpectedArguments(
+                "send_conn expects two arguments".to_string(),
+            ))
+        }
+    };
+
+    let term = fiber.locals().term.as_ref().ok_or(Error::Runtime(
+        "recv_req failed - no connected terminal".to_string(),
+    ))?;
+
+    let resp = Response {
+        req_id: *req_id,
+        contents: Ok(contents
+            .clone()
+            .try_into()
+            .map_err(|e| Error::Runtime(format!("{e}")))?),
+    };
+
+    term.send_response(resp)
+        .await
+        .map_err(|e| Error::Runtime(format!("{e}")))?;
+
+    Ok(Val::keyword("ok"))
 }
 
 // #[cfg(test)]

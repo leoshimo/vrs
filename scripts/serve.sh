@@ -6,7 +6,7 @@ if [ "$TMUX" ]; then
 fi
 
 while true; do
-    PID=$(RUST_LOG=debug cargo run --bin vrsd > vrsd.log) &
+    PID=$(RUST_LOG=debug cargo run --bin vrsd --release > vrsd.log) &
     sleep 1
     ./scripts/launcher.ll &
     wait $PID
