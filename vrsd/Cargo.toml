@@ -12,7 +12,7 @@ path = "src/main.rs"
 [dependencies]
 vrs = { path = "../libvrs" }
 lyric = { path = "../lyric" }
-tokio = { version = "1.35.0", features = ["full"] }
-anyhow = "1.0.75"
+tokio = { version = "1.35.1", features = ["full"] }
+anyhow = "1.0.79"
 tracing-subscriber = "0.3.18"
 tracing = "0.1.40"
