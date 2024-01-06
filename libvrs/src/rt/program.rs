@@ -121,11 +121,7 @@ impl Program {
 }
 
 /// Create a new program for connections
-pub fn connection_program() -> Program {
-    let mut env = proc_env();
-    env.bind_native_async(SymbolId::from("recv_req"), bindings::recv_req_fn())
-        .bind_native_async(SymbolId::from("send_resp"), bindings::send_resp_fn());
-
+pub fn term_prog() -> Program {
     let prog = r#"
         (loop
             (def (req_id contents) (recv_req))
@@ -134,7 +130,7 @@ pub fn connection_program() -> Program {
 
     Program::from_expr(prog)
         .expect("Connection program should compile")
-        .env(env)
+        .env(term_env())
 }
 
 impl Locals {
@@ -234,4 +230,12 @@ pub fn proc_env() -> Env {
     }
 
     e
+}
+
+/// Create an environment for term_prog
+pub fn term_env() -> Env {
+    let mut env = proc_env();
+    env.bind_native_async(SymbolId::from("recv_req"), bindings::recv_req_fn())
+        .bind_native_async(SymbolId::from("send_resp"), bindings::send_resp_fn());
+    env
 }

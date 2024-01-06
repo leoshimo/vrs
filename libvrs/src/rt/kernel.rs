@@ -66,7 +66,7 @@ impl KernelHandle {
     pub(crate) async fn spawn_for_conn(&self, conn: Connection) -> Result<ProcessHandle> {
         let (tx, rx) = oneshot::channel();
         self.ev_tx
-            .send(Event::SpawnConnProc(conn, tx))
+            .send(Event::SpawnTermProc(conn, tx))
             .await
             .map_err(|_| Error::NoMessageReceiver("spawn_for_conn failed".to_string()))?;
         rx.await
@@ -132,7 +132,7 @@ impl std::cmp::PartialEq for WeakKernelHandle {
 #[derive(Debug)]
 pub enum Event {
     SpawnProg(Program, oneshot::Sender<ProcessHandle>),
-    SpawnConnProc(Connection, oneshot::Sender<ProcessHandle>),
+    SpawnTermProc(Connection, oneshot::Sender<ProcessHandle>),
     ProcessExit(ProcessExit),
     ListProcess(oneshot::Sender<Vec<ProcessId>>),
     KillProcess(ProcessId),
@@ -170,8 +170,8 @@ impl Kernel {
                 let _ = tx.send(hdl);
                 Ok(())
             }
-            Event::SpawnConnProc(conn, tx) => {
-                let proc = Process::from_prog(self.next_pid(), program::connection_program())
+            Event::SpawnTermProc(conn, tx) => {
+                let proc = Process::from_prog(self.next_pid(), program::term_prog())
                     .term(Term::spawn(conn));
                 let hdl = self.spawn(proc)?;
                 let _ = tx.send(hdl);
