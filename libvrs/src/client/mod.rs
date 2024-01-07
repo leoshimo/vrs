@@ -38,6 +38,9 @@ pub enum Event {
 
     /// Subscribe command
     SubscribeRequest(KeywordId, oneshot::Sender<Result<Subscription>>),
+    /// Subscription dropped
+    SubscriptionDropped(KeywordId),
+
     /// Topic update for active subscription
     RecvSubscriptionUpdate(SubscriptionUpdate),
 }
@@ -47,14 +50,21 @@ pub enum Event {
 struct State {
     /// The connection to runtime
     conn: Connection,
-
     /// Next request id to use
     next_req_id: u32,
     /// Maps req_ids to Sender channel for responses
     inflight_reqs: HashMap<u32, oneshot::Sender<Response>>,
-
     /// Active subscriptions managed by client
-    sub_txs: HashMap<KeywordId, broadcast::Sender<Form>>,
+    sub_txs: HashMap<KeywordId, ActiveSubscription>,
+    /// Weak TX to event loop
+    hdl_tx: mpsc::WeakSender<Event>,
+}
+
+/// Subscription record active on client
+#[derive(Debug)]
+struct ActiveSubscription {
+    count: usize,
+    sub_tx: broadcast::Sender<Form>,
 }
 
 /// An active subscription channel watched by client
@@ -62,6 +72,7 @@ struct State {
 pub struct Subscription {
     topic: KeywordId,
     rx: broadcast::Receiver<Form>,
+    on_drop_tx: Option<oneshot::Sender<()>>,
 }
 
 impl Subscription {
@@ -76,14 +87,23 @@ impl Subscription {
     }
 }
 
+impl std::ops::Drop for Subscription {
+    fn drop(&mut self) {
+        if let Some(on_drop_tx) = self.on_drop_tx.take() {
+            let _ = on_drop_tx.send(());
+        }
+    }
+}
+
 impl Client {
     /// Create new client from connection transport between client and runtime
     pub fn new(conn: Connection) -> Self {
         let (hdl_tx, hdl_rx) = mpsc::channel(32);
         let cancel = CancellationToken::new();
 
+        // TODO: Move to dedicated client task runloop + state
         let cancel_clone = cancel.clone();
-        let state = State::new(conn);
+        let state = State::new(hdl_tx.downgrade(), conn);
         tokio::spawn(async move {
             tokio::select! {
                 res = run(state, hdl_rx) => {
@@ -147,12 +167,13 @@ async fn run(mut state: State, mut hdl_rx: mpsc::Receiver<Event>) -> Result<()> 
 }
 
 impl State {
-    fn new(conn: Connection) -> Self {
+    fn new(hdl_tx: mpsc::WeakSender<Event>, conn: Connection) -> Self {
         Self {
             conn,
             next_req_id: 0,
             inflight_reqs: HashMap::new(),
             sub_txs: Default::default(),
+            hdl_tx,
         }
     }
 
@@ -173,6 +194,7 @@ impl State {
                 self.handle_sub_update(update);
                 Ok(())
             }
+            Event::SubscriptionDropped(topic) => self.handle_sub_drop(topic).await,
         }
     }
 
@@ -207,20 +229,45 @@ impl State {
 
     /// Handle a subscription request
     async fn handle_subscribe(&mut self, topic: KeywordId) -> Result<Subscription> {
-        match self.sub_txs.get(&topic) {
-            Some(tx) => Ok(Subscription {
-                topic,
-                rx: tx.subscribe(),
-            }),
+        let (on_drop_tx, on_drop_rx) = oneshot::channel();
+
+        let hdl_tx = self.hdl_tx.clone();
+        let topic_clone = topic.clone();
+        tokio::spawn(async move {
+            let _ = on_drop_rx.await;
+            if let Some(hdl_tx) = hdl_tx.upgrade() {
+                let _ = hdl_tx.send(Event::SubscriptionDropped(topic_clone)).await;
+            }
+        });
+
+        match self.sub_txs.get_mut(&topic) {
+            Some(record) => {
+                record.count += 1;
+                Ok(Subscription {
+                    topic,
+                    rx: record.sub_tx.subscribe(),
+                    on_drop_tx: Some(on_drop_tx),
+                })
+            }
             None => {
                 let (tx, rx) = broadcast::channel(32);
-                self.sub_txs.insert(topic.clone(), tx);
+                self.sub_txs.insert(
+                    topic.clone(),
+                    ActiveSubscription {
+                        count: 1,
+                        sub_tx: tx,
+                    },
+                );
                 self.conn
-                    .send(&Message::SubscriptionRequest(SubscriptionRequest {
+                    .send(&Message::SubscriptionStart(SubscriptionRequest {
                         topic: topic.clone(),
                     }))
                     .await?;
-                Ok(Subscription { topic, rx })
+                Ok(Subscription {
+                    topic,
+                    rx,
+                    on_drop_tx: Some(on_drop_tx),
+                })
             }
         }
     }
@@ -229,7 +276,7 @@ impl State {
     fn handle_sub_update(&self, update: SubscriptionUpdate) {
         match self.sub_txs.get(&update.topic) {
             Some(s) => {
-                if let Err(e) = s.send(update.contents) {
+                if let Err(e) = s.sub_tx.send(update.contents) {
                     error!("Error while sending update - {e}");
                 }
             }
@@ -241,6 +288,20 @@ impl State {
             }
         }
     }
+
+    async fn handle_sub_drop(&mut self, topic: KeywordId) -> Result<()> {
+        let record = self
+            .sub_txs
+            .get_mut(&topic)
+            .expect("Should only see drop events for active subscriptions");
+        record.count -= 1;
+        if record.count == 0 {
+            self.sub_txs.remove(&topic);
+            self.conn.send(&Message::SubscriptionEnd(topic)).await?;
+        }
+
+        Ok(())
+    }
 }
 
 impl TryFrom<Message> for Event {
@@ -249,7 +310,7 @@ impl TryFrom<Message> for Event {
         match value {
             Message::Response(resp) => Ok(Self::RecvResponse(resp)),
             Message::SubscriptionUpdate(update) => Ok(Self::RecvSubscriptionUpdate(update)),
-            Message::Request(_) | Message::SubscriptionRequest(_) => Err(Error::Internal(format!(
+            _ => Err(Error::Internal(format!(
                 "Client unexpectedly received {:?}",
                 value
             ))),
@@ -357,7 +418,7 @@ mod test {
             .unwrap();
         assert_eq!(
             msg,
-            Message::SubscriptionRequest(SubscriptionRequest {
+            Message::SubscriptionStart(SubscriptionRequest {
                 topic: KeywordId::from("my_topic")
             }),
             "remote should receive corresponding subscribe request"
@@ -449,5 +510,96 @@ mod test {
         );
     }
 
-    // TODO: Check dropping last subscription messages runtime that client is fully unsubscribed
+    #[tokio::test]
+    async fn subscription_drop_to_zero() {
+        let (local, mut remote) = Connection::pair().unwrap();
+        let client = Client::new(local);
+
+        let remote_task = tokio::spawn(async move {
+            let mut msgs = vec![];
+            while msgs.len() < 2 {
+                msgs.push(remote.recv().await.unwrap().unwrap());
+            }
+            msgs
+        });
+
+        let sub = client.subscribe(KeywordId::from("my_topic")).await.unwrap();
+        drop(sub); // should send SubscriptionEnd
+
+        let remote_msgs = remote_task.await.unwrap();
+
+        assert_eq!(
+            remote_msgs,
+            vec![
+                Message::SubscriptionStart(SubscriptionRequest {
+                    topic: KeywordId::from("my_topic")
+                }),
+                Message::SubscriptionEnd(KeywordId::from("my_topic")),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn subscription_drop_multi() {
+        let (local, mut remote) = Connection::pair().unwrap();
+        let client = Client::new(local);
+
+        let remote_task = tokio::spawn(async move {
+            let mut msgs = vec![];
+            while msgs.len() < 2 {
+                msgs.push(remote.recv().await.unwrap().unwrap());
+            }
+            msgs
+        });
+
+        let sub = client.subscribe(KeywordId::from("my_topic")).await.unwrap();
+        let sub2 = client.subscribe(KeywordId::from("my_topic")).await.unwrap();
+
+        drop(sub);
+        drop(sub2);
+
+        let remote_msgs = remote_task.await.unwrap();
+
+        assert_eq!(
+            remote_msgs,
+            vec![
+                Message::SubscriptionStart(SubscriptionRequest {
+                    topic: KeywordId::from("my_topic")
+                }),
+                Message::SubscriptionEnd(KeywordId::from("my_topic")),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn subscription_drop_decrement() {
+        let (local, mut remote) = Connection::pair().unwrap();
+        let client = Client::new(local);
+
+        let remote_task = tokio::spawn(async move {
+            let mut msgs = vec![];
+            while msgs.len() < 2 {
+                msgs.push(remote.recv().await.unwrap().unwrap());
+            }
+            msgs
+        });
+
+        tokio::spawn(async move {
+            let sub = client.subscribe(KeywordId::from("my_topic")).await.unwrap();
+            let _sub2 = client.subscribe(KeywordId::from("my_topic")).await.unwrap();
+            drop(sub); // Only drop sub1
+
+            loop {
+                let _ = client.request(Form::Nil).await; // "marker" API call
+            }
+        });
+
+        let remote_msgs = remote_task.await.unwrap();
+
+        assert_matches!(
+            remote_msgs[..],
+            [Message::SubscriptionStart(_), Message::Request(_)],
+            "should not see SubscriptionEnd"
+        );
+    }
 }

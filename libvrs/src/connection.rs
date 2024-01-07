@@ -25,8 +25,9 @@ pub struct Connection {
 pub enum Message {
     Request(Request),
     Response(Response),
-    SubscriptionRequest(SubscriptionRequest),
+    SubscriptionStart(SubscriptionRequest),
     SubscriptionUpdate(SubscriptionUpdate),
+    SubscriptionEnd(KeywordId),
 }
 
 /// Outgoing Requests
@@ -138,12 +139,10 @@ impl Connection {
         let msg = self.recv().await?;
         match msg {
             Ok(Message::Request(r)) => Some(Ok(r)),
-            Ok(Message::Response(_))
-            | Ok(Message::SubscriptionRequest(_))
-            | Ok(Message::SubscriptionUpdate(_)) => {
+            Err(e) => Some(Err(e)),
+            _ => {
                 panic!("Expected request, but received response over connection")
             }
-            Err(e) => Some(Err(e)),
         }
     }
 
@@ -152,12 +151,10 @@ impl Connection {
         let msg = self.recv().await?;
         match msg {
             Ok(Message::Response(r)) => Some(Ok(r)),
-            Ok(Message::Request(_))
-            | Ok(Message::SubscriptionRequest(_))
-            | Ok(Message::SubscriptionUpdate(_)) => {
+            Err(e) => Some(Err(e)),
+            _ => {
                 panic!("Expected response, but received request over connection")
             }
-            Err(e) => Some(Err(e)),
         }
     }
 }
