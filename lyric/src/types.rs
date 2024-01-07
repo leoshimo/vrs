@@ -181,6 +181,11 @@ where
 }
 
 impl Form {
+    /// From expr
+    pub fn from_expr(expr: &str) -> Result<Self> {
+        parse(expr)
+    }
+
     /// Shorhand for constructing [Form::String]
     pub fn string(s: &str) -> Self {
         Self::String(String::from(s))
