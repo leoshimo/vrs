@@ -15,3 +15,4 @@ tracing = "0.1.40"
 clap = { version = "4.4.13", features = ["cargo", "derive", "string"] }
 rustyline = { version = "13.0.0", features = ["derive"] }
 dirs = "5.0.1"
+clearscreen = "2.0.1"

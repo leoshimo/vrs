@@ -3,7 +3,7 @@ mod repl;
 mod watch;
 
 use anyhow::{Context, Result};
-use clap::{arg, command};
+use clap::{arg, command, ArgGroup};
 
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -38,7 +38,16 @@ async fn main() -> Result<()> {
             run_file(&client, file).await
         } else if let Some(topic) = args.get_one::<String>("subscription") {
             let follow = args.get_flag("follow");
-            watch::run(&client, KeywordId::from(topic.as_str()), follow).await
+            let follow_clear = args.get_flag("follow_clear");
+            watch::run(
+                &client,
+                KeywordId::from(topic.as_str()),
+                watch::Opts {
+                    follow: follow || follow_clear,
+                    clear: follow_clear,
+                },
+            )
+            .await
         } else {
             repl::run(&client).await
         }
@@ -65,8 +74,13 @@ fn cli() -> clap::Command {
         .arg(arg!(command: -c --command <COMMAND> "If present, COMMAND is sent and program exits"))
         .arg(arg!(file: [FILE] "If present, executes contents of FILE"))
         .arg(arg!(subscription: -s --subscription <TOPIC> "If present, watches a specific topic for data"))
+        .group(ArgGroup::new("main")
+               .args(["command", "file", "subscription"])
+               .required(false))
         .arg(arg!(follow: -f --follow "If present, continues polling subscription after first topic update")
              .requires("subscription"))
+        .arg(arg!(follow_clear: -F --followclear "Like --follow, but clears screen after each value")
+            .requires("subscription"))
         .arg(
             arg!(socket: -S --socket <SOCKET> "Path to unix socket for vrsd")
                 .default_value(vrs::runtime_socket().into_os_string()),
