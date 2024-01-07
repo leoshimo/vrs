@@ -47,7 +47,7 @@ async fn subscribe_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
         .await
         .map_err(|e| Error::Runtime(format!("Failed to subscribe on pubsub - {e}")))?;
 
-    // TODO: Should process keep track of active subscriptions via some task handle?
+    // TODO: Idiom for streaming result from =Subscription= to another sink via async task for proc subs + term subs
     tokio::spawn(async move {
         while let Some(ev) = sub.recv().await {
             let msg = Message {

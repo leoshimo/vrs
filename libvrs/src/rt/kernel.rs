@@ -172,7 +172,7 @@ impl Kernel {
             }
             Event::SpawnTermProc(conn, tx) => {
                 let proc = Process::from_prog(self.next_pid(), program::term_prog())
-                    .term(Term::spawn(conn));
+                    .term(Term::spawn(conn, self.pubsub.clone()));
                 let hdl = self.spawn(proc)?;
                 let _ = tx.send(hdl);
                 Ok(())

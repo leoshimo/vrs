@@ -1,20 +1,29 @@
 //! Controlling Terminal for Processes
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
-use crate::connection::Message;
+use crate::connection::{Message, SubscriptionRequest, SubscriptionUpdate};
 use crate::rt::{Error, Result};
 use crate::{Connection, Request, Response};
 use tokio::sync::{mpsc, oneshot};
-use tracing::error;
+use tokio::task::JoinHandle;
+use tracing::{error, info};
 
-/// Controlling terminal
+use super::program::{Form, KeywordId};
+use super::pubsub::PubSubHandle;
+
+/// Controlling terminal managing a client connection
+/// Acts as a pseudo-process, with a single attached process for expression evaluations
+/// [Term] has its own state for subscriptions, separately from attached process.
 #[derive(Debug)]
 pub struct Term {
+    tx: mpsc::WeakSender<Cmd>,
     rx: mpsc::Receiver<Cmd>,
     conn: Connection,
     req_queue: VecDeque<Request>,
     read_req_queue: VecDeque<oneshot::Sender<Request>>,
+    pubsub: PubSubHandle,
+    active_subs: HashMap<KeywordId, JoinHandle<()>>,
 }
 
 /// Handle to [Term]
@@ -27,6 +36,7 @@ pub struct TermHandle {
 enum Cmd {
     ReadRequest(oneshot::Sender<Request>),
     SendResponse(Response),
+    NotifySubscriptionUpdate(KeywordId, Form),
 }
 
 impl TermHandle {
@@ -52,13 +62,16 @@ impl TermHandle {
 
 impl Term {
     /// Create a new terminal connection
-    pub(crate) fn spawn(conn: Connection) -> TermHandle {
+    pub(crate) fn spawn(conn: Connection, pubsub: PubSubHandle) -> TermHandle {
         let (tx, rx) = mpsc::channel(32);
         let t = Term {
+            tx: tx.downgrade(),
             rx,
             conn,
             req_queue: Default::default(),
             read_req_queue: Default::default(),
+            pubsub,
+            active_subs: Default::default(),
         };
         tokio::spawn(async move {
             if let Err(e) = t.run().await {
@@ -72,14 +85,9 @@ impl Term {
     async fn run(mut self) -> Result<()> {
         loop {
             tokio::select! {
-                req = Term::read_req(&mut self.conn) => {
-                    let req = req?;
-                    if let Some(tx) = self.read_req_queue.pop_front() {
-                        let _ = tx.send(req);
-                    } else {
-                        self.req_queue.push_back(req);
-                    }
-                }
+                msg = Term::read_msg(&mut self.conn) => {
+                    self.handle_conn_msg(msg?).await?;
+                },
                 cmd = self.rx.recv() => {
                     let cmd = match cmd {
                         Some(cmd) => cmd,
@@ -99,6 +107,9 @@ impl Term {
                                     self.read_req_queue.push_back(req_tx);
                                 }
                             }
+                        },
+                        Cmd::NotifySubscriptionUpdate(topic, contents) => {
+                            self.handle_sub_update(topic, contents).await?;
                         }
                     }
                 }
@@ -108,17 +119,88 @@ impl Term {
     }
 
     /// Async task to poll for new messages
-    async fn read_req(conn: &mut Connection) -> Result<Request> {
-        let msg = conn
-            .recv()
+    async fn read_msg(conn: &mut Connection) -> Result<Message> {
+        conn.recv()
             .await
             .ok_or(Error::ConnectionClosed)?
-            .map_err(|e| Error::IOError(format!("{e}")))?;
-        let req = match msg {
-            Message::Request(req) => req,
-            _ => return Err(Error::IOError(format!("Unexpected message: {:?}", msg))),
-        };
-        Ok(req)
+            .map_err(|e| Error::IOError(format!("{e}")))
+    }
+
+    /// Handle a message from connection
+    async fn handle_conn_msg(&mut self, msg: Message) -> Result<()> {
+        match msg {
+            Message::Request(req) => {
+                if let Some(tx) = self.read_req_queue.pop_front() {
+                    let _ = tx.send(req);
+                } else {
+                    self.req_queue.push_back(req);
+                }
+            }
+            Message::SubscriptionStart(req) => {
+                self.setup_subscription(req).await?;
+            }
+            Message::SubscriptionEnd(topic) => {
+                self.teardown_subscription(topic).await?;
+            }
+            _ => error!("Received unexpected msg over conn - {msg:?}"),
+        }
+        Ok(())
+    }
+
+    /// Setup a new subscription
+    async fn setup_subscription(&mut self, req: SubscriptionRequest) -> Result<()> {
+        info!("setup_subscription {req:?}");
+        let mut sub = self.pubsub.subscribe(&req.topic).await?;
+
+        // TODO: Idiom for streaming result from =Subscription= to another sink via async task for proc subs + term subs
+        let tx = self.tx.clone();
+        let topic = req.topic.clone();
+        let sub_task = tokio::spawn(async move {
+            while let Some(ev) = sub.recv().await {
+                if let Some(tx) = tx.upgrade() {
+                    let form: Form = match ev.try_into() {
+                        Ok(f) => f,
+                        Err(e) => {
+                            error!("Unable to notify subscription update - {e}");
+                            continue;
+                        }
+                    };
+                    let _ = tx
+                        .send(Cmd::NotifySubscriptionUpdate(topic.clone(), form))
+                        .await;
+                }
+            }
+        });
+
+        self.active_subs.insert(req.topic, sub_task);
+
+        Ok(())
+    }
+
+    /// Handle notification of subscription update
+    async fn handle_sub_update(&mut self, topic: KeywordId, contents: Form) -> Result<()> {
+        info!("handle_sub_update {topic} {contents}");
+        self.conn
+            .send(&Message::SubscriptionUpdate(SubscriptionUpdate {
+                topic,
+                contents,
+            }))
+            .await
+            .map_err(|e| Error::IOError(format!("{}", e)))
+    }
+
+    /// Teardown a subscription for topic
+    async fn teardown_subscription(&mut self, topic: KeywordId) -> Result<()> {
+        info!("teardown_subscription {topic}");
+        match self.active_subs.remove(&topic) {
+            None => {
+                error!("Unable to teardown - missing active sub for {topic}");
+            }
+            Some(task) => {
+                task.abort();
+            }
+        }
+        Ok(())
     }
 }
 
@@ -130,7 +212,10 @@ impl std::cmp::PartialEq for TermHandle {
 
 #[cfg(test)]
 mod tests {
-    use crate::rt::program::Form;
+    use crate::{
+        rt::{program::Form, pubsub::PubSub},
+        Client, Val,
+    };
 
     use super::*;
     use assert_matches::assert_matches;
@@ -140,7 +225,7 @@ mod tests {
     #[tokio::test]
     async fn read_req_no_request() {
         let (rt, _client) = Connection::pair().unwrap();
-        let t = Term::spawn(rt);
+        let t = Term::spawn(rt, PubSub::spawn());
 
         timeout(Duration::from_secs(0), t.read_request())
             .await
@@ -153,7 +238,7 @@ mod tests {
         // Send client.send_req before Cmd::ReadRequest
         {
             let (rt, mut client) = Connection::pair().unwrap();
-            let t = Term::spawn(rt);
+            let t = Term::spawn(rt, PubSub::spawn());
 
             let (req_tx, req_rx) = oneshot::channel();
 
@@ -182,7 +267,7 @@ mod tests {
         // Send before Cmd::ReadRequest client.send_req
         {
             let (rt, mut client) = Connection::pair().unwrap();
-            let t = Term::spawn(rt);
+            let t = Term::spawn(rt, PubSub::spawn());
 
             let (req_tx, req_rx) = oneshot::channel();
 
@@ -211,7 +296,7 @@ mod tests {
     async fn read_request_in_sequence() {
         let (rt, mut client) = Connection::pair().unwrap();
 
-        let t = Term::spawn(rt);
+        let t = Term::spawn(rt, PubSub::spawn());
 
         tokio::spawn(async move {
             for i in 0..5 {
@@ -250,7 +335,7 @@ mod tests {
     #[tokio::test]
     async fn read_request_dropped_remote() {
         let (remote, local) = Connection::pair().unwrap();
-        let t = Term::spawn(local);
+        let t = Term::spawn(local, PubSub::spawn());
 
         let t_task = tokio::spawn(async move { t.read_request().await });
 
@@ -263,7 +348,7 @@ mod tests {
     #[tokio::test]
     async fn send_response() {
         let (local, mut remote) = Connection::pair().unwrap();
-        let t = Term::spawn(local);
+        let t = Term::spawn(local, PubSub::spawn());
 
         t.send_response(Response {
             req_id: 99,
@@ -286,5 +371,39 @@ mod tests {
         );
     }
 
-    // TODO: Test that client process is killed after connection is disconnected (?)
+    #[tokio::test]
+    async fn term_subscription() {
+        let (runtime, client) = Connection::pair().unwrap();
+        let client = Client::new(client);
+        let pubsub = PubSub::spawn();
+        let _t = Term::spawn(runtime, pubsub.clone());
+
+        let client_task = tokio::spawn(async move {
+            let mut client_sub = client.subscribe(KeywordId::from("my_topic")).await.unwrap();
+            let mut seen = vec![];
+            while seen.len() < 3 {
+                seen.push(client_sub.recv().await.unwrap());
+            }
+            seen
+        });
+
+        // Publish increasing
+        tokio::spawn(async move {
+            let mut count = 0;
+            loop {
+                pubsub
+                    .publish(&KeywordId::from("my_topic"), Val::Int(count))
+                    .await
+                    .unwrap();
+                count += 1;
+                yield_now().await;
+            }
+        });
+
+        let res = client_task.await.unwrap();
+
+        assert_matches!(res[..],
+                        [Form::Int(a), Form::Int(b), Form::Int(c)] if b == a + 1 && c == b + 1,
+                        "client subscription should observe a sequence of 3 increasing numbers");
+    }
 }

@@ -70,6 +70,7 @@ async fn send_resp_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
 mod tests {
     use super::*;
     use crate::rt::program::{self, term_env, Form};
+    use crate::rt::pubsub::PubSub;
     use crate::rt::term::Term;
     use crate::rt::{kernel, Process, ProcessSet};
     use crate::{Connection, ProcessResult, Program, Request};
@@ -82,7 +83,7 @@ mod tests {
         let mut procs = ProcessSet::new();
         let prog = Program::from_expr("(recv_req)").unwrap().env(term_env());
         let _ = Process::from_prog(0.into(), prog)
-            .term(Term::spawn(local))
+            .term(Term::spawn(local, PubSub::spawn()))
             .spawn(&mut procs);
 
         let _ = remote
@@ -115,7 +116,7 @@ mod tests {
         "#;
         let prog = Program::from_expr(prog).unwrap().env(term_env());
         let hdl = Process::from_prog(0.into(), prog)
-            .term(Term::spawn(local))
+            .term(Term::spawn(local, PubSub::spawn()))
             .spawn(&mut procs)
             .unwrap();
 
@@ -150,7 +151,7 @@ mod tests {
 
         let prog = program::term_prog();
         let _ = Process::from_prog(0.into(), prog)
-            .term(Term::spawn(local))
+            .term(Term::spawn(local, PubSub::spawn()))
             .spawn(&mut procs);
 
         let _ = remote
