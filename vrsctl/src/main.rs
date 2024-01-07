@@ -1,5 +1,6 @@
 mod editor;
 mod repl;
+mod watch;
 
 use anyhow::{Context, Result};
 use clap::{arg, command};
@@ -10,8 +11,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use tokio::net::UnixStream;
 use tracing::debug;
-use vrs::Client;
-use vrs::Connection;
+use vrs::{Client, Connection, KeywordId};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -36,6 +36,9 @@ async fn main() -> Result<()> {
             run_cmd(&client, cmd).await
         } else if let Some(file) = args.get_one::<String>("file") {
             run_file(&client, file).await
+        } else if let Some(topic) = args.get_one::<String>("subscription") {
+            let follow = args.get_flag("follow");
+            watch::run(&client, KeywordId::from(topic.as_str()), follow).await
         } else {
             repl::run(&client).await
         }
@@ -61,8 +64,11 @@ fn cli() -> clap::Command {
     command!()
         .arg(arg!(command: -c --command <COMMAND> "If present, COMMAND is sent and program exits"))
         .arg(arg!(file: [FILE] "If present, executes contents of FILE"))
+        .arg(arg!(subscription: -s --subscription <TOPIC> "If present, watches a specific topic for data"))
+        .arg(arg!(follow: -f --follow "If present, continues polling subscription after first topic update")
+             .requires("subscription"))
         .arg(
-            arg!(socket: -S --socket [SOCKET] "Path to unix socket for vrsd")
+            arg!(socket: -S --socket <SOCKET> "Path to unix socket for vrsd")
                 .default_value(vrs::runtime_socket().into_os_string()),
         )
 }
