@@ -36,7 +36,7 @@ async fn main() -> Result<()> {
             run_cmd(&client, cmd).await
         } else if let Some(file) = args.get_one::<String>("file") {
             run_file(&client, file).await
-        } else if let Some(topic) = args.get_one::<String>("subscription") {
+        } else if let Some(topic) = args.get_one::<String>("subscribe") {
             let follow = args.get_flag("follow");
             let follow_clear = args.get_flag("follow_clear");
             watch::run(
@@ -71,16 +71,16 @@ async fn main() -> Result<()> {
 /// The clap CLI interface
 fn cli() -> clap::Command {
     command!()
-        .arg(arg!(command: -c --command <COMMAND> "If present, COMMAND is sent and program exits"))
         .arg(arg!(file: [FILE] "If present, executes contents of FILE"))
-        .arg(arg!(subscription: -s --subscription <TOPIC> "If present, watches a specific topic for data"))
+        .arg(arg!(command: -c --command <EXPR> "If present, EXPR is sent as request, then program exits"))
+        .arg(arg!(subscribe: -s --subscribe <TOPIC> "If present, watches a specific topic for data"))
         .group(ArgGroup::new("main")
-               .args(["command", "file", "subscription"])
+               .args(["command", "file", "subscribe"])
                .required(false))
         .arg(arg!(follow: -f --follow "If present, continues polling subscription after first topic update")
-             .requires("subscription"))
+             .requires("subscribe"))
         .arg(arg!(follow_clear: -F --followclear "Like --follow, but clears screen after each value")
-            .requires("subscription"))
+            .requires("subscribe"))
         .arg(
             arg!(socket: -S --socket <SOCKET> "Path to unix socket for vrsd")
                 .default_value(vrs::runtime_socket().into_os_string()),

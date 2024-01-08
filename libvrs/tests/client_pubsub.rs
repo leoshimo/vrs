@@ -24,7 +24,7 @@ async fn client_pubsub_from_service() {
     let client = Client::new(local);
     rt.handle_conn(remote).await.unwrap();
 
-    // subscribe + trigger pusub update from same client
+    // subscribe + trigger pubsub update from same client
     let mut sub = client.subscribe(KeywordId::from("count")).await.unwrap();
     client
         .request(
