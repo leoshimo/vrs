@@ -2,8 +2,7 @@
 use anyhow::Result;
 
 use lyric::Form;
-use std::{path::PathBuf, thread};
-use tokio::sync::mpsc;
+use std::path::PathBuf;
 use vrs::Client;
 
 use crate::editor::{self, Editor};
