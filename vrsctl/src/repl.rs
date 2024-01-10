@@ -37,6 +37,7 @@ pub(crate) async fn run(client: &Client) -> Result<()> {
                 continue;
             }
         };
+        // TODO: Interrupt request with ctrl-c?
         match client.request(f).await {
             Ok(resp) => match resp.contents {
                 // TODO: Bringup different formats for clients - e.g. REPL should use text format only

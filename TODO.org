@@ -6,7 +6,8 @@ Current: Hypermedia Client and VRSJMP Command Bar Client
 
 ** Hypermedia Client - vrsjmp
 
-- [ ] Hypermedia Client Design
+- [X] Runtime Pubsub
+- [X] Hypermedia Client Design
 - [ ] VRSJMP Command Bar Client
 
 ** Runtime Core v0.2
@@ -19,7 +20,7 @@ Goal: Build Core Runtime Features
 - [ ] Process Links and Supervisor
 - [ ] Rust Macros for Code Compression
 - [ ] Lyric Macros
-- [ ] Parellel Development / Release Instances
+- [X] Parallel Development / Release Instances
 - [ ] Daemon Installation Hook
   
 ** VRS Cloud - Replace Things / Are.na
@@ -32,11 +33,6 @@ This is in service of desktop + web + mobile replacement for Things / Org Mode
 Goal: Replicate Emacs-like Development Workflow to build VRS software
 E.g. Emacs Eval, SLIME-like workflows for molding Software
 
-* wishlist
-Record of "I want to be able to" thoughts
-** Open a visual structured editor for building interfaces from source, with changes reflected in source
-** =(interactive)=-like mechanics for dealing with common user-input arguments
-E.g. =(completing-read)= and =(interactive "f")= in Emacs
 * runtime
 ** DONE Conn-less Process Spawning
 Goal: Non-connection-backed =spawn= from =kernel.rs=
@@ -81,6 +77,11 @@ Maybe also cover imports / exported interface and discoverability
 (bind-srv :launcher)
 #+end_src
 
+** DONE PubSub API
+- Support pub/sub channels
+- Proof-of-Concept: Pub/Sub listening to "counter" variable on new task execution model
+- Reactivity of PubSub over PubSub
+- Method to access pubsub topic via =vrsctl=
 ** TODO Hypermedia Client
 Goal: Build CLI Hypermedia Client over VRS
 See also - "Revisit Client Connection"
@@ -114,9 +115,6 @@ Goal: Better interface over =Command= to access:
 - Process output
 - Exit code
 
-** TODO Runtime Live-On
-- [ ] =vrsd= does not crash if process crashes (?)
-- [ ] =vrsd= can run in parallel - =dev= and =prod=
 ** TODO Revisit Runtime / Client Boundary
 Goal: Revisit protocol b/t/ Runtime / Client w/ New Learnings
 
@@ -141,11 +139,6 @@ Allows:
 - "Interrupt" to exit to prompt, like Ctrl-c
 
 Similar to =read= and =input()= working in shell + python respectively
-** TODO PubSub API
-- Support pub/sub channels
-- Proof-of-Concept: Pub/Sub listening to "counter" variable on new task execution model
-- Reactivity of PubSub over PubSub
-- Method to access pubsub topic via =vrsctl=
 ** TODO Preemptive Multitasking
 
 - Start a process that infinite loops, =(loop 5)=
@@ -260,6 +253,17 @@ Use query string! e.g.:
 Exercises Embark Mechanics + Consuming Program Output
 Generate hypermedia based on =ps= output
 ** TODO Notification Service
+** TODO Journal / Brain
+A replacement for "self-texting"
+
+A chat interface for:
+- Storing information (notes, messages, URLs, etc)
+- Recalling information
+- Timeline Record
+- Brainstorming
+- Task Management
+- "Assistant"
+
 * rnd
 ** TODO LLM Blocks
 
@@ -277,22 +281,6 @@ Goal: Recovering from process or host failure
 ** TODO Program Migration
 Goal: Moving snapshot of running program from machine to machine
 ** TODO Agent Programs
-* testing
-** TODO More Test Cases for Message Passing
-- [ ] Test Cases:
-   - [ ] Calling =recv= FIRST, then =send=
-   - [ ] Calling =send= FIRST, then =recv=
-   - [ ] Calling =recv= for specific pattern
-** TODO Test Cases for Def, Get, Set, at different scopes
-
-Replicate tests in env.rs to eval.rs
-
-- get local in parent
-- get local in child
-- get parent in child
-- set parent in child
-- Two things capturing a parent, and each setting and updating it
-
 * debt  
 ** TODO Native Bindings that should be =Lambda=
 E.g. built-in lambda bindings - e.g. =call_fn=
@@ -322,9 +310,6 @@ pub(crate) fn call_fn() -> Lambda {
 
 ** TODO Native Bindings w/ hand-rolled macos
 E.g. =srv= definition - =srv_fn=
-
-** TODO Fiber Execution
-Revisit =Fiber= and =CallStack= code
 
 * tooling
 ** TODO Debuggers and Breakpoints
@@ -401,8 +386,73 @@ Extend to visual elements? UI:
 ** TODO Tail-Call Optimization
 * bugs
 ** TODO Busy Looper sometimes Crashes Runtime
-** TODO =(begin)= should push =nil= if there are no body statements
-** TODO =(if ...)= without =else-form= should return =nil=
 ** TODO =(loop 0)= blocks new connection only via REPL, but not =vrsctl -c "(loop 0)"=
 ** TODO Using =(map (ps) (lambda (p) (kill p)))= results in runtime crash sometimes
 ** TODO Disconnecting from REPL after running =loop 0= does not quit as expected.
+** TODO Sending client request for undefined method hangs indefinitely
+
+Test case to repro
+
+#+begin_src rust
+//! Tests for [Client] Pubsub API
+
+use lyric::parse;
+use vrs::{Client, Connection, Form, KeywordId, Program, Runtime};
+
+/// Test Client::subscribe between client and runtime service process
+#[tokio::test]
+async fn client_pubsub_process_and_service() {
+    let rt = Runtime::new();
+
+    // counter service
+    let prog = Program::from_expr(
+        r#"(begin
+        (def count 0)
+        (defn increment (n)
+            (set count (+ count n))
+            (publish :count count))
+        (srv :name :counter :exports '(increment)))
+        "#,
+    )
+    .unwrap();
+    rt.run(prog).await.unwrap();
+
+    let (local, remote) = Connection::pair().unwrap();
+    let client = Client::new(local);
+    rt.handle_conn(remote).await.unwrap();
+
+    // subscribe then increment
+    let mut sub = client.subscribe(KeywordId::from("count")).await.unwrap();
+    client
+        .request(parse("(increment 1)").unwrap())
+        .await
+        .unwrap();
+    client
+        .request(parse("(increment 10)").unwrap())
+        .await
+        .unwrap();
+    client
+        .request(parse("(increment 31)").unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        sub.recv().await.unwrap(),
+        Form::Int(1),
+        "should publish 1 after (increment 1)"
+    );
+}
+
+// TODO: Pubsub from another client
+
+#+end_src
+
+** TODO Processes that run =srv= does not exit after =vrsctl= exits
+I.e. killing connection does NOT terminate proc.
+** TODO bug - =(publish :my_topic)= terminates vrsctl w/o helpful error
+Errors in REPL are sub-par quality
+* wishlist
+Record of "I want to be able to" thoughts
+** Open a visual structured editor for building interfaces from source, with changes reflected in source
+** =(interactive)=-like mechanics for dealing with common user-input arguments
+E.g. =(completing-read)= and =(interactive "f")= in Emacs

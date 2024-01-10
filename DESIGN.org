@@ -83,9 +83,8 @@ affecting API surface between client and client library.
 
 ** Hypermedia Client
 
-The client implementation over client API is hypermedia-driven:
-
-TODO: Add notes on hypermedia client
+The client implementation over client API is hypermedia-driven.
+See [Hypermedia]
 
 ** vrsctl - CLI client
 
@@ -232,6 +231,13 @@ The design is focused on:
   complexity on client or runtime programs.
 - Ease of Automation and Testing
 
+** High Level
+
+Client manages connection
+Connection transmits request / response / pubsub messages over connection
+Documents are backed by pubsub topics
+Browser manages a set of documents
+
 ** Uniform Hypermedia-Driven Interface
 
 The hypermedia format should have a minimal, uniform interface.
@@ -294,6 +300,10 @@ thin general-purpose clients, i.e a slim web browser of sorts.
 
 Rich interactivity is enabled by an interactive interface process that runs in
 the runtime itself, a la Phoenix LiveView
+
+Clients should *not* accumulate a large body of lyric code in client shell
+binary itself, so that changes in runtime do not need recompilation of client
+binary in most cases.
 
 *Rapid Interactive Dev Loop*
 
