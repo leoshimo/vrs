@@ -15,29 +15,20 @@ pub(crate) async fn run(client: &Client) -> Result<()> {
     let mut rl = editor::editor()?;
     let mut printer = rl.create_external_printer()?;
     let history = history_file();
-    let (line_tx, mut line_rx) = mpsc::channel(32);
 
-    // Uses separate thread for rustyline - rustyline is not async
-    thread::spawn(move || loop {
-        load_history(&mut rl, &history);
-        match rl.readline("vrs> ") {
+    load_history(&mut rl, &history);
+
+    loop {
+        let line = match rl.readline("vrs> ") {
             Ok(line) => {
                 let _ = rl.add_history_entry(line.as_str());
-                let _ = line_tx.blocking_send(line);
+                line
             }
             Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => break,
             Err(err) => {
                 println!("Error: {:?}", err);
                 break;
             }
-        }
-        save_history(&mut rl, &history);
-    });
-
-    loop {
-        let line = match line_rx.recv().await {
-            Some(l) => l,
-            None => break, // rustyline exited
         };
         let f = match lyric::parse(&line) {
             Ok(f) => f,
@@ -61,6 +52,8 @@ pub(crate) async fn run(client: &Client) -> Result<()> {
             }
         }
     }
+
+    save_history(&mut rl, &history);
     client.shutdown().await;
 
     Ok(())
