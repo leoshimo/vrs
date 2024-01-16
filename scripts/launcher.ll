@@ -21,7 +21,7 @@
 (add_item "Cron" '(open_app "Cron"))
 (add_item "Zulip" '(open_app "Zulip"))
 (add_item "Checkins" '(open_url "https://recurse.zulipchat.com/#narrow/stream/27333-alumni-checkins/topic/Leo.20Shimonaka"))
-(add_item "Twitter" '(open_url "https://www.twitter.com"))
+(add_item "X" '(open_url "https://www.x.com"))
 (add_item "GitHub - vrs" '(open_url "https://www.github.com/leoshimo/vrs"))
 (add_item "Downloads" '(open_file "~/Downloads"))
 (add_item "Dropbox" '(open_file "~/Dropbox"))
