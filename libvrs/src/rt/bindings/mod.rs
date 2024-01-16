@@ -1,13 +1,14 @@
-mod conn;
+mod fs;
 mod mailbox;
 mod open;
 mod proc;
 mod pubsub;
 mod service;
 mod system;
+mod term;
 
-pub(crate) use conn::recv_req_fn;
-pub(crate) use conn::send_resp_fn;
+pub(crate) use term::recv_req_fn;
+pub(crate) use term::send_resp_fn;
 
 pub(crate) use mailbox::call_fn;
 pub(crate) use mailbox::ls_msgs_fn;
@@ -34,7 +35,11 @@ pub(crate) use service::find_srv_fn;
 pub(crate) use service::info_srv_fn;
 pub(crate) use service::ls_srv_fn;
 pub(crate) use service::register_fn;
+pub(crate) use service::spawn_srv_fn;
 pub(crate) use service::srv_fn;
 
 pub(crate) use pubsub::publish_fn;
 pub(crate) use pubsub::subscribe_fn;
+
+pub(crate) use fs::fdump_fn;
+pub(crate) use fs::fread_fn;

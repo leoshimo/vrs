@@ -34,6 +34,7 @@
             {
                 "fullscreen": false,
                 "resizable": false,
+                "alwaysOnTop": false,
                 "maximizable": false,
                 "minimizable": false,
                 "closable": false,
@@ -41,8 +42,9 @@
                 "title": "vrsjmp",
                 "decorations": false,
                 "width": 800,
-                "height": 600,
-                "center": true
+                "height": 530,
+                "center": true,
+                "acceptFirstMouse": true
             }
         ]
     }

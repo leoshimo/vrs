@@ -6,6 +6,7 @@ use super::proc::{ProcessExit, ProcessHandle, ProcessSet};
 use super::program;
 use super::pubsub::{PubSub, PubSubHandle};
 use super::registry::Registry;
+use crate::rt::term::Term;
 use crate::rt::{proc::Process, Error, ProcessId, Result};
 use crate::{Connection, Program};
 use tokio::sync::{mpsc, oneshot};
@@ -65,7 +66,7 @@ impl KernelHandle {
     pub(crate) async fn spawn_for_conn(&self, conn: Connection) -> Result<ProcessHandle> {
         let (tx, rx) = oneshot::channel();
         self.ev_tx
-            .send(Event::SpawnConnProc(conn, tx))
+            .send(Event::SpawnTermProc(conn, tx))
             .await
             .map_err(|_| Error::NoMessageReceiver("spawn_for_conn failed".to_string()))?;
         rx.await
@@ -131,7 +132,7 @@ impl std::cmp::PartialEq for WeakKernelHandle {
 #[derive(Debug)]
 pub enum Event {
     SpawnProg(Program, oneshot::Sender<ProcessHandle>),
-    SpawnConnProc(Connection, oneshot::Sender<ProcessHandle>),
+    SpawnTermProc(Connection, oneshot::Sender<ProcessHandle>),
     ProcessExit(ProcessExit),
     ListProcess(oneshot::Sender<Vec<ProcessId>>),
     KillProcess(ProcessId),
@@ -169,8 +170,9 @@ impl Kernel {
                 let _ = tx.send(hdl);
                 Ok(())
             }
-            Event::SpawnConnProc(_, tx) => {
-                let proc = Process::from_prog(self.next_pid(), program::connection_program());
+            Event::SpawnTermProc(conn, tx) => {
+                let proc = Process::from_prog(self.next_pid(), program::term_prog())
+                    .term(Term::spawn(conn, self.pubsub.clone()));
                 let hdl = self.spawn(proc)?;
                 let _ = tx.send(hdl);
                 Ok(())
@@ -241,7 +243,6 @@ mod tests {
 
     use super::*;
 
-    #[ignore] // TODO: Controlling terminal test
     #[tokio::test]
     async fn kernel_proc_for_conn() {
         let (local, remote) = Connection::pair().unwrap();
@@ -266,7 +267,6 @@ mod tests {
         assert_eq!(resp.contents, Ok(Form::string("Hello world")));
     }
 
-    #[ignore] // TODO: Controlling terminal test
     #[tokio::test]
     async fn kernel_spawn_conn_drop() {
         let (local, remote) = Connection::pair().unwrap();
@@ -280,10 +280,12 @@ mod tests {
 
         drop(remote); // remote terminates
 
-        assert_eq!(
-            hdl.join().await.unwrap().status.unwrap(),
-            ProcessResult::Disconnected
-        );
+        let exit = timeout(Duration::from_millis(5), hdl.join())
+            .await
+            .expect("Should not timeout - process should exit for error")
+            .expect("Join should succeed");
+
+        assert_matches!(exit.status, Err(_));
         assert!(
             k.procs().await.unwrap().is_empty(),
             "Should terminate conn process for dropped conn"

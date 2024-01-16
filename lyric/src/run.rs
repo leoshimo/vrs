@@ -25,7 +25,8 @@ where
             Signal::Await(call) => {
                 // TODO: Should errors in fut properly update `Fiber::state`?
                 // TODO: Jiggle code between fiber::run and run::run
-                let poll_res = call.apply(f).await?;
+                // TODO(bug): NativeAsyncFn do not respect error catching scope, e.g. `(try (exec "jibberish"))` terminates proc
+                let poll_res = call.apply(f).await;
                 res = f.resume(poll_res)?;
             }
         }
@@ -86,6 +87,7 @@ mod tests {
         env.bind_native_async(
             SymbolId::from("async_call"),
             NativeAsyncFn {
+                doc: "".to_string(),
                 func: |_, _| {
                     Box::new(async {
                         yield_now().await;
@@ -107,6 +109,7 @@ mod tests {
         env.bind_native_async(
             SymbolId::from("async_inc"),
             NativeAsyncFn {
+                doc: "".to_string(),
                 func: |_, args| {
                     let num = match args[..] {
                         [Val::Int(n)] => n,
@@ -132,6 +135,7 @@ mod tests {
         env.bind_native_async(
             SymbolId::from("async_err"),
             NativeAsyncFn {
+                doc: "".to_string(),
                 func: |_, args| {
                     Box::new(async move {
                         yield_now().await;
@@ -156,6 +160,7 @@ mod tests {
         env.bind_native_async(
             SymbolId::from("async_inc"),
             NativeAsyncFn {
+                doc: "".to_string(),
                 func: |_, args| {
                     let num = match args[..] {
                         [Val::Int(n)] => n,

@@ -10,6 +10,7 @@ use super::kernel::WeakKernelHandle;
 use super::proc::ProcessId;
 use super::pubsub::PubSubHandle;
 use super::registry::Registry;
+use super::term::TermHandle;
 
 /// Program used to spawn new processes
 #[derive(Debug, Clone)]
@@ -55,6 +56,7 @@ pub type Bytecode = lyric::Bytecode<Extern, Locals>;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Extern {
     ProcessId(ProcessId),
+    RequestId(u32), // TODO: Type request id as RequestId
 }
 
 /// Locals for Program Fiber
@@ -70,13 +72,15 @@ pub struct Locals {
     pub(crate) pubsub: Option<PubSubHandle>,
     /// Handle to current process
     pub(crate) self_handle: Option<ProcessHandle>,
+    /// Handle to controlling terminal, if any
+    pub(crate) term: Option<TermHandle>,
 }
 
 impl Program {
     pub fn from_bytecode(code: Bytecode) -> Self {
         Self {
             code,
-            env: program_env(),
+            env: proc_env(),
         }
     }
 
@@ -97,13 +101,19 @@ impl Program {
             ));
         }
 
-        let mut prog = Self::from_bytecode(lambda.code);
-        prog.env = match lambda.parent.as_ref() {
-            Some(parent) => parent.as_ref().lock().unwrap().clone(),
-            None => program_env(),
-        };
+        let code = lambda.code;
+        let env = lambda.parent.as_ref();
+        let prog = Self::from_bytecode(code).env(match env {
+            Some(env) => env.lock().unwrap().fork(),
+            None => proc_env(),
+        });
 
         Ok(prog)
+    }
+
+    pub fn env(mut self, env: Env) -> Self {
+        self.env = env;
+        self
     }
 
     pub fn into_fiber(self, locals: Locals) -> Fiber {
@@ -112,9 +122,16 @@ impl Program {
 }
 
 /// Create a new program for connections
-pub fn connection_program() -> Program {
-    Program::from_expr("(loop (send_resp (try (eval (recv_req)))))")
+pub fn term_prog() -> Program {
+    let prog = r#"
+        (loop
+            (def (req_id contents) (recv_req))
+            (send_resp req_id (try (eval contents))))
+    "#;
+
+    Program::from_expr(prog)
         .expect("Connection program should compile")
+        .env(term_env())
 }
 
 impl Locals {
@@ -125,6 +142,7 @@ impl Locals {
             registry: None,
             pubsub: None,
             self_handle: None,
+            term: None,
         }
     }
 
@@ -144,8 +162,12 @@ impl Locals {
     }
 
     pub(crate) fn handle(&mut self, handle: ProcessHandle) -> &mut Self {
-        //
         self.self_handle = Some(handle);
+        self
+    }
+
+    pub(crate) fn term(&mut self, term: TermHandle) -> &mut Self {
+        self.term = Some(term);
         self
     }
 }
@@ -156,30 +178,26 @@ impl PartialEq for Program {
     }
 }
 
-/// Create new environment for programs
-fn program_env() -> Env {
+/// Create new environment for process programs
+pub fn proc_env() -> Env {
     let mut e = Env::standard();
 
     {
-        e.bind_native(SymbolId::from("recv_req"), bindings::recv_req_fn())
-            .bind_native(SymbolId::from("send_resp"), bindings::send_resp_fn());
-    }
-
-    {
         e.bind_native_async(SymbolId::from("recv"), bindings::recv_fn())
-            .bind_native_async(SymbolId::from("ls-msgs"), bindings::ls_msgs_fn())
+            .bind_native_async(SymbolId::from("ls_msgs"), bindings::ls_msgs_fn())
             .bind_native_async(SymbolId::from("send"), bindings::send_fn())
             .bind_lambda(SymbolId::from("call"), bindings::call_fn());
     }
 
     {
         e.bind_native(SymbolId::from("srv"), bindings::srv_fn())
-            .bind_lambda(SymbolId::from("bind-srv"), bindings::bind_srv_fn())
+            .bind_lambda(SymbolId::from("bind_srv"), bindings::bind_srv_fn())
             .bind_native(
-                SymbolId::from("def-bind-interface"),
+                SymbolId::from("def_bind_interface"),
                 bindings::def_bind_interface(),
             )
-            .bind_native_async(SymbolId::from("info-srv"), bindings::info_srv_fn());
+            .bind_native_async(SymbolId::from("info_srv"), bindings::info_srv_fn())
+            .bind_native(SymbolId::from("spawn_srv"), bindings::spawn_srv_fn());
     }
 
     {
@@ -189,6 +207,11 @@ fn program_env() -> Env {
             .bind_native(SymbolId::from("self"), bindings::self_fn())
             .bind_native_async(SymbolId::from("sleep"), bindings::sleep_fn())
             .bind_native_async(SymbolId::from("spawn"), bindings::spawn_fn());
+    }
+
+    {
+        e.bind_native_async(SymbolId::from("fread"), bindings::fread_fn())
+            .bind_native_async(SymbolId::from("fdump"), bindings::fdump_fn());
     }
 
     {
@@ -204,8 +227,8 @@ fn program_env() -> Env {
 
     {
         e.bind_native_async(SymbolId::from("register"), bindings::register_fn())
-            .bind_lambda(SymbolId::from("find-srv"), bindings::find_srv_fn())
-            .bind_native_async(SymbolId::from("ls-srv"), bindings::ls_srv_fn());
+            .bind_lambda(SymbolId::from("find_srv"), bindings::find_srv_fn())
+            .bind_native_async(SymbolId::from("ls_srv"), bindings::ls_srv_fn());
     }
 
     {
@@ -214,4 +237,12 @@ fn program_env() -> Env {
     }
 
     e
+}
+
+/// Create an environment for term_prog
+pub fn term_env() -> Env {
+    let mut env = proc_env();
+    env.bind_native_async(SymbolId::from("recv_req"), bindings::recv_req_fn())
+        .bind_native_async(SymbolId::from("send_resp"), bindings::send_resp_fn());
+    env
 }

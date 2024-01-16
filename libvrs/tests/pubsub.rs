@@ -10,7 +10,7 @@ async fn single_process_pubsub() {
         (publish :my_topic :before_subscribe)
         (subscribe :my_topic)
         (publish :my_topic :after_subscribe)
-        (ls-msgs)
+        (ls_msgs)
     )"#;
     let prog = Program::from_expr(prog).unwrap();
     let hdl = rt.run(prog).await.unwrap();

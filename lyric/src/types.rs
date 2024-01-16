@@ -59,15 +59,23 @@ pub type Bytecode<T, L> = Vec<Inst<T, L>>;
 /// A function object that closes over environment it was created in
 #[derive(Clone)]
 pub struct Lambda<T: Extern, L: Locals> {
+    pub doc: Option<String>,
     pub params: Vec<SymbolId>,
     pub code: Bytecode<T, L>,
     pub parent: Option<Arc<Mutex<Env<T, L>>>>,
 }
 
 /// A native founction bound to given symbol
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct NativeFn<T: Extern, L: Locals> {
+    pub doc: String,
     pub func: NativeFnSig<T, L>,
+}
+
+impl<T: Extern, L: Locals> PartialEq for NativeFn<T, L> {
+    fn eq(&self, other: &Self) -> bool {
+        self.doc == other.doc && (self.func as usize == other.func as usize)
+    }
 }
 
 /// Type for NativeFn functions
@@ -85,16 +93,29 @@ pub enum NativeFnOp<T: Extern, L: Locals> {
 }
 
 /// A native async function
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct NativeAsyncFn<T: Extern, L: Locals> {
+    pub doc: String,
     pub func: NativeAsyncFnSig<T, L>,
 }
 
+impl<T: Extern, L: Locals> PartialEq for NativeAsyncFn<T, L> {
+    fn eq(&self, other: &Self) -> bool {
+        self.doc == other.doc && (self.func as usize == other.func as usize)
+    }
+}
+
 /// A deferred call to native async fn
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct NativeAsyncCall<T: Extern, L: Locals> {
     pub args: Vec<Val<T, L>>,
     pub func: NativeAsyncFnSig<T, L>,
+}
+
+impl<T: Extern, L: Locals> PartialEq for NativeAsyncCall<T, L> {
+    fn eq(&self, other: &Self) -> bool {
+        self.args == other.args && (self.func as usize == other.func as usize)
+    }
 }
 
 /// Signature for native async functions
@@ -155,6 +176,14 @@ where
         }
     }
 
+    pub fn as_int(&self) -> Result<&i32> {
+        if let Val::Int(inner) = &self {
+            Ok(inner)
+        } else {
+            Err(Error::UnexpectedType("expected int".to_string()))
+        }
+    }
+
     pub fn as_keyword(&self) -> Result<&KeywordId> {
         if let Val::Keyword(inner) = &self {
             Ok(inner)
@@ -171,6 +200,20 @@ where
         }
     }
 
+    pub fn as_string_coerce(&self) -> Result<String> {
+        match self {
+            Val::Nil => Ok("".to_string()),
+            Val::Bool(true) => Ok("true".to_string()),
+            Val::Bool(false) => Ok("false".to_string()),
+            Val::Int(i) => Ok(format!("{}", i)),
+            Val::String(s) => Ok(s.clone()),
+            _ => Err(Error::UnexpectedType(format!(
+                "{} is not convertible to str",
+                self
+            ))),
+        }
+    }
+
     pub fn to_list(self) -> Result<Vec<Val<T, L>>> {
         if let Val::List(inner) = self {
             Ok(inner)
@@ -181,6 +224,11 @@ where
 }
 
 impl Form {
+    /// From expr
+    pub fn from_expr(expr: &str) -> Result<Self> {
+        parse(expr)
+    }
+
     /// Shorhand for constructing [Form::String]
     pub fn string(s: &str) -> Self {
         Self::String(String::from(s))
@@ -487,12 +535,12 @@ mod tests {
     fn list_to_string() {
         assert_eq!(
             Val::List(vec![
-                Val::symbol("my-func"),
+                Val::symbol("my_func"),
                 Val::Int(5),
                 Val::string("string"),
             ])
             .to_string(),
-            "(my-func 5 \"string\")"
+            "(my_func 5 \"string\")"
         );
         assert_eq!(
             Val::List(vec![

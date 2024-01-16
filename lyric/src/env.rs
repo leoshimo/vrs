@@ -22,7 +22,7 @@ impl<T: Extern, L: Locals> Env<T, L> {
             bindings: HashMap::default(),
             parent: None,
         };
-        e.bind_native(SymbolId::from("contains"), builtin::contains_fn())
+        e.bind_native(SymbolId::from("contains?"), builtin::contains_fn())
             .bind_native(SymbolId::from("eq?"), builtin::eq_fn())
             .bind_native(SymbolId::from("+"), builtin::plus_fn())
             .bind_native(SymbolId::from("ref"), builtin::ref_fn())
@@ -30,12 +30,44 @@ impl<T: Extern, L: Locals> Env<T, L> {
             .bind_native(SymbolId::from("push"), builtin::push_fn())
             .bind_native(SymbolId::from("get"), builtin::get_fn())
             .bind_native(SymbolId::from("map"), builtin::map_fn())
-            .bind_native(SymbolId::from("not"), builtin::not_fn())
+            .bind_native(SymbolId::from("len"), builtin::len_fn())
+            .bind_lambda(SymbolId::from("filter"), builtin::filter_fn())
+            .bind_native(SymbolId::from("not?"), builtin::not_fn())
             .bind_native(SymbolId::from("ok?"), builtin::ok_fn())
+            .bind_native(SymbolId::from("empty?"), builtin::empty_fn())
+            .bind_native(SymbolId::from("keyword?"), builtin::is_keyword_fn())
             .bind_native(SymbolId::from("err?"), builtin::err_fn())
-            .bind_native(SymbolId::from("ls-env"), builtin::ls_env_fn());
+            .bind_native(SymbolId::from("str"), builtin::str_fn())
+            .bind_native(SymbolId::from("join"), builtin::join_fn())
+            .bind_native(SymbolId::from("split"), builtin::split_fn())
+            .bind_native(SymbolId::from("format"), builtin::format_fn())
+            .bind_native(SymbolId::from("display"), builtin::display_fn())
+            .bind_native(SymbolId::from("dbg"), builtin::dbg_fn())
+            .bind_native(SymbolId::from("read"), builtin::read_fn())
+            .bind_native(SymbolId::from("help"), builtin::help_fn())
+            .bind_native(SymbolId::from("ls_env"), builtin::ls_env_fn());
 
         e
+    }
+
+    /// Extend an existing environment with given env as parent
+    pub fn extend(parent: &Arc<Mutex<Env<T, L>>>) -> Self {
+        Self {
+            bindings: HashMap::new(),
+            parent: Some(Arc::clone(parent)),
+        }
+    }
+
+    /// Fork this environment in to a *deep copy*
+    pub fn fork(&self) -> Self {
+        let parent = self
+            .parent
+            .as_ref()
+            .map(|parent| Arc::new(Mutex::new(parent.as_ref().lock().unwrap().clone())));
+        Self {
+            bindings: self.bindings.clone(),
+            parent,
+        }
     }
 
     /// Define a new symbol with given value in current environment
@@ -69,14 +101,6 @@ impl<T: Extern, L: Locals> Env<T, L> {
         Err(Error::UndefinedSymbol(symbol.clone()))
     }
 
-    /// Extend an existing environment with given env as parent
-    pub fn extend(parent: &Arc<Mutex<Env<T, L>>>) -> Self {
-        Self {
-            bindings: HashMap::new(),
-            parent: Some(Arc::clone(parent)),
-        }
-    }
-
     /// Convenience to bind native functions
     pub fn bind_native(&mut self, symbol: SymbolId, nativefn: NativeFn<T, L>) -> &mut Self {
         self.define(symbol, Val::NativeFn(nativefn));
@@ -99,6 +123,7 @@ impl<T: Extern, L: Locals> Env<T, L> {
         self
     }
 
+    /// Iterate over all symbols and bindings
     pub fn iter(&self) -> EnvIter<'_, T, L> {
         EnvIter(self.bindings.iter())
     }

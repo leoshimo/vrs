@@ -3,6 +3,7 @@ use super::mailbox::Message;
 use super::program::{Extern, Locals, Val};
 use super::pubsub::PubSubHandle;
 use super::registry::Registry;
+use super::term::TermHandle;
 use crate::rt::mailbox::{Mailbox, MailboxHandle};
 use crate::rt::{Error, Result};
 use crate::Program;
@@ -41,8 +42,6 @@ pub enum ProcessResult {
     Done(Val),
     /// Cancelled for closed event loop
     Cancelled,
-    /// Completed for disconnected connection
-    Disconnected,
 }
 
 /// A record of process exiting
@@ -77,6 +76,12 @@ impl Process {
     /// Set pubsub handle for process
     pub(crate) fn pubsub(mut self, pubsub: PubSubHandle) -> Self {
         self.locals.pubsub(pubsub);
+        self
+    }
+
+    /// Set connection for process, if any
+    pub(crate) fn term(mut self, term: TermHandle) -> Self {
+        self.locals.term(term);
         self
     }
 
@@ -123,6 +128,7 @@ impl Process {
             };
 
             let _ = exit_tx.send(exit.clone());
+            info!("proc exit - {} - {}", self.id, exit);
             exit
         });
 
@@ -190,6 +196,7 @@ impl std::fmt::Display for Extern {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Extern::ProcessId(pid) => write!(f, "{}", pid),
+            Extern::RequestId(id) => write!(f, "<request_id {}>", id),
         }
     }
 }
@@ -198,7 +205,6 @@ impl std::fmt::Display for ProcessExit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.status {
             Ok(ProcessResult::Done(v)) => write!(f, "DONE - {v}"),
-            Ok(ProcessResult::Disconnected) => write!(f, "DISCONNECTED"),
             Ok(ProcessResult::Cancelled) => write!(f, "CANCELLED"),
             Err(e) => write!(f, "ERROR - {e}"),
         }

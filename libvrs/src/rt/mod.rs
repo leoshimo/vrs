@@ -5,6 +5,7 @@ pub mod program;
 mod pubsub;
 mod registry;
 mod runtime;
+mod term;
 
 mod mailbox;
 mod proc;

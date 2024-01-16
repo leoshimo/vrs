@@ -7,6 +7,7 @@ use lyric::{compile, parse, Error, Result, SymbolId};
 
 pub(crate) fn send_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        doc: "(send PID MSG) - Send process PID the message MSG".to_string(),
         func: |f, args| Box::new(send_impl(f, args)),
     }
 }
@@ -14,6 +15,9 @@ pub(crate) fn send_fn() -> NativeAsyncFn {
 /// Binding to recv messages
 pub(crate) fn recv_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        doc: "(recv [PATTERN]) - Poll mailbox for a message. \
+              Optional PATTERN argument can match for messages matching specific patterns."
+            .to_string(),
         func: |f, args| Box::new(recv_impl(f, args)),
     }
 }
@@ -21,6 +25,7 @@ pub(crate) fn recv_fn() -> NativeAsyncFn {
 /// Binding to list messages
 pub(crate) fn ls_msgs_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        doc: "(ls_msgs) - Returns contents of mailbox without consuming messages or blocking when mailbox is empty.".to_string(),
         func: |f, args| Box::new(ls_msgs_impl(f, args)),
     }
 }
@@ -28,6 +33,7 @@ pub(crate) fn ls_msgs_fn() -> NativeAsyncFn {
 /// Binding for call
 pub(crate) fn call_fn() -> Lambda {
     Lambda {
+        doc: Some("(call PID MSG) - Send process PID a message MSG and block until receiving a response for the message".to_string()),
         params: vec![SymbolId::from("pid"), SymbolId::from("msg")],
         code: compile(
             &parse(
@@ -102,11 +108,11 @@ async fn recv_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
     Ok(msg.contents)
 }
 
-/// Implementation for (ls-msgs)
+/// Implementation for (ls_msgs)
 async fn ls_msgs_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
     if !args.is_empty() {
         return Err(Error::UnexpectedArguments(
-            "Unexpected ls-msgs call - No arguments expected".to_string(),
+            "Unexpected ls_msgs call - No arguments expected".to_string(),
         ));
     }
 
@@ -203,7 +209,7 @@ mod tests {
         let k = kernel::start();
 
         let hdl = k
-            .spawn_prog(Program::from_expr("(ls-msgs)").unwrap())
+            .spawn_prog(Program::from_expr("(ls_msgs)").unwrap())
             .await
             .unwrap();
 
@@ -223,7 +229,7 @@ mod tests {
                         (send (self) :one)
                         (send (self) :two)
                         (send (self) :three)
-                        (ls-msgs))",
+                        (ls_msgs))",
                 )
                 .unwrap(),
             )
@@ -234,7 +240,7 @@ mod tests {
         assert_eq!(
             exit.status.unwrap(),
             ProcessResult::Done(Val::from_expr("(:one :two :three)").unwrap()),
-            "ls-msgs should contain all messages in order"
+            "ls_msgs should contain all messages in order"
         );
     }
 
@@ -247,7 +253,7 @@ mod tests {
                 Program::from_expr(
                     "(begin
                 (def match (recv :target))
-                (list match (ls-msgs)))",
+                (list match (ls_msgs)))",
                 )
                 .unwrap(),
             )
@@ -281,7 +287,7 @@ mod tests {
                     (:ignored_one :ignored_two (:target :ignored_three))
                 )").unwrap()
             ),
-            "(recv :target) should return :target for first element, ls-msgs should return all ignored messages"
+            "(recv :target) should return :target for first element, ls_msgs should return all ignored messages"
         );
     }
 

@@ -1,5 +1,6 @@
 //! Lexer for Lyric
 use std::iter::Peekable;
+use tracing::error;
 
 use crate::{Error, Result};
 
@@ -35,7 +36,15 @@ impl std::fmt::Display for Token {
 
 /// Tokenize entire expression as vector
 pub(crate) fn lex(expr: &str) -> Result<Vec<Token>> {
-    let tokens = Tokens::new(expr).collect::<Result<Vec<_>>>()?;
+    let mut tokens = vec![];
+    for token in Tokens::new(expr) {
+        match token {
+            Ok(token) => tokens.push(token),
+            Err(err) => {
+                error!("lexing failed - {}, tokens={:?}", err, tokens);
+            }
+        }
+    }
     Ok(tokens)
 }
 
@@ -100,7 +109,25 @@ impl Tokens<'_> {
             )));
         }
 
-        let expr: String = std::iter::from_fn(|| self.inner.next_if(|ch| *ch != '\"')).collect();
+        // TODO: Revisit iterators in lexer
+        let mut escaped = false;
+        let expr: String = std::iter::from_fn(|| {
+            while let Some(ch) = self.inner.next_if(|ch| *ch != '\"' || escaped) {
+                if !escaped && ch == '\\' {
+                    escaped = true;
+                } else {
+                    let actual_ch = match ch {
+                        'n' if escaped => '\n',
+                        '"' if escaped => '\"',
+                        _ => ch,
+                    };
+                    escaped = false;
+                    return Some(actual_ch);
+                }
+            }
+            None
+        })
+        .collect();
 
         let ch = self.inner.next().ok_or(Error::IncompleteExpression(
             "Expected closing string quotation".to_string(),
@@ -210,8 +237,8 @@ mod tests {
             Ok(vec![Token::Symbol(String::from("hello_world"))])
         );
         assert_eq!(
-            lex("hello-world"),
-            Ok(vec![Token::Symbol(String::from("hello-world"))])
+            lex("hello_world"),
+            Ok(vec![Token::Symbol(String::from("hello_world"))])
         );
         assert_eq!(
             lex("    hello    "),
@@ -240,6 +267,26 @@ mod tests {
             lex("      \"hello  world  \"      "),
             Ok(vec![Token::String("hello  world  ".to_string())])
         );
+
+        {
+            // Escape
+            assert_eq!(
+                lex(r#""Hello \"World\"""#),
+                Ok(vec![Token::String(r#"Hello "World""#.to_string())]),
+                "Escaped quotes should be part of strings"
+            );
+            assert_eq!(
+                lex(r#"(exec "osascript" "-e" "tell application \"System Events\"")"#),
+                Ok(vec![
+                    Token::ParenLeft,
+                    Token::Symbol("exec".to_string()),
+                    Token::String("osascript".to_string()),
+                    Token::String("-e".to_string()),
+                    Token::String(r#"tell application "System Events""#.to_string()),
+                    Token::ParenRight,
+                ])
+            );
+        }
     }
 
     #[test]
@@ -404,3 +451,7 @@ mod tests {
         );
     }
 }
+
+// TODO(bug): Cannot parse non-number "-" prefix:
+//     vrs> (- (read (get (exec "date" "+%s") 1)) 10)
+//     Incomplete expression - Unable to parse integer - -

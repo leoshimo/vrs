@@ -8,12 +8,16 @@ use tracing::error;
 
 pub(crate) fn subscribe_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        doc: "(subscribe TOPIC) - Subscribe current process to receive pubsub messages for TOPIC."
+            .to_string(),
         func: |f, args| Box::new(subscribe_impl(f, args)),
     }
 }
 
 pub(crate) fn publish_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        doc: "(publish TOPIC DATA) - Publish DATA over TOPIC, notifying all active subscribers."
+            .to_string(),
         func: |f, args| Box::new(publish_impl(f, args)),
     }
 }
@@ -47,7 +51,7 @@ async fn subscribe_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
         .await
         .map_err(|e| Error::Runtime(format!("Failed to subscribe on pubsub - {e}")))?;
 
-    // TODO: Should process keep track of active subscriptions via some task handle?
+    // TODO: Idiom for streaming result from =Subscription= to another sink via async task for proc subs + term subs
     tokio::spawn(async move {
         while let Some(ev) = sub.recv().await {
             let msg = Message {
