@@ -18,7 +18,7 @@
 (add_item "Terminal" '(open_app "Alacritty"))
 (add_item "Messages" '(open_app "Messages"))
 (add_item "Mail" '(open_app "Spark"))
-(add_item "Cron" '(open_app "Cron"))
+(add_item "Cal" '(open_app "Notion Calendar"))
 (add_item "Zulip" '(open_app "Zulip"))
 (add_item "Checkins" '(open_url "https://recurse.zulipchat.com/#narrow/stream/27333-alumni-checkins/topic/Leo.20Shimonaka"))
 (add_item "X" '(open_url "https://www.x.com"))
