@@ -318,7 +318,7 @@ impl<T: Extern, L: Locals> PartialEq for Lambda<T, L> {
     }
 }
 
-fn escape_string(value: &str) -> String {
+pub(crate) fn escape_string(value: &str) -> String {
     let mut escaped = String::with_capacity(value.len());
     for ch in value.chars() {
         match ch {

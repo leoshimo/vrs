@@ -1,8 +1,7 @@
 //! Lexer for Lyric
 use std::iter::Peekable;
-use tracing::error;
 
-use crate::{Error, Result};
+use crate::{types::escape_string, Error, Result};
 
 /// Parsed Tokens from String
 #[derive(Debug, PartialEq)]
@@ -24,7 +23,7 @@ impl std::fmt::Display for Token {
             Token::Nil => write!(f, "nil"),
             Token::Bool(b) => write!(f, "{}", if *b { "true" } else { "false" }),
             Token::Int(i) => write!(f, "{}", i),
-            Token::String(s) => write!(f, "\"{}\"", s),
+            Token::String(s) => write!(f, "\"{}\"", escape_string(s)),
             Token::Symbol(s) => write!(f, "{}", s),
             Token::Keyword(s) => write!(f, ":{}", s),
             Token::ParenLeft => write!(f, "("),
@@ -36,16 +35,7 @@ impl std::fmt::Display for Token {
 
 /// Tokenize entire expression as vector
 pub(crate) fn lex(expr: &str) -> Result<Vec<Token>> {
-    let mut tokens = vec![];
-    for token in Tokens::new(expr) {
-        match token {
-            Ok(token) => tokens.push(token),
-            Err(err) => {
-                error!("lexing failed - {}, tokens={:?}", err, tokens);
-            }
-        }
-    }
-    Ok(tokens)
+    Tokens::new(expr).collect()
 }
 
 /// An iterator over Tokens
@@ -109,39 +99,39 @@ impl Tokens<'_> {
             )));
         }
 
-        // TODO: Revisit iterators in lexer
-        let mut escaped = false;
-        let expr: String = std::iter::from_fn(|| {
-            while let Some(ch) = self.inner.next_if(|ch| *ch != '\"' || escaped) {
-                if !escaped && ch == '\\' {
-                    escaped = true;
-                } else {
-                    let actual_ch = match ch {
-                        'n' if escaped => '\n',
-                        'r' if escaped => '\r',
-                        't' if escaped => '\t',
-                        '\\' if escaped => '\\',
-                        '"' if escaped => '\"',
-                        _ => ch,
+        let mut value = String::new();
+        loop {
+            match self.inner.next() {
+                Some('"') => return Ok(Token::String(value)),
+                Some('\\') => {
+                    let escaped = self.inner.next().ok_or_else(|| {
+                        Error::IncompleteExpression(
+                            "Expected character after string escape".to_string(),
+                        )
+                    })?;
+                    let ch = match escaped {
+                        'n' => '\n',
+                        'r' => '\r',
+                        't' => '\t',
+                        '\\' => '\\',
+                        '"' => '"',
+                        '\'' => '\'',
+                        _ => {
+                            return Err(Error::InvalidExpression(format!(
+                                "Unsupported string escape - \\{escaped}"
+                            )))
+                        }
                     };
-                    escaped = false;
-                    return Some(actual_ch);
+                    value.push(ch);
+                }
+                Some(ch) => value.push(ch),
+                None => {
+                    return Err(Error::IncompleteExpression(
+                        "Expected closing string quotation".to_string(),
+                    ))
                 }
             }
-            None
-        })
-        .collect();
-
-        let ch = self.inner.next().ok_or(Error::IncompleteExpression(
-            "Expected closing string quotation".to_string(),
-        ))?;
-        if ch != '\"' {
-            return Err(Error::IncompleteExpression(format!(
-                "Expected closing string quotation - found {ch}"
-            )));
         }
-
-        Ok(Token::String(expr))
     }
 
     /// Parse keyword
@@ -279,11 +269,11 @@ mod tests {
                 "Escaped quotes should be part of strings"
             );
             assert_eq!(
-                lex(r#""line one\nline two\r\t\\end""#),
+                lex(r#""line one\nline two\r\t\\end\'""#),
                 Ok(vec![Token::String(
-                    "line one\nline two\r\t\\end".to_string()
+                    "line one\nline two\r\t\\end'".to_string()
                 )]),
-                "Display escapes should round-trip through the lexer"
+                "Supported escapes should decode to their characters"
             );
             assert_eq!(
                 lex(r#"(exec "osascript" "-e" "tell application \"System Events\"")"#),
@@ -297,6 +287,37 @@ mod tests {
                 ])
             );
         }
+    }
+
+    #[test]
+    fn lex_string_rejects_invalid_or_incomplete_escapes() {
+        assert_eq!(
+            lex(r#""bad \q escape""#),
+            Err(Error::InvalidExpression(
+                "Unsupported string escape - \\q".to_string()
+            ))
+        );
+        assert_eq!(
+            lex("\"trailing\\"),
+            Err(Error::IncompleteExpression(
+                "Expected character after string escape".to_string()
+            ))
+        );
+        assert_eq!(
+            lex("\"unterminated"),
+            Err(Error::IncompleteExpression(
+                "Expected closing string quotation".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn string_token_display_is_valid_source() {
+        let token = Token::String("line one\n\"line two\"\\end\r\t".to_string());
+        assert_eq!(
+            token.to_string(),
+            "\"line one\\n\\\"line two\\\"\\\\end\\r\\t\""
+        );
     }
 
     #[test]
