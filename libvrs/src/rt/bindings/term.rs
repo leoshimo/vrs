@@ -1,5 +1,6 @@
 //! Bindings for interacting with [Connection]
 use crate::{
+    connection::Error as ConnectionError,
     rt::program::{Extern, Fiber, NativeAsyncFn, Val},
     Response,
 };
@@ -53,12 +54,16 @@ async fn send_resp_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
         "recv_req failed - no connected terminal".to_string(),
     ))?;
 
-    let resp = Response {
-        req_id: *req_id,
-        contents: Ok(contents
+    let contents = match contents {
+        Val::Error(error) => Err(ConnectionError::EvaluationError(error.clone())),
+        contents => Ok(contents
             .clone()
             .try_into()
             .map_err(|e| Error::Runtime(format!("{e}")))?),
+    };
+    let resp = Response {
+        req_id: *req_id,
+        contents,
     };
 
     term.send_response(resp)
@@ -167,6 +172,37 @@ mod tests {
         assert_matches!(
             resp,
             Some(Ok(r)) if r.req_id == 10 && r.contents == Ok(Form::Int(3))
+        );
+    }
+
+    #[tokio::test]
+    async fn term_e2e_returns_evaluation_errors_as_response_errors() {
+        let (local, mut remote) = Connection::pair().unwrap();
+        let mut procs = ProcessSet::new();
+
+        let _ = Process::from_prog(0.into(), program::term_prog())
+            .term(Term::spawn(local, PubSub::spawn()))
+            .spawn(&mut procs);
+
+        remote
+            .send_req(Request {
+                id: 11,
+                contents: Val::from_expr("(undefined_function)")
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+            })
+            .await
+            .unwrap();
+
+        assert_matches!(
+            remote.recv_resp().await,
+            Some(Ok(Response {
+                req_id: 11,
+                contents: Err(ConnectionError::EvaluationError(
+                    Error::UndefinedSymbol(symbol)
+                )),
+            })) if symbol == lyric::SymbolId::from("undefined_function")
         );
     }
 
