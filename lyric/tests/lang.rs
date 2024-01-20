@@ -47,6 +47,22 @@ fn string() {
 }
 
 #[test]
+fn get_handles_positive_and_negative_indexes() {
+    assert_eq!(
+        eval_expr("(get '(one two three) 0)"),
+        Ok(Val::symbol("one"))
+    );
+    assert_eq!(
+        eval_expr("(get '(one two three) -1)"),
+        Ok(Val::symbol("three"))
+    );
+    assert_eq!(eval_expr("(get '(one two three) 3)"), Ok(Val::Nil));
+    assert_eq!(eval_expr("(get '(one two three) -4)"), Ok(Val::Nil));
+    assert_eq!(eval_expr("(get '() -1)"), Ok(Val::Nil));
+    assert_eq!(eval_expr("(get '(one) -2147483648)"), Ok(Val::Nil));
+}
+
+#[test]
 fn symbols() {
     let prog = r#"
              (begin (def greeting "Hello world")
