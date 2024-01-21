@@ -219,6 +219,26 @@ initiated execution of fiber.
 A fiber can later be resumed when the event that fiber was paused for occurs,
 such as IO, message-passing, etc.
 
+** Fibers and Yielding
+
+Fibers manipulated from within Lyric itself allows for arbitrary levels of
+yielding calls:
+
+- When root-fiber yields for Future
+   - Top-level fiber is paused
+   - Fiber driver receives future, then polls it
+- When child-fiber yields for Future
+   - Top-level Fiber is paused
+   - Child Fiber is paused
+   - Fiber driver receives future
+- When root-fiber yields a value
+   - Root-fiber is paused
+   - Fiber driver errors for unexpected pause
+- When child-fiber yields a value
+   - Root-fiber is running
+   - Child-fiber is paused
+   - Fiber driver is not involved
+
 * Hypermedia
 
 HyperLyric is the hypermedia format between the runtime and interactive client shells.

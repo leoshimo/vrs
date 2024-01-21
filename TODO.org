@@ -264,6 +264,7 @@ A chat interface for:
 - Task Management
 - "Assistant"
 
+** TODO Chat Service over Cogni
 * rnd
 ** TODO LLM Blocks
 
@@ -385,6 +386,32 @@ Extend to visual elements? UI:
 ** TODO Compact Bytecode
 ** TODO Tail-Call Optimization
 * bugs
+** TODO bug? - Scope bug for Functions used to spawn child process
+
+#+begin_src lyric
+(defn child (parent_pid)
+    (def results '())
+    (subscribe :my_topic)
+    (send parent :child_ready)     # ** BUG ** - parent was not defined here!
+    (loop (match (recv '(topic_updated _ _))
+        ((_ t :done) (send parent (list :child_results results)))
+        ((_ t val) (set results (push results (list t val))))
+        (_ (error "Unexpected result"))
+    )))
+
+(def parent (self))
+(def child (spawn (lambda () (child parent))))
+
+(recv :child_ready)
+
+(publish :my_topic :one)
+(publish :my_topic :two)
+(publish :my_topic :three)
+(publish :my_topic :done)
+
+(recv '(:child_results _))
+#+end_src
+
 ** TODO Busy Looper sometimes Crashes Runtime
 ** TODO =(loop 0)= blocks new connection only via REPL, but not =vrsctl -c "(loop 0)"=
 ** TODO Using =(map (ps) (lambda (p) (kill p)))= results in runtime crash sometimes
