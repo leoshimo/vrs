@@ -234,4 +234,13 @@ mod tests {
 
         assert!(error.to_string().contains("undefined_function"));
     }
+
+    #[tokio::test]
+    async fn run_cmd_propagates_async_error_without_closing_client() {
+        let (_runtime, client) = runtime_client().await;
+        let error = run_cmd(&client, "(publish :my_topic)").await.unwrap_err();
+
+        assert!(error.to_string().contains("publish expects two arguments"));
+        run_cmd(&client, "(+ 20 22)").await.unwrap();
+    }
 }
