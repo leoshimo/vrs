@@ -159,11 +159,11 @@ impl<'a> Iterator for Tokens<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let mut is_comment = false;
 
-        while let Some(ch) = self.inner.peek() {
-            if *ch == '\n' && is_comment {
+        while let Some(ch) = self.inner.peek().copied() {
+            if ch == '\n' && is_comment {
                 is_comment = false;
             }
-            if *ch == '#' {
+            if ch == '#' {
                 is_comment = true;
             }
             if ch.is_whitespace() || is_comment {
@@ -173,8 +173,13 @@ impl<'a> Iterator for Tokens<'a> {
             let token = match ch {
                 '\"' => self.next_string(),
                 ':' => self.next_keyword(),
-                _ if is_punct(ch) => self.next_punct(),
-                _ if ch.is_numeric() || ch == &'-' => self.next_int(),
+                _ if is_punct(&ch) => self.next_punct(),
+                _ if ch.is_numeric()
+                    || (ch == '-'
+                        && matches!(self.inner.clone().nth(1), Some(ch) if ch.is_numeric())) =>
+                {
+                    self.next_int()
+                }
                 _ => self.next_symbol(),
             };
             return Some(token);
@@ -213,6 +218,21 @@ mod tests {
         assert_eq!(lex("1"), Ok(vec![Token::Int(1)]));
         assert_eq!(lex("     1     "), Ok(vec![Token::Int(1)]));
         assert_eq!(lex("-99"), Ok(vec![Token::Int(-99)]));
+    }
+
+    #[test]
+    fn lex_minus_symbol() {
+        assert_eq!(lex("-"), Ok(vec![Token::Symbol("-".to_string())]));
+        assert_eq!(
+            lex("(- 10 -3)"),
+            Ok(vec![
+                Token::ParenLeft,
+                Token::Symbol("-".to_string()),
+                Token::Int(10),
+                Token::Int(-3),
+                Token::ParenRight,
+            ])
+        );
     }
 
     #[test]
@@ -482,7 +502,3 @@ mod tests {
         );
     }
 }
-
-// TODO(bug): Cannot parse non-number "-" prefix:
-//     vrs> (- (read (get (exec "date" "+%s") :stdout)) 10)
-//     Incomplete expression - Unable to parse integer - -
