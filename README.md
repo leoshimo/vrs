@@ -26,7 +26,7 @@ of thought.
 Its key principles are: 
 
 - simplicity
-- progress
+- pragmatic
 - joy
 
 ## Status
