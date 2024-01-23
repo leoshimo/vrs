@@ -121,6 +121,11 @@ mod tests {
             parse("\"hello :not_a_keyword\""),
             Ok(Form::string("hello :not_a_keyword"))
         );
+
+        assert_eq!(
+            parse("\"\"\"\n  line one\n  \"line two\" \\\\end\n  \"\"\""),
+            Ok(Form::string("line one\n\"line two\" \\\\end\n"))
+        );
     }
 
     #[test]

@@ -88,8 +88,12 @@ impl Tokens<'_> {
         }
     }
 
-    /// Parse next string
+    /// Parse the next regular or raw block string.
     fn next_string(&mut self) -> Result<Token> {
+        if self.inner.clone().take(3).collect::<String>() == "\"\"\"" {
+            return self.next_block_string();
+        }
+
         let ch = self.inner.next().ok_or(Error::IncompleteExpression(
             "Expected opening string quotation".to_string(),
         ))?;
@@ -134,6 +138,48 @@ impl Tokens<'_> {
         }
     }
 
+    /// Parse a raw block string delimited by three double quotes.
+    ///
+    /// A newline immediately after the opening delimiter enables layout mode:
+    /// the leading newline, closing-delimiter indentation, and common content
+    /// indentation are removed. Otherwise the contents are preserved exactly.
+    fn next_block_string(&mut self) -> Result<Token> {
+        for _ in 0..3 {
+            match self.inner.next() {
+                Some('"') => {}
+                _ => {
+                    return Err(Error::IncompleteExpression(
+                        "Expected opening block string delimiter".to_string(),
+                    ))
+                }
+            }
+        }
+
+        let mut value = String::new();
+        loop {
+            let quote_count = self.inner.clone().take_while(|ch| *ch == '"').count();
+            if quote_count >= 3 {
+                for _ in 0..quote_count - 3 {
+                    self.inner.next();
+                    value.push('"');
+                }
+                for _ in 0..3 {
+                    self.inner.next();
+                }
+                return Ok(Token::String(normalize_block_string(value)));
+            }
+
+            match self.inner.next() {
+                Some(ch) => value.push(ch),
+                None => {
+                    return Err(Error::IncompleteExpression(
+                        "Expected closing block string delimiter".to_string(),
+                    ))
+                }
+            }
+        }
+    }
+
     /// Parse keyword
     fn next_keyword(&mut self) -> Result<Token> {
         let ch = self.inner.next().ok_or(Error::IncompleteExpression(
@@ -151,6 +197,66 @@ impl Tokens<'_> {
 
         Ok(Token::Keyword(keyword))
     }
+}
+
+/// Normalize an indented multiline block while preserving inline blocks exactly.
+fn normalize_block_string(mut value: String) -> String {
+    if let Some(stripped) = value.strip_prefix("\r\n") {
+        value = stripped.to_string();
+    } else if let Some(stripped) = value.strip_prefix('\n') {
+        value = stripped.to_string();
+    } else {
+        return value;
+    }
+
+    if value
+        .chars()
+        .all(|ch| matches!(ch, ' ' | '\t' | '\r' | '\n'))
+    {
+        return String::new();
+    }
+
+    if let Some(last_newline) = value.rfind('\n') {
+        let closing_indent = &value[last_newline + 1..];
+        if closing_indent
+            .chars()
+            .all(|ch| matches!(ch, ' ' | '\t' | '\r'))
+        {
+            value.truncate(last_newline + 1);
+        }
+    }
+
+    let common_indent = value
+        .split('\n')
+        .filter(|line| !line.trim_matches([' ', '\t', '\r']).is_empty())
+        .map(|line| {
+            line.as_bytes()
+                .iter()
+                .take_while(|byte| matches!(byte, b' ' | b'\t'))
+                .count()
+        })
+        .min()
+        .unwrap_or(0);
+
+    if common_indent == 0 {
+        return value;
+    }
+
+    let mut normalized = String::with_capacity(value.len());
+    for line in value.split_inclusive('\n') {
+        let (content, newline) = line
+            .strip_suffix('\n')
+            .map(|content| (content, "\n"))
+            .unwrap_or((line, ""));
+
+        if content.trim_matches([' ', '\t', '\r']).is_empty() {
+            normalized.push_str(content.trim_start_matches([' ', '\t']));
+        } else {
+            normalized.push_str(&content[common_indent..]);
+        }
+        normalized.push_str(newline);
+    }
+    normalized
 }
 
 impl<'a> Iterator for Tokens<'a> {
@@ -307,6 +413,64 @@ mod tests {
                 ])
             );
         }
+    }
+
+    #[test]
+    fn lex_raw_block_string() {
+        let source = concat!(
+            "\"\"\"\n",
+            "    printf \"%s\\\\n\" \"$1\"\n",
+            "    # Quotes, parens, and backslashes are literal: (\"hello\")\n",
+            "    path='C:\\tmp'\n",
+            "    \"\"\"",
+        );
+
+        assert_eq!(
+            lex(source),
+            Ok(vec![Token::String(
+                "printf \"%s\\\\n\" \"$1\"\n# Quotes, parens, and backslashes are literal: (\"hello\")\npath='C:\\tmp'\n"
+                    .to_string()
+            )])
+        );
+    }
+
+    #[test]
+    fn block_string_layout_is_predictable() {
+        assert_eq!(
+            lex("\"\"\"inline \\\\ \"quoted\"\"\"\""),
+            Ok(vec![Token::String("inline \\\\ \"quoted\"".to_string())])
+        );
+        assert_eq!(
+            lex("\"\"\"\n    one\n      two\n    \"\"\""),
+            Ok(vec![Token::String("one\n  two\n".to_string())])
+        );
+        assert_eq!(
+            lex("\"\"\"\r\n\tline\r\n\t\"\"\""),
+            Ok(vec![Token::String("line\r\n".to_string())])
+        );
+        assert_eq!(
+            lex("\"\"\"\n    \"\"\""),
+            Ok(vec![Token::String(String::new())])
+        );
+    }
+
+    #[test]
+    fn unterminated_block_string_is_incomplete() {
+        assert_eq!(
+            lex("\"\"\"never closed"),
+            Err(Error::IncompleteExpression(
+                "Expected closing block string delimiter".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn block_string_token_display_round_trips_as_a_regular_string() {
+        let [token] = lex("\"\"\"\n  line one\n  \\\\ \"line two\"\n  \"\"\"")
+            .unwrap()
+            .try_into()
+            .unwrap();
+        assert_eq!(lex(&token.to_string()), Ok(vec![token]));
     }
 
     #[test]
