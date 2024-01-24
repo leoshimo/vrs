@@ -20,6 +20,7 @@ pub use fiber::Fiber;
 pub use fiber::Signal;
 pub use fiber::Status;
 pub use parse::parse;
+pub use parse::parse_script;
 pub use pmatch::Pattern;
 pub use run::run;
 pub use types::Bytecode;
