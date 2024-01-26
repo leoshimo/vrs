@@ -24,12 +24,12 @@ pub(crate) struct WeakKernelHandle {
     ev_tx: mpsc::WeakSender<Event>,
 }
 
-/// Starts the kernel task, which manages processes on runtime
-pub(crate) fn start() -> KernelHandle {
+/// Starts the kernel task, which manages processes for one runtime node.
+pub(crate) fn start(node_name: String) -> KernelHandle {
     let (ev_tx, mut ev_rx) = mpsc::channel(32);
 
     let handle = KernelHandle { ev_tx };
-    let mut kernel = Kernel::new(handle.clone());
+    let mut kernel = Kernel::new(handle.clone(), node_name);
     tokio::spawn(async move {
         loop {
             tokio::select! {
@@ -147,10 +147,11 @@ struct Kernel {
     next_proc_id: usize,
     registry: Registry,
     pubsub: PubSubHandle,
+    node_name: String,
 }
 
 impl Kernel {
-    pub fn new(handle: KernelHandle) -> Self {
+    pub fn new(handle: KernelHandle, node_name: String) -> Self {
         Self {
             weak_hdl: handle.downgrade(),
             procs: ProcessSet::new(),
@@ -158,6 +159,7 @@ impl Kernel {
             next_proc_id: 0,
             registry: Registry::spawn(),
             pubsub: PubSub::spawn(),
+            node_name,
         }
     }
 
@@ -193,6 +195,7 @@ impl Kernel {
         let hdl = proc
             .kernel(self.weak_hdl.clone())
             .registry(self.registry.clone())
+            .node_name(self.node_name.clone())
             .pubsub(self.pubsub.clone())
             .spawn(&mut self.procs)?;
         self.proc_hdls.insert(hdl.id(), hdl.clone());
@@ -248,7 +251,7 @@ mod tests {
         let (local, remote) = Connection::pair().unwrap();
         let client = Client::new(remote);
 
-        let k = start();
+        let k = start("test".to_string());
         let _ = k
             .spawn_for_conn(local)
             .await
@@ -271,7 +274,7 @@ mod tests {
     async fn kernel_spawn_conn_drop() {
         let (local, remote) = Connection::pair().unwrap();
 
-        let k = start();
+        let k = start("test".to_string());
         let hdl = k
             .spawn_for_conn(local)
             .await
@@ -294,7 +297,7 @@ mod tests {
 
     #[tokio::test]
     async fn kernel_spawn_kill() {
-        let k = start();
+        let k = start("test".to_string());
         let hdl = k
             .spawn_prog(Program::from_expr("(loop (sleep 1))").unwrap())
             .await
@@ -315,7 +318,7 @@ mod tests {
 
     #[tokio::test]
     async fn kernel_drop() {
-        let k = start();
+        let k = start("test".to_string());
         let hdl = k
             .spawn_prog(Program::from_expr("(loop (sleep 0))").unwrap())
             .await
@@ -330,7 +333,7 @@ mod tests {
 
     #[tokio::test]
     async fn kernel_weak_handle() {
-        let k = start();
+        let k = start("test".to_string());
         let weak_k = k.downgrade();
         let _ = k
             .spawn_prog(Program::from_expr("(loop (sleep 1))").unwrap())
@@ -346,7 +349,7 @@ mod tests {
 
     #[tokio::test]
     async fn kill_proc_from_kernel() {
-        let k = start();
+        let k = start("test".to_string());
         let proc = k
             .spawn_prog(Program::from_expr("(loop (sleep 1))").unwrap())
             .await
@@ -366,7 +369,7 @@ mod tests {
     async fn kill_proc_from_proc() {
         use tokio::time;
 
-        let k = start();
+        let k = start("test".to_string());
 
         let kill_target = k
             .spawn_prog(Program::from_expr("(loop (sleep 0))").unwrap())
@@ -403,7 +406,7 @@ mod tests {
 
     #[tokio::test]
     async fn spawn_progs() {
-        let k = start();
+        let k = start("test".to_string());
 
         let recv = k
             .spawn_prog(Program::from_expr("(recv)").unwrap())

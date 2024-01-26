@@ -73,6 +73,11 @@ impl Process {
         self
     }
 
+    pub(crate) fn node_name(mut self, node_name: String) -> Self {
+        self.locals.node_name(node_name);
+        self
+    }
+
     /// Set pubsub handle for process
     pub(crate) fn pubsub(mut self, pubsub: PubSubHandle) -> Self {
         self.locals.pubsub(pubsub);

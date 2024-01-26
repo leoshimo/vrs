@@ -16,6 +16,7 @@ pub(crate) use mailbox::recv_fn;
 pub(crate) use mailbox::send_fn;
 
 pub(crate) use proc::kill_fn;
+pub(crate) use proc::node_name_fn;
 pub(crate) use proc::pid_fn;
 pub(crate) use proc::ps_fn;
 pub(crate) use proc::self_fn;

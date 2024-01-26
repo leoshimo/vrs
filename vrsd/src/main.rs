@@ -8,6 +8,10 @@ use vrs::{Connection, ProcessResult, Program, Runtime};
 #[derive(Debug, Parser)]
 #[command(about = "VRS runtime daemon")]
 struct Args {
+    /// Stable node name advertised to other VRS runtimes.
+    #[arg(long, default_value_t = default_node_name())]
+    node: String,
+
     /// Script evaluated inside a fresh runtime process before accepting clients.
     #[arg(long)]
     init: Option<PathBuf>,
@@ -24,7 +28,7 @@ async fn main() -> Result<()> {
             .with_context(|| format!("Failed to remove existing socket {}", path.display()))?;
     }
 
-    let runtime = Runtime::new();
+    let runtime = Runtime::new(args.node);
 
     if let Some(init_path) = args.init {
         run_init(&runtime, &init_path).await?;
@@ -45,6 +49,18 @@ async fn main() -> Result<()> {
             }
         }
     }
+}
+
+fn default_node_name() -> String {
+    std::process::Command::new("hostname")
+        .arg("-s")
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| String::from_utf8(output.stdout).ok())
+        .map(|name| name.trim().to_ascii_lowercase())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| "local".to_string())
 }
 
 async fn run_init(runtime: &Runtime, path: &Path) -> Result<()> {
@@ -93,7 +109,7 @@ mod tests {
         )
         .unwrap();
 
-        let runtime = Runtime::new();
+        let runtime = Runtime::new("test");
         run_init(&runtime, &path).await.unwrap();
         let query = runtime
             .run(Program::from_expr("(begin (bind_srv :init_probe) (ping))").unwrap())

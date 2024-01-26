@@ -208,7 +208,7 @@ mod tests {
 
     #[tokio::test]
     async fn standard_procs_has_no_bindings() {
-        let k = kernel::start();
+        let k = kernel::start("test".to_string());
 
         {
             let prog = Program::from_expr("(recv_req)").unwrap().env(term_env());

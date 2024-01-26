@@ -64,6 +64,8 @@ pub enum Extern {
 pub struct Locals {
     /// Id of process owning fiber
     pub(crate) pid: ProcessId,
+    /// Stable name of the runtime node hosting this process.
+    pub(crate) node_name: String,
     /// Handle to kernel process
     pub(crate) kernel: Option<WeakKernelHandle>,
     /// Handle to process registry
@@ -147,12 +149,18 @@ impl Locals {
     pub(crate) fn new(pid: ProcessId) -> Self {
         Self {
             pid,
+            node_name: "local".to_string(),
             kernel: None,
             registry: None,
             pubsub: None,
             self_handle: None,
             term: None,
         }
+    }
+
+    pub(crate) fn node_name(&mut self, node_name: String) -> &mut Self {
+        self.node_name = node_name;
+        self
     }
 
     pub(crate) fn kernel(&mut self, kernel: WeakKernelHandle) -> &mut Self {
@@ -212,6 +220,7 @@ pub fn proc_env() -> Env {
     {
         e.bind_native_async(SymbolId::from("kill"), bindings::kill_fn())
             .bind_native(SymbolId::from("pid"), bindings::pid_fn())
+            .bind_native(SymbolId::from("node_name"), bindings::node_name_fn())
             .bind_native_async(SymbolId::from("ps"), bindings::ps_fn())
             .bind_native(SymbolId::from("self"), bindings::self_fn())
             .bind_native_async(SymbolId::from("sleep"), bindings::sleep_fn())
