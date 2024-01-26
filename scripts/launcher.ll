@@ -30,6 +30,7 @@
 (add_item "RC - Presentations" '(open_url "https://presentations.recurse.com"))
 (add_item "AWS Console" '(open_url "http://console.aws.amazon.com"))
 (add_item "Perplexity" '(open_url "https://www.perplexity.ai"))
+(add_item "ChatGPT" '(open_url "https://chat.openai.com"))
 (add_item "Restart vrsd" '(exec "pkill" "-ax" "vrsd"))
 
 (srv :name :launcher
