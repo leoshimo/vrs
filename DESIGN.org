@@ -239,9 +239,10 @@ yielding calls:
    - Child-fiber is paused
    - Fiber driver is not involved
 
-* Hypermedia
+* Hypermedia (WIP)
 
-HyperLyric is the hypermedia format between the runtime and interactive client shells.
+The client interface uses hypermedia between the runtime and interactive client
+shells.
 
 The design is focused on:
 - Enabling speedy + simple development of interactive applications
@@ -292,7 +293,7 @@ possible to "log the events" being run during a sequence of interactions, then
 use that information to write a program that automates that interaction.
 
 Unlike the Browser Ecosystem, which often uses event handlers from JavaScript to
-hook interactive behavior, HyperLyric data will contain the code that defines
+hook interactive behavior, hypermedia data will contain the code that defines
 the behavior on interaction, similar how there is behavior associated with
 anchor tags and form tags.
 
@@ -315,7 +316,7 @@ programmer) and implicit links (interactions natural for the data itself).
 *Thin Clients*
 
 Instead of having to replicate rich interactive experiences per client shell
-implementation (i.e. build thick client applicationz), Hypermedia should allow
+implementation (i.e. build thick client applications), hypermedia should allow
 thin general-purpose clients, i.e a slim web browser of sorts.
 
 Rich interactivity is enabled by an interactive interface process that runs in
@@ -332,27 +333,27 @@ building and testing UI.
 
 ** Conceptual Analogies to Emacs and Web Browsers
 
-HyperLyric is to VRS what buffers are to Emacs, and HTML document / DOM is to
-Web Browsers.
+Hypermedia document is to VRS what buffers are to Emacs, and HTML document / DOM
+is to Web Browsers.
 
 It is the representation for data, interface, and behavior.
 
 In a sense, each client is a minimal pseudo-browser for presenting interfaces
-for given HyperLyric data.
+for given hypermedia data.
 
 ** Client as a Pseudobrowser
 
 It may be helpful to conceptualize the client shells as a pseudo-web-browser of
 sorts, as far as runtime is concerned.
 
-While runtime processes may respond with HyperLyric data, the client manages the
+While runtime processes may respond with hypermedia data, the client manages the
 "tabs" of this markup across variety of different sources, similar to a web browser.
 
 In this way, the contract between client and runtime stays simple - there is a
 bidirectional channel which is used for RPC and Pub/Sub traffic. For example,
 there can be a collection of topics published from the runtime, which client
-subscribes to. Each of those topics can contain the Hyperlyric markup
-representing the "page".
+subscribes to. Each of those topics can contain the hypermedia representing the
+"page".
 
 ** Inspirations
 
