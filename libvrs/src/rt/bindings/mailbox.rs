@@ -1,9 +1,9 @@
 //! Bindings for Process Mailbox
 use crate::rt::{
     mailbox::Message,
-    program::{Extern, Fiber, Lambda, NativeAsyncFn, Pattern, Val},
+    program::{Extern, Fiber, NativeAsyncFn, Pattern, Val},
 };
-use lyric::{compile, parse, Error, Result, SymbolId};
+use lyric::{Error, Result, SymbolId};
 
 pub(crate) fn send_fn() -> NativeAsyncFn {
     NativeAsyncFn {
@@ -31,25 +31,64 @@ pub(crate) fn ls_msgs_fn() -> NativeAsyncFn {
 }
 
 /// Binding for call
-pub(crate) fn call_fn() -> Lambda {
-    Lambda {
-        doc: Some("(call PID MSG) - Send process PID a message MSG and block until receiving a response for the message".to_string()),
-        params: vec![SymbolId::from("pid"), SymbolId::from("msg")],
-        code: compile(
-            &parse(
-                r#"
-            (begin
-                (def r (ref))
-                (send pid (list r (self) msg))
-                (get (recv (list r 'any)) 1))
-        "#,
-            )
-            .unwrap()
-            .into(),
-        )
-        .unwrap(),
-        parent: None,
+pub(crate) fn call_fn() -> NativeAsyncFn {
+    NativeAsyncFn {
+        doc: "(call PID MSG) - Send a request and wait for its response, up to the calling process's timeout".to_string(),
+        func: |fiber, args| Box::new(call_impl(fiber, args)),
     }
+}
+
+async fn call_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
+    let (pid, msg, timeout) = match args.as_slice() {
+        [Val::Extern(Extern::ProcessId(pid)), msg] => {
+            (pid.clone(), msg.clone(), fiber.locals().call_timeout)
+        }
+        _ => {
+            return Err(Error::UnexpectedArguments(
+                "call expects a process id and message".to_string(),
+            ))
+        }
+    };
+
+    let request_ref = lyric::Ref::unique();
+    let request = Val::List(vec![
+        Val::Ref(request_ref.clone()),
+        Val::Extern(Extern::ProcessId(fiber.locals().pid.clone())),
+        msg,
+    ]);
+    send_impl(
+        fiber,
+        vec![Val::Extern(Extern::ProcessId(pid.clone())), request],
+    )
+    .await?;
+
+    let pattern = Pattern::from_val(Val::List(vec![
+        Val::Ref(request_ref),
+        Val::Symbol(SymbolId::from("response")),
+    ]));
+    let mailbox = fiber
+        .locals()
+        .self_handle
+        .as_ref()
+        .expect("process should have self handle")
+        .mailbox()
+        .clone();
+    let response = mailbox
+        .poll_timeout(Some(pattern), timeout)
+        .await
+        .map_err(|e| Error::Runtime(format!("{e}")))?
+        .ok_or_else(|| {
+            Error::Runtime(format!(
+                "call to {pid} timed out after {} seconds",
+                timeout.as_secs()
+            ))
+        })?;
+    response
+        .contents
+        .as_list()?
+        .get(1)
+        .cloned()
+        .ok_or_else(|| Error::Runtime("call received a malformed response".to_string()))
 }
 
 /// Implementation for (send PID MSG)
@@ -212,6 +251,35 @@ mod tests {
             ])),
             "recv should receive message"
         );
+    }
+
+    #[tokio::test]
+    async fn call_timeout_does_not_prevent_the_caller_from_continuing() {
+        let k = kernel::start_test();
+        let hdl = k
+            .spawn_prog(
+                Program::from_expr(
+                    r#"(begin
+                        (call_timeout 0)
+                        (def target (spawn (lambda () (recv))))
+                        (def timeout_error (try (call target :hello)))
+                        (send (self) :continued)
+                        (list timeout_error (recv)))"#,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let result = hdl.join().await.unwrap().status.unwrap();
+        let ProcessResult::Done(Val::List(values)) = result else {
+            panic!("call should time out and let the process continue");
+        };
+        assert!(matches!(
+            &values[..],
+            [Val::Error(lyric::Error::Runtime(message)), Val::Keyword(continued)]
+                if message.contains("timed out after 0 seconds") && continued.as_str() == "continued"
+        ));
     }
 
     #[tokio::test]

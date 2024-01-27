@@ -1,5 +1,6 @@
 //! A Process's Mailbox
 use std::collections::VecDeque;
+use std::time::Duration;
 
 use super::proc::ProcessId;
 use super::program::{Pattern, Val};
@@ -31,6 +32,7 @@ enum Cmd {
     Push(Message),
     GetAll(oneshot::Sender<Vec<Message>>),
     Poll(Option<Pattern>, oneshot::Sender<Message>),
+    CancelPoll(oneshot::Sender<()>),
 }
 
 /// A pending handle for polling mailbox
@@ -70,6 +72,32 @@ impl MailboxHandle {
             .map_err(|_| Error::NoMailbox)?;
         Ok(rx.await?)
     }
+
+    /// Poll for a matching message until the deadline, clearing the pending
+    /// poll before returning if the deadline expires.
+    pub(crate) async fn poll_timeout(
+        &self,
+        pat: Option<Pattern>,
+        duration: Duration,
+    ) -> Result<Option<Message>> {
+        let (tx, rx) = oneshot::channel();
+        self.tx
+            .send(Cmd::Poll(pat, tx))
+            .await
+            .map_err(|_| Error::NoMailbox)?;
+        match tokio::time::timeout(duration, rx).await {
+            Ok(message) => Ok(Some(message?)),
+            Err(_) => {
+                let (tx, rx) = oneshot::channel();
+                self.tx
+                    .send(Cmd::CancelPoll(tx))
+                    .await
+                    .map_err(|_| Error::NoMailbox)?;
+                rx.await?;
+                Ok(None)
+            }
+        }
+    }
 }
 
 impl Mailbox {
@@ -87,6 +115,10 @@ impl Mailbox {
                         let _ = tx.send(msgs);
                     }
                     Cmd::Poll(pat, tx) => mailbox.handle_poll(pat, tx),
+                    Cmd::CancelPoll(tx) => {
+                        mailbox.pending.take();
+                        let _ = tx.send(());
+                    }
                 }
             }
         });
@@ -220,6 +252,23 @@ mod tests {
             hdl.await.unwrap().unwrap(),
             Message::new(Val::symbol("hi")),
             "Poll should return with result"
+        );
+    }
+
+    #[tokio::test]
+    async fn timed_out_poll_does_not_poison_the_next_poll() {
+        let mb = Mailbox::spawn(ProcessId::new("test", 0));
+        assert_eq!(mb.poll_timeout(None, Duration::ZERO).await.unwrap(), None);
+
+        let pending = tokio::spawn({
+            let mb = mb.clone();
+            async move { mb.poll(None).await }
+        });
+        yield_now().await;
+        mb.push(Message::new(Val::keyword("next"))).await.unwrap();
+        assert_eq!(
+            pending.await.unwrap().unwrap(),
+            Message::new(Val::keyword("next"))
         );
     }
 

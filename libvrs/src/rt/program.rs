@@ -2,6 +2,7 @@
 //! Program that specifies a process
 
 use lyric::{Error, Result, SymbolId};
+use std::time::Duration;
 
 use crate::ProcessHandle;
 
@@ -53,6 +54,8 @@ pub type NativeAsyncFn = lyric::NativeAsyncFn<Extern, Locals>;
 /// Bytecode
 pub type Bytecode = lyric::Bytecode<Extern, Locals>;
 
+pub(crate) const DEFAULT_CALL_TIMEOUT: Duration = Duration::from_secs(5);
+
 /// Extern type between Fiber and hosting program
 #[derive(Debug, Clone, PartialEq)]
 pub enum Extern {
@@ -79,6 +82,8 @@ pub struct Locals {
     pub(crate) self_handle: Option<ProcessHandle>,
     /// Handle to controlling terminal, if any
     pub(crate) term: Option<TermHandle>,
+    /// Maximum time this process waits for a call response by default.
+    pub(crate) call_timeout: Duration,
 }
 
 impl Program {
@@ -159,6 +164,7 @@ impl Locals {
             pubsub: None,
             self_handle: None,
             term: None,
+            call_timeout: DEFAULT_CALL_TIMEOUT,
         }
     }
 
@@ -212,7 +218,7 @@ pub fn proc_env() -> Env {
         e.bind_native_async(SymbolId::from("recv"), bindings::recv_fn())
             .bind_native_async(SymbolId::from("ls_msgs"), bindings::ls_msgs_fn())
             .bind_native_async(SymbolId::from("send"), bindings::send_fn())
-            .bind_lambda(SymbolId::from("call"), bindings::call_fn());
+            .bind_native_async(SymbolId::from("call"), bindings::call_fn());
     }
 
     {
@@ -230,6 +236,7 @@ pub fn proc_env() -> Env {
         e.bind_native_async(SymbolId::from("kill"), bindings::kill_fn())
             .bind_native(SymbolId::from("pid"), bindings::pid_fn())
             .bind_native(SymbolId::from("node_name"), bindings::node_name_fn())
+            .bind_native(SymbolId::from("call_timeout"), bindings::call_timeout_fn())
             .bind_native_async(SymbolId::from("ps"), bindings::ps_fn())
             .bind_native(SymbolId::from("self"), bindings::self_fn())
             .bind_native_async(SymbolId::from("sleep"), bindings::sleep_fn())
