@@ -1,9 +1,11 @@
-//! Process Registry
-use nanoid::nanoid;
-use std::collections::HashMap;
-use tokio::sync::{mpsc, oneshot};
+//! Local cache of service registrations, including registrations learned from nodes.
 
-use lyric::KeywordId;
+use nanoid::nanoid;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use tokio::sync::{broadcast, mpsc, oneshot};
+
+use lyric::{Form, KeywordId};
 use tracing::error;
 
 use crate::rt::program::Val;
@@ -11,32 +13,52 @@ use crate::{Error, Extern, ProcessExit, ProcessHandle, Result};
 
 use super::ProcessId;
 
-/// Handle to [Registry]
 #[derive(Debug, Clone)]
 pub struct Registry {
     tx: mpsc::Sender<Cmd>,
+    events: broadcast::Sender<RegistryEvent>,
 }
 
-/// Storage and lookup of processes
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct ServiceDescription {
+    pub name: KeywordId,
+    pub pid: ProcessId,
+    pub interface: Vec<Form>,
+    pub docs: HashMap<KeywordId, String>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum RegistryEvent {
+    Up(ServiceDescription),
+    Down { name: KeywordId, pid: ProcessId },
+}
+
 #[derive(Debug)]
-pub struct RegistryTask {
+struct RegistryTask {
     weak_tx: mpsc::WeakSender<Cmd>,
-    entries: HashMap<KeywordId, Entry>,
+    entries: HashMap<KeywordId, Vec<Entry>>,
+    events: broadcast::Sender<RegistryEvent>,
+    node_name: String,
+    observed: u64,
 }
 
-/// Identifier for Entries
 #[derive(Debug, Clone, PartialEq)]
 pub struct EntryId(String);
 
-/// Single entry in [Registry]
 #[derive(Debug, Clone)]
 pub struct Entry {
     id: EntryId,
     registration: Registration,
-    handle: ProcessHandle,
+    target: EntryTarget,
+    observed: u64,
 }
 
-/// Struct carrying registration payload
+#[derive(Debug, Clone)]
+enum EntryTarget {
+    Local(ProcessHandle),
+    Remote(ProcessId),
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Registration {
     keyword: KeywordId,
@@ -46,20 +68,21 @@ pub struct Registration {
 }
 
 impl Registry {
-    /// Spawn a new registry task
-    pub fn spawn() -> Registry {
+    pub(crate) fn spawn_named(node_name: String) -> Registry {
         let (tx, mut rx) = mpsc::channel(32);
+        let (events, _) = broadcast::channel(64);
         let weak_tx = tx.downgrade();
+        let task_events = events.clone();
+        let task_node_name = node_name.clone();
         tokio::spawn(async move {
-            let mut registry = RegistryTask::new(weak_tx);
+            let mut registry = RegistryTask::new(weak_tx, task_node_name, task_events);
             while let Some(cmd) = rx.recv().await {
                 registry.handle_cmd(cmd).await
             }
         });
-        Registry { tx }
+        Registry { tx, events }
     }
 
-    /// Register a given process
     pub async fn register(&self, registration: Registration, proc: ProcessHandle) -> Result<()> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.tx
@@ -69,7 +92,6 @@ impl Registry {
         resp_rx.await?
     }
 
-    /// Lookup given process for name
     pub async fn lookup(&self, keyword: KeywordId) -> Result<Option<Entry>> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.tx
@@ -79,7 +101,6 @@ impl Registry {
         Ok(resp_rx.await?)
     }
 
-    /// Get all entries
     pub async fn all(&self) -> Result<Vec<Entry>> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.tx
@@ -88,20 +109,82 @@ impl Registry {
             .map_err(|_| Error::NoMessageReceiver("registry task is dead".to_string()))?;
         Ok(resp_rx.await?)
     }
+
+    pub(crate) fn subscribe(&self) -> broadcast::Receiver<RegistryEvent> {
+        self.events.subscribe()
+    }
+
+    pub(crate) async fn local_snapshot(&self) -> Result<Vec<ServiceDescription>> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.tx
+            .send(Cmd::LocalSnapshot(resp_tx))
+            .await
+            .map_err(|_| Error::NoMessageReceiver("registry task is dead".to_string()))?;
+        resp_rx.await?
+    }
+
+    pub(crate) async fn replace_remote(
+        &self,
+        node: String,
+        services: Vec<ServiceDescription>,
+    ) -> Result<()> {
+        self.tx
+            .send(Cmd::ReplaceRemote(node, services))
+            .await
+            .map_err(|_| Error::NoMessageReceiver("registry task is dead".to_string()))
+    }
+
+    pub(crate) async fn remote_up(&self, service: ServiceDescription) -> Result<()> {
+        self.tx
+            .send(Cmd::RemoteUp(service))
+            .await
+            .map_err(|_| Error::NoMessageReceiver("registry task is dead".to_string()))
+    }
+
+    pub(crate) async fn remote_down(
+        &self,
+        node: String,
+        name: KeywordId,
+        pid: ProcessId,
+    ) -> Result<()> {
+        self.tx
+            .send(Cmd::RemoteDown { node, name, pid })
+            .await
+            .map_err(|_| Error::NoMessageReceiver("registry task is dead".to_string()))
+    }
+
+    pub(crate) async fn remove_node(&self, node: String) -> Result<()> {
+        self.tx
+            .send(Cmd::RemoveNode(node))
+            .await
+            .map_err(|_| Error::NoMessageReceiver("registry task is dead".to_string()))
+    }
 }
 
-impl std::cmp::PartialEq for Registry {
+impl PartialEq for Registry {
     fn eq(&self, other: &Self) -> bool {
         std::ptr::eq(&self.tx, &other.tx)
     }
 }
 
 impl RegistryTask {
-    fn new(weak_tx: mpsc::WeakSender<Cmd>) -> Self {
+    fn new(
+        weak_tx: mpsc::WeakSender<Cmd>,
+        node_name: String,
+        events: broadcast::Sender<RegistryEvent>,
+    ) -> Self {
         Self {
             weak_tx,
             entries: HashMap::new(),
+            events,
+            node_name,
+            observed: 0,
         }
+    }
+
+    fn next_observed(&mut self) -> u64 {
+        self.observed = self.observed.wrapping_add(1);
+        self.observed
     }
 
     async fn handle_cmd(&mut self, cmd: Cmd) {
@@ -110,70 +193,178 @@ impl RegistryTask {
                 let _ = resp_tx.send(self.handle_register(registration, proc));
             }
             Cmd::Lookup(keyword, resp_tx) => {
-                let _ = resp_tx.send(self.entries.get(&keyword).cloned());
+                let selected = self.entries.get(&keyword).and_then(|entries| {
+                    entries
+                        .iter()
+                        .filter(|entry| entry.is_local())
+                        .max_by_key(|entry| entry.observed)
+                        .or_else(|| entries.iter().max_by_key(|entry| entry.observed))
+                        .cloned()
+                });
+                let _ = resp_tx.send(selected);
             }
-            Cmd::NotifyExit(keyword, id, exit) => {
-                self.handle_exit(keyword, id, exit);
-            }
+            Cmd::NotifyExit(keyword, id, exit) => self.handle_exit(keyword, id, exit),
             Cmd::GetAll(resp_tx) => {
-                let _ = resp_tx.send(self.entries.values().cloned().collect());
+                let all = self.entries.values().flatten().cloned().collect();
+                let _ = resp_tx.send(all);
             }
+            Cmd::LocalSnapshot(resp_tx) => {
+                let snapshot = self
+                    .entries
+                    .values()
+                    .flatten()
+                    .filter(|entry| entry.is_local())
+                    .map(|entry| entry.description())
+                    .collect();
+                let _ = resp_tx.send(snapshot);
+            }
+            Cmd::ReplaceRemote(node, services) => {
+                self.remove_node(&node);
+                for service in services {
+                    if service.pid.node() == node {
+                        self.handle_remote_up(service);
+                    }
+                }
+            }
+            Cmd::RemoteUp(service) => self.handle_remote_up(service),
+            Cmd::RemoteDown { node, name, pid } => self.remove_remote(&node, &name, &pid),
+            Cmd::RemoveNode(node) => self.remove_node(&node),
         }
     }
 
     fn handle_register(&mut self, registration: Registration, handle: ProcessHandle) -> Result<()> {
-        let keyword = &registration.keyword;
-
-        if !registration.overwrite && self.entries.contains_key(keyword) {
+        let keyword = registration.keyword.clone();
+        let existing_local = self
+            .entries
+            .get(&keyword)
+            .is_some_and(|entries| entries.iter().any(Entry::is_local));
+        if existing_local && !registration.overwrite {
             return Err(Error::RegistryError(format!(
-                "Registered process exists for {}",
-                keyword
+                "Registered process exists for {keyword}"
             )));
         }
 
-        let entry = Entry::new(registration.clone(), handle.clone());
+        if registration.overwrite {
+            if let Some(entries) = self.entries.get_mut(&keyword) {
+                entries.retain(|entry| !entry.is_local());
+            }
+        }
 
-        // Notify on exit
+        let entry = Entry::local(registration, handle.clone(), self.next_observed());
         let entry_id = entry.id.clone();
         let on_exit = handle.join();
         let weak_tx = self.weak_tx.clone();
-        let kwd = keyword.clone();
+        let exit_keyword = keyword.clone();
         tokio::spawn(async move {
             let exit = on_exit.await;
-            let tx = match weak_tx.upgrade() {
-                Some(tx) => tx,
-                None => return,
-            };
-            let _ = tx.send(Cmd::NotifyExit(kwd, entry_id, exit)).await;
+            let Some(tx) = weak_tx.upgrade() else { return };
+            let _ = tx.send(Cmd::NotifyExit(exit_keyword, entry_id, exit)).await;
         });
 
-        self.entries.insert(keyword.clone(), entry);
-
+        if let Ok(description) = entry.description() {
+            let _ = self.events.send(RegistryEvent::Up(description));
+        }
+        self.entries.entry(keyword).or_default().push(entry);
         Ok(())
     }
 
     fn handle_exit(&mut self, keyword: KeywordId, id: EntryId, exit: Result<ProcessExit>) {
-        match self.entries.get(&keyword) {
-            Some(e) if e.id == id => {
+        let mut removed = None;
+        if let Some(entries) = self.entries.get_mut(&keyword) {
+            if let Some(index) = entries.iter().position(|entry| entry.id == id) {
+                removed = Some(entries.remove(index));
+            }
+            if entries.is_empty() {
                 self.entries.remove(&keyword);
             }
-            _ => {
-                error!(
-                    "handle_exit with unknown exit: {:?} {:?} {:?}",
-                    keyword, id, exit
-                );
+        }
+        match removed {
+            Some(entry) => {
+                let _ = self.events.send(RegistryEvent::Down {
+                    name: keyword,
+                    pid: entry.pid(),
+                });
             }
-        };
+            None => error!("handle_exit with unknown exit: {keyword:?} {id:?} {exit:?}"),
+        }
+    }
+
+    fn handle_remote_up(&mut self, service: ServiceDescription) {
+        if service.pid.node() == self.node_name {
+            return;
+        }
+        self.remove_remote(service.pid.node(), &service.name, &service.pid);
+        let observed = self.next_observed();
+        let keyword = service.name.clone();
+        let entry = Entry::remote(service, observed);
+        self.entries.entry(keyword).or_default().push(entry);
+    }
+
+    fn remove_remote(&mut self, node: &str, name: &KeywordId, pid: &ProcessId) {
+        if let Some(entries) = self.entries.get_mut(name) {
+            entries.retain(|entry| !entry.matches_remote(node, pid));
+            if entries.is_empty() {
+                self.entries.remove(name);
+            }
+        }
+    }
+
+    fn remove_node(&mut self, node: &str) {
+        self.entries.retain(|_, entries| {
+            entries.retain(|entry| entry.node() != node || entry.is_local());
+            !entries.is_empty()
+        });
     }
 }
 
 impl Entry {
-    fn new(registration: Registration, handle: ProcessHandle) -> Self {
+    fn local(registration: Registration, handle: ProcessHandle, observed: u64) -> Self {
         Self {
-            id: EntryId::from(nanoid!()),
+            id: EntryId(nanoid!()),
             registration,
-            handle,
+            target: EntryTarget::Local(handle),
+            observed,
         }
+    }
+
+    fn remote(service: ServiceDescription, observed: u64) -> Self {
+        let interface = service.interface.into_iter().map(Val::from).collect();
+        Self {
+            id: EntryId(nanoid!()),
+            registration: Registration {
+                keyword: service.name,
+                interface,
+                overwrite: false,
+                docs: service.docs,
+            },
+            target: EntryTarget::Remote(service.pid),
+            observed,
+        }
+    }
+
+    fn description(&self) -> Result<ServiceDescription> {
+        let interface = self
+            .registration
+            .interface
+            .iter()
+            .cloned()
+            .map(Form::try_from)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(Error::EvaluationError)?;
+        Ok(ServiceDescription {
+            name: self.registration.keyword.clone(),
+            pid: self.pid(),
+            interface,
+            docs: self.registration.docs.clone(),
+        })
+    }
+
+    fn is_local(&self) -> bool {
+        matches!(self.target, EntryTarget::Local(_))
+    }
+
+    fn matches_remote(&self, node: &str, pid: &ProcessId) -> bool {
+        matches!(&self.target, EntryTarget::Remote(entry_pid) if entry_pid.node() == node && entry_pid == pid)
     }
 
     pub fn keyword(&self) -> &KeywordId {
@@ -181,7 +372,21 @@ impl Entry {
     }
 
     pub fn pid(&self) -> ProcessId {
-        self.handle.id()
+        match &self.target {
+            EntryTarget::Local(handle) => handle.id(),
+            EntryTarget::Remote(pid) => pid.clone(),
+        }
+    }
+
+    pub fn node(&self) -> &str {
+        match &self.target {
+            EntryTarget::Local(handle) => handle.id_ref().node(),
+            EntryTarget::Remote(pid) => pid.node(),
+        }
+    }
+
+    pub fn process_val(&self) -> Val {
+        Val::Extern(Extern::ProcessId(self.pid()))
     }
 
     pub fn interface(&self) -> &Vec<Val> {
@@ -199,15 +404,16 @@ impl From<Entry> for Val {
             Val::keyword("name"),
             Val::Keyword(value.keyword().clone()),
             Val::keyword("pid"),
-            Val::Extern(Extern::ProcessId(value.pid())),
+            value.process_val(),
         ];
-
-        let interface = &value.registration.interface;
-        if !interface.is_empty() {
-            contents.push(Val::keyword("interface"));
-            contents.push(Val::List(interface.clone()));
+        if !value.is_local() {
+            contents.push(Val::keyword("node"));
+            contents.push(Val::String(value.node().to_string()));
         }
-
+        if !value.registration.interface.is_empty() {
+            contents.push(Val::keyword("interface"));
+            contents.push(Val::List(value.registration.interface.clone()));
+        }
         Val::List(contents)
     }
 }
@@ -238,182 +444,73 @@ impl Registration {
     }
 }
 
-impl From<String> for EntryId {
-    fn from(value: String) -> Self {
-        Self(value)
-    }
-}
-
 enum Cmd {
     Register(Registration, ProcessHandle, oneshot::Sender<Result<()>>),
     Lookup(KeywordId, oneshot::Sender<Option<Entry>>),
     NotifyExit(KeywordId, EntryId, Result<ProcessExit>),
     GetAll(oneshot::Sender<Vec<Entry>>),
+    LocalSnapshot(oneshot::Sender<Result<Vec<ServiceDescription>>>),
+    ReplaceRemote(String, Vec<ServiceDescription>),
+    RemoteUp(ServiceDescription),
+    RemoteDown {
+        node: String,
+        name: KeywordId,
+        pid: ProcessId,
+    },
+    RemoveNode(String),
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::{rt::kernel, Program};
 
-    use super::*;
-    use assert_matches::assert_matches;
-
     #[tokio::test]
-    async fn empty() {
-        let r = Registry::spawn();
-        assert_matches!(
-            r.lookup(KeywordId::from("unknown_keyword")).await.unwrap(),
-            None
+    async fn local_wins_then_latest_remote_wins() {
+        let registry = Registry::spawn_named("here".to_string());
+        registry
+            .remote_up(ServiceDescription {
+                name: KeywordId::from("svc"),
+                pid: ProcessId::new("one", 1),
+                interface: vec![],
+                docs: HashMap::new(),
+            })
+            .await
+            .unwrap();
+        registry
+            .remote_up(ServiceDescription {
+                name: KeywordId::from("svc"),
+                pid: ProcessId::new("two", 2),
+                interface: vec![],
+                docs: HashMap::new(),
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            registry
+                .lookup(KeywordId::from("svc"))
+                .await
+                .unwrap()
+                .unwrap()
+                .node(),
+            "two"
         );
-        assert!(r.all().await.unwrap().is_empty());
-    }
 
-    #[tokio::test]
-    async fn register() {
-        let r = Registry::spawn();
-        let k = kernel::start("test".to_string());
-
-        let prog = Program::from_expr("(loop (sleep 1))").unwrap();
-        let hdl_a = k.spawn_prog(prog.clone()).await.unwrap();
-        let hdl_b = k.spawn_prog(prog).await.unwrap();
-
-        assert_matches!(r.lookup(KeywordId::from("A")).await.unwrap(), None);
-        assert_matches!(r.lookup(KeywordId::from("B")).await.unwrap(), None);
-
-        r.register(Registration::new(KeywordId::from("A")), hdl_a.clone())
+        let kernel = kernel::start_test();
+        let handle = kernel
+            .spawn_prog(Program::from_expr("(recv)").unwrap())
             .await
-            .expect("registration should succeed");
-        r.register(Registration::new(KeywordId::from("B")), hdl_b.clone())
+            .unwrap();
+        registry
+            .register(Registration::new(KeywordId::from("svc")), handle.clone())
             .await
-            .expect("registration should succeed");
-
-        assert_matches!(r.lookup(KeywordId::from("A")).await.unwrap(),
-                        Some(r) if r.handle.id() == hdl_a.id());
-        assert_matches!(r.lookup(KeywordId::from("B")).await.unwrap(),
-                        Some(r) if r.handle.id() == hdl_b.id());
-    }
-
-    #[tokio::test]
-    async fn register_duplicate() {
-        let r = Registry::spawn();
-        let k = kernel::start("test".to_string());
-
-        let prog = Program::from_expr("(loop (sleep 1))").unwrap();
-        let hdl_a = k.spawn_prog(prog.clone()).await.unwrap();
-        let hdl_b = k.spawn_prog(prog).await.unwrap();
-
-        r.register(Registration::new(KeywordId::from("A")), hdl_a.clone())
+            .unwrap();
+        assert!(registry
+            .lookup(KeywordId::from("svc"))
             .await
-            .expect("registration should succeed");
-
-        assert_matches!(
-            r.register(Registration::new(KeywordId::from("A")), hdl_b.clone())
-                .await,
-            Err(Error::RegistryError(_)),
-            "Registration for existing key should fail"
-        );
-    }
-
-    #[tokio::test]
-    async fn register_duplicate_overwrite() {
-        let r = Registry::spawn();
-        let k = kernel::start("test".to_string());
-
-        let prog = Program::from_expr("(loop (sleep 1))").unwrap();
-        let hdl_a = k.spawn_prog(prog.clone()).await.unwrap();
-        let hdl_b = k.spawn_prog(prog).await.unwrap();
-
-        r.register(Registration::new(KeywordId::from("A")), hdl_a.clone())
-            .await
-            .expect("registration should succeed");
-
-        let mut registration = Registration::new(KeywordId::from("A"));
-        registration.overwrite(true);
-        r.register(registration, hdl_b.clone())
-            .await
-            .expect("Registration for duplicate key should succeed since overwrite is true");
-
-        assert_matches!(r.lookup(KeywordId::from("A")).await.unwrap(),
-                        Some(r) if r.handle.id() == hdl_b.id(),
-                        "Lookup should return newer registration");
-    }
-
-    #[tokio::test]
-    async fn deregister_on_proc_exit() {
-        let r = Registry::spawn();
-        let k = kernel::start("test".to_string());
-
-        let prog = Program::from_expr("(recv)").unwrap();
-        let hdl = k.spawn_prog(prog.clone()).await.unwrap();
-
-        r.register(Registration::new(KeywordId::from("A")), hdl.clone())
-            .await
-            .expect("registration should succeed");
-
-        let _ = r
-            .lookup(KeywordId::from("A"))
-            .await
-            .expect("process is still running - lookup should return Some");
-
-        hdl.kill().await;
-        hdl.join().await.expect("should complete");
-
-        assert_matches!(
-            r.lookup(KeywordId::from("A")).await.unwrap(),
-            None,
-            "Dead processes should be removed from registry"
-        );
-    }
-
-    #[tokio::test]
-    async fn get_all() {
-        let r = Registry::spawn();
-        let k = kernel::start("test".to_string());
-
-        let prog = Program::from_expr("(loop (sleep 1))").unwrap();
-        let hdl_a = k.spawn_prog(prog.clone()).await.unwrap();
-        let hdl_b = k.spawn_prog(prog).await.unwrap();
-
-        let mut reg_a = Registration::new(KeywordId::from("A"));
-        reg_a.interface(vec![Val::keyword("interface_a")]);
-        r.register(reg_a, hdl_a.clone())
-            .await
-            .expect("registration should succeed");
-
-        let mut reg_b = Registration::new(KeywordId::from("B"));
-        reg_b.interface(vec![Val::keyword("interface_b")]);
-        r.register(reg_b, hdl_b.clone())
-            .await
-            .expect("registration should succeed");
-
-        let entries: Vec<_> = r
-            .all()
-            .await
-            .expect("Should be able to retrieve entries")
-            .into_iter()
-            .map(|e| (e.registration))
-            .collect();
-        assert!(entries.contains(
-            Registration::new(KeywordId::from("A")).interface(vec![Val::keyword("interface_a")])
-        ));
-        assert!(entries.contains(
-            Registration::new(KeywordId::from("B")).interface(vec![Val::keyword("interface_b")])
-        ));
-
-        hdl_a.kill().await;
-        hdl_a.join().await.expect("should complete");
-
-        let entries: Vec<_> = r
-            .all()
-            .await
-            .expect("Should be able to retrieve entries")
-            .into_iter()
-            .map(|e| (e.registration.keyword))
-            .collect();
-        assert!(
-            !entries.contains(&KeywordId::from("A")),
-            "A should have been removed"
-        );
-        assert!(entries.contains(&KeywordId::from("B")));
+            .unwrap()
+            .unwrap()
+            .is_local());
+        handle.kill().await;
     }
 }

@@ -7,6 +7,7 @@ use crate::ProcessHandle;
 
 use super::bindings;
 use super::kernel::WeakKernelHandle;
+use super::peer::PeerHandle;
 use super::proc::ProcessId;
 use super::pubsub::PubSubHandle;
 use super::registry::Registry;
@@ -70,6 +71,8 @@ pub struct Locals {
     pub(crate) kernel: Option<WeakKernelHandle>,
     /// Handle to process registry
     pub(crate) registry: Option<Registry>,
+    /// Handle to persistent node links
+    pub(crate) peers: Option<PeerHandle>,
     /// Handle to pubsub
     pub(crate) pubsub: Option<PubSubHandle>,
     /// Handle to current process
@@ -152,6 +155,7 @@ impl Locals {
             node_name: "local".to_string(),
             kernel: None,
             registry: None,
+            peers: None,
             pubsub: None,
             self_handle: None,
             term: None,
@@ -170,6 +174,11 @@ impl Locals {
 
     pub(crate) fn registry(&mut self, registry: Registry) -> &mut Self {
         self.registry = Some(registry);
+        self
+    }
+
+    pub(crate) fn peers(&mut self, peers: PeerHandle) -> &mut Self {
+        self.peers = Some(peers);
         self
     }
 
@@ -225,6 +234,10 @@ pub fn proc_env() -> Env {
             .bind_native(SymbolId::from("self"), bindings::self_fn())
             .bind_native_async(SymbolId::from("sleep"), bindings::sleep_fn())
             .bind_native_async(SymbolId::from("spawn"), bindings::spawn_fn());
+    }
+
+    {
+        e.bind_native_async(SymbolId::from("configure"), bindings::configure_fn());
     }
 
     {

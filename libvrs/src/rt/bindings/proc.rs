@@ -11,7 +11,7 @@ pub(crate) fn self_fn() -> NativeFn {
     NativeFn {
         doc: "(self) - Returns process id of caller".to_string(),
         func: |f, _| {
-            let pid = f.locals().pid;
+            let pid = f.locals().pid.clone();
             Ok(NativeFnOp::Return(Val::Extern(Extern::ProcessId(pid))))
         },
     }
@@ -21,7 +21,7 @@ pub(crate) fn self_fn() -> NativeFn {
 pub(crate) fn pid_fn() -> NativeFn {
     NativeFn {
         doc: "(pid NUMBER) - Creates a new process id type for given NUMBER".to_string(),
-        func: |_, args| {
+        func: |f, args| {
             let pid = match args {
                 [Val::Int(pid)] => pid,
                 _ => {
@@ -31,7 +31,7 @@ pub(crate) fn pid_fn() -> NativeFn {
                 }
             };
             Ok(NativeFnOp::Return(Val::Extern(Extern::ProcessId(
-                ProcessId::from(*pid as usize),
+                ProcessId::new(f.locals().node_name.clone(), *pid as usize),
             ))))
         },
     }
@@ -125,8 +125,8 @@ async fn ps_impl(fiber: &mut Fiber) -> Result<Val> {
 /// Implementation for (kill PID)
 async fn kill_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
     let pid = match args[..] {
-        [Val::Extern(Extern::ProcessId(pid))] => pid,
-        [Val::Int(pid)] => ProcessId::from(pid as usize),
+        [Val::Extern(Extern::ProcessId(ref pid))] => pid.clone(),
+        [Val::Int(pid)] => ProcessId::new(fiber.locals().node_name.clone(), pid as usize),
         _ => {
             return Err(Error::UnexpectedArguments(
                 "kill should have one integer argument".to_string(),
@@ -178,7 +178,7 @@ mod tests {
 
     #[tokio::test]
     async fn binding_self() {
-        let k = kernel::start("test".to_string());
+        let k = kernel::start_test();
         let hdl = k
             .spawn_prog(Program::from_expr("(self)").unwrap())
             .await
@@ -194,7 +194,7 @@ mod tests {
 
     #[tokio::test]
     async fn sleep() {
-        let k = kernel::start("test".to_string());
+        let k = kernel::start_test();
         let hdl = k
             .spawn_prog(Program::from_expr("(sleep 0)").unwrap())
             .await
@@ -211,7 +211,7 @@ mod tests {
 
     #[tokio::test]
     async fn ps() {
-        let k = kernel::start("test".to_string());
+        let k = kernel::start_test();
         let hdl = k
             .spawn_prog(Program::from_expr("(ps)").unwrap())
             .await
@@ -230,7 +230,7 @@ mod tests {
     async fn kill() {
         use tokio::time;
 
-        let k = kernel::start("test".to_string());
+        let k = kernel::start_test();
 
         let kill_target = k
             .spawn_prog(Program::from_expr("(loop (sleep 0))").unwrap())
@@ -255,7 +255,7 @@ mod tests {
 
     #[tokio::test]
     async fn binding_spawn() {
-        let k = kernel::start("test".to_string());
+        let k = kernel::start_test();
 
         let prog = r#"(begin
             (spawn (lambda () (loop (sleep 0)))) # spawn infinite loop

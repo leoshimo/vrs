@@ -54,9 +54,9 @@ pub(crate) fn call_fn() -> Lambda {
 
 /// Implementation for (send PID MSG)
 async fn send_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
-    let src = fiber.locals().pid;
+    let src = fiber.locals().pid.clone();
     let (dst, msg) = match &args[..] {
-        [Val::Extern(Extern::ProcessId(dst)), msg] => (dst, msg),
+        [Val::Extern(Extern::ProcessId(dst)), msg] => (dst.clone(), msg),
         _ => {
             return Err(Error::UnexpectedArguments(
                 "Unexpected send call - (send DEST_PID DATA)".to_string(),
@@ -64,15 +64,15 @@ async fn send_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
         }
     };
 
-    if src == *dst {
+    if dst == src {
         fiber
             .locals()
             .self_handle
             .as_ref()
             .expect("process should have self handle")
-            .notify_message(Message::new(src, msg.clone()))
+            .notify_message(Message::new(msg.clone()))
             .await;
-    } else {
+    } else if dst.node() == fiber.locals().node_name {
         let kernel = fiber
             .locals()
             .kernel
@@ -80,7 +80,17 @@ async fn send_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
             .and_then(|k| k.upgrade())
             .ok_or(Error::Runtime("Kernel is missing for process".to_string()))?;
         kernel
-            .send_message(src, *dst, msg.clone())
+            .send_message(dst, msg.clone())
+            .await
+            .map_err(|e| Error::Runtime(format!("{e}")))?;
+    } else {
+        let peers = fiber
+            .locals()
+            .peers
+            .as_ref()
+            .ok_or_else(|| Error::Runtime("Node links are not available".to_string()))?;
+        peers
+            .route(dst, msg.clone())
             .await
             .map_err(|e| Error::Runtime(format!("{e}")))?;
     }
@@ -142,7 +152,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_recv_one() {
-        let k = kernel::start("test".to_string());
+        let k = kernel::start_test();
 
         let hdl = k
             .spawn_prog(
@@ -165,7 +175,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_recv_two() {
-        let k = kernel::start("test".to_string());
+        let k = kernel::start_test();
 
         let recv = k
             .spawn_prog(Program::from_expr("(recv)").unwrap())
@@ -188,7 +198,7 @@ mod tests {
             ProcessResult::Done(Val::List(vec![
                 Val::keyword("hi"),
                 Val::keyword("from"),
-                Val::Extern(Extern::ProcessId(send_pid))
+                Val::Extern(Extern::ProcessId(send_pid.clone()))
             ])),
             "send should return sent message"
         );
@@ -206,7 +216,7 @@ mod tests {
 
     #[tokio::test]
     async fn ls_msgs_empty() {
-        let k = kernel::start("test".to_string());
+        let k = kernel::start_test();
 
         let hdl = k
             .spawn_prog(Program::from_expr("(ls_msgs)").unwrap())
@@ -220,7 +230,7 @@ mod tests {
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn ls_msgs_nonempty() {
-        let k = kernel::start("test".to_string());
+        let k = kernel::start_test();
 
         let hdl = k
             .spawn_prog(
@@ -246,7 +256,7 @@ mod tests {
 
     #[tokio::test]
     async fn recv_with_pattern() {
-        let k = kernel::start("test".to_string());
+        let k = kernel::start_test();
 
         let recv = k
             .spawn_prog(
@@ -293,7 +303,7 @@ mod tests {
 
     #[tokio::test]
     async fn recv_with_pattern_nested() {
-        let k = kernel::start("test".to_string());
+        let k = kernel::start_test();
 
         let recv = k
             .spawn_prog(
@@ -340,7 +350,7 @@ mod tests {
 
     #[tokio::test]
     async fn recv_with_multipattern() {
-        let k = kernel::start("test".to_string());
+        let k = kernel::start_test();
 
         let prog = r#"(begin
             (send (self) :one)

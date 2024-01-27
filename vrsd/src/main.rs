@@ -3,7 +3,7 @@ use clap::Parser;
 use std::path::{Path, PathBuf};
 use tokio::net::UnixListener;
 use tracing::{error, info};
-use vrs::{Connection, ProcessResult, Program, Runtime};
+use vrs::{Connection, ProcessResult, Program, Runtime, DEFAULT_NODE_PORT};
 
 #[derive(Debug, Parser)]
 #[command(about = "VRS runtime daemon")]
@@ -15,6 +15,14 @@ struct Args {
     /// Script evaluated inside a fresh runtime process before accepting clients.
     #[arg(long)]
     init: Option<PathBuf>,
+
+    /// Localhost port used for vrsd-to-vrsd connections.
+    #[arg(long, default_value_t = DEFAULT_NODE_PORT)]
+    node_port: u16,
+
+    /// Unix socket for local clients.
+    #[arg(long)]
+    socket: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -22,13 +30,17 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
     let args = Args::parse();
 
-    let path = vrs::runtime_socket();
+    let path = args.socket.unwrap_or_else(vrs::runtime_socket);
     if path.exists() {
         std::fs::remove_file(&path)
             .with_context(|| format!("Failed to remove existing socket {}", path.display()))?;
     }
 
     let runtime = Runtime::new(args.node);
+    runtime
+        .listen_for_nodes(args.node_port)
+        .await
+        .with_context(|| format!("Failed to start node listener on port {}", args.node_port))?;
 
     if let Some(init_path) = args.init {
         run_init(&runtime, &init_path).await?;

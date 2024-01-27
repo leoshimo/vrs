@@ -2,9 +2,10 @@
 //! This type is used to fill similar function as `make_ref()` in Erlang
 use crate::{Extern, Locals, NativeFn, NativeFnOp, Val};
 use nanoid::nanoid;
+use serde::{Deserialize, Serialize};
 
 /// Unique reference type
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Ref(pub(crate) String);
 
 /// Binding to create a new unique reference

@@ -79,7 +79,7 @@ mod tests {
     use crate::rt::program::{self, term_env, Form};
     use crate::rt::pubsub::PubSub;
     use crate::rt::term::Term;
-    use crate::rt::{kernel, Process, ProcessSet};
+    use crate::rt::{kernel, Process, ProcessId, ProcessSet};
     use crate::{Connection, ProcessResult, Program, Request};
     use assert_matches::assert_matches;
 
@@ -89,7 +89,7 @@ mod tests {
 
         let mut procs = ProcessSet::new();
         let prog = Program::from_expr("(recv_req)").unwrap().env(term_env());
-        let _ = Process::from_prog(0.into(), prog)
+        let _ = Process::from_prog(ProcessId::new("test", 0), prog)
             .term(Term::spawn(local, PubSub::spawn()))
             .spawn(&mut procs);
 
@@ -122,7 +122,7 @@ mod tests {
             (send_resp req_id "Goodbye world"))
         "#;
         let prog = Program::from_expr(prog).unwrap().env(term_env());
-        let hdl = Process::from_prog(0.into(), prog)
+        let hdl = Process::from_prog(ProcessId::new("test", 0), prog)
             .term(Term::spawn(local, PubSub::spawn()))
             .spawn(&mut procs)
             .unwrap();
@@ -157,7 +157,7 @@ mod tests {
         let mut procs = ProcessSet::new();
 
         let prog = program::term_prog();
-        let _ = Process::from_prog(0.into(), prog)
+        let _ = Process::from_prog(ProcessId::new("test", 0), prog)
             .term(Term::spawn(local, PubSub::spawn()))
             .spawn(&mut procs);
 
@@ -180,7 +180,7 @@ mod tests {
         let (local, mut remote) = Connection::pair().unwrap();
         let mut procs = ProcessSet::new();
 
-        let _ = Process::from_prog(0.into(), program::term_prog())
+        let _ = Process::from_prog(ProcessId::new("test", 0), program::term_prog())
             .term(Term::spawn(local, PubSub::spawn()))
             .spawn(&mut procs);
 
@@ -208,7 +208,7 @@ mod tests {
 
     #[tokio::test]
     async fn standard_procs_has_no_bindings() {
-        let k = kernel::start("test".to_string());
+        let k = kernel::start_test();
 
         {
             let prog = Program::from_expr("(recv_req)").unwrap().env(term_env());

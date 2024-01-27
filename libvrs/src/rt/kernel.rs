@@ -2,6 +2,7 @@
 use std::collections::HashMap;
 
 use super::mailbox::Message;
+use super::peer::PeerHandle;
 use super::proc::{ProcessExit, ProcessHandle, ProcessSet};
 use super::program;
 use super::pubsub::{PubSub, PubSubHandle};
@@ -25,11 +26,15 @@ pub(crate) struct WeakKernelHandle {
 }
 
 /// Starts the kernel task, which manages processes for one runtime node.
-pub(crate) fn start(node_name: String) -> KernelHandle {
+pub(crate) fn start(
+    node_name: String,
+    registry: Registry,
+    peers: Option<PeerHandle>,
+) -> KernelHandle {
     let (ev_tx, mut ev_rx) = mpsc::channel(32);
 
     let handle = KernelHandle { ev_tx };
-    let mut kernel = Kernel::new(handle.clone(), node_name);
+    let mut kernel = Kernel::new(handle.clone(), node_name, registry, peers);
     tokio::spawn(async move {
         loop {
             tokio::select! {
@@ -48,6 +53,12 @@ pub(crate) fn start(node_name: String) -> KernelHandle {
         Ok::<(), Error>(())
     });
     handle
+}
+
+#[cfg(test)]
+pub(crate) fn start_test() -> KernelHandle {
+    let node_name = "test".to_string();
+    start(node_name.clone(), Registry::spawn_named(node_name), None)
 }
 
 impl KernelHandle {
@@ -92,16 +103,10 @@ impl KernelHandle {
             .map_err(|_| Error::NoMessageReceiver("kill_procs failed".to_string()))
     }
 
-    // TODO(sec): SRC IDs too flexible
     /// Handle a message being sent from one process to another
-    pub(crate) async fn send_message(
-        &self,
-        src: ProcessId,
-        dst: ProcessId,
-        val: program::Val,
-    ) -> Result<()> {
+    pub(crate) async fn send_message(&self, dst: ProcessId, val: program::Val) -> Result<()> {
         self.ev_tx
-            .send(Event::ProcessSendMessage(src, dst, val))
+            .send(Event::ProcessSendMessage(dst, val))
             .await
             .map_err(|_| Error::NoMessageReceiver("send_message failed".to_string()))
     }
@@ -136,7 +141,7 @@ pub enum Event {
     ProcessExit(ProcessExit),
     ListProcess(oneshot::Sender<Vec<ProcessId>>),
     KillProcess(ProcessId),
-    ProcessSendMessage(ProcessId, ProcessId, program::Val),
+    ProcessSendMessage(ProcessId, program::Val),
 }
 
 /// The runtime kernel task
@@ -148,18 +153,25 @@ struct Kernel {
     registry: Registry,
     pubsub: PubSubHandle,
     node_name: String,
+    peers: Option<PeerHandle>,
 }
 
 impl Kernel {
-    pub fn new(handle: KernelHandle, node_name: String) -> Self {
+    pub fn new(
+        handle: KernelHandle,
+        node_name: String,
+        registry: Registry,
+        peers: Option<PeerHandle>,
+    ) -> Self {
         Self {
             weak_hdl: handle.downgrade(),
             procs: ProcessSet::new(),
             proc_hdls: HashMap::new(),
             next_proc_id: 0,
-            registry: Registry::spawn(),
+            registry,
             pubsub: PubSub::spawn(),
             node_name,
+            peers,
         }
     }
 
@@ -181,23 +193,26 @@ impl Kernel {
             }
             Event::ProcessExit(exit) => self.handle_exit(exit),
             Event::ListProcess(tx) => {
-                let ids = self.proc_hdls.keys().copied().collect();
+                let ids = self.proc_hdls.keys().cloned().collect();
                 let _ = tx.send(ids);
                 Ok(())
             }
             Event::KillProcess(pid) => self.kill_proc(pid).await,
-            Event::ProcessSendMessage(src, dst, msg) => self.dispatch_msg(src, dst, msg).await,
+            Event::ProcessSendMessage(dst, msg) => self.dispatch_msg(dst, msg).await,
         }
     }
 
     /// Spawn a new process
     fn spawn(&mut self, proc: Process) -> Result<ProcessHandle> {
-        let hdl = proc
+        let mut proc = proc
             .kernel(self.weak_hdl.clone())
             .registry(self.registry.clone())
             .node_name(self.node_name.clone())
-            .pubsub(self.pubsub.clone())
-            .spawn(&mut self.procs)?;
+            .pubsub(self.pubsub.clone());
+        if let Some(peers) = &self.peers {
+            proc = proc.peers(peers.clone());
+        }
+        let hdl = proc.spawn(&mut self.procs)?;
         self.proc_hdls.insert(hdl.id(), hdl.clone());
         Ok(hdl)
     }
@@ -221,16 +236,16 @@ impl Kernel {
         }
     }
 
-    /// Dispatc message from src to dst
-    async fn dispatch_msg(&self, src: ProcessId, dst: ProcessId, msg: program::Val) -> Result<()> {
+    /// Dispatch a message to a process on this node.
+    async fn dispatch_msg(&self, dst: ProcessId, msg: program::Val) -> Result<()> {
         let dst = self.proc_hdls.get(&dst).ok_or(Error::UnknownProcess)?;
-        dst.notify_message(Message::new(src, msg)).await;
+        dst.notify_message(Message::new(msg)).await;
         Ok(())
     }
 
     /// Get the next process id
     fn next_pid(&mut self) -> ProcessId {
-        let id = ProcessId::from(self.next_proc_id);
+        let id = ProcessId::new(self.node_name.clone(), self.next_proc_id);
         self.next_proc_id = self.next_proc_id.wrapping_add(1);
         id
     }
@@ -251,7 +266,7 @@ mod tests {
         let (local, remote) = Connection::pair().unwrap();
         let client = Client::new(remote);
 
-        let k = start("test".to_string());
+        let k = start_test();
         let _ = k
             .spawn_for_conn(local)
             .await
@@ -274,7 +289,7 @@ mod tests {
     async fn kernel_spawn_conn_drop() {
         let (local, remote) = Connection::pair().unwrap();
 
-        let k = start("test".to_string());
+        let k = start_test();
         let hdl = k
             .spawn_for_conn(local)
             .await
@@ -297,7 +312,7 @@ mod tests {
 
     #[tokio::test]
     async fn kernel_spawn_kill() {
-        let k = start("test".to_string());
+        let k = start_test();
         let hdl = k
             .spawn_prog(Program::from_expr("(loop (sleep 1))").unwrap())
             .await
@@ -318,7 +333,7 @@ mod tests {
 
     #[tokio::test]
     async fn kernel_drop() {
-        let k = start("test".to_string());
+        let k = start_test();
         let hdl = k
             .spawn_prog(Program::from_expr("(loop (sleep 0))").unwrap())
             .await
@@ -333,7 +348,7 @@ mod tests {
 
     #[tokio::test]
     async fn kernel_weak_handle() {
-        let k = start("test".to_string());
+        let k = start_test();
         let weak_k = k.downgrade();
         let _ = k
             .spawn_prog(Program::from_expr("(loop (sleep 1))").unwrap())
@@ -349,7 +364,7 @@ mod tests {
 
     #[tokio::test]
     async fn kill_proc_from_kernel() {
-        let k = start("test".to_string());
+        let k = start_test();
         let proc = k
             .spawn_prog(Program::from_expr("(loop (sleep 1))").unwrap())
             .await
@@ -369,7 +384,7 @@ mod tests {
     async fn kill_proc_from_proc() {
         use tokio::time;
 
-        let k = start("test".to_string());
+        let k = start_test();
 
         let kill_target = k
             .spawn_prog(Program::from_expr("(loop (sleep 0))").unwrap())
@@ -406,7 +421,7 @@ mod tests {
 
     #[tokio::test]
     async fn spawn_progs() {
-        let k = start("test".to_string());
+        let k = start_test();
 
         let recv = k
             .spawn_prog(Program::from_expr("(recv)").unwrap())
