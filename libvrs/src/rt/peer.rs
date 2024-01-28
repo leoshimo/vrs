@@ -21,6 +21,8 @@ use crate::{Error, Result};
 use super::ProcessId;
 
 static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
+const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
+const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Debug, Clone)]
 pub(crate) struct PeerHandle {
@@ -95,6 +97,7 @@ enum PeerMessage {
     Hello {
         node: String,
     },
+    Heartbeat,
     RegistrySnapshot {
         services: Vec<ServiceDescription>,
     },
@@ -326,7 +329,10 @@ impl PeerManager {
                                     }
                                     Err(e) => warn!("invalid message from node {node}: {e}"),
                                 },
-                                PeerMessage::Hello { .. } | PeerMessage::RegistryUp { .. } | PeerMessage::RegistryDown { .. } => {}
+                                PeerMessage::Hello { .. }
+                                | PeerMessage::Heartbeat
+                                | PeerMessage::RegistryUp { .. }
+                                | PeerMessage::RegistryDown { .. } => {}
                             }
                         }
                         SessionEvent::Disconnected { id, node } => {
@@ -517,10 +523,34 @@ async fn connect_loop(
 
 async fn run_session<R, W>(
     read: R,
+    write: W,
+    local_node: String,
+    direction: Direction,
+    events: mpsc::Sender<SessionEvent>,
+) where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    run_session_with_heartbeat(
+        read,
+        write,
+        local_node,
+        direction,
+        events,
+        HEARTBEAT_INTERVAL,
+        HEARTBEAT_TIMEOUT,
+    )
+    .await;
+}
+
+async fn run_session_with_heartbeat<R, W>(
+    read: R,
     mut write: W,
     local_node: String,
     direction: Direction,
     events: mpsc::Sender<SessionEvent>,
+    heartbeat_interval: Duration,
+    heartbeat_timeout: Duration,
 ) where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
@@ -536,38 +566,64 @@ async fn run_session<R, W>(
     let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
     let mut shutdown_tx = Some(shutdown_tx);
     let mut remote_node = None;
+    let mut heartbeat = tokio::time::interval(heartbeat_interval);
+    heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    heartbeat.tick().await;
+    let silence = tokio::time::sleep(heartbeat_timeout);
+    tokio::pin!(silence);
 
     loop {
         tokio::select! {
             line = lines.next_line() => match line {
-                Ok(Some(line)) => match serde_json::from_str::<PeerMessage>(&line) {
-                    Ok(PeerMessage::Hello { node }) if remote_node.is_none() && valid_node_name(&node) => {
-                        remote_node = Some(node.clone());
-                        if events.send(SessionEvent::Connected {
-                            id,
-                            node,
-                            direction,
-                            tx: out_tx.clone(),
-                            shutdown: shutdown_tx.take().expect("hello is accepted only once"),
-                        }).await.is_err() {
-                            break;
-                        }
-                    }
-                    Ok(message) => {
-                        if let Some(node) = &remote_node {
-                            if events.send(SessionEvent::Incoming { id, node: node.clone(), message }).await.is_err() {
-                                break;
+                Ok(Some(line)) => {
+                    match serde_json::from_str::<PeerMessage>(&line) {
+                        Ok(message) => match message {
+                            PeerMessage::Hello { node } if remote_node.is_none() && valid_node_name(&node) => {
+                                silence.as_mut().reset(tokio::time::Instant::now() + heartbeat_timeout);
+                                remote_node = Some(node.clone());
+                                if events.send(SessionEvent::Connected {
+                                    id,
+                                    node,
+                                    direction,
+                                    tx: out_tx.clone(),
+                                    shutdown: shutdown_tx.take().expect("hello is accepted only once"),
+                                }).await.is_err() {
+                                    break;
+                                }
                             }
-                        }
+                            PeerMessage::Heartbeat if remote_node.is_some() => {
+                                silence.as_mut().reset(tokio::time::Instant::now() + heartbeat_timeout);
+                            }
+                            message => {
+                                if let Some(node) = &remote_node {
+                                    silence.as_mut().reset(tokio::time::Instant::now() + heartbeat_timeout);
+                                    if events.send(SessionEvent::Incoming { id, node: node.clone(), message }).await.is_err() {
+                                        break;
+                                    }
+                                }
+                            }
+                        },
+                        Err(e) => warn!("invalid node message: {e}"),
                     }
-                    Err(e) => warn!("invalid node message: {e}"),
-                },
+                }
                 Ok(None) | Err(_) => break,
             },
             Some(message) = out_rx.recv() => {
                 if write_message(&mut write, &message).await.is_err() {
                     break;
                 }
+            }
+            _ = heartbeat.tick() => {
+                if write_message(&mut write, &PeerMessage::Heartbeat).await.is_err() {
+                    break;
+                }
+            }
+            _ = &mut silence => {
+                warn!(
+                    "node heartbeat timed out: {}",
+                    remote_node.as_deref().unwrap_or("unknown")
+                );
+                break;
             }
             _ = &mut shutdown_rx => break,
         }
@@ -643,6 +699,8 @@ impl WireVal {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::io::{duplex, split};
+    use tokio::time::timeout;
 
     #[test]
     fn node_endpoints_have_explicit_transports_and_optional_ports() {
@@ -702,5 +760,60 @@ mod tests {
                 Val::Extern(Extern::ProcessId(ProcessId::new("alpha", 3))),
             ])
         );
+    }
+
+    #[tokio::test]
+    async fn silent_session_disconnects_after_heartbeat_timeout() {
+        let (local, remote) = duplex(4096);
+        let (local_read, local_write) = split(local);
+        let (remote_read, mut remote_write) = split(remote);
+        let mut remote_lines = BufReader::new(remote_read).lines();
+        let (events_tx, mut events_rx) = mpsc::channel(8);
+
+        let session = tokio::spawn(run_session_with_heartbeat(
+            local_read,
+            local_write,
+            "alpha".to_string(),
+            Direction::Outgoing,
+            events_tx,
+            Duration::from_millis(10),
+            Duration::from_millis(40),
+        ));
+
+        let hello = remote_lines.next_line().await.unwrap().unwrap();
+        assert!(matches!(
+            serde_json::from_str::<PeerMessage>(&hello).unwrap(),
+            PeerMessage::Hello { node } if node == "alpha"
+        ));
+        write_message(
+            &mut remote_write,
+            &PeerMessage::Hello {
+                node: "beta".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let _shutdown = match events_rx.recv().await.unwrap() {
+            SessionEvent::Connected { node, shutdown, .. } if node == "beta" => shutdown,
+            event => panic!("expected beta to connect, got {event:?}"),
+        };
+        let heartbeat = timeout(Duration::from_millis(100), remote_lines.next_line())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert!(matches!(
+            serde_json::from_str::<PeerMessage>(&heartbeat).unwrap(),
+            PeerMessage::Heartbeat
+        ));
+        assert!(matches!(
+            timeout(Duration::from_millis(200), events_rx.recv())
+                .await
+                .unwrap()
+                .unwrap(),
+            SessionEvent::Disconnected { node, .. } if node == "beta"
+        ));
+        session.await.unwrap();
     }
 }

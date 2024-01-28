@@ -95,7 +95,7 @@ async fn service_is_visible(client: &Client) -> bool {
 }
 
 #[tokio::test]
-async fn two_local_daemons_route_a_service_call() {
+async fn configured_node_reconnects_and_routes_service_calls() {
     let test_dir = TestDir::new();
     let alpha_socket = test_dir.join("alpha.socket");
     let beta_socket = test_dir.join("beta.socket");
@@ -110,13 +110,9 @@ async fn two_local_daemons_route_a_service_call() {
     .unwrap();
     std::fs::write(
         &beta_init,
-        format!(
-            concat!(
-                "(configure :nodes '(\"tcp://127.0.0.1:{}\"))\n",
-                "(defn ping (message) (list :pong message))\n",
-                "(spawn_srv :remote_probe :interface '(ping))",
-            ),
-            alpha_port
+        concat!(
+            "(defn ping (message) (list :pong message))\n",
+            "(spawn_srv :remote_probe :interface '(ping))",
         ),
     )
     .unwrap();
@@ -166,4 +162,26 @@ async fn two_local_daemons_route_a_service_call() {
         );
         sleep(Duration::from_millis(50)).await;
     }
+
+    let _restarted_beta = spawn_vrsd("beta", beta_port, &beta_socket, &beta_init);
+    let _restarted_beta_client = connect_client(&beta_socket).await;
+    let deadline = Instant::now() + Duration::from_secs(8);
+    while !service_is_visible(&client).await {
+        assert!(
+            Instant::now() < deadline,
+            "alpha never reconnected to beta's service registry"
+        );
+        sleep(Duration::from_millis(50)).await;
+    }
+
+    let response = client
+        .request(Form::from_expr("(begin (bind_srv :remote_probe) (ping \"again\"))").unwrap())
+        .await
+        .unwrap()
+        .contents
+        .unwrap();
+    assert_eq!(
+        response,
+        Form::List(vec![Form::keyword("pong"), Form::string("again")])
+    );
 }
