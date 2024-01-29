@@ -704,9 +704,14 @@ mod tests {
 
     #[test]
     fn node_endpoints_have_explicit_transports_and_optional_ports() {
+        #[cfg(debug_assertions)]
+        assert_eq!(DEFAULT_NODE_PORT, 8774);
+        #[cfg(not(debug_assertions))]
+        assert_eq!(DEFAULT_NODE_PORT, 8773);
+
         assert_eq!(
             NodeEndpoint::parse("tcp://node"),
-            Some(NodeEndpoint::Tcp("node:8773".to_string()))
+            Some(NodeEndpoint::Tcp(format!("node:{DEFAULT_NODE_PORT}")))
         );
         assert_eq!(
             NodeEndpoint::parse("tcp://127.0.0.1:4567"),
@@ -716,7 +721,7 @@ mod tests {
             NodeEndpoint::parse("ssh://node"),
             Some(NodeEndpoint::Ssh {
                 host: "node".to_string(),
-                port: 8773,
+                port: DEFAULT_NODE_PORT,
             })
         );
         assert_eq!(

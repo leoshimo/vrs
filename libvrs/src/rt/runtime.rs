@@ -5,7 +5,7 @@ use super::registry::Registry;
 use crate::rt::{ProcessHandle, Result};
 use crate::{Connection, Program};
 
-pub const DEFAULT_NODE_PORT: u16 = 8773;
+pub const DEFAULT_NODE_PORT: u16 = if cfg!(debug_assertions) { 8774 } else { 8773 };
 
 /// Handle to Runtime's public interface
 pub struct Runtime {
