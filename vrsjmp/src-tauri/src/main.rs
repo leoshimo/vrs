@@ -47,7 +47,31 @@ struct Client {
 }
 
 enum Cmd {
-    Request(Form, oneshot::Sender<Response>),
+    Request(Form, oneshot::Sender<Result<Response>>),
+}
+
+async fn request_once(client: &mut Option<vrs::Client>, form: Form) -> Result<Response> {
+    if client.is_none() {
+        let socket = vrs::runtime_socket();
+        let conn = UnixStream::connect(socket)
+            .await
+            .map(Connection::new)
+            .with_context(|| "Failed to connect to vrsd socket")?;
+        *client = Some(vrs::Client::new(conn));
+    }
+
+    let result = client
+        .as_ref()
+        .expect("client should be connected")
+        .request(form)
+        .await;
+    match result {
+        Ok(response) => Ok(response),
+        Err(error) => {
+            *client = None;
+            Err(error).with_context(|| "VRS request failed")
+        }
+    }
 }
 
 impl Client {
@@ -67,17 +91,12 @@ impl Client {
         self.hdl_tx = Some(tx);
 
         self.task = Some(tauri::async_runtime::spawn(async move {
-            let socket = vrs::runtime_socket();
-            let conn = UnixStream::connect(socket)
-                .await
-                .map(Connection::new)
-                .with_context(|| "Failed to connect to vrsd socket")?;
-            let client = vrs::Client::new(conn);
+            let mut client = None;
 
             while let Some(cmd) = rx.recv().await {
                 match cmd {
                     Cmd::Request(f, resp_tx) => {
-                        let res = client.request(f).await?;
+                        let res = request_once(&mut client, f).await;
                         let _ = resp_tx.send(res);
                     }
                 }
@@ -93,11 +112,9 @@ impl Client {
             let hdl_tx = self.hdl_tx.clone().expect("Client task is not started");
             let (resp_tx, resp_rx) = oneshot::channel();
             hdl_tx.send(Cmd::Request(form, resp_tx)).await?;
-            let res = resp_rx
+            resp_rx
                 .await
-                .with_context(|| "Failed to receive response")?;
-
-            Ok(res)
+                .with_context(|| "Failed to receive response")?
         })
     }
 }
@@ -113,13 +130,23 @@ fn query_request(query: &str) -> Form {
 #[tauri::command]
 fn set_query(query: &str, state: tauri::State<State>) -> Vec<serde_json::Value> {
     let mut matcher = state.matcher.lock().unwrap();
-    let response = state.client.request(query_request(query)).unwrap();
+    let response = match state.client.request(query_request(query)) {
+        Ok(response) => response,
+        Err(error) => {
+            error!("Error requesting items - {error}");
+            return vec![];
+        }
+    };
 
-    let items = match response.contents.unwrap() {
-        Form::List(items) => items.iter().map(|i| i.to_string()).collect(),
-        e => {
+    let items = match response.contents {
+        Ok(Form::List(items)) => items.iter().map(|i| i.to_string()).collect(),
+        Ok(e) => {
             error!("Received unexpected response from client - {e}");
             vec![]
+        }
+        Err(error) => {
+            error!("Error evaluating item request - {error}");
+            return vec![];
         }
     };
 
