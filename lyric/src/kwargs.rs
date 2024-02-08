@@ -9,4 +9,22 @@ pub fn get<T: Extern, L: Locals>(lst: &[Val<T, L>], target: &KeywordId) -> Optio
         .map(|w| w[1].clone())
 }
 
+/// Check for existance of flag option, if any
+/// Supports both implicit and explicit values:
+/// - (my_func :my_flag)
+/// - (my_func :my_flag true) / (my_func :my_flag false)
+pub fn flag<T: Extern, L: Locals>(lst: &[Val<T, L>], target: &KeywordId) -> Option<Val<T, L>> {
+    let mut iter = lst
+        .iter()
+        .skip_while(|v| matches!(v, Val::Keyword(kwd) if kwd != target));
+
+    if iter.next().is_some() {
+        let val = iter.next().unwrap_or(&Val::Bool(true)); // implicit true flag
+        Some(val.clone())
+    } else {
+        None // no explicit arg
+    }
+}
+
 // TODO: Tests for `kwargs::get`
+// TODO: Tests for `kwargs::flag`

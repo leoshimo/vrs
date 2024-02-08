@@ -41,6 +41,7 @@ pub struct Entry {
 pub struct Registration {
     keyword: KeywordId,
     interface: Vec<Val>,
+    overwrite: bool,
 }
 
 impl Registry {
@@ -121,7 +122,8 @@ impl RegistryTask {
 
     fn handle_register(&mut self, registration: Registration, handle: ProcessHandle) -> Result<()> {
         let keyword = &registration.keyword;
-        if self.entries.contains_key(keyword) {
+
+        if !registration.overwrite && self.entries.contains_key(keyword) {
             return Err(Error::RegistryError(format!(
                 "Registered process exists for {}",
                 keyword
@@ -210,7 +212,13 @@ impl Registration {
         Self {
             keyword,
             interface: vec![],
+            overwrite: false,
         }
+    }
+
+    pub fn overwrite(&mut self, overwrite: bool) -> &mut Self {
+        self.overwrite = overwrite;
+        self
     }
 
     pub fn interface(&mut self, interface: Vec<Val>) -> &mut Self {
@@ -293,6 +301,30 @@ mod tests {
             Err(Error::RegistryError(_)),
             "Registration for existing key should fail"
         );
+    }
+
+    #[tokio::test]
+    async fn register_duplicate_overwrite() {
+        let r = Registry::spawn();
+        let k = kernel::start();
+
+        let prog = Program::from_expr("(loop (sleep 1))").unwrap();
+        let hdl_a = k.spawn_prog(prog.clone()).await.unwrap();
+        let hdl_b = k.spawn_prog(prog).await.unwrap();
+
+        r.register(Registration::new(KeywordId::from("A")), hdl_a.clone())
+            .await
+            .expect("registration should succeed");
+
+        let mut registration = Registration::new(KeywordId::from("A"));
+        registration.overwrite(true);
+        r.register(registration, hdl_b.clone())
+            .await
+            .expect("Registration for duplicate key should succeed since overwrite is true");
+
+        assert_matches!(r.lookup(KeywordId::from("A")).await.unwrap(),
+                        Some(r) if r.handle.id() == hdl_b.id(),
+                        "Lookup should return newer registration");
     }
 
     #[tokio::test]

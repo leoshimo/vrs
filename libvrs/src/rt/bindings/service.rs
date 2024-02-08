@@ -1,6 +1,7 @@
 //! Service Bindings
 //! See also [super::registry]
 
+use lyric::builtin::cond::is_true;
 use lyric::{compile, kwargs, parse, Error, KeywordId, Result, SymbolId};
 
 use crate::rt::program::{Extern, Fiber, Lambda, NativeAsyncFn, NativeFn, NativeFnOp, Val};
@@ -13,7 +14,7 @@ pub(crate) fn register_fn() -> NativeAsyncFn {
     }
 }
 
-/// Implementation for (register NAME [:exports EXPORT_LIST])
+/// Implementation for (register NAME [:exports EXPORT_LIST] [:overwrite])
 async fn register_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
     let keyword = match args.first() {
         Some(Val::Keyword(k)) => k.clone(),
@@ -36,6 +37,12 @@ async fn register_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
             )))
         }
         None => (),
+    }
+
+    let overwrite_flag =
+        kwargs::flag(&args[1..], &KeywordId::from("overwrite")).unwrap_or(Val::Bool(false));
+    if is_true(&overwrite_flag)? {
+        reg.overwrite(true);
     }
 
     let hdl = fiber

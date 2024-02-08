@@ -181,6 +181,41 @@ async fn double_register_fails() {
 }
 
 #[tokio::test]
+async fn overwrite_register_succeeds() {
+    let rt = Runtime::new();
+
+    let srv_a = Program::from_expr("(begin (register :service_a) (recv))").unwrap();
+    let _srv_a = rt.run(srv_a).await.unwrap();
+
+    let srv_b = Program::from_expr("(begin (register :service_a :overwrite) (recv))").unwrap();
+    let _srv_b = rt.run(srv_b).await.unwrap();
+
+    // TODO: Validate srv_b overwrote.
+    // TOOD: Invest in better test infra to wait for system to "settle" before running validation on final system state
+    //     {
+    //         let prog = Program::from_expr("(ls-srv)").unwrap();
+    //         let hdl = rt.run(prog).await.unwrap();
+    //         let val = hdl.join().await.unwrap().status.unwrap().unwrap();
+    //         let svcs = match val {
+    //             Val::List(v) => v,
+    //             _ => panic!("Expected list as result"),
+    //         };
+
+    //         assert_eq!(svcs.len(), 1, "only one service should be registered");
+    //         dbg!(&svcs);
+    //         assert!(
+    //             svcs.contains(&Val::List(vec![
+    //                 Val::keyword("name"),
+    //                 Val::keyword("service_b"),
+    //                 Val::keyword("pid"),
+    //                 Val::Extern(Extern::ProcessId(srv_b.id())),
+    //             ])),
+    //             "The second service registration should overwrite first"
+    //         );
+    //     }
+}
+
+#[tokio::test]
 async fn registry_updates_after_exit() {
     let rt = Runtime::new();
 
