@@ -222,7 +222,7 @@ fn srv(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
     //     (srv :name :SRV_NAME :exports '(sym_a sym_b))
     // to
     //     (begin
-    //         (register :launcher :exports '(sym_a sym_b))
+    //         (register :launcher :overwrite :exports '(sym_a sym_b))
     //         (loop
     //             (def (r src msg) (recv))
     //             (def resp
@@ -293,6 +293,7 @@ fn srv(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
     let register_form = Val::List(vec![
         Val::symbol("register"),
         name,
+        Val::keyword("overwrite"),
         Val::keyword("interface"),
         Val::List(vec![Val::symbol("quote"), Val::List(interface)]),
     ]);
