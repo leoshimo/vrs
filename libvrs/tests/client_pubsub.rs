@@ -14,7 +14,7 @@ async fn client_pubsub_from_service() {
         (defn increment (n)
             (set count (+ count n))
             (publish :count count))
-        (srv :name :counter :interface '(increment)))
+        (srv :counter :interface '(increment)))
         "#,
     )
     .unwrap();
@@ -104,7 +104,7 @@ async fn client_pubsub_from_another_client_via_service() {
         (defn increment (n)
             (set count (+ count n))
             (publish :count count))
-        (srv :name :counter :interface '(increment)))
+        (srv :counter :interface '(increment)))
         "#,
     )
     .unwrap();

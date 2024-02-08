@@ -70,7 +70,7 @@ Maybe also cover imports / exported interface and discoverability
 
 #+begin_src lyric
 # *** service-side
-(srv :name launcher
+(srv :launcher
      :export '(get_favs, add_favs))
 
 # *** client side (gets imports!)
@@ -231,7 +231,7 @@ let echo_prog = r#" (begin
     (spawn (lambda () (begin
         (defn ping (msg) (list "pong" msg))
         (defn pong (msg) (list "ping" msg))
-        (srv :name :ping_pong :interface '(echo)))))
+        (srv :ping_pong :interface '(echo)))))
     (list
         (call (find-srv :ping_pong) '(:ping "hi"))
         (call (find-srv :ping_pong) '(:pong "bye")))
@@ -438,7 +438,7 @@ async fn client_pubsub_process_and_service() {
         (defn increment (n)
             (set count (+ count n))
             (publish :count count))
-        (srv :name :counter :interface '(increment)))
+        (srv :counter :interface '(increment)))
         "#,
     )
     .unwrap();

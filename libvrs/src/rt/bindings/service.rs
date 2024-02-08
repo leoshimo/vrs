@@ -219,7 +219,7 @@ pub(crate) fn def_bind_interface() -> NativeFn {
 // TODO: Define as lisp macro
 fn srv(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
     // Expand
-    //     (srv :name :SRV_NAME :interface '(sym_a sym_b))
+    //     (srv :SRV_NAME :interface '(sym_a sym_b))
     // to
     //     (begin
     //         (register :launcher :overwrite :interface '(sym_a sym_b))
@@ -232,8 +232,8 @@ fn srv(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
     //                     (_ '(:err "Unrecognized message")))))
     //             (send src (list r resp))))
 
-    let name = kwargs::get(args, &KeywordId::from("name")).ok_or(Error::UnexpectedArguments(
-        "Missing :name keyword argument".to_string(),
+    let name = args.first().ok_or(Error::UnexpectedArguments(
+        "First argument must be a value used to identify service".to_string(),
     ))?;
 
     let interface = kwargs::get(args, &KeywordId::from("interface")).ok_or(
@@ -292,7 +292,7 @@ fn srv(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
 
     let register_form = Val::List(vec![
         Val::symbol("register"),
-        name,
+        name.clone(),
         Val::keyword("overwrite"),
         Val::keyword("interface"),
         Val::List(vec![Val::symbol("quote"), Val::List(interface)]),

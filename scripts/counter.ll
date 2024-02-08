@@ -6,4 +6,4 @@
   (set count (+ count n))
   (publish :count count))
 
-(srv :name :counter :interface '(increment))
+(srv :counter :interface '(increment))

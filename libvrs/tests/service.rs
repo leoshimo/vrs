@@ -8,7 +8,7 @@ async fn srv_echo() {
 
     let echo_prog = r#" (begin 
         (defn echo (name) (list "got" name))
-        (srv :name :echo :interface '(echo))
+        (srv :echo :interface '(echo))
     )"#;
     let echo_srv = Program::from_expr(echo_prog).unwrap();
     let _ = rt.run(echo_srv).await.unwrap();
@@ -43,7 +43,7 @@ async fn srv_multi_interface() {
         (spawn (lambda () (begin
             (defn ping (msg) (list "pong" msg))
             (defn pong (msg) (list "ping" msg))
-            (srv :name :ping_pong :interface '(ping pong)))))
+            (srv :ping_pong :interface '(ping pong)))))
         (list
             (call (find-srv :ping_pong) '(:ping "hi"))
             (call (find-srv :ping_pong) '(:pong "bye")))
@@ -67,7 +67,7 @@ async fn srv_echo_invalid_msg() {
 
     let echo_prog = r#" (begin 
         (defn echo (name) (list "got" name))
-        (srv :name :echo :interface '(echo))
+        (srv :echo :interface '(echo))
     )"#;
     let echo_srv = Program::from_expr(echo_prog).unwrap();
     let _ = rt.run(echo_srv).await.unwrap();
@@ -91,7 +91,7 @@ async fn srv_echo_invalid_arg() {
 
     let echo_prog = r#" (begin 
         (defn echo (name) (list "got" name))
-        (srv :name :echo :interface '(echo))
+        (srv :echo :interface '(echo))
     )"#;
     let echo_srv = Program::from_expr(echo_prog).unwrap();
     let _ = rt.run(echo_srv).await.unwrap();
@@ -118,7 +118,7 @@ async fn spawn_echo_svc() {
     let prog = r#"(begin
          (spawn (lambda () (begin
             (defn echo (name) (list "got" name))
-            (srv :name :echo :interface '(echo))
+            (srv :echo :interface '(echo))
          )))
          (call (find-srv :echo) '(:echo "hello")))
     "#;
@@ -132,5 +132,5 @@ async fn spawn_echo_svc() {
     );
 }
 
-// TODO: Test srv w/o :name errors
+// TODO: Test srv w/o service name errors
 // TODO: Test srv w/o :interface errors
