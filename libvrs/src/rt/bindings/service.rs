@@ -14,7 +14,7 @@ pub(crate) fn register_fn() -> NativeAsyncFn {
     }
 }
 
-/// Implementation for (register NAME [:exports EXPORT_LIST] [:overwrite])
+/// Implementation for (register NAME [:interface INTERFACE_LIST] [:overwrite])
 async fn register_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
     let keyword = match args.first() {
         Some(Val::Keyword(k)) => k.clone(),
@@ -219,10 +219,10 @@ pub(crate) fn def_bind_interface() -> NativeFn {
 // TODO: Define as lisp macro
 fn srv(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
     // Expand
-    //     (srv :name :SRV_NAME :exports '(sym_a sym_b))
+    //     (srv :name :SRV_NAME :interface '(sym_a sym_b))
     // to
     //     (begin
-    //         (register :launcher :overwrite :exports '(sym_a sym_b))
+    //         (register :launcher :overwrite :interface '(sym_a sym_b))
     //         (loop
     //             (def (r src msg) (recv))
     //             (def resp
@@ -236,13 +236,13 @@ fn srv(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
         "Missing :name keyword argument".to_string(),
     ))?;
 
-    let exports = kwargs::get(args, &KeywordId::from("exports")).ok_or(
-        Error::UnexpectedArguments("Missing :exports keyword argument".to_string()),
+    let interface = kwargs::get(args, &KeywordId::from("interface")).ok_or(
+        Error::UnexpectedArguments("Missing :interface keyword argument".to_string()),
     )?;
-    let symbols = match exports {
+    let symbols = match interface {
         Val::List(ref symbols) => Ok(symbols),
         _ => Err(Error::UnexpectedArguments(
-            ":exports keyword argument must be a list".to_string(),
+            ":interface keyword argument must be a list".to_string(),
         )),
     }?;
     let symbols = symbols
@@ -250,7 +250,7 @@ fn srv(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
         .map(|e| match e {
             Val::Symbol(s) => Ok(s),
             _ => Err(Error::UnexpectedArguments(
-                "Forms in :exports list should be symbols".to_string(),
+                "Forms in :interface list should be symbols".to_string(),
             )),
         })
         .collect::<Result<Vec<_>>>()?;

@@ -35,5 +35,5 @@
 (add_item "Restart vrsd" '(exec "pkill" "-ax" "vrsd"))
 
 (srv :name :launcher
-     :exports '(get_items add_item))
+     :interface '(get_items add_item))
 
