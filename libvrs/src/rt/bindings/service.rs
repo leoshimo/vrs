@@ -104,11 +104,6 @@ pub(crate) fn find_srv_fn() -> Lambda {
     }
 }
 
-/// Binding for `srv`
-pub(crate) fn srv_fn() -> NativeFn {
-    NativeFn { func: srv }
-}
-
 // TODO: Rust macros for creating Vals - e.g. lambdas
 /// Binding for `bind-srv`
 pub(crate) fn bind_srv_fn() -> Lambda {
@@ -217,7 +212,48 @@ pub(crate) fn def_bind_interface() -> NativeFn {
 }
 
 // TODO: Define as lisp macro
-fn srv(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
+/// Implementation of spawn_srv
+pub(crate) fn spawn_srv_fn() -> NativeFn {
+    NativeFn {
+        func: spawn_srv_impl,
+    }
+}
+
+/// Implementation for (spawn_srv) that matches (srv)'s signature
+fn spawn_srv_impl(_f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
+    // Expand
+    //     (spawn_srv :SRV_NAME :interface '(sym_a sym_b))
+    // Into
+    //     (spawn (lambda () (srv :SRV_NAME :interface '(sym_a sym_b))))
+
+    let mut srv = vec![Val::symbol("srv")];
+    srv.push(args[0].clone());
+
+    if let Some(interfaces) = kwargs::get(args, &KeywordId::from("interface")) {
+        srv.push(Val::keyword("interface"));
+        srv.push(Val::List(vec![Val::symbol("quote"), interfaces.clone()]));
+    }
+
+    let ast = Val::List(vec![
+        Val::symbol("spawn"),
+        Val::List(vec![
+            Val::symbol("lambda"),
+            Val::List(vec![]),
+            Val::List(srv),
+        ]),
+    ]);
+
+    let bc = compile(&ast)?;
+    Ok(NativeFnOp::Exec(bc))
+}
+
+/// Binding for `srv`
+pub(crate) fn srv_fn() -> NativeFn {
+    NativeFn { func: srv_impl }
+}
+
+// TODO: Define as lisp macro
+fn srv_impl(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
     // Expand
     //     (srv :SRV_NAME :interface '(sym_a sym_b))
     // to

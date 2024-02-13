@@ -195,7 +195,8 @@ pub fn proc_env() -> Env {
                 SymbolId::from("def-bind-interface"),
                 bindings::def_bind_interface(),
             )
-            .bind_native_async(SymbolId::from("info-srv"), bindings::info_srv_fn());
+            .bind_native_async(SymbolId::from("info-srv"), bindings::info_srv_fn())
+            .bind_native(SymbolId::from("spawn-srv"), bindings::spawn_srv_fn());
     }
 
     {
