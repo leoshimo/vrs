@@ -12,7 +12,9 @@ pub use rt::program::{
     Bytecode, Env, Extern, Form, KeywordId, Lambda, Locals, NativeFn, NativeFnOp, Pattern, Program,
     Val,
 };
-pub use rt::{Error, ProcessExit, ProcessHandle, ProcessResult, Result, Runtime}; // TODO: Should rt reexport from lib?
+pub use rt::{
+    Error, Process, ProcessExit, ProcessHandle, ProcessResult, ProcessSet, Result, Runtime,
+}; // TODO: Should rt reexport from lib?
 
 /// The path to runtime socket
 pub fn runtime_socket() -> PathBuf {
