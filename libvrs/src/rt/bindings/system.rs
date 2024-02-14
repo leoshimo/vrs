@@ -1,8 +1,10 @@
 //! Host System Bindings
 
+use std::process::Stdio;
+
 use crate::rt::program::{NativeAsyncFn, NativeFn, NativeFnOp, Val};
 use lyric::{Error, Result};
-use tokio::process::Command;
+use tokio::{io::AsyncReadExt, process::Command};
 use tracing::{debug, error};
 
 /// Binding for exec
@@ -59,15 +61,26 @@ async fn exec_impl(args: Vec<Val>) -> Result<Val> {
 
     let mut cmd = Command::new(prog.clone())
         .args(args.clone())
+        .stdout(Stdio::piped())
         .spawn()
         .map_err(|e| Error::Runtime(format!("{e}")))?;
+
     let exit_status = cmd
         .wait()
         .await
         .map_err(|e| Error::Runtime(format!("{e}")))?;
+
+    let mut output = cmd.stdout.take().expect("Expected stdout handle");
+    let mut output_str = String::new();
+    output
+        .read_to_string(&mut output_str)
+        .await
+        .map_err(|e| Error::Runtime(format!("{e}")))?;
+    let output_str = output_str.trim();
+
     if exit_status.success() {
         debug!("exec {:?} {:?} - {:?}", prog, args, exit_status);
-        Ok(Val::keyword("ok"))
+        Ok(Val::List(vec![Val::keyword("ok"), Val::string(output_str)]))
     } else {
         error!("exec {:?} {:?} - {:?}", prog, args, exit_status);
         Err(Error::Runtime(format!(
