@@ -34,6 +34,6 @@
 (add_item "Slack" '(open_app "Slack"))
 (add_item "Restart vrsd" '(exec "pkill" "-ax" "vrsd"))
 
-(srv :launcher
-     :interface '(get_items add_item))
+(spawn-srv :launcher
+   :interface '(get_items add_item))
 

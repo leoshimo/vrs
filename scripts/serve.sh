@@ -7,7 +7,14 @@ fi
 
 while true; do
     PID=$(RUST_LOG=debug cargo run --bin vrsd --release > vrsd.log) &
-    sleep 1
-    ./scripts/launcher.ll &
+
+    while true; do
+        ./scripts/launcher.ll >/dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            echo "Successfully started launcher.ll"
+            break
+        fi
+        sleep 2
+    done
     wait $PID
 done
