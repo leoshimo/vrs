@@ -28,7 +28,8 @@ a {
 :root {
     --font-sans: 'Inter', --apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen, Ubuntu, Cantarell, Fira Sans,
     Droid Sans, Helvetica Neue, sans-serif;
-    --app-bg: var(--gray1);
+
+    --app-bg: hsl(0, 0%, 99%, 0.3);
     --cmdk-shadow: 0 16px 70px rgb(0 0 0 / 20%);
 
     --lowContrast: #ffffff;
@@ -136,7 +137,8 @@ html, body {
 .root {
     max-width: 640px;
     width: 100%;
-    background: var(--gray1);
+    background: var(--app-bg);
+    opacity: 0.8;
     border-radius: 12px;
     padding: 8px 0;
     font-family: var(--font-sans);

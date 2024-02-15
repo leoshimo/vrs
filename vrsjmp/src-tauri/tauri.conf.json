@@ -33,7 +33,7 @@
         "windows": [
             {
                 "fullscreen": false,
-                "resizable": true,
+                "resizable": false,
                 "alwaysOnTop": true,
                 "maximizable": false,
                 "minimizable": false,
