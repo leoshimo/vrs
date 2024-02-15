@@ -1,11 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde_json::json;
-use tauri::Manager;
+use tauri::{GlobalShortcutManager, Manager};
 
-use window_vibrancy::NSVisualEffectState;
 #[cfg(target_os = "macos")]
-use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
+use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
 
 #[tauri::command]
 fn set_query(query: &str) -> Vec<serde_json::Value> {
@@ -37,6 +36,21 @@ fn main() {
                 Some(16.0),
             )
             .expect("Unsupported platform! 'apply_vibrancy' is only supported on macOS");
+
+            let mut shortcuts = app.global_shortcut_manager();
+            shortcuts
+                .register("CMD+CTRL+SPACE", move || {
+                    let visible = window
+                        .is_visible()
+                        .expect("should retrieve window visibility");
+                    if visible {
+                        let _ = window.hide();
+                    } else {
+                        let _ = window.set_focus();
+                        let _ = window.set_focus();
+                    }
+                })
+                .unwrap();
 
             Ok(())
         })

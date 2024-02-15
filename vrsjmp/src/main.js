@@ -45,3 +45,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
     outputListEl = document.querySelector("#output-list");
 });
+
+window.onfocus = function() {
+    inputEl.focus();
+};
