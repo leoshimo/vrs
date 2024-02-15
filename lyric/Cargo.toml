@@ -7,12 +7,12 @@ edition = "2021"
 
 [dependencies]
 nanoid = "0.4.0"
-serde = { version = "1.0.194", features = ["derive"] }
-thiserror = "1.0.56"
+serde = { version = "1.0.196", features = ["derive"] }
+thiserror = "1.0.57"
 tracing = "0.1.40"
 
 [dev-dependencies]
 assert_matches = "1.5.0"
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 void = "1.0.2"
-tokio = "1.35.1" # for async / run.rs tests
+tokio = "1.36.0" # for async / run.rs tests
