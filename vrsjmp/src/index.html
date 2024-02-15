@@ -12,12 +12,11 @@
 </head>
 
 <body>
-    <div class="container">
-        <form id="input-form">
-            <input id="input-field" />
-        </form>
-        <div id="output-list"></div>
+    <div data-tauri-drag-region class="root dark">
+        <input placeholder="Search" id="input-field" class="input-field"/>
+        <hr class="input-field-separator"></hr>
+        <div id="output-list" class="list list--empty">
+        </div>
     </div>
 </body>
-
 </html>

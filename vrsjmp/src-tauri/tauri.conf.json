@@ -33,16 +33,18 @@
         "windows": [
             {
                 "fullscreen": false,
-                "resizable": false,
+                "resizable": true,
+                "alwaysOnTop": true,
                 "maximizable": false,
                 "minimizable": false,
                 "closable": false,
                 "transparent": true,
                 "title": "vrsjmp",
                 "decorations": false,
-                "width": 800,
-                "height": 600,
-                "center": true
+                "width": 640,
+                "height": 461,
+                "center": true,
+                "acceptFirstMouse": true
             }
         ]
     }
