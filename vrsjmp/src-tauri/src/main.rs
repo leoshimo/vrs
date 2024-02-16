@@ -183,7 +183,7 @@ fn main() -> Result<()> {
             let handle = app.handle();
             let mut shortcuts = app.global_shortcut_manager();
             shortcuts
-                .register("CMD+CTRL+SPACE", move || {
+                .register("CMD+SPACE", move || {
                     let visible = window
                         .is_visible()
                         .expect("should retrieve window visibility");
