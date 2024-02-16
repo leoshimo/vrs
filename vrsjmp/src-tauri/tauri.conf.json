@@ -34,7 +34,7 @@
             {
                 "fullscreen": false,
                 "resizable": false,
-                "alwaysOnTop": true,
+                "alwaysOnTop": false,
                 "maximizable": false,
                 "minimizable": false,
                 "closable": false,

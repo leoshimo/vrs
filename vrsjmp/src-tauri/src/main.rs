@@ -177,6 +177,7 @@ fn main() -> Result<()> {
             )
             .expect("Unsupported platform! 'apply_vibrancy' is only supported on macOS");
 
+            let handle = app.handle();
             let mut shortcuts = app.global_shortcut_manager();
             shortcuts
                 .register("CMD+CTRL+SPACE", move || {
@@ -184,7 +185,7 @@ fn main() -> Result<()> {
                         .is_visible()
                         .expect("should retrieve window visibility");
                     if visible {
-                        let _ = window.hide();
+                        let _ = handle.hide();
                     } else {
                         let _ = window.set_focus();
                     }
