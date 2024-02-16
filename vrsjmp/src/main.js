@@ -26,10 +26,10 @@ function itemElement(query_item) {
         dispatch(query_item['on_click']);
     });
 
-    const itemMeta = document.createElement("item__meta");
-    itemMeta.classList = ['item__meta'];
-    itemMeta.textContent = "Meta";
-    itemEl.appendChild(itemMeta);
+    // const itemMeta = document.createElement("item__meta");
+    // itemMeta.classList = ['item__meta'];
+    // itemMeta.textContent = "Meta";
+    // itemEl.appendChild(itemMeta);
 
     return itemEl;
 }
