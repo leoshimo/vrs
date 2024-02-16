@@ -3,16 +3,26 @@ const { invoke } = window.__TAURI__.tauri;
 let rootEl;
 let inputEl;
 let outputListEl;
+let focusedEl;
 
 async function dispatch(form) {
     await invoke("dispatch", { form: form });
+
 }
 
 async function setQuery(query) {
+    focusedEl = null;
     const items = await invoke("set_query", { query: query });
     outputListEl.replaceChildren();
+    let isFirst = true;
     for (const item of items) {
-        outputListEl.appendChild(itemElement(item));
+        const itemEl = itemElement(item);
+        outputListEl.appendChild(itemEl);
+        if (isFirst) {
+            focusedEl = itemEl;
+            focusedEl.classList.add('item--focus');
+            isFirst = false;
+        }
     }
 }
 
@@ -24,6 +34,8 @@ function itemElement(query_item) {
     itemEl.textContent = query_item['title'];
     itemEl.addEventListener('click', (e) => {
         dispatch(query_item['on_click']);
+        inputEl.value = '';
+        setQuery('');
     });
 
     // const itemMeta = document.createElement("item__meta");
@@ -37,10 +49,19 @@ function itemElement(query_item) {
 window.addEventListener("DOMContentLoaded", () => {
     rootEl = document.querySelector(".root");
 
+    setQuery("");
+
     inputEl = document.querySelector("#input-field");
     inputEl.addEventListener("input", (e) => {
         e.preventDefault();
         setQuery(inputEl.value);
+    });
+    inputEl.addEventListener("keydown", (e) => {
+        if (e.key == 'Enter') {
+            if (focusedEl != null) {
+                focusedEl.click();
+            }
+        }
     });
 
     outputListEl = document.querySelector("#output-list");

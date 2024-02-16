@@ -230,6 +230,11 @@ html, body {
     margin-top: 4px;
 }
 
+.item--focus {
+    transition-property: background;
+    background: var(--gray4);
+}
+
 .item:active {
     transition-property: background;
     background: var(--gray4);

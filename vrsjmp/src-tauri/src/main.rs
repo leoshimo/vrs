@@ -138,8 +138,9 @@ fn set_query(query: &str, state: tauri::State<State>) -> Vec<serde_json::Value> 
 }
 
 #[tauri::command]
-fn dispatch(form: &str, state: tauri::State<State>) {
+fn dispatch(form: &str, state: tauri::State<State>, app: tauri::AppHandle) {
     let client = &state.client;
+    let window = app.get_window("main").unwrap();
 
     // TODO: Make kwarg extraction more ergonomic (?)
     let form_args = match Val::from(Form::from_expr(form).unwrap()) {
@@ -152,6 +153,8 @@ fn dispatch(form: &str, state: tauri::State<State>) {
     if let Err(e) = client.request(on_click_form) {
         error!("Error dispatching request - {e}");
     }
+
+    let _ = window.hide();
 }
 
 fn main() -> Result<()> {
