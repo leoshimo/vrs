@@ -1,17 +1,64 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::sync::Mutex;
+
+use nucleo_matcher::{
+    pattern::{CaseMatching, Normalization, Pattern},
+    Matcher,
+};
 use serde_json::json;
 use tauri::{GlobalShortcutManager, Manager};
 
 #[cfg(target_os = "macos")]
 use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
 
+struct State {
+    matcher: Mutex<Matcher>,
+}
+
+impl State {
+    fn new() -> Self {
+        Self {
+            matcher: Mutex::new(Matcher::default()),
+        }
+    }
+}
+
 #[tauri::command]
-fn set_query(query: &str) -> Vec<serde_json::Value> {
+fn set_query(query: &str, state: tauri::State<State>) -> Vec<serde_json::Value> {
+    let mut matcher = state.matcher.lock().unwrap();
+
+    // TODO: Integrate with Client
+    let items = vec![
+        "Open File",
+        "New Document",
+        "Save",
+        "Save As...",
+        "Close Window",
+        "Undo",
+        "Redo",
+        "Cut",
+        "Copy",
+        "Paste",
+        "Find",
+        "Replace",
+        "Go To Line",
+        "Select All",
+        "Preferences",
+        "Toggle Fullscreen",
+        "Zoom In",
+        "Zoom Out",
+        "Help",
+        "Exit",
+    ];
+
+    let matches = Pattern::parse(query, CaseMatching::Smart, Normalization::Smart)
+        .match_list(items, &mut matcher);
+
     let mut result = vec![];
-    for i in 0..=10 {
+    for (i, _) in matches {
         result.push(json!({
-            "title": format!("{} {}", query, i),
+            "title": format!("{}", i),
             "on_click": format!("(send {})", i),
         }))
     }
@@ -25,6 +72,7 @@ fn dispatch(form: &str) {
 
 fn main() {
     tauri::Builder::default()
+        .manage(State::new())
         .setup(|app| {
             let window = app.get_window("main").unwrap();
 
