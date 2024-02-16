@@ -95,7 +95,6 @@ fn main() {
                         let _ = window.hide();
                     } else {
                         let _ = window.set_focus();
-                        let _ = window.set_focus();
                     }
                 })
                 .unwrap();
