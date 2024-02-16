@@ -140,7 +140,6 @@ fn set_query(query: &str, state: tauri::State<State>) -> Vec<serde_json::Value> 
 #[tauri::command]
 fn dispatch(form: &str, state: tauri::State<State>, app: tauri::AppHandle) {
     let client = &state.client;
-    let window = app.get_window("main").unwrap();
 
     // TODO: Make kwarg extraction more ergonomic (?)
     let form_args = match Val::from(Form::from_expr(form).unwrap()) {
@@ -154,7 +153,11 @@ fn dispatch(form: &str, state: tauri::State<State>, app: tauri::AppHandle) {
         error!("Error dispatching request - {e}");
     }
 
+    let window = app.get_window("main").unwrap();
     let _ = window.hide();
+
+    #[cfg(target_os = "macos")]
+    let _ = app.hide();
 }
 
 fn main() -> Result<()> {
@@ -185,7 +188,9 @@ fn main() -> Result<()> {
                         .is_visible()
                         .expect("should retrieve window visibility");
                     if visible {
+                        #[cfg(target_os = "macos")]
                         let _ = handle.hide();
+                        let _ = window.hide();
                     } else {
                         let _ = window.set_focus();
                     }
