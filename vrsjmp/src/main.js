@@ -21,14 +21,14 @@ function itemElement(query_item) {
     const itemEl = document.createElement('div')
 
     itemEl.classList = ['item'];
-    itemEl.innerText = query_item['title'];
+    itemEl.textContent = query_item['title'];
     itemEl.addEventListener('click', (e) => {
         dispatch(query_item['on_click']);
     });
 
     const itemMeta = document.createElement("item__meta");
     itemMeta.classList = ['item__meta'];
-    itemMeta.innerText = "Meta";
+    itemMeta.textContent = "Meta";
     itemEl.appendChild(itemMeta);
 
     return itemEl;
