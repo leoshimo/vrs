@@ -22,4 +22,4 @@
 (defn messages ()
   msgs)
 
-(srv :chat :interface '(chat messages))
+(spawn-srv :chat :interface '(chat messages))
