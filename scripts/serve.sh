@@ -16,7 +16,9 @@ while true; do
     while true; do
         cargo run --bin vrsctl $@ ./scripts/launcher.ll >/dev/null 2>&1
         if [ $? -eq 0 ]; then
-            echo "Successfully started launcher.ll"
+            cargo run --bin vrsctl $@ ./scripts/chat.ll >/dev/null 2>&1
+            cargo run --bin vrsctl $@ ./scripts/system_appearance.ll >/dev/null 2>&1
+            echo "Launched Services"
             break
         fi
         sleep 2
