@@ -35,7 +35,7 @@
 (add_item "Restart vrsd" '(exec "pkill" "-ax" "vrsd"))
 
 # TODO: Need better DX around calling service functions (exported via sexp, but symbol needs reexporting in client process)
-(add_item "Toggle darkmode" '(call (find-srv :system_appearance) '(:toggle_darkmode)))
+(add_item "Toggle Darkmode" '(call (find-srv :system_appearance) '(:toggle_darkmode)))
 
 (spawn-srv :launcher
    :interface '(get_items add_item))
