@@ -16,7 +16,7 @@ if [ "$TMUX" ]; then
     tmux rename-window "vrs-srv-$MODE"
 fi
 
-CARGO_ARGS=""
+CARGO_ARGS=
 if [ "$MODE" = "live-on" ]; then
     CARGO_ARGS="--release"
 fi
@@ -24,13 +24,13 @@ fi
 echo "Mode: $MODE"
 
 while true; do
-     PID=$(RUST_LOG=debug cargo run --bin vrsd "$CARGO_ARGS" > vrsd.log) &
+     PID=$(RUST_LOG=debug cargo run --bin vrsd "$CARGO_ARGS" > "vrsd-$MODE.log") &
 
      while true; do
-         cargo run --bin vrsctl "$CARGO_ARGS" ./scripts/launcher.ll >/dev/null 2>&1
+         cargo run $CARGO_ARGS --bin vrsctl ./scripts/launcher.ll >/dev/null
          if [ $? -eq 0 ]; then
-             cargo run --bin vrsctl "$CARGO_ARGS" ./scripts/chat.ll >/dev/null 2>&1
-             cargo run --bin vrsctl "$CARGO_ARGS" ./scripts/system_appearance.ll >/dev/null 2>&1
+             cargo run --bin vrsctl $CARGO_ARGS ./scripts/chat.ll >/dev/null
+             cargo run --bin vrsctl $CARGO_ARGS ./scripts/system_appearance.ll >/dev/null
 
              # Restart vrsjmp if live-on
              if [ "$MODE" = "live-on" ]; then
