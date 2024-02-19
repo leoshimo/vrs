@@ -32,6 +32,7 @@
 (add_item "Perplexity" '(open_url "https://www.perplexity.ai"))
 (add_item "ChatGPT" '(open_url "https://chat.openai.com"))
 (add_item "Slack" '(open_app "Slack"))
+(add_item "Soulver" '(open_app "Soulver 3"))
 (add_item "Restart vrsd" '(exec "pkill" "-ax" "vrsd"))
 
 # TODO: Need better DX around calling service functions (exported via sexp, but symbol needs reexporting in client process)
