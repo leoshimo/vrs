@@ -171,6 +171,17 @@ Goal: Provide way to extract params from messages w/o indexing
 ** DONE Add =match= 
 Add pattern matching conditional branching
 Test: Make sure that =(a b a)= only matches =(1 2 1)= but not =(1 2 3)=
+** TODO Better Escape Characters
+
+Currently, escaping backslash is hacked together - see lexer for strings
+
+Add proper support for:
+- \n
+- \'
+- \"
+
+And appropriate printing of those values
+
 ** TODO quasiquote, unquote, unquote-splice
 ** TODO Macros
 - [ ] [[https://www.youtube.com/watch?v=M4qj2ictRpg&t=22s][Gavin - Macros in ELisp]]

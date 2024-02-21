@@ -100,7 +100,20 @@ impl Tokens<'_> {
             )));
         }
 
-        let expr: String = std::iter::from_fn(|| self.inner.next_if(|ch| *ch != '\"')).collect();
+        // TODO: Revisit iterators in lexer
+        let mut escaped = false;
+        let expr: String = std::iter::from_fn(|| {
+            while let Some(ch) = self.inner.next_if(|ch| *ch != '\"' || escaped) {
+                if !escaped && ch == '\\' {
+                    escaped = true;
+                } else {
+                    escaped = false;
+                    return Some(ch);
+                }
+            }
+            return None;
+        })
+        .collect();
 
         let ch = self.inner.next().ok_or(Error::IncompleteExpression(
             "Expected closing string quotation".to_string(),
@@ -240,6 +253,26 @@ mod tests {
             lex("      \"hello  world  \"      "),
             Ok(vec![Token::String("hello  world  ".to_string())])
         );
+
+        {
+            // Escape
+            assert_eq!(
+                lex(r#""Hello \"World\"""#),
+                Ok(vec![Token::String(r#"Hello "World""#.to_string())]),
+                "Escaped quotes should be part of strings"
+            );
+            assert_eq!(
+                lex(r#"(exec "osascript" "-e" "tell application \"System Events\"")"#),
+                Ok(vec![
+                    Token::ParenLeft,
+                    Token::Symbol("exec".to_string()),
+                    Token::String("osascript".to_string()),
+                    Token::String("-e".to_string()),
+                    Token::String(r#"tell application "System Events""#.to_string()),
+                    Token::ParenRight,
+                ])
+            );
+        }
     }
 
     #[test]
