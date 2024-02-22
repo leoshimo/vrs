@@ -16,12 +16,12 @@
 
 ## What is this?
 
-[vrs](https://github.com/leoshimo/vrs) is a WIP personal software runtime,
-inspired by Emacs, Erlang, Unix, Plan 9, and Hypermedia systems.
+[vrs](https://github.com/leoshimo/vrs) is a personal software runtime - an
+opinionated take on my "endgame" software platform.
 
-It hopes to combine powerful ideas from those systems into one cohesive project,
-so I can build rich personal software ecosystems and superplatforms at the speed
-of thought.
+Its key inspirations are Emacs, Erlang, Unix, Plan 9, and Hypermedia
+applications. By combining powerful ideas from those systems into one cohesive
+project, it hopes to accelerate development of my personal software ecosystem.
 
 Its key principles are: 
 
@@ -242,8 +242,8 @@ Each process has a dedicated mailbox that it can poll to receive messages:
 # macOS System Appearance Integration
 #
 
-# Helper: Wrapper around AppleScript to get dark mode appearance
-(defn osa_get_darkmode ()
+# Get system appearance state
+(defn is_darkmode ()
   (def (:ok result) (exec "osascript"
                           "-e" "tell application \"System Events\""
                           "-e" "tell appearance preferences"
@@ -252,8 +252,8 @@ Each process has a dedicated mailbox that it can poll to receive messages:
                           "-e" "end tell"))
   (eq? result "true"))
 
-# Helper: Wrapper around AppleScript to set dark mode appearance
-(defn osa_set_darkmode (dark)
+# Set system appearance state
+(defn set_darkmode (dark)
   (exec "osascript"
         "-e" "on run argv"
         "-e" "tell application \"System Events\""
@@ -264,14 +264,10 @@ Each process has a dedicated mailbox that it can poll to receive messages:
         "-e" "end run")
   :ok)
 
-# Initialize state of service to current appearance state
-(def is_dark (osa_get_darkmode))
-
-# Toggle appearance, flipping `is_dark`
+# Toggle current state
 (defn toggle_darkmode ()
-  (set is_dark (not is_dark))
-  (osa_set_darkmode is_dark))
+  (set_darkmode (not (is_darkmode))))
 
-# Fork this process into a service called :system_appearance with toggle_darkmode as exported interface
+# Fork into service exporting `toggle_darkmode` as service
 (spawn-srv :system_appearance :interface '(toggle_darkmode))
 ```
