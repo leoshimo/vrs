@@ -41,8 +41,8 @@
                 "transparent": true,
                 "title": "vrsjmp",
                 "decorations": false,
-                "width": 640,
-                "height": 461,
+                "width": 800,
+                "height": 518,
                 "center": true,
                 "acceptFirstMouse": true
             }
