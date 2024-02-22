@@ -7,7 +7,6 @@ let focusedEl;
 
 async function dispatch(form) {
     await invoke("dispatch", { form: form });
-
 }
 
 async function setQuery(query) {
@@ -69,4 +68,8 @@ window.addEventListener("DOMContentLoaded", () => {
 
 window.onfocus = function() {
     inputEl.focus();
+};
+
+window.onblur = function() {
+    invoke("on_blur");
 };

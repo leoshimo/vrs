@@ -160,6 +160,14 @@ fn dispatch(form: &str, state: tauri::State<State>, app: tauri::AppHandle) {
     let _ = app.hide();
 }
 
+#[tauri::command]
+fn on_blur(app: tauri::AppHandle) {
+    let window = app.get_window("main").unwrap();
+    let _ = window.hide();
+    #[cfg(target_os = "macos")]
+    let _ = app.hide();
+}
+
 fn main() -> Result<()> {
     let mut client = Client::new();
     client
@@ -206,7 +214,7 @@ fn main() -> Result<()> {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![set_query, dispatch])
+        .invoke_handler(tauri::generate_handler![set_query, dispatch, on_blur])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 
