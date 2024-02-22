@@ -182,8 +182,15 @@ fn main() -> Result<()> {
 
             let handle = app.handle();
             let mut shortcuts = app.global_shortcut_manager();
+
+            let binding = if cfg!(debug_assertions) {
+                "CMD+CTRL+SHIFT+SPACE" // debug
+            } else {
+                "CMD+SPACE" // release
+            };
+
             shortcuts
-                .register("CMD+SPACE", move || {
+                .register(binding, move || {
                     let visible = window
                         .is_visible()
                         .expect("should retrieve window visibility");
