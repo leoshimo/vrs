@@ -2,7 +2,7 @@
 # macOS System Appearance Integration
 #
 
-(defn osa_get_darkmode ()
+(defn is_darkmode ()
   (def (:ok result) (exec "osascript"
                           "-e" "tell application \"System Events\""
                           "-e" "tell appearance preferences"
@@ -11,7 +11,7 @@
                           "-e" "end tell"))
   (eq? result "true"))
 
-(defn osa_set_darkmode (dark)
+(defn set_darkmode (dark)
   (exec "osascript"
         "-e" "on run argv"
         "-e" "tell application \"System Events\""
@@ -22,10 +22,7 @@
         "-e" "end run")
   :ok)
 
-(def is_dark (osa_get_darkmode))
-
 (defn toggle_darkmode ()
-  (set is_dark (not is_dark))
-  (osa_set_darkmode is_dark))
+  (set_darkmode (not (is_darkmode))))
 
 (spawn-srv :system_appearance :interface '(toggle_darkmode))
