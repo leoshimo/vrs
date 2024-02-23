@@ -135,6 +135,7 @@ fn fiber_yielding_native_binding() {
     env.bind_native(
         SymbolId::from("echo_yield"),
         NativeFn {
+            metadata: vec![],
             doc: "".to_string(),
             func: |_, x| Ok(NativeFnOp::Yield(Val::Extern(Ext::Echo(x.to_vec())))),
         },
@@ -191,6 +192,7 @@ fn fiber_conn_recv_try_eval_sim() {
     env.bind_native(
         SymbolId::from("recv_conn"),
         NativeFn {
+            metadata: vec![],
             doc: "".to_string(),
             func: |_, _| Ok(NativeFnOp::Yield(Val::Extern(Ext::RecvConn))),
         },
@@ -198,6 +200,7 @@ fn fiber_conn_recv_try_eval_sim() {
     env.bind_native(
         SymbolId::from("send_conn"),
         NativeFn {
+            metadata: vec![],
             doc: "".to_string(),
             func: |_, args| Ok(NativeFnOp::Yield(Val::Extern(Ext::SendConn(args.to_vec())))),
         },
@@ -262,6 +265,7 @@ fn get_set_locals() {
     env.bind_native(
         SymbolId::from("get_local"),
         NativeFn {
+            metadata: vec![],
             doc: "".to_string(),
             func: |f, _| {
                 let v = f.locals().val;
@@ -272,6 +276,7 @@ fn get_set_locals() {
     env.bind_native(
         SymbolId::from("inc_local"),
         NativeFn {
+            metadata: vec![],
             doc: "".to_string(),
             func: |f, args| {
                 let v = match args {

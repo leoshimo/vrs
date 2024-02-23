@@ -3,6 +3,7 @@ use dyn_fmt::AsStrFormatExt;
 
 pub(crate) fn str_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        metadata: vec![],
         doc: "(str ARG1 ARG2 ... ARGN) - Returns a new string by concatenating each argument coerced into string.\
               Arguments are optional.".to_string(),
         func: |_, args| {
@@ -17,6 +18,7 @@ pub(crate) fn str_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 
 pub(crate) fn display_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        metadata: vec![],
         doc: "(display ARG1 ARG2 ... ARGN) - Returns a new string by concatenating each argument as a display string.".to_string(),
         func: |_, args| {
             let mut result = String::new();
@@ -30,6 +32,7 @@ pub(crate) fn display_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 
 pub(crate) fn join_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        metadata: vec![],
         doc: "(join SEP ARG1 ARG2 ... ARGN) - Returns a new string by concatenating each argument separated by SEP.".to_string(),
         func: |_, args| {
             let separator = args
@@ -53,6 +56,7 @@ pub(crate) fn join_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 
 pub(crate) fn split_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        metadata: vec![],
         doc: "(split SEP STR) - Returns a list separating string STR by SEP.".to_string(),
         func: |_, args| {
             let substrings = match args {
@@ -71,6 +75,7 @@ pub(crate) fn split_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 
 pub(crate) fn format_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        metadata: vec![],
         doc: "(format FORMAT ARG1 ARG2 ... ARGN) - Returns a new string by templating FORMAT with arguments coerced into strings.".to_string(),
         func: |_, args| {
             let format = args
@@ -94,6 +99,7 @@ pub(crate) fn format_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 
 pub(crate) fn read_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        metadata: vec![],
         doc: "(read STRING) - Returns a symbolic expression by parsing STRING.".to_string(),
         func: |_, args| {
             let expr = match args {

@@ -18,6 +18,7 @@ impl Ref {
 /// Binding to create a new unique reference
 pub fn ref_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        metadata: vec![],
         doc: "(ref) - Creates a new unique reference in runtime".to_string(),
         func: |_, _| {
             let r = Ref::unique();

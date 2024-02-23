@@ -5,6 +5,7 @@ pub mod env;
 pub mod list;
 pub mod log;
 pub mod math;
+pub mod metadata;
 pub mod refs;
 pub mod string;
 pub mod types;

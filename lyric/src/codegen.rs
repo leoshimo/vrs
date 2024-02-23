@@ -122,6 +122,8 @@ fn compile_fn<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>
         }
     };
 
+    let metadata = interactive_metadata(params, body)?;
+    let body = if metadata.is_some() { &body[1..] } else { body };
     let mut lambda = vec![Val::symbol("lambda"), params.clone()];
     if let Some(docs) = docs {
         lambda.push(Val::String(docs.clone()));
@@ -131,7 +133,17 @@ fn compile_fn<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>
             .chain(body.iter().cloned())
             .collect(),
     ));
-    let inst = compile(&Val::List(lambda))?;
+    let inst = if let Some(metadata) = metadata {
+        compile_func_call(
+            &Val::NativeFn(crate::builtin::metadata::annotate_fn()),
+            &[
+                Val::List(lambda),
+                Val::List(vec![Val::symbol("quote"), metadata]),
+            ],
+        )?
+    } else {
+        compile(&Val::List(lambda))?
+    };
 
     Ok(inst)
 }
@@ -150,15 +162,11 @@ fn compile_defn<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, 
         }
     };
 
-    let mut lambda = vec![Val::symbol("lambda"), params.clone()];
+    let mut lambda = vec![Val::symbol("fn"), params.clone()];
     if let Some(docs) = docs {
         lambda.push(Val::String(docs.clone()));
     }
-    lambda.push(Val::List(
-        std::iter::once(Val::symbol("begin"))
-            .chain(body.iter().cloned())
-            .collect(),
-    ));
+    lambda.extend(body.iter().cloned());
 
     let inst = compile(&Val::List(vec![
         Val::symbol("def"),
@@ -167,6 +175,40 @@ fn compile_defn<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, 
     ]))?;
 
     Ok(inst)
+}
+
+fn interactive_metadata<T: Extern, L: Locals>(
+    params: &Val<T, L>,
+    body: &[Val<T, L>],
+) -> Result<Option<Val<T, L>>> {
+    if let Some(Val::List(declaration)) = body.first() {
+        if declaration.first() == Some(&Val::symbol("interactive")) {
+            let types = &declaration[1..];
+            if types.len() != params.as_list()?.len()
+                || types.iter().any(|t| !matches!(t, Val::Keyword(_)))
+            {
+                return Err(Error::InvalidExpression(
+                    "interactive expects one entity-type keyword per parameter".into(),
+                ));
+            }
+            if body.len() < 2 {
+                return Err(Error::InvalidExpression(
+                    "interactive declaration requires a function body".into(),
+                ));
+            }
+            let args = types
+                .iter()
+                .map(|ty| Val::List(vec![Val::keyword("type"), ty.clone()]))
+                .collect();
+            return Ok(Some(Val::List(vec![
+                Val::keyword("interactive"),
+                Val::Bool(true),
+                Val::keyword("args"),
+                Val::List(args),
+            ])));
+        }
+    }
+    Ok(None)
 }
 
 /// Compile special form lambda
@@ -185,8 +227,8 @@ fn compile_lambda<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T
 
     Ok(vec![
         Inst::PushConst(param.clone()),
-        Inst::PushConst(if docs.is_some() {
-            Val::String(docs.unwrap().clone())
+        Inst::PushConst(if let Some(docs) = docs {
+            Val::String(docs.clone())
         } else {
             Val::Nil
         }),

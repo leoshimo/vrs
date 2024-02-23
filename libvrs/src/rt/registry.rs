@@ -25,6 +25,10 @@ pub(crate) struct ServiceDescription {
     pub pid: ProcessId,
     pub interface: Vec<Form>,
     pub docs: HashMap<KeywordId, String>,
+    #[serde(default)]
+    pub metadata: HashMap<KeywordId, Vec<Form>>,
+    #[serde(default)]
+    pub entity_completions: lyric::env::EntityCompletions,
 }
 
 #[derive(Debug, Clone)]
@@ -65,6 +69,8 @@ pub struct Registration {
     interface: Vec<Val>,
     overwrite: bool,
     docs: HashMap<KeywordId, String>,
+    metadata: HashMap<KeywordId, Vec<Form>>,
+    entity_completions: lyric::env::EntityCompletions,
 }
 
 impl Registry {
@@ -344,6 +350,8 @@ impl Entry {
                 interface,
                 overwrite: false,
                 docs: service.docs,
+                metadata: service.metadata,
+                entity_completions: service.entity_completions,
             },
             target: EntryTarget::Remote(service.pid),
             observed,
@@ -364,6 +372,8 @@ impl Entry {
             pid: self.pid(),
             interface,
             docs: self.registration.docs.clone(),
+            metadata: self.registration.metadata.clone(),
+            entity_completions: self.registration.entity_completions.clone(),
         })
     }
 
@@ -408,6 +418,18 @@ impl Entry {
     pub fn doc(&self, keyword: &KeywordId) -> Option<&String> {
         self.registration.docs.get(keyword)
     }
+
+    pub fn metadata(&self, keyword: &KeywordId) -> Vec<Form> {
+        self.registration
+            .metadata
+            .get(keyword)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    pub fn entity_completions(&self) -> &lyric::env::EntityCompletions {
+        &self.registration.entity_completions
+    }
 }
 
 impl From<Entry> for Val {
@@ -437,6 +459,8 @@ impl Registration {
             interface: vec![],
             overwrite: false,
             docs: HashMap::new(),
+            metadata: HashMap::new(),
+            entity_completions: HashMap::new(),
         }
     }
 
@@ -453,6 +477,14 @@ impl Registration {
     pub fn docs(&mut self, keyword: KeywordId, doc: String) -> &mut Self {
         self.docs.insert(keyword, doc);
         self
+    }
+
+    pub fn metadata(&mut self, keyword: KeywordId, metadata: Vec<Form>) {
+        self.metadata.insert(keyword, metadata);
+    }
+
+    pub fn entity_completions(&mut self, completions: lyric::env::EntityCompletions) {
+        self.entity_completions = completions;
     }
 }
 
@@ -482,6 +514,8 @@ mod tests {
         let registry = Registry::spawn_named("here".to_string());
         registry
             .remote_up(ServiceDescription {
+                metadata: HashMap::new(),
+                entity_completions: HashMap::new(),
                 name: KeywordId::from("replaceable"),
                 pid: ProcessId::new("remote", 1),
                 interface: vec![Form::List(vec![
@@ -494,6 +528,8 @@ mod tests {
             .unwrap();
         registry
             .remote_up(ServiceDescription {
+                metadata: HashMap::new(),
+                entity_completions: HashMap::new(),
                 name: KeywordId::from("replaceable"),
                 pid: ProcessId::new("remote", 2),
                 interface: vec![Form::List(vec![
@@ -534,6 +570,8 @@ mod tests {
         let registry = Registry::spawn_named("here".to_string());
         registry
             .remote_up(ServiceDescription {
+                metadata: HashMap::new(),
+                entity_completions: HashMap::new(),
                 name: KeywordId::from("svc"),
                 pid: ProcessId::new("one", 1),
                 interface: vec![],
@@ -543,6 +581,8 @@ mod tests {
             .unwrap();
         registry
             .remote_up(ServiceDescription {
+                metadata: HashMap::new(),
+                entity_completions: HashMap::new(),
                 name: KeywordId::from("svc"),
                 pid: ProcessId::new("two", 2),
                 interface: vec![],
@@ -584,6 +624,8 @@ mod tests {
 
         registry
             .remote_up(ServiceDescription {
+                metadata: HashMap::new(),
+                entity_completions: HashMap::new(),
                 name: KeywordId::from("svc"),
                 pid: ProcessId::new("three", 3),
                 interface: vec![],

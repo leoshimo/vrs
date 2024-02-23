@@ -4,9 +4,29 @@ use crate::{
     Val,
 };
 
+/// Invoke a callable with values, without evaluating the values as expressions.
+pub fn apply_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
+    NativeFn {
+        metadata: vec![],
+        doc: "(apply CALLABLE ARGS) - Call CALLABLE with the values in ARGS".to_string(),
+        func: |_, args| match args {
+            [callable, Val::List(values)] => {
+                let mut code = vec![Inst::PushConst(callable.clone())];
+                code.extend(values.iter().cloned().map(Inst::PushConst));
+                code.push(Inst::CallFunc(values.len()));
+                Ok(NativeFnOp::Exec(code))
+            }
+            _ => Err(Error::UnexpectedArguments(
+                "apply expects a callable and argument list".to_string(),
+            )),
+        },
+    }
+}
+
 /// Language bindng for `list`
 pub fn list_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        metadata: vec![],
         doc: "(list ELEM_1 ELEM_2 .. ELEM_N) - Creates a new list containing arguments of form. Each argument ELEM is evaluated.\
               Arguments are optional.".to_string(),
         func: |_, args| Ok(NativeFnOp::Return(Val::List(args.to_vec()))),
@@ -16,6 +36,7 @@ pub fn list_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 /// Language bindng for `push`
 pub fn push_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        metadata: vec![],
         doc: "(push LIST ELEM) - Creates a new list containing elements of LIST with ELEM appended at end".to_string(),
         func: |_, args| match args {
             [Val::List(l), elem] => {
@@ -33,6 +54,7 @@ pub fn push_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 /// Language bindng for `get`
 pub fn get_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        metadata: vec![],
         doc: "(get LIST ATTR) - Returns element within LIST for given ATTR, which can be 0-indexed position in list, or keywords for association lists. Negative indexes return from end of list.".to_string(),
         func: |_, x| match x {
             [Val::List(l), Val::Int(idx)] => {
@@ -63,6 +85,7 @@ pub fn get_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 /// Language binding for `len`
 pub fn len_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        metadata: vec![],
         doc: "(len LIST) - Returns number of elements in LIST".to_string(),
         func: |_, x| match x {
             [Val::List(l)] => Ok(NativeFnOp::Return(Val::Int(l.len().try_into().unwrap()))),
@@ -75,8 +98,9 @@ pub fn len_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 
 // TODO: Revisit this map impl.
 /// Language binding for `map`
-pub(crate) fn map_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
+pub fn map_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        metadata: vec![],
         doc: "(map LIST CALLABLE) - Creates a new list containing elements of LIST transformed by CALLABLE".to_string(),
         func: |_, args| match args {
             [Val::List(l), val] if val.is_callable() => {
@@ -101,6 +125,7 @@ pub(crate) fn map_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 /// Language binding for `filter`
 pub(crate) fn filter_fn<T: Extern, L: Locals>() -> Lambda<T, L> {
     Lambda {
+        metadata: vec![],
         doc: Some("(filter LIST CALLABLE) - Creates a new list containing elements of LIST filtered by CALLABLE".to_string()),
         params: vec![SymbolId::from("lst"), SymbolId::from("callable")],
         code: compile(

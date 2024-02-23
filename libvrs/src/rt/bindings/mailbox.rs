@@ -7,6 +7,7 @@ use lyric::{Error, Result, SymbolId};
 
 pub(crate) fn send_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(send PID MSG) - Send process PID the message MSG".to_string(),
         func: |f, args| Box::new(send_impl(f, args)),
     }
@@ -15,6 +16,7 @@ pub(crate) fn send_fn() -> NativeAsyncFn {
 /// Binding to recv messages
 pub(crate) fn recv_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(recv [PATTERN]) - Poll mailbox for a message. \
               Optional PATTERN argument can match for messages matching specific patterns."
             .to_string(),
@@ -25,6 +27,7 @@ pub(crate) fn recv_fn() -> NativeAsyncFn {
 /// Binding to list messages
 pub(crate) fn ls_msgs_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(ls_msgs) - Returns contents of mailbox without consuming messages or blocking when mailbox is empty.".to_string(),
         func: |f, args| Box::new(ls_msgs_impl(f, args)),
     }
@@ -33,6 +36,7 @@ pub(crate) fn ls_msgs_fn() -> NativeAsyncFn {
 /// Binding for call
 pub(crate) fn call_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(call PID MSG) - Send a request and wait for its response, up to the calling process's timeout".to_string(),
         func: |fiber, args| Box::new(call_impl(fiber, args)),
     }

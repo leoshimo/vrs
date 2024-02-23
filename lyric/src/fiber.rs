@@ -331,6 +331,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                     .collect::<Result<Vec<_>>>()?;
 
                 self.stack.push(Val::Lambda(Lambda {
+                    metadata: vec![],
                     doc,
                     params,
                     code,
@@ -349,6 +350,12 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
 
                 match self.stack.pop() {
                     Some(Val::Lambda(l)) => {
+                        if l.params.len() != nargs {
+                            return Err(Error::UnexpectedArguments(format!(
+                                "function expects {} arguments, got {nargs}",
+                                l.params.len()
+                            )));
+                        }
                         let parent_env = l.parent.unwrap_or_else(|| Arc::clone(&self.global));
                         let mut fn_env = Env::extend(&parent_env);
                         for (s, arg) in l.params.into_iter().zip(args) {
@@ -655,6 +662,7 @@ mod tests {
         let mut f = Fiber::from_bytecode(
             vec![
                 PushConst(Val::Lambda(Lambda {
+                    metadata: vec![],
                     doc: None,
                     params: vec![SymbolId::from("x")],
                     code: vec![GetSym(SymbolId::from("x"))],

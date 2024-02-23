@@ -11,6 +11,7 @@ use tracing::debug;
 /// Binding for exec
 pub(crate) fn exec_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(exec PROG ARG1 ... ARGN [:stdin STRING]) - Execute PROG, optionally write STRING to stdin, and return (:exit CODE :stdout STRING :stderr STRING).".to_string(),
         func: |_, args| Box::new(exec_impl(args)),
     }
@@ -19,6 +20,7 @@ pub(crate) fn exec_fn() -> NativeAsyncFn {
 /// Binding for decode
 pub(crate) fn decode_fn() -> NativeFn {
     NativeFn {
+        metadata: vec![],
         doc: "(decode FORMAT STRING [:columns COLUMNS]) - Decode external text as :json, :tsv, or :lines. :tsv optionally maps fields to keyword COLUMNS.".to_string(),
         func: |_, args| decode_impl(args),
     }
@@ -27,6 +29,7 @@ pub(crate) fn decode_fn() -> NativeFn {
 /// Binding for shell_expand
 pub(crate) fn shell_expand_fn() -> NativeFn {
     NativeFn {
+        metadata: vec![],
         doc: "(shell_expand STRING) - Expand STRING using standard shell filename expansion."
             .to_string(),
         func: |_, args| {

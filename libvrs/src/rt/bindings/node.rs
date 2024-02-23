@@ -5,6 +5,7 @@ use lyric::{kwargs, Error, KeywordId, Result};
 
 pub(crate) fn configure_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(configure :nodes '(ENDPOINT ...)) - Nonblockingly add tcp:// or ssh:// node links"
             .to_string(),
         func: |fiber, args| Box::new(configure_impl(fiber, args)),
