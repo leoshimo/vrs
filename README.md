@@ -271,3 +271,45 @@ Each process has a dedicated mailbox that it can poll to receive messages:
 # Fork into service exporting `toggle_darkmode` as service
 (spawn-srv :system_appearance :interface '(toggle_darkmode))
 ```
+
+---
+
+## Tooling
+
+### REPL-driven workflows via `vrsctl`
+
+`vrsctl` is a CLI client for vrs. When invoked without arguments, it launches into an interactive REPL useful for live programming and debugging:
+
+```shell
+$ vrsctl
+
+# Experiment with lyric:
+vrs> (def url "https://github.com/leoshimo/vrs")
+"https://github.com/leoshimo/vrs"
+vrs> (open_url url)
+(:ok "")
+
+# Introspect runtime state:
+vrs> (ls-srv)
+((:name :launcher :pid <pid 28> :interface ((:get_items) (:add_item title cmd)))
+ (:name :system_appearance :pid <pid 5> :interface ((:toggle_darkmode))))
+ 
+# Bind and talk to services:
+vrs> (bind-srv :launcher)
+((:get_items) (:add_item title cmd))
+vrs> (add_item "Hello" '(open_url "http://example.com"))
+:ok
+```
+
+`vrsctl` also offers convenient interfaces and tools to support scripting and
+debugging - see `vrsctl --help` for an overview of available commands.
+
+### Emacs Integration
+
+There is an major-mode available for Emacs - `lyric-mode`.
+
+It provides syntax highlighting and bindings useful for bottom-up, interactive
+editor-centric software development.
+
+The package is currently not available via package repositories - but is
+available in my [dotfiles repository](https://github.com/leoshimo/dots/blob/527bd86095f7c082e6fd6a7658698c8745c65be0/emacs/.emacs.d/init.org#lyric--vrs).

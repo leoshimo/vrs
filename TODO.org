@@ -324,6 +324,10 @@ pub(crate) fn call_fn() -> Lambda {
 E.g. =srv= definition - =srv_fn=
 
 * tooling
+** TODO Inferior VRS Mode in Emacs
+
+Extend existing emacs mode with inferior mode comint shell, like =run-python=
+
 ** TODO Emacs Code-Signing Workflow
 
 Add ability to sign a script from editor - e.g. =(sign "Ey.....")= and workflow
