@@ -11,7 +11,7 @@ use crate::rt::program::{NativeFn, NativeFnOp, Val};
 pub(crate) fn fuzzy_match_fn() -> NativeFn {
     NativeFn {
         metadata: vec![],
-        doc: "(fuzzy_match QUERY ITEMS KEY) - Return original items ranked by matching (KEY item)"
+        doc: "(fuzzy_match QUERY ITEMS KEY) - Rank original items by KEY's text or list of text fields; exact fields first"
             .into(),
         func: |_, args| match args {
             [Val::String(_), Val::List(_), key] => Ok(NativeFnOp::Exec(vec![
@@ -41,22 +41,38 @@ fn sort_matches_fn() -> NativeFn {
                     "invalid fuzzy matching keys".into(),
                 ));
             };
-            let keys = keys
-                .iter()
-                .enumerate()
-                .map(|(index, value)| {
-                    Ok(Key {
+            let mut fields = vec![];
+            for (index, value) in keys.iter().enumerate() {
+                let values = match value {
+                    Val::List(values) => values.as_slice(),
+                    _ => std::slice::from_ref(value),
+                };
+                for value in values {
+                    fields.push(Key {
                         index,
                         text: value.as_string()?.clone(),
-                    })
-                })
-                .collect::<lyric::Result<Vec<_>>>()?;
+                    });
+                }
+            }
             let matches = Pattern::parse(query, CaseMatching::Smart, Normalization::Smart)
-                .match_list(keys, &mut Matcher::default());
+                .match_list(fields, &mut Matcher::default());
+            let mut scores = vec![None; items.len()];
+            for (key, score) in matches {
+                let exact = !query.trim().is_empty() && key.text.eq_ignore_ascii_case(query.trim());
+                let rank = (exact, score);
+                scores[key.index] =
+                    Some(scores[key.index].map_or(rank, |old| std::cmp::max(old, rank)));
+            }
+            let mut ranked = scores
+                .into_iter()
+                .enumerate()
+                .filter_map(|(index, rank)| rank.map(|rank| (index, rank)))
+                .collect::<Vec<_>>();
+            ranked.sort_by_key(|(_, rank)| std::cmp::Reverse(*rank));
             Ok(NativeFnOp::Return(Val::List(
-                matches
+                ranked
                     .into_iter()
-                    .map(|(key, _)| items[key.index].clone())
+                    .map(|(index, _)| items[index].clone())
                     .collect(),
             )))
         },

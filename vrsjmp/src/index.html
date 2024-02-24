@@ -1,27 +1,40 @@
 <!doctype html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>vrsjmp</title>
-    <script type="module" src="/main.js" defer></script>
-    <style>
-    </style>
+    <script type="module" src="/main.js"></script>
 </head>
-
 <body>
-    <div data-tauri-drag-region class="root">
-        <button id="back" type="button" hidden aria-label="Back (Escape)">‹ Back</button>
-        <input placeholder="Search" id="input-field" class="input-field" autoFocus
-               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
-        <span id="loading" role="status" aria-label="Loading" hidden></span>
-        <hr class="input-field-separator"></hr>
-        <div id="status" role="status" aria-live="polite"></div>
-        <div id="output-list" class="list list--empty" role="listbox" aria-label="Commands">
+    <main class="root">
+        <header class="page-header" data-tauri-drag-region>
+            <button id="back" type="button" hidden aria-label="Back (Escape)">←</button>
+            <span class="brand">vrs</span><span aria-hidden="true">/</span>
+            <span id="page-title">Home</span>
+        </header>
+        <div class="input-row">
+            <input placeholder="Search commands…" id="input-field" aria-label="Search commands"
+                   autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                   role="combobox" aria-autocomplete="list" aria-controls="output-list" aria-expanded="true" />
+            <span id="loading" role="status" aria-label="Loading" hidden></span>
         </div>
+        <div class="results">
+            <div id="status" role="status" aria-live="polite"></div>
+            <div id="output-list" role="listbox" aria-label="Commands"></div>
+        </div>
+        <footer class="page-footer">
+            <span id="count" aria-live="polite"></span>
+            <button id="actions" type="button" hidden aria-haspopup="menu" aria-expanded="false">
+                Actions <kbd>⌘ K</kbd>
+            </button>
+        </footer>
+        <section id="action-menu" role="menu" aria-labelledby="action-title" hidden>
+            <header class="action-header"><div id="action-title"></div><div id="action-subtitle"></div></header>
+            <div id="action-list"></div>
+        </section>
         <div id="toast" role="alert" hidden></div>
-    </div>
+    </main>
 </body>
 </html>

@@ -1,5 +1,5 @@
 // The GUI owns history, not page behavior. Callbacks/arguments stay opaque here.
-export const rootPage = () => ({ get_items: "root_items", args: "(())", prompt: "Search", debounce_ms: 0 });
+export const rootPage = () => ({ get_items: "root_items", args: "(())", title: "Home", prompt: "Search commands…", debounce_ms: 0 });
 export const retentionMs = 8 * 60 * 1000;
 
 export class Navigation {
@@ -154,9 +154,10 @@ export class Navigation {
         this.current.selected = count ? (index + count) % count : 0;
         this.changed();
     }
-    async activate(index = this.current?.selected) {
+    async activate(index = this.current?.selected, actionIndex = null) {
         const frame = this.current;
-        const item = frame?.items[index];
+        const primary = frame?.items[index];
+        const item = actionIndex === null ? primary : primary?.actions?.[actionIndex];
         if (!item || frame.loading || this.action || !this.visible) return;
         const request = { frame, obsolete: false };
         this.action = request;

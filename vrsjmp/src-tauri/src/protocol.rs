@@ -5,11 +5,21 @@ use serde::Serialize;
 #[derive(Debug, Serialize, PartialEq)]
 pub struct Item {
     pub title: String,
+    pub subtitle: Option<String>,
+    pub aside: Option<String>,
+    pub actions: Vec<ItemCommand>,
+    pub on_click: String,
+}
+
+#[derive(Debug, Serialize, PartialEq)]
+pub struct ItemCommand {
+    pub title: String,
     pub on_click: String,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
 pub struct Page {
+    pub title: String,
     pub prompt: String,
     pub get_items: String,
     pub args: String,
@@ -77,16 +87,45 @@ pub fn items(value: Form) -> Result<Vec<Item>> {
             let Form::List(ref values) = item else {
                 bail!("Expected an item record");
             };
-            let Some(Form::String(title)) = field(values, "title") else {
-                bail!("Item is missing a title");
+            let command = item_command(&item)?;
+            let actions = match field(values, "actions") {
+                None => vec![],
+                Some(Form::List(commands)) => {
+                    commands.iter().map(item_command).collect::<Result<_>>()?
+                }
+                _ => bail!("Item actions must be a list"),
             };
-            field(values, "on_click").context("Item is missing an action")?;
             Ok(Item {
-                title: title.clone(),
-                on_click: item.to_string(),
+                title: command.title,
+                subtitle: optional_text(values, "subtitle")?,
+                aside: optional_text(values, "aside")?,
+                actions,
+                on_click: command.on_click,
             })
         })
         .collect()
+}
+
+fn optional_text(values: &[Form], name: &str) -> Result<Option<String>> {
+    match field(values, name) {
+        None | Some(Form::Nil) => Ok(None),
+        Some(Form::String(text)) => Ok(Some(text.clone())),
+        _ => bail!("{name} must be text"),
+    }
+}
+
+fn item_command(item: &Form) -> Result<ItemCommand> {
+    let Form::List(values) = item else {
+        bail!("Expected an action record");
+    };
+    let Some(Form::String(title)) = field(values, "title") else {
+        bail!("Item is missing a title");
+    };
+    field(values, "on_click").context("Item is missing an action")?;
+    Ok(ItemCommand {
+        title: title.clone(),
+        on_click: item.to_string(),
+    })
 }
 
 pub fn action(value: Form) -> Result<Action> {
@@ -117,6 +156,7 @@ pub fn action(value: Form) -> Result<Action> {
     };
     Ok(Action::PushPage {
         page: Page {
+            title: optional_text(values, "title")?.unwrap_or_else(|| prompt.clone()),
             prompt: prompt.clone(),
             get_items: callback.as_str().into(),
             args,
@@ -150,6 +190,7 @@ mod tests {
             panic!()
         };
         assert_eq!(page.args, "()");
+        assert_eq!(page.title, "Read Later");
         assert_eq!(page.debounce_ms, 200);
         assert!(action(
             Form::from_expr("(:push_page :prompt \"x\" :get_items f :debounce_ms -1)").unwrap()
@@ -158,5 +199,21 @@ mod tests {
         assert_eq!(action(Form::keyword("close")).unwrap(), Action::Close);
         assert!(items(Form::from_expr("((:title 42))").unwrap()).is_err());
         assert!(action(Form::keyword("unexpected")).is_err());
+        let rows = items(
+            Form::from_expr(
+                r#"((:title "Article" :subtitle "example.test" :aside "Saved today"
+            :on_click (open_url "https://example.test")
+            :actions ((:title "Copy URL" :on_click (set_clipboard "https://example.test")))))"#,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(rows[0].subtitle.as_deref(), Some("example.test"));
+        assert_eq!(rows[0].actions[0].title, "Copy URL");
+        assert!(action_request(&rows[0].actions[0].on_click).is_ok());
+        assert!(
+            items(Form::from_expr("((:title \"x\" :on_click (x) :actions (42)))").unwrap())
+                .is_err()
+        );
     }
 }
