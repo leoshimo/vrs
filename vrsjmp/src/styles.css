@@ -79,6 +79,17 @@ body {
     margin: 0;
 }
 
+#status { position: absolute; top: 100px; left: 22px; font-size: 13px; color: var(--gray11); pointer-events: none; }
+#back { align-self: flex-start; margin: 0 16px 4px; background: none; border: 0; color: var(--gray11); cursor: pointer; }
+#loading { position: absolute; right: 24px; top: 25px; width: 12px; height: 12px;
+    border: 1.5px solid var(--gray6); border-top-color: var(--gray11); border-radius: 50%;
+    animation: spin 900ms linear infinite; pointer-events: none; }
+#toast { position: absolute; bottom: 14px; left: 16px; right: 16px; padding: 10px 14px;
+    border: 1px solid var(--gray6); border-radius: 8px; background: var(--gray3);
+    color: var(--gray12); font-size: 13px; max-height: 90px; overflow: auto; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { #loading { animation: none; } }
+
 .root {
     user-select: none;
 }
@@ -86,6 +97,7 @@ body {
 html, body {
     /* required for tauri window-vibrancy */
     background: transparent;
+    height: 100%;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -139,6 +151,9 @@ html, body {
 .root {
     max-width: 800px;
     width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
     background: var(--app-bg);
     opacity: 0.8;
     border-radius: 12px;
@@ -157,7 +172,7 @@ html, body {
     width: 100%;
     font-size: 22px;
     font-weight: 600;
-    padding: 0.4em 22px;
+    padding: 0.4em 48px 0.4em 22px;
     outline: none;
     background: var(--bg);
     color: var(--gray12);
@@ -206,12 +221,13 @@ html, body {
     animation-duration: 1.5s;
     animation-delay: 1s;
     animation-timing-function: ease;
-    animation-name: loading;
+    animation-name: none;
 }
 
 .list {
     padding: 4px 8px;
-    height: 450px;
+    flex: 1;
+    min-height: 0;
     overflow: auto;
     overscroll-behavior: contain;
     transition: 100ms ease;
@@ -300,4 +316,3 @@ html, body {
         transform: translateX(0);
     }
 }
-

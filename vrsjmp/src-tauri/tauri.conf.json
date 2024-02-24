@@ -33,9 +33,10 @@
         "windows": [
             {
                 "fullscreen": false,
+                "visible": false,
                 "resizable": false,
                 "alwaysOnTop": false,
-                "maximizable": false,
+                "maximizable": true,
                 "minimizable": false,
                 "closable": false,
                 "transparent": true,

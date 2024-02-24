@@ -1,103 +1,82 @@
+import { Navigation } from "./navigation.mjs";
+import { createOpening, createTransport } from "./transport.mjs";
 
 const { invoke } = window.__TAURI__.tauri;
+const input = document.querySelector("#input-field");
+const output = document.querySelector("#output-list");
+const status = document.querySelector("#status");
+const back = document.querySelector("#back");
+const loading = document.querySelector("#loading");
+const toast = document.querySelector("#toast");
+let loadingTimer = null, toastTimer = null;
+let previousItems = null, previousSelected = null, previousError = "";
 
-let rootEl;
-let inputEl;
-let outputListEl;
-let focusedEl;
-
-async function dispatch(form) {
-    await invoke("dispatch", { form: form });
-}
-
-async function setQuery(query) {
-    focusedEl = null;
-    const items = await invoke("set_query", { query: query });
-    outputListEl.replaceChildren();
-    let isFirst = true;
-    for (const item of items) {
-        const itemEl = itemElement(item);
-        outputListEl.appendChild(itemEl);
-        if (isFirst) {
-            focusItem(itemEl);
-            isFirst = false;
-        }
+const navigation = new Navigation(createTransport(invoke), state => {
+    if (input.value !== state.query) input.value = state.query;
+    input.placeholder = state.page?.prompt ?? "Search";
+    input.setAttribute("aria-busy", String(state.loading));
+    back.hidden = !state.canBack;
+    status.textContent = !state.loading && !state.error && !state.items.length ? "No results" : "";
+    if (state.loading && state.visible) {
+        if (loadingTimer === null) loadingTimer = setTimeout(() => { loading.hidden = false; }, 250);
+    } else {
+        clearTimeout(loadingTimer);
+        loadingTimer = null;
+        loading.hidden = true;
     }
-}
-
-/// Given an query item, return HTML element for rendering query
-function itemElement(query_item) {
-    const itemEl = document.createElement('div')
-
-    itemEl.classList = ['item'];
-    itemEl.textContent = query_item['title'];
-    itemEl.addEventListener('click', (e) => {
-        dispatch(query_item['on_click']);
-        inputEl.value = '';
-        setQuery('');
-    });
-
-    // const itemMeta = document.createElement("item__meta");
-    // itemMeta.classList = ['item__meta'];
-    // itemMeta.textContent = "Meta";
-    // itemEl.appendChild(itemMeta);
-
-    return itemEl;
-}
-
-function focusItem(newEl) {
-    console.log(newEl);
-    if (focusedEl) {
-        focusedEl.classList.remove('item--focus');
-        focusedEl = null;
+    if (state.error !== previousError) {
+        clearTimeout(toastTimer);
+        previousError = state.error;
+        toast.textContent = state.error;
+        toast.hidden = !state.error;
+        if (state.error) toastTimer = setTimeout(() => { toast.hidden = true; }, 6000);
     }
-    focusedEl = newEl;
-    if (focusedEl) {
-        focusedEl.classList.add('item--focus');
-        focusedEl.scrollIntoView({
-            behavior: "auto",
-            block: "nearest",
-            inline: "nearest",
+    const changedItems = state.items !== previousItems;
+    if (changedItems) {
+        output.replaceChildren();
+        state.items.forEach((item, index) => {
+        const element = document.createElement("div");
+        element.className = "item";
+        element.setAttribute("role", "option");
+        element.textContent = item.title;
+        element.addEventListener("click", () => { navigation.activate(index); input.focus(); });
+        output.appendChild(element);
         });
+        previousItems = state.items;
     }
-}
-
-window.onkeyup = function(e){
-    if (e.key === 'ArrowDown' || (e.key === 'n' && e.ctrlKey)) {
-        focusItem(focusedEl.nextSibling || outputListEl.firstChild);
-    }
-    if (e.key === 'ArrowUp' || (e.key === 'p' && e.ctrlKey)) {
-        focusItem(focusedEl.previousSibling || outputListEl.lastChild);
-    }
-}
-
-window.addEventListener("DOMContentLoaded", () => {
-    rootEl = document.querySelector(".root");
-
-    setQuery("");
-
-    inputEl = document.querySelector("#input-field");
-    inputEl.addEventListener("input", (e) => {
-        e.preventDefault();
-        setQuery(inputEl.value);
+    Array.from(output.children).forEach((element, index) => {
+        element.classList.toggle("item--focus", index === state.selected);
+        element.setAttribute("aria-selected", String(index === state.selected));
+        element.setAttribute("aria-disabled", String(state.loading));
     });
-    inputEl.addEventListener("keydown", (e) => {
-        if (e.key == 'Enter') {
-            if (focusedEl != null) {
-                focusedEl.click();
-            }
-        }
-    });
-    outputListEl = document.querySelector("#output-list");
+    if (changedItems || previousSelected !== state.selected) {
+        output.children[state.selected]?.scrollIntoView({ block: "nearest" });
+        previousSelected = state.selected;
+    }
 });
 
-window.onfocus = function() {
-    inputEl.value = '';
-    setQuery('');
-    inputEl.focus();
-    focusItem(outputListEl.firstChild);
-};
-
-window.onblur = function() {
-    invoke("on_blur");
-};
+input.addEventListener("input", () => navigation.search(input.value));
+window.addEventListener("keydown", event => {
+    if (event.isComposing) return;
+    if (event.key === "Escape") { event.preventDefault(); navigation.back(); }
+    else if (event.key === "Enter") { event.preventDefault(); navigation.activate(); }
+    else if (event.key === "ArrowDown" || (event.ctrlKey && event.key === "n")) {
+        event.preventDefault(); navigation.select((navigation.current?.selected ?? 0) + 1);
+    } else if (event.key === "ArrowUp" || (event.ctrlKey && event.key === "p")) {
+        event.preventDefault(); navigation.select((navigation.current?.selected ?? 0) - 1);
+    }
+});
+back.addEventListener("click", () => { navigation.back(); input.focus(); });
+window.addEventListener("focus", () => {
+    input.focus();
+});
+window.addEventListener("blur", () => {
+    navigation.suspend();
+    invoke("on_blur").catch(console.error);
+});
+const openPalette = createOpening(navigation, () => invoke("show"));
+await window.__TAURI__.event.listen("toggle-palette", () => {
+    if (navigation.visible) navigation.close();
+    else openPalette().catch(console.error);
+});
+openPalette().catch(console.error);
