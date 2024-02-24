@@ -81,7 +81,7 @@ fn cli() -> clap::Command {
         .arg(arg!(command: -c --command <EXPR> "If present, EXPR is sent as request, then program exits"))
         .arg(arg!(subscribe: -s --subscribe <TOPIC> "If present, watches a specific topic for data"))
         .group(ArgGroup::new("main")
-               .args(["command", "file", "subscribe"])
+               .args(["command", "subscribe"])
                .required(false))
         .arg(arg!(follow: -f --follow "If present, continues polling subscription after first topic update")
              .requires("subscribe"))
