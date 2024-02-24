@@ -111,7 +111,7 @@ impl Tokens<'_> {
                     return Some(ch);
                 }
             }
-            return None;
+            None
         })
         .collect();
 
