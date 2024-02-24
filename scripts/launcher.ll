@@ -4,13 +4,16 @@
 (def items '())
 
 (defn get_items ()
+  "Return items in launcher"
   items)
 
 (defn add_item (title cmd)
+  "Add new item to launcher"
   (set items (push items (mk_item title cmd)))
   :ok)
 
 (defn mk_item (title cmd)
+  "Create new item for launcher"
   (list :title title :on_click cmd))
 
 (add_item "Browser" '(open_app "Safari"))
@@ -35,7 +38,8 @@
 (add_item "Soulver" '(open_app "Soulver 3"))
 (add_item "Restart vrsd" '(exec "pkill" "-ax" "vrsd"))
 
-# TODO: Need better DX around calling service functions (exported via sexp, but symbol needs reexporting in client process)
+# TODO: Need better DX around calling service functions
+# Service exports needs re-import in client process - Global Namespace?
 (add_item "Toggle Darkmode" '(call (find-srv :system_appearance) '(:toggle_darkmode)))
 
 (spawn-srv :launcher
