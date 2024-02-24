@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use clap::{arg, command, ArgGroup};
 
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{self, BufRead, BufReader, IsTerminal, Read};
 use std::path::PathBuf;
 use std::str::FromStr;
 use tokio::net::UnixStream;
@@ -32,9 +32,14 @@ async fn main() -> Result<()> {
     let client = Client::new(conn);
 
     let run = async {
+        let file = open_file(
+            args.get_one::<String>("file")
+                .expect("file has a default value"),
+        )?;
+
         if let Some(cmd) = args.get_one::<String>("command") {
             run_cmd(&client, cmd).await
-        } else if let Some(file) = args.get_one::<String>("file") {
+        } else if let Some(file) = file {
             run_file(&client, file).await
         } else if let Some(topic) = args.get_one::<String>("subscribe") {
             let follow = args.get_flag("follow");
@@ -71,7 +76,8 @@ async fn main() -> Result<()> {
 /// The clap CLI interface
 fn cli() -> clap::Command {
     command!()
-        .arg(arg!(file: [FILE] "If present, executes contents of FILE"))
+        .arg(arg!(file: [FILE] "If present, executes contents of FILE")
+             .default_value("-"))
         .arg(arg!(command: -c --command <EXPR> "If present, EXPR is sent as request, then program exits"))
         .arg(arg!(subscribe: -s --subscribe <TOPIC> "If present, watches a specific topic for data"))
         .group(ArgGroup::new("main")
@@ -87,6 +93,21 @@ fn cli() -> clap::Command {
         )
 }
 
+/// Open file specified by argument
+fn open_file(file: &str) -> Result<Option<Box<dyn Read>>> {
+    match file {
+        "-" => {
+            let stdin = io::stdin();
+            if stdin.is_terminal() {
+                Ok(None) // ignore "-" if interactive
+            } else {
+                Ok(Some(Box::new(stdin)))
+            }
+        }
+        _ => Ok(Some(Box::new(File::open(file)?))),
+    }
+}
+
 /// Run a single request
 async fn run_cmd(client: &Client, cmd: &str) -> Result<()> {
     let f = lyric::parse(cmd)?;
@@ -99,9 +120,8 @@ async fn run_cmd(client: &Client, cmd: &str) -> Result<()> {
 }
 
 /// Run a script file
-async fn run_file(client: &Client, file: &str) -> Result<()> {
-    let f = File::open(file).with_context(|| format!("Failed to open {}", file))?;
-    let mut f = BufReader::new(f);
+async fn run_file(client: &Client, file: Box<dyn Read>) -> Result<()> {
+    let mut f = BufReader::new(file);
     let mut line = String::new();
     loop {
         match f.read_line(&mut line) {
@@ -144,3 +164,7 @@ async fn run_file(client: &Client, file: &str) -> Result<()> {
 
     Ok(())
 }
+
+// TODO: Test case for executing from stdin
+// TODO: Test case for executing from REPL
+// TODO: Test case for executing from -c CMD
