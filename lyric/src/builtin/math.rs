@@ -8,6 +8,11 @@ pub fn plus_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
         func: |_, x| match x {
             [Val::Int(a), Val::Int(b)] => Ok(NativeFnOp::Return(Val::Int(a + b))),
+            [Val::List(lhs), Val::List(rhs)] => {
+                let mut items = lhs.to_vec();
+                items.extend_from_slice(rhs);
+                Ok(NativeFnOp::Return(Val::List(items)))
+            }
             _ => panic!("only supports ints"),
         },
     }
