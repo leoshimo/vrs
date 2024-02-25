@@ -147,15 +147,8 @@ fn set_query(query: &str, state: tauri::State<State>) -> Vec<serde_json::Value> 
 fn dispatch(form: &str, state: tauri::State<State>, app: tauri::AppHandle) {
     let client = &state.client;
 
-    // TODO: Make kwarg extraction more ergonomic (?)
-    let form_args = match Val::from(Form::from_expr(form).unwrap()) {
-        Val::List(l) => l,
-        _ => panic!("Unexpected format - not a list"),
-    };
-    let on_click = kwargs::get(&form_args, &KeywordId::from("on_click")).unwrap();
-    let on_click_form = Form::try_from(on_click).unwrap();
-
-    if let Err(e) = client.request(on_click_form) {
+    let dispatch = Form::from_expr(&format!("(on_click (quote {}))", form)).unwrap();
+    if let Err(e) = client.request(dispatch) {
         error!("Error dispatching request - {e}");
     }
 

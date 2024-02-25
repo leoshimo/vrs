@@ -2,6 +2,9 @@
 # vrsjmp.ll - vrsjmp commandbar
 #
 
+# TODO: Move to init.ll w/ supervision tree
+(bind-srv :system_appearance)
+
 (defn get_items (query)
   "Retrieve items to display"
   (+ (bookmarks)
@@ -19,6 +22,11 @@
                   (list 'open_url (format "http://perplexity.ai/?q={}" query)))
        (make_item "Search Google"
                   (list 'open_url (format "http://google.com/search?q={}" query))))))
+
+(defn on_click (item)
+  "Handle an on_click payload from item"
+  (eval (get item :on_click))
+  :ok)
 
 (defn bookmarks ()
   "Returns list of static bookmarks"
@@ -43,11 +51,8 @@
    (make_item "Slack" '(open_app "Slack"))
    (make_item "Soulver" '(open_app "Soulver 3"))
    (make_item "Restart vrsd" '(exec "pkill" "-ax" "vrsd"))
-
-   # TODO: Need better DX around calling service functions
-   # Service exports needs re-import in client process - Global Namespace?
-   (make_item "Toggle Darkmode" '(call (find-srv :system_appearance) '(:toggle_darkmode)))
+   (make_item "Toggle Darkmode" '(toggle_darkmode))
    ))
 
 
-(spawn-srv :vrsjmp :interface '(get_items))
+(spawn-srv :vrsjmp :interface '(get_items on_click))
