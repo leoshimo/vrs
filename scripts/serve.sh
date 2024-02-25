@@ -24,7 +24,7 @@ fi
 echo "Mode: $MODE"
 
 while true; do
-     PID=$(RUST_LOG=debug cargo run --bin vrsd "$CARGO_ARGS" > "vrsd-$MODE.log") &
+     PID=$(cargo run --bin vrsd "$CARGO_ARGS" > "vrsd-$MODE.log") &
 
      while true; do
          cargo run --bin vrsctl $CARGO_ARGS -- --command ':healthcheck' >/dev/null 2>&1
