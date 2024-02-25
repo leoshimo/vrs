@@ -25,6 +25,7 @@ where
             Signal::Await(call) => {
                 // TODO: Should errors in fut properly update `Fiber::state`?
                 // TODO: Jiggle code between fiber::run and run::run
+                // TODO(bug): NativeAsyncFn do not respect error catching scope, e.g. `(try (exec "jibberish"))` terminates proc
                 let poll_res = call.apply(f).await?;
                 res = f.resume(poll_res)?;
             }
