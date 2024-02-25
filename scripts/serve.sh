@@ -34,6 +34,8 @@ while true; do
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/system_appearance.ll >/dev/null
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/os_notify.ll >/dev/null
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/os_browser.ll >/dev/null
+
+             cargo run --bin vrsctl $CARGO_ARGS ./scripts/bookmarks.ll >/dev/null
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/vrsjmp.ll >/dev/null
 
              # Restart vrsjmp if live-on

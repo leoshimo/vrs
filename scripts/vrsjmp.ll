@@ -4,11 +4,13 @@
 
 # TODO: Move to init.ll w/ supervision tree
 (bind-srv :system_appearance)
+(bind-srv :bookmarks)
 
 (defn get_items (query)
   "Retrieve items to display"
-  (+ (bookmarks)
-     (dynamic_items query)))
+  (+ (+ (favorite_items)
+        (dynamic_items query))
+     (get_bookmarks)))
 
 (defn make_item (title command)
   "Create an item with TITLE and COMMAND"
@@ -28,8 +30,8 @@
   (eval (get item :on_click))
   :ok)
 
-(defn bookmarks ()
-  "Returns list of static bookmarks"
+(defn favorite_items ()
+  "Returns list of static vrsjmp items"
   (list
    (make_item "Browser" '(open_app "Safari"))
    (make_item "Things" '(open_app "Things3"))
@@ -52,6 +54,9 @@
    (make_item "Soulver" '(open_app "Soulver 3"))
    (make_item "Restart vrsd" '(exec "pkill" "-ax" "vrsd"))
    (make_item "Toggle Darkmode" '(toggle_darkmode))
+
+   (make_item "Bookmarks - Add" '(bookmark_active_tab))
+   (make_item "Bookmarks - Clear" '(clear_bookmarks))
    ))
 
 
