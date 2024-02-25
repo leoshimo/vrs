@@ -91,9 +91,9 @@ window.addEventListener("DOMContentLoaded", () => {
     outputListEl = document.querySelector("#output-list");
 });
 
-
-
 window.onfocus = function() {
+    inputEl.value = '';
+    setQuery('');
     inputEl.focus();
     focusItem(outputListEl.firstChild);
 };
