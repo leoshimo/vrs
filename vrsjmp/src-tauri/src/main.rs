@@ -103,7 +103,13 @@ fn set_query(query: &str, state: tauri::State<State>) -> Vec<serde_json::Value> 
 
     let response = state
         .client
-        .request(Form::from_expr("(begin (bind-srv :launcher) (get_items))").unwrap())
+        .request(
+            Form::from_expr(&format!(
+                "(begin (bind-srv :vrsjmp) (get_items \"{}\"))",
+                query
+            ))
+            .unwrap(),
+        )
         .unwrap();
 
     let items = match response.contents.unwrap() {
