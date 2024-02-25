@@ -29,7 +29,6 @@ pub(crate) fn format_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
                 .map(|v| v.as_string_coerce())
                 .collect::<Result<Vec<_>>>()?;
 
-            println!("{:?}", str_args);
             let result = format.format(str_args.as_slice());
             Ok(NativeFnOp::Return(Val::String(result)))
         },
