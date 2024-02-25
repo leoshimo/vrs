@@ -171,6 +171,20 @@ where
         }
     }
 
+    pub fn as_string_coerce(&self) -> Result<String> {
+        match self {
+            Val::Nil => Ok("".to_string()),
+            Val::Bool(true) => Ok("true".to_string()),
+            Val::Bool(false) => Ok("false".to_string()),
+            Val::Int(i) => Ok(format!("{}", i)),
+            Val::String(s) => Ok(s.clone()),
+            _ => Err(Error::UnexpectedType(format!(
+                "{} is not convertible to str",
+                self
+            ))),
+        }
+    }
+
     pub fn to_list(self) -> Result<Vec<Val<T, L>>> {
         if let Val::List(inner) = self {
             Ok(inner)
