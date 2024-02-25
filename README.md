@@ -114,6 +114,9 @@ true                              # booleans are `true` or `false`
 (def result '(:ok "Success"))
 (def (:ok status) result)      # matches :ok, binds status to string "Success"
 
+# As a Lisp, Lyric has `eval` and `read`:
+(eval (read "(+ 40 2)")) # => 42
+
 # and there are more builtins and symbols in environment, introspectable via `ls-env`
 (ls-env)
 ```
