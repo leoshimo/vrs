@@ -4,8 +4,8 @@
 
 (defn get_items (query)
   "Retrieve items to display"
-  (+ (dynamic_items query)
-     (bookmarks)))
+  (+ (bookmarks)
+     (dynamic_items query)))
 
 (defn make_item (title command)
   "Create an item with TITLE and COMMAND"
@@ -15,9 +15,9 @@
   "Return list of dynamically generated items or empty list"
   (if (not query) '()
       (list
-       (make_item (format "Search Perplexity - {}" query)
+       (make_item "Search Perplexity"
                   (list 'open_url (format "http://perplexity.ai/?q={}" query)))
-       (make_item (format "Search Google - {}" query)
+       (make_item "Search Google"
                   (list 'open_url (format "http://google.com/search?q={}" query))))))
 
 (defn bookmarks ()
