@@ -35,6 +35,7 @@ impl<T: Extern, L: Locals> Env<T, L> {
             .bind_native(SymbolId::from("err?"), builtin::err_fn())
             .bind_native(SymbolId::from("str"), builtin::str_fn())
             .bind_native(SymbolId::from("format"), builtin::format_fn())
+            .bind_native(SymbolId::from("read"), builtin::read_fn())
             .bind_native(SymbolId::from("ls-env"), builtin::ls_env_fn());
 
         e

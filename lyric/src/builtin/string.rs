@@ -35,9 +35,31 @@ pub(crate) fn format_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     }
 }
 
+pub(crate) fn read_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
+    NativeFn {
+        func: |_, args| {
+            let expr = match args {
+                [Val::String(s)] => s,
+                _ => {
+                    return Err(Error::UnexpectedArguments(
+                        "read accepts a single string argument".to_string(),
+                    ))
+                }
+            };
+
+            let val: Val<T, L> = crate::parse(expr)
+                .map_err(|e| Error::Runtime(format!("{e}")))?
+                .into();
+            Ok(NativeFnOp::Return(val))
+        },
+    }
+}
+
 // TODO: Test cases for str:
 // (str "a " "b " "c")
 // (str "a" " " "b" " " "c") # => "a b c"
 // (str 5) # => 5
 
 // TODO: Test cases for `format`
+
+// TODO: Test cases for `read`

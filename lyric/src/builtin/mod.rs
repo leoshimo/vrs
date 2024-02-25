@@ -20,6 +20,7 @@ pub(crate) use list::push_fn;
 pub(crate) use math::plus_fn;
 pub(crate) use refs::ref_fn;
 pub(crate) use string::format_fn;
+pub(crate) use string::read_fn;
 pub(crate) use string::str_fn;
 pub(crate) use types::err_fn;
 pub(crate) use types::ok_fn;
