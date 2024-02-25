@@ -168,6 +168,9 @@ fn dispatch(form: &str, state: tauri::State<State>, app: tauri::AppHandle) {
 
 #[tauri::command]
 fn on_blur(app: tauri::AppHandle) {
+    if cfg!(debug_assertions) {
+        return; // skip hiding on debug
+    }
     let window = app.get_window("main").unwrap();
     let _ = window.hide();
     #[cfg(target_os = "macos")]

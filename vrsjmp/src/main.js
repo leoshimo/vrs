@@ -18,8 +18,7 @@ async function setQuery(query) {
         const itemEl = itemElement(item);
         outputListEl.appendChild(itemEl);
         if (isFirst) {
-            focusedEl = itemEl;
-            focusedEl.classList.add('item--focus');
+            focusItem(itemEl);
             isFirst = false;
         }
     }
@@ -45,6 +44,32 @@ function itemElement(query_item) {
     return itemEl;
 }
 
+function focusItem(newEl) {
+    console.log(newEl);
+    if (focusedEl) {
+        focusedEl.classList.remove('item--focus');
+        focusedEl = null;
+    }
+    focusedEl = newEl;
+    if (focusedEl) {
+        focusedEl.classList.add('item--focus');
+        focusedEl.scrollIntoView({
+            behavior: "auto",
+            block: "nearest",
+            inline: "nearest",
+        });
+    }
+}
+
+window.onkeyup = function(e){
+    if (e.key === 'ArrowDown' || (e.key === 'n' && e.ctrlKey)) {
+        focusItem(focusedEl.nextSibling || outputListEl.firstChild);
+    }
+    if (e.key === 'ArrowUp' || (e.key === 'p' && e.ctrlKey)) {
+        focusItem(focusedEl.previousSibling || outputListEl.lastChild);
+    }
+}
+
 window.addEventListener("DOMContentLoaded", () => {
     rootEl = document.querySelector(".root");
 
@@ -66,8 +91,11 @@ window.addEventListener("DOMContentLoaded", () => {
     outputListEl = document.querySelector("#output-list");
 });
 
+
+
 window.onfocus = function() {
     inputEl.focus();
+    focusItem(outputListEl.firstChild);
 };
 
 window.onblur = function() {
