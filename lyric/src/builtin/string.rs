@@ -13,6 +13,18 @@ pub(crate) fn str_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     }
 }
 
+pub(crate) fn display_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
+    NativeFn {
+        func: |_, args| {
+            let mut result = String::new();
+            for v in args {
+                result += &v.to_string();
+            }
+            Ok(NativeFnOp::Return(Val::String(result)))
+        },
+    }
+}
+
 pub(crate) fn format_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
         func: |_, args| {
