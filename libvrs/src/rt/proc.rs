@@ -128,6 +128,7 @@ impl Process {
             };
 
             let _ = exit_tx.send(exit.clone());
+            info!("proc exit - {} - {}", self.id, exit);
             exit
         });
 
