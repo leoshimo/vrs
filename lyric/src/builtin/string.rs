@@ -1,4 +1,5 @@
-use crate::{Extern, Locals, NativeFn, NativeFnOp, Val};
+use crate::{Error, Extern, Locals, NativeFn, NativeFnOp, Result, Val};
+use dyn_fmt::AsStrFormatExt;
 
 pub(crate) fn str_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
@@ -12,7 +13,32 @@ pub(crate) fn str_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     }
 }
 
+pub(crate) fn format_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
+    NativeFn {
+        func: |_, args| {
+            let format = args
+                .first()
+                .ok_or(Error::UnexpectedArguments(
+                    "First argument should be format string".to_string(),
+                ))?
+                .as_string()?;
+
+            let str_args = args
+                .iter()
+                .skip(1)
+                .map(|v| v.as_string_coerce())
+                .collect::<Result<Vec<_>>>()?;
+
+            println!("{:?}", str_args);
+            let result = format.format(str_args.as_slice());
+            Ok(NativeFnOp::Return(Val::String(result)))
+        },
+    }
+}
+
 // TODO: Test cases for str:
 // (str "a " "b " "c")
 // (str "a" " " "b" " " "c") # => "a b c"
 // (str 5) # => 5
+
+// TODO: Test cases for `format`
