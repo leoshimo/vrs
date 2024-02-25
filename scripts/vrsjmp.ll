@@ -10,8 +10,8 @@
   "Retrieve items to display"
   # TODO: Support N-ary +
   (+ (+ (favorite_items)
-        (dynamic_items query))
-     (get_bookmarks)))
+        (get_bookmarks))
+     (dynamic_items query)))
 
 (defn make_item (title command)
   "Create an item with TITLE and COMMAND"
