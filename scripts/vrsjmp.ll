@@ -18,7 +18,7 @@
        (make_item (format "Search Perplexity - {}" query)
                   (list 'open_url (format "http://perplexity.ai/?q={}" query)))
        (make_item (format "Search Google - {}" query)
-                  (list 'open_url (format "http://google.com/?q={}" query))))))
+                  (list 'open_url (format "http://google.com/search?q={}" query))))))
 
 (defn bookmarks ()
   "Returns list of static bookmarks"
@@ -30,7 +30,6 @@
    (make_item "Mail" '(open_app "Spark"))
    (make_item "Cal" '(open_app "Notion Calendar"))
    (make_item "Zulip" '(open_app "Zulip"))
-   (make_item "Checkins" '(open_url "https://recurse.zulipchat.com/#narrow/stream/27333-alumni-checkins/topic/Leo.20Shimonaka"))
    (make_item "X" '(open_url "https://www.x.com"))
    (make_item "GitHub - vrs" '(open_url "https://www.github.com/leoshimo/vrs"))
    (make_item "Downloads" '(open_file "~/Downloads"))
