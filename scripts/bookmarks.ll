@@ -13,7 +13,10 @@
   "Bookmark active tab, if any"
   (match (active_tab)
     (nil nil)
-    ((:title title :url url) (set bookmarks (push bookmarks (list :title title :on_click (list 'open_url url)))))))
+    ((:title title :url url)
+     (set bookmarks (push bookmarks
+                          (list :title (format "Bookmarks - {}" title)
+                                :on_click (list 'open_url url)))))))
 
 (defn clear_bookmarks ()
   "Clear all bookmarks"

@@ -8,6 +8,7 @@
 
 (defn get_items (query)
   "Retrieve items to display"
+  # TODO: Support N-ary +
   (+ (+ (favorite_items)
         (dynamic_items query))
      (get_bookmarks)))
