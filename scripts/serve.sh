@@ -31,6 +31,7 @@ while true; do
          if [ $? -eq 0 ]; then
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/chat.ll >/dev/null
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/system_appearance.ll >/dev/null
+             cargo run --bin vrsctl $CARGO_ARGS ./scripts/os_notify.ll >/dev/null
 
              # Restart vrsjmp if live-on
              if [ "$MODE" = "live-on" ]; then

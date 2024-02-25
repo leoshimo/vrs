@@ -308,7 +308,7 @@ debugging - see `vrsctl --help` for an overview of available commands.
 
 There is an major-mode available for Emacs - `lyric-mode`.
 
-It provides syntax highlighting and bindings useful for bottom-up, interactive
+It provides syntax highlighting and bindings useful for bottom-up, interactive,
 editor-centric software development.
 
 The package is currently not available via package repositories - but is
