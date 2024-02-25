@@ -224,7 +224,9 @@ fn spawn_srv_impl(_f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
     // Expand
     //     (spawn_srv :SRV_NAME :interface '(sym_a sym_b))
     // Into
-    //     (spawn (lambda () (srv :SRV_NAME :interface '(sym_a sym_b))))
+    //     (spawn (lambda () (begin
+    //            (try (kill (find-srv :SRV_NAME)))
+    //            (srv :SRV_NAME :interface '(sym_a sym_b)))))
 
     let mut srv = vec![Val::symbol("srv")];
     srv.push(args[0].clone());
@@ -234,12 +236,14 @@ fn spawn_srv_impl(_f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
         srv.push(Val::List(vec![Val::symbol("quote"), interfaces.clone()]));
     }
 
+    let kill_srv = Val::from_expr(&format!("(try (kill (find-srv {})))", args[0].clone())).unwrap();
+
     let ast = Val::List(vec![
         Val::symbol("spawn"),
         Val::List(vec![
             Val::symbol("lambda"),
             Val::List(vec![]),
-            Val::List(srv),
+            Val::List(vec![Val::symbol("begin"), kill_srv, Val::List(srv)]),
         ]),
     ]);
 
