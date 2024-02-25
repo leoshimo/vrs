@@ -83,11 +83,11 @@ fn fiber_yielding() {
     let mut f = Fiber::from_expr(prog, env(), locals()).unwrap();
 
     assert_eq!(f.start().unwrap(), Signal::Yield(Val::Int(0)));
-    assert_eq!(f.resume(Val::Nil).unwrap(), Signal::Yield(Val::Int(1)));
-    assert_eq!(f.resume(Val::Nil).unwrap(), Signal::Yield(Val::Int(2)));
-    assert_eq!(f.resume(Val::Nil).unwrap(), Signal::Yield(Val::Int(3)));
-    assert_eq!(f.resume(Val::Nil).unwrap(), Signal::Yield(Val::Int(4)));
-    assert_eq!(f.resume(Val::Nil).unwrap(), Signal::Yield(Val::Int(5)));
+    assert_eq!(f.resume(Ok(Val::Nil)).unwrap(), Signal::Yield(Val::Int(1)));
+    assert_eq!(f.resume(Ok(Val::Nil)).unwrap(), Signal::Yield(Val::Int(2)));
+    assert_eq!(f.resume(Ok(Val::Nil)).unwrap(), Signal::Yield(Val::Int(3)));
+    assert_eq!(f.resume(Ok(Val::Nil)).unwrap(), Signal::Yield(Val::Int(4)));
+    assert_eq!(f.resume(Ok(Val::Nil)).unwrap(), Signal::Yield(Val::Int(5)));
 
     // TODO: Use fiber_yielding as test case for tail-call optimization (shouldn't grow number of CallFrames)
 }
@@ -107,11 +107,26 @@ fn fiber_yielding_by_arg() {
     let mut f = Fiber::from_expr(prog, env(), locals()).unwrap();
 
     assert_eq!(f.start().unwrap(), Signal::Yield(Val::Int(0)));
-    assert_eq!(f.resume(Val::Int(1)).unwrap(), Signal::Yield(Val::Int(1)));
-    assert_eq!(f.resume(Val::Int(2)).unwrap(), Signal::Yield(Val::Int(3)));
-    assert_eq!(f.resume(Val::Int(3)).unwrap(), Signal::Yield(Val::Int(6)));
-    assert_eq!(f.resume(Val::Int(4)).unwrap(), Signal::Yield(Val::Int(10)));
-    assert_eq!(f.resume(Val::Int(5)).unwrap(), Signal::Yield(Val::Int(15)));
+    assert_eq!(
+        f.resume(Ok(Val::Int(1))).unwrap(),
+        Signal::Yield(Val::Int(1))
+    );
+    assert_eq!(
+        f.resume(Ok(Val::Int(2))).unwrap(),
+        Signal::Yield(Val::Int(3))
+    );
+    assert_eq!(
+        f.resume(Ok(Val::Int(3))).unwrap(),
+        Signal::Yield(Val::Int(6))
+    );
+    assert_eq!(
+        f.resume(Ok(Val::Int(4))).unwrap(),
+        Signal::Yield(Val::Int(10))
+    );
+    assert_eq!(
+        f.resume(Ok(Val::Int(5))).unwrap(),
+        Signal::Yield(Val::Int(15))
+    );
 }
 
 #[test]
@@ -134,7 +149,7 @@ fn fiber_yielding_native_binding() {
         ])))
     );
     assert_eq!(
-        f.resume(Val::string("Hello world")).unwrap(),
+        f.resume(Ok(Val::string("Hello world"))).unwrap(),
         Signal::Done(Val::string("Hello world")),
     );
 }
@@ -150,9 +165,18 @@ fn fiber_looping_yield() {
     let mut f = Fiber::from_expr(prog, env(), locals()).unwrap();
 
     assert_eq!(f.start().unwrap(), Signal::Yield(Val::Int(0)));
-    assert_eq!(f.resume(Val::Int(1)).unwrap(), Signal::Yield(Val::Int(1)));
-    assert_eq!(f.resume(Val::Int(2)).unwrap(), Signal::Yield(Val::Int(3)));
-    assert_eq!(f.resume(Val::Int(3)).unwrap(), Signal::Yield(Val::Int(6)));
+    assert_eq!(
+        f.resume(Ok(Val::Int(1))).unwrap(),
+        Signal::Yield(Val::Int(1))
+    );
+    assert_eq!(
+        f.resume(Ok(Val::Int(2))).unwrap(),
+        Signal::Yield(Val::Int(3))
+    );
+    assert_eq!(
+        f.resume(Ok(Val::Int(3))).unwrap(),
+        Signal::Yield(Val::Int(6))
+    );
 }
 
 #[test]
@@ -183,38 +207,40 @@ fn fiber_conn_recv_try_eval_sim() {
     );
 
     assert_eq!(
-        f.resume(parse("(def x (+ 1 2))").unwrap().into()).unwrap(),
+        f.resume(Ok(parse("(def x (+ 1 2))").unwrap().into()))
+            .unwrap(),
         Signal::Yield(Val::Extern(Ext::SendConn(vec![Val::Int(3)]))),
         "Should receive send_conn signal w/ eval-ed expr"
     );
     assert_eq!(
-        f.resume(Val::Nil).unwrap(),
+        f.resume(Ok(Val::Nil)).unwrap(),
         Signal::Yield(Val::Extern(Ext::RecvConn))
     );
 
     assert_eq!(
-        f.resume(parse("x").unwrap().into()).unwrap(),
+        f.resume(Ok(parse("x").unwrap().into())).unwrap(),
         Signal::Yield(Val::Extern(Ext::SendConn(vec![Val::Int(3)]))),
     );
     assert_eq!(
-        f.resume(Val::Nil).unwrap(),
+        f.resume(Ok(Val::Nil)).unwrap(),
         Signal::Yield(Val::Extern(Ext::RecvConn))
     );
 
     assert_eq!(
-        f.resume(Val::symbol("jibberish")).unwrap(),
+        f.resume(Ok(Val::symbol("jibberish"))).unwrap(),
         Signal::Yield(Val::Extern(Ext::SendConn(vec![Val::Error(
             Error::UndefinedSymbol(SymbolId::from("jibberish"))
         )]))),
         "Error should return error as a value via pcall"
     );
     assert_eq!(
-        f.resume(Val::Nil).unwrap(),
+        f.resume(Ok(Val::Nil)).unwrap(),
         Signal::Yield(Val::Extern(Ext::RecvConn))
     );
 
     assert_eq!(
-        f.resume(parse("(set x (+ x x))").unwrap().into()).unwrap(),
+        f.resume(Ok(parse("(set x (+ x x))").unwrap().into()))
+            .unwrap(),
         Signal::Yield(Val::Extern(Ext::SendConn(vec![Val::Int(6)]))),
         "Environment should be preserved after error"
     );

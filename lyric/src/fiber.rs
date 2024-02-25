@@ -117,12 +117,18 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
     }
 
     /// Resume a paused fiber execution
-    pub fn resume(&mut self, val: Val<T, L>) -> Result<Signal<T, L>> {
+    pub fn resume(&mut self, val_result: Result<Val<T, L>>) -> Result<Signal<T, L>> {
         if self.status != Status::Paused {
             return Err(Error::UnexpectedResume(
                 "resuming a fiber that is not paused".to_string(),
             ));
         }
+
+        let val = match val_result {
+            Ok(val) => val,
+            Err(e) => self.maybe_catch_err(e)?,
+        };
+
         self.stack.push(val);
         self.run()
     }
@@ -165,18 +171,8 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
             // tracing::debug!("{self:?}");
 
             if let Err(e) = self.step() {
-                // Catch unwind or exit w/ error
-                let unwind_len = match self.cf().unwind_cf_len {
-                    None => {
-                        self.status = Status::Done;
-                        return Err(e);
-                    }
-                    Some(l) => l,
-                };
-                let stack_len = self.cframes[unwind_len].stack_len;
-                self.cframes.truncate(unwind_len);
-                self.stack.truncate(stack_len);
-                self.stack.push(Val::Error(e));
+                let err_val = self.maybe_catch_err(e)?;
+                self.stack.push(err_val);
             }
         }
 
@@ -212,6 +208,23 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
             }
             s => panic!("Fiber::run exiting in unexpected state - {s:?}"),
         }
+    }
+
+    /// Catch the error as a `Val::Error` or propagate as `Result::Err` depending on state of callframe
+    /// after encounting an error during `Fiber::step` result or `Fiber::resume` resume value
+    fn maybe_catch_err(&mut self, e: Error) -> Result<Val<T, L>> {
+        // Catch unwind or exit w/ error
+        let unwind_len = match self.cf().unwind_cf_len {
+            None => {
+                self.status = Status::Done;
+                return Err(e); // no catching - propagate
+            }
+            Some(l) => l,
+        };
+        let stack_len = self.cframes[unwind_len].stack_len;
+        self.cframes.truncate(unwind_len);
+        self.stack.truncate(stack_len);
+        Ok(Val::Error(e)) // return as Val::Error
     }
 
     /// Run a single fetch-decode-execute cycle
@@ -489,7 +502,7 @@ mod tests {
             "Should not be able to start after result"
         );
         assert_matches!(
-            f.resume(Val::Nil),
+            f.resume(Ok(Val::Nil)),
             Err(Error::UnexpectedResume(_)),
             "Should not be able to resume after result"
         );
@@ -518,7 +531,7 @@ mod tests {
             "Should not be able to start after error"
         );
         assert_matches!(
-            f.resume(Val::Nil),
+            f.resume(Ok(Val::Nil)),
             Err(Error::UnexpectedResume(_)),
             "Should not be able to resume after error"
         );
@@ -822,7 +835,7 @@ mod tests {
         assert_eq!(f.start().unwrap(), Signal::Yield(Val::string("before")));
         assert!(!f.is_done());
         assert_eq!(
-            f.resume(Val::string("after")).unwrap(),
+            f.resume(Ok(Val::string("after"))).unwrap(),
             Signal::Done(Val::string("after"))
         );
         assert!(f.is_done());
@@ -849,10 +862,10 @@ mod tests {
         );
 
         assert_eq!(f.start().unwrap(), Signal::Yield(Val::Int(1)));
-        assert_eq!(f.resume(Val::Nil).unwrap(), Signal::Yield(Val::Int(2)));
-        assert_eq!(f.resume(Val::Nil).unwrap(), Signal::Yield(Val::Int(3)));
-        assert_eq!(f.resume(Val::Nil).unwrap(), Signal::Yield(Val::Int(4)));
-        assert_eq!(f.resume(Val::Nil).unwrap(), Signal::Yield(Val::Int(5)));
+        assert_eq!(f.resume(Ok(Val::Nil)).unwrap(), Signal::Yield(Val::Int(2)));
+        assert_eq!(f.resume(Ok(Val::Nil)).unwrap(), Signal::Yield(Val::Int(3)));
+        assert_eq!(f.resume(Ok(Val::Nil)).unwrap(), Signal::Yield(Val::Int(4)));
+        assert_eq!(f.resume(Ok(Val::Nil)).unwrap(), Signal::Yield(Val::Int(5)));
 
         assert!(!f.is_done(), "infinitely yielding fiber is not done");
     }
@@ -930,22 +943,23 @@ mod tests {
         assert_eq!(f.start().unwrap(), Signal::Yield(Val::string("hi")));
 
         assert_eq!(
-            f.resume(Val::Nil).unwrap(),
+            f.resume(Ok(Val::Nil)).unwrap(),
             Signal::Yield(Val::string("hi"))
         );
         assert_eq!(
-            f.resume(Val::Nil).unwrap(),
+            f.resume(Ok(Val::Nil)).unwrap(),
             Signal::Yield(Val::string("hi"))
         );
         assert_eq!(
-            f.resume(Val::Nil).unwrap(),
+            f.resume(Ok(Val::Nil)).unwrap(),
             Signal::Yield(Val::string("hi"))
         );
         assert_eq!(
-            f.resume(Val::Nil).unwrap(),
+            f.resume(Ok(Val::Nil)).unwrap(),
             Signal::Yield(Val::string("hi"))
         );
     }
 
-    // // TODO: Add Test case for NativeFnOp::Call
+    // TODO: Add Test case for NativeFnOp::Call
+    // TODO: Test that Fiber::resume w/ Err resume value (i.e. from nativeasyncfn err) is catch-able - (try (exec "jibberish"))
 }
