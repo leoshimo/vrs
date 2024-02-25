@@ -214,6 +214,10 @@ impl PartialEq for Program {
 pub fn proc_env() -> Env {
     let mut e = Env::standard();
     e.bind_native(SymbolId::from("fuzzy_match"), bindings::fuzzy_match_fn());
+    e.bind_native(
+        SymbolId::from("match_excerpt"),
+        bindings::match_excerpt_fn(),
+    );
 
     {
         e.bind_native_async(SymbolId::from("recv"), bindings::recv_fn())
