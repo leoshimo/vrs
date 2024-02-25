@@ -13,13 +13,18 @@ const count = document.querySelector("#count");
 const actions = document.querySelector("#actions");
 const menu = document.querySelector("#action-menu");
 const actionList = document.querySelector("#action-list");
+const actionFilter = document.querySelector("#action-filter");
+const actionStatus = document.querySelector("#action-status");
 let loadingTimer = null, toastTimer = null;
 let previousItems = null, previousSelected = null, previousError = "";
 let menuItem = null;
+let menuRow = -1, menuSelected = 0;
 
 function closeMenu(focus = false) {
     menu.hidden = true;
     menuItem = null;
+    menuRow = -1;
+    actionFilter.value = "";
     actions.setAttribute("aria-expanded", "false");
     if (focus) input.focus();
 }
@@ -72,7 +77,19 @@ const navigation = new Navigation(createTransport(invoke), state => {
             const copy = document.createElement("span");
             copy.className = "item-copy";
             copy.append(textSpan("item-title", item.title));
-            if (item.subtitle) copy.append(textSpan("item-subtitle", item.subtitle));
+            if (item.subtitle) {
+                const subtitle = textSpan("item-subtitle", "");
+                if (item.subtitle_spans?.length) {
+                    for (const span of item.subtitle_spans) {
+                        if (span.matched) {
+                            const mark = document.createElement("mark");
+                            mark.textContent = span.text;
+                            subtitle.append(mark);
+                        } else subtitle.append(document.createTextNode(span.text));
+                    }
+                } else subtitle.textContent = item.subtitle;
+                copy.append(subtitle);
+            }
             element.append(copy);
             if (item.aside) element.append(textSpan("item-aside", item.aside));
             element.addEventListener("click", () => { navigation.activate(index); input.focus(); });
@@ -93,36 +110,62 @@ const navigation = new Navigation(createTransport(invoke), state => {
     }
 });
 
+function selectMenu(index) {
+    const buttons = Array.from(actionList.children);
+    menuSelected = buttons.length ? (index + buttons.length) % buttons.length : 0;
+    buttons.forEach((button, i) => {
+        button.classList.toggle("action--focus", i === menuSelected);
+        button.setAttribute("aria-selected", String(i === menuSelected));
+    });
+    if (buttons.length) {
+        actionFilter.setAttribute("aria-activedescendant", buttons[menuSelected].id);
+        buttons[menuSelected].scrollIntoView({block: "nearest"});
+    } else actionFilter.removeAttribute("aria-activedescendant");
+}
+
+function renderMenu() {
+    const words = actionFilter.value.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+    actionList.replaceChildren();
+    menuItem.actions.forEach((command, index) => {
+        if (!words.every(word => command.title.toLocaleLowerCase().includes(word))) return;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.role = "option";
+        button.tabIndex = -1;
+        button.id = "action-" + index;
+        button.textContent = command.title;
+        const visibleIndex = actionList.children.length;
+        button.addEventListener("pointermove", () => selectMenu(visibleIndex));
+        button.onclick = () => {
+            // Menu actions apply to the exact row that opened the menu.
+            if (navigation.current?.items[menuRow] !== menuItem) { closeMenu(true); return; }
+            const row = menuRow;
+            closeMenu(true);
+            navigation.activate(row, index);
+        };
+        actionList.append(button);
+    });
+    actionStatus.hidden = actionList.children.length > 0;
+    selectMenu(0);
+}
+
 function toggleMenu() {
     if (!menu.hidden) { closeMenu(true); return; }
     const state = navigation.snapshot();
     const item = state.items[state.selected];
     if (state.loading || !item?.actions?.length) return;
     menuItem = item;
+    menuRow = state.selected;
+    actionFilter.value = "";
     document.querySelector("#action-title").textContent = item.title;
     document.querySelector("#action-subtitle").textContent = item.subtitle ?? item.aside ?? "";
-    actionList.replaceChildren();
-    item.actions.forEach((command, index) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.role = "menuitem";
-        button.textContent = command.title;
-        // Pointer and keyboard share one active row; don't paint a second
-        // hover highlight while Enter would still invoke the focused action.
-        button.addEventListener("pointermove", () => button.focus({ preventScroll: true }));
-        button.onclick = () => {
-            // Menu actions apply to the exact row that opened the menu.
-            if (navigation.current?.items[state.selected] !== item) { closeMenu(true); return; }
-            closeMenu(true);
-            navigation.activate(state.selected, index);
-        };
-        actionList.append(button);
-    });
     menu.hidden = false;
     actions.setAttribute("aria-expanded", "true");
-    actionList.firstElementChild?.focus();
+    renderMenu();
+    actionFilter.focus();
 }
 
+actionFilter.addEventListener("input", renderMenu);
 input.addEventListener("input", () => { closeMenu(); navigation.search(input.value); });
 window.addEventListener("keydown", event => {
     if (event.isComposing) return;
@@ -130,14 +173,18 @@ window.addEventListener("keydown", event => {
     const step = event.key === "ArrowDown" || (event.ctrlKey && event.key === "n") ? 1
         : event.key === "ArrowUp" || (event.ctrlKey && event.key === "p") ? -1 : 0;
     if (!menu.hidden) {
-        if (event.key === "Escape") { event.preventDefault(); closeMenu(true); }
+        if (event.key === "Escape") {
+            event.preventDefault();
+            if (actionFilter.value) { actionFilter.value = ""; renderMenu(); }
+            else closeMenu(true);
+        }
         else if (step) {
             event.preventDefault();
-            const buttons = Array.from(actionList.children);
-            const current = buttons.indexOf(document.activeElement);
-            buttons[(current + step + buttons.length) % buttons.length]?.focus();
+            selectMenu(menuSelected + step);
+        } else if (event.key === "Enter") {
+            event.preventDefault();
+            actionList.children[menuSelected]?.click();
         }
-        // Enter/Space use the focused action button's native behavior.
         return;
     }
     if (event.key === "Escape") { event.preventDefault(); navigation.back(); }

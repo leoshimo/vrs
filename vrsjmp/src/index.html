@@ -26,13 +26,17 @@
         </div>
         <footer class="page-footer">
             <span id="count" aria-live="polite"></span>
-            <button id="actions" type="button" hidden aria-haspopup="menu" aria-expanded="false">
+            <button id="actions" type="button" hidden aria-haspopup="dialog" aria-expanded="false">
                 Actions <kbd>⌘ K</kbd>
             </button>
         </footer>
-        <section id="action-menu" role="menu" aria-labelledby="action-title" hidden>
+        <section id="action-menu" role="dialog" aria-labelledby="action-title" hidden>
             <header class="action-header"><div id="action-title"></div><div id="action-subtitle"></div></header>
-            <div id="action-list"></div>
+            <input id="action-filter" placeholder="Filter actions…" aria-label="Filter actions"
+                   autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                   role="combobox" aria-autocomplete="list" aria-controls="action-list" aria-expanded="true" />
+            <div id="action-list" role="listbox" aria-label="Actions"></div>
+            <div id="action-status" role="status" hidden>No matching actions</div>
         </section>
         <div id="toast" role="alert" hidden></div>
     </main>
