@@ -28,8 +28,7 @@
 
 (defn on_click (item)
   "Handle an on_click payload from item"
-  (eval (get item :on_click))
-  :ok)
+  (try (eval (get item :on_click))))
 
 (defn favorite_items ()
   "Returns list of static vrsjmp items"
