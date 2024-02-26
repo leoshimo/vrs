@@ -58,6 +58,7 @@ impl<T: Extern, L: Locals> Env<T, L> {
             .bind_native(SymbolId::from("split"), builtin::split_fn())
             .bind_native(SymbolId::from("format"), builtin::format_fn())
             .bind_native(SymbolId::from("display"), builtin::display_fn())
+            .bind_native(SymbolId::from("pretty"), builtin::pretty_fn())
             .bind_native(SymbolId::from("dbg"), builtin::dbg_fn())
             .bind_native(SymbolId::from("read"), builtin::read_fn())
             .bind_native(SymbolId::from("help"), builtin::help_fn())

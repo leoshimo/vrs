@@ -1,26 +1,21 @@
 mod editor;
+mod output;
 mod repl;
 mod watch;
 
 use anyhow::{Context, Result};
 use clap::builder::EnumValueParser;
 use clap::{arg, command, ArgAction, ArgGroup};
+use output::{Format, Output};
 
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, IsTerminal, Read};
+use std::io::{self, BufRead, BufReader, IsTerminal, Read, Write};
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::str::FromStr;
 use tokio::net::UnixStream;
 use tracing::debug;
 use vrs::{Client, Connection, Form, KeywordId};
-
-#[derive(clap::ValueEnum, Debug, Clone, PartialEq)]
-enum Format {
-    #[clap(help = "Default output format")]
-    Default,
-    #[clap(help = "Format for editors")]
-    Editor,
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -61,19 +56,19 @@ async fn main() -> Result<()> {
             }
         }
 
-        let file = open_file(
-            args.get_one::<String>("file")
-                .expect("file has a default value"),
-        )?;
-
-        let format = args
+        let format = *args
             .get_one::<Format>("format")
             .expect("format has a default value");
+        let output = Output::new(
+            format,
+            args.get_one::<NonZeroUsize>("width")
+                .map(|width| width.get()),
+            args.get_flag("raw"),
+        );
+        let mut stdout = io::stdout();
 
         if let Some(cmd) = args.get_one::<String>("command") {
-            run_cmd(&client, cmd).await
-        } else if let Some(file) = file {
-            run_file(&client, format, file).await
+            run_cmd(&client, cmd, &output, &mut stdout).await
         } else if let Some(topic) = args.get_one::<String>("subscribe") {
             let follow = args.get_flag("follow");
             let follow_clear = args.get_flag("follow_clear");
@@ -84,10 +79,17 @@ async fn main() -> Result<()> {
                     follow: follow || follow_clear,
                     clear: follow_clear,
                 },
+                &output,
             )
             .await
         } else {
-            repl::run(&client).await
+            match open_file(
+                args.get_one::<String>("file")
+                    .expect("file has a default value"),
+            )? {
+                Some(file) => run_file(&client, &output, file, &mut stdout).await,
+                None => repl::run(&client, &output).await,
+            }
         }
     };
 
@@ -102,7 +104,8 @@ async fn main() -> Result<()> {
 fn cli() -> clap::Command {
     command!()
         .arg(arg!(file: [FILE] "If present, executes contents of FILE")
-             .default_value("-"))
+             .default_value("-")
+             .conflicts_with_all(["command", "subscribe"]))
         .arg(arg!(command: -c --command <EXPR> "If present, EXPR is sent as request, then program exits"))
         .arg(arg!(subscribe: -s --subscribe <TOPIC> "If present, watches a specific topic for data"))
         .group(ArgGroup::new("main")
@@ -116,6 +119,9 @@ fn cli() -> clap::Command {
              .default_value("default")
              .value_parser(EnumValueParser::<Format>::new())
         )
+        .arg(arg!(width: --width <COLUMNS> "Target width for pretty/editor output (terminal width, or 80); atoms may exceed it")
+             .value_parser(clap::value_parser!(NonZeroUsize)))
+        .arg(arg!(raw: --raw "Print top-level strings verbatim; nested strings remain quoted"))
         .arg(arg!(name: -n --name <NAME> "Registers client process for this connection as NAME"))
         .arg(arg!(bind_service: -b --bind <NAME> "Binds client process to service named NAME")
              .action(ArgAction::Append))
@@ -141,12 +147,17 @@ fn open_file(file: &str) -> Result<Option<Box<dyn Read>>> {
 }
 
 /// Run a single request
-async fn run_cmd(client: &Client, cmd: &str) -> Result<()> {
+async fn run_cmd(
+    client: &Client,
+    cmd: &str,
+    output: &Output,
+    writer: &mut impl Write,
+) -> Result<()> {
     let f = lyric::parse(cmd)?;
     let resp = client.request(f).await?;
     match resp.contents {
         Ok(c) => {
-            println!("{}", c);
+            output.write(writer, &c, cmd)?;
             Ok(())
         }
         Err(e) => Err(anyhow::anyhow!("{e}")),
@@ -154,7 +165,12 @@ async fn run_cmd(client: &Client, cmd: &str) -> Result<()> {
 }
 
 /// Run a script file
-async fn run_file(client: &Client, format: &Format, file: Box<dyn Read>) -> Result<()> {
+async fn run_file(
+    client: &Client,
+    output: &Output,
+    file: Box<dyn Read>,
+    writer: &mut impl Write,
+) -> Result<()> {
     let mut f = BufReader::new(file);
     let mut line = String::new();
     let mut lineno = 0;
@@ -177,18 +193,12 @@ async fn run_file(client: &Client, format: &Format, file: Box<dyn Read>) -> Resu
             }
         };
 
-        if *format == Format::Editor {
-            print!("{}", line);
-        }
-
-        line.clear();
-
         let resp = client.request(f).await?;
         match resp.contents {
-            Ok(c) if *format == Format::Editor => println!("# => {}", c),
-            Ok(c) => println!("{}", c),
+            Ok(c) => output.write(writer, &c, &line)?,
             Err(e) => return Err(anyhow::anyhow!("{e}")),
         }
+        line.clear();
     }
 
     if !line.trim().is_empty() && !line.trim().starts_with('#') {
@@ -200,10 +210,6 @@ async fn run_file(client: &Client, format: &Format, file: Box<dyn Read>) -> Resu
     Ok(())
 }
 
-// TODO: Test case for executing from stdin
-// TODO: Test case for executing from REPL
-// TODO: Test case for executing from -c CMD
-// TODO: Test case for --format=editor
 // TODO: Test case for --name=SRV_NAME
 // TODO: Test case for incomplete expressions
 // TODO: Test case for incomplete expressions that are comments
@@ -222,16 +228,152 @@ mod tests {
         (runtime, Client::new(client))
     }
 
+    #[test]
+    fn cli_accepts_output_options_in_all_modes_and_validates_width() {
+        for mode in [
+            vec![],
+            vec!["-c", "(ls_srv)"],
+            vec!["example.ll"],
+            vec!["-"],
+            vec!["-s", "topic", "-f"],
+            vec!["-s", "topic", "-F"],
+        ] {
+            let mut args = vec!["vrsctl", "--format", "pretty", "--width", "40", "--raw"];
+            args.extend(mode);
+            cli().try_get_matches_from(args).unwrap();
+        }
+        for width in ["0", "-1", "abc"] {
+            assert!(cli()
+                .try_get_matches_from(["vrsctl", "--width", width])
+                .is_err());
+        }
+        assert!(cli()
+            .try_get_matches_from(["vrsctl", "example.ll", "-s", "topic"])
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn command_and_script_results_share_the_output_policy() {
+        let (_runtime, client) = runtime_client().await;
+        let expr = "'((1 2) (3 4))";
+        for (format, expected) in [
+            (Format::Compact, "((1 2) (3 4))\n"),
+            (Format::Pretty, "((1 2)\n (3 4))\n"),
+            (
+                Format::Editor,
+                "'((1 2) (3 4))\n# => ((1 2)\n#     (3 4))\n",
+            ),
+        ] {
+            let output = Output::new(
+                format,
+                Some(if format == Format::Editor { 16 } else { 11 }),
+                false,
+            );
+            let mut command = Vec::new();
+            run_cmd(&client, expr, &output, &mut command).await.unwrap();
+            assert_eq!(String::from_utf8(command).unwrap(), expected);
+            let mut script = Vec::new();
+            run_file(
+                &client,
+                &output,
+                Box::new(std::io::Cursor::new(expr)),
+                &mut script,
+            )
+            .await
+            .unwrap();
+            assert_eq!(String::from_utf8(script).unwrap(), expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn editor_transcript_keeps_multiline_results_in_comments() {
+        let (_runtime, client) = runtime_client().await;
+        let source = "# sample\n(pretty '(1 2 3) 1)\n(+ 20 22)";
+        let output = Output::new(Format::Editor, Some(80), true);
+        let mut buf = Vec::new();
+        run_file(
+            &client,
+            &output,
+            Box::new(std::io::Cursor::new(source)),
+            &mut buf,
+        )
+        .await
+        .unwrap();
+        let transcript = String::from_utf8(buf).unwrap();
+        assert_eq!(
+            transcript,
+            "# sample\n(pretty '(1 2 3) 1)\n# => (1\n#     2\n#     3)\n(+ 20 22)\n# => 42\n"
+        );
+        assert_eq!(
+            lyric::parse_script(&transcript).unwrap(),
+            lyric::parse_script(source).unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn service_registry_and_pretty_builtin_have_the_same_readable_output() {
+        let (_runtime, client) = runtime_client().await;
+        client
+            .request(
+                lyric::parse(
+                    "(begin (defn ping (x) x) (register :format_example :interface '(ping)))",
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap()
+            .contents
+            .unwrap();
+        let mut normal = Vec::new();
+        run_cmd(
+            &client,
+            "(ls_srv)",
+            &Output::new(Format::Pretty, Some(25), false),
+            &mut normal,
+        )
+        .await
+        .unwrap();
+        let mut explicit = Vec::new();
+        run_cmd(
+            &client,
+            "(pretty (ls_srv) 25)",
+            &Output::new(Format::Compact, None, true),
+            &mut explicit,
+        )
+        .await
+        .unwrap();
+        assert_eq!(normal, explicit);
+        let text = String::from_utf8(normal).unwrap();
+        assert!(text.contains(":name :format_example"));
+        assert!(text.starts_with("(:format_example\n ("), "{text}");
+        assert!(text.contains("\n  :pid <vrsctl:"), "{text}");
+        assert!(text.contains(":interface"));
+    }
+
     #[tokio::test]
     async fn run_cmd_succeeds_for_value() {
         let (_runtime, client) = runtime_client().await;
-        run_cmd(&client, "(+ 20 22)").await.unwrap();
+        run_cmd(
+            &client,
+            "(+ 20 22)",
+            &Output::new(Format::Default, None, false),
+            &mut Vec::new(),
+        )
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
     async fn run_cmd_propagates_evaluation_error() {
         let (_runtime, client) = runtime_client().await;
-        let error = run_cmd(&client, "(undefined_function)").await.unwrap_err();
+        let error = run_cmd(
+            &client,
+            "(undefined_function)",
+            &Output::new(Format::Default, None, false),
+            &mut Vec::new(),
+        )
+        .await
+        .unwrap_err();
 
         assert!(error.to_string().contains("undefined_function"));
     }
@@ -239,10 +381,24 @@ mod tests {
     #[tokio::test]
     async fn run_cmd_propagates_async_error_without_closing_client() {
         let (_runtime, client) = runtime_client().await;
-        let error = run_cmd(&client, "(publish :my_topic)").await.unwrap_err();
+        let error = run_cmd(
+            &client,
+            "(publish :my_topic)",
+            &Output::new(Format::Default, None, false),
+            &mut Vec::new(),
+        )
+        .await
+        .unwrap_err();
 
         assert!(error.to_string().contains("publish expects two arguments"));
-        run_cmd(&client, "(+ 20 22)").await.unwrap();
+        run_cmd(
+            &client,
+            "(+ 20 22)",
+            &Output::new(Format::Default, None, false),
+            &mut Vec::new(),
+        )
+        .await
+        .unwrap();
     }
 
     #[tokio::test]

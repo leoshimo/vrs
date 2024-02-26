@@ -231,6 +231,12 @@ where
 }
 
 impl Form {
+    /// Format for reading at a target column width. Atoms are never split.
+    /// RawString remains verbatim; it need not be readable Lyric syntax.
+    pub fn to_pretty_string(&self, width: usize) -> String {
+        crate::pretty::format(self, width)
+    }
+
     /// From expr
     pub fn from_expr(expr: &str) -> Result<Self> {
         parse(expr)
@@ -253,6 +259,12 @@ impl Form {
 }
 
 impl<T: Extern, L: Locals> Val<T, L> {
+    /// Format for reading at a target column width. Atoms are never split.
+    /// Opaque runtime values retain their existing display notation.
+    pub fn to_pretty_string(&self, width: usize) -> String {
+        crate::pretty::format(self, width)
+    }
+
     /// Shorhand for constructing [Val::String]
     pub fn string(s: &str) -> Self {
         Self::String(String::from(s))
