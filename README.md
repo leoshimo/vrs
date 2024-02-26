@@ -82,7 +82,7 @@ true                              # booleans are `true` or `false`
 # Association Lists
 (def item '(:title "My Title" :subtitle "My Subtitle"))
 (get item :title)      # => "My Title"
-(get item :subtitle)   # => "My Title"
+(get item :subtitle)   # => "My Subtitle"
 
 # Functions (Lambdas) are first class
 (defn apply (x fn)
