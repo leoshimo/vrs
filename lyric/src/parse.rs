@@ -64,9 +64,29 @@ where
                 "Unexpected closing parenthesis while parsing expression".to_string(),
             ))
         }
-        Token::Quote => {
+        prefix @ (Token::Quote | Token::Quasiquote | Token::Unquote | Token::UnquoteSplicing) => {
+            let name = match prefix {
+                Token::Quote => "quote",
+                Token::Quasiquote => "quasiquote",
+                Token::Unquote => "unquote",
+                Token::UnquoteSplicing => "unquote-splicing",
+                _ => unreachable!(),
+            };
+            match tokens.peek() {
+                None => {
+                    return Err(Error::IncompleteExpression(format!(
+                        "Expected a form after {prefix}"
+                    )))
+                }
+                Some(Token::ParenRight) => {
+                    return Err(Error::InvalidExpression(format!(
+                        "Expected a form after {prefix}, found )"
+                    )))
+                }
+                _ => (),
+            }
             let quoted = parse_form(tokens)?;
-            Form::List(vec![Form::symbol("quote"), quoted])
+            Form::List(vec![Form::symbol(name), quoted])
         }
     };
     Ok(form)
