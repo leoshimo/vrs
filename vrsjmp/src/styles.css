@@ -234,18 +234,20 @@ html, body {
 }
 
 .item--focus {
-    text-shadow: 1px 1px 2px var(--gray3);
     transition-property: background;
-    background: linear-gradient(90deg, #3F45D0, #4147D6);
+    /* background: linear-gradient(90deg, #3F45D0, #4147D6); */
+    background: var(--gray4);
 }
 
 .item:active {
     transition-property: background;
-    background: #4D53D9;
+    /* background: #4D53D9; */
+    background: var(--gray5);
 }
 
 .item--selected {
-    background: #4D53D9;
+    /* background: #4D53D9; */
+    background: var(--gray5);
 }
 
 .item__meta {
