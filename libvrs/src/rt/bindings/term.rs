@@ -8,6 +8,7 @@ use lyric::{Error, Result};
 /// Binding for `recv_req` to receive requests over client connection
 pub(crate) fn recv_req_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        doc: "(recv_req) - Receive request over client connection. This blocks until request is received.".to_string(),
         func: |f, _| Box::new(recv_req_impl(f)),
     }
 }
@@ -32,6 +33,7 @@ async fn recv_req_impl(fiber: &mut Fiber) -> Result<Val> {
 /// Binding for `send_resp` to send responses over client connection
 pub(crate) fn send_resp_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        doc: "(send_resp REQ_ID RESP) - Send response RESP over client connection for request identified by REQ_ID. This blocks until response is sent.".to_string(),
         func: |f, args| Box::new(send_resp_impl(f, args)),
     }
 }

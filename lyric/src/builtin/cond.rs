@@ -4,6 +4,7 @@ use crate::{Error, Extern, Locals, NativeFn, NativeFnOp, Result, Val};
 /// Language bindng for `eq?`
 pub fn eq_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        doc: "(eq? LHS RHS) - returns true if LHS equals RHS, otherwise false".to_string(),
         func: |_, args| {
             let (lhs, rhs) = match args {
                 [lhs, rhs] => (lhs, rhs),
@@ -21,6 +22,7 @@ pub fn eq_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 /// Language bindng for `contains`
 pub fn contains_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        doc: "(contains LIST ELEM) - returns true if LIST contains ELEM, otherwise false. LIST can be str or list".to_string(),
         func: |_, args| match args {
             [Val::List(l), target] => Ok(NativeFnOp::Return(Val::Bool(l.contains(target)))),
             [Val::String(s), Val::String(target)] => {
@@ -37,6 +39,7 @@ pub fn contains_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 /// Language binding for `not`
 pub fn not_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        doc: "(not EXPR) - returns the negation of truthiness of EXPR".to_string(),
         func: |_, args| match args {
             [cond] => Ok(NativeFnOp::Return(Val::Bool(!is_true(cond)?))),
             _ => Err(Error::UnexpectedArguments(

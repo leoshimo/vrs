@@ -10,6 +10,7 @@ use tracing::{debug, error};
 /// Binding for exec
 pub(crate) fn exec_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        doc: "(exec PROG ARG1 ARG2 ... ARGN) - Execute external executable PROG passing optional command line arguments ARG1 to ARGN.".to_string(),
         func: |_, args| Box::new(exec_impl(args)),
     }
 }
@@ -17,6 +18,8 @@ pub(crate) fn exec_fn() -> NativeAsyncFn {
 /// Binding for shell_expand
 pub(crate) fn shell_expand_fn() -> NativeFn {
     NativeFn {
+        doc: "(shell_expand STRING) - Expand STRING using standard shell filename expansion."
+            .to_string(),
         func: |_, args| {
             let path = match args {
                 [Val::String(s)] => s,

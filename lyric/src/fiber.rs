@@ -324,6 +324,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                     .collect::<Result<Vec<_>>>()?;
 
                 self.stack.push(Val::Lambda(Lambda {
+                    doc: None,
                     params,
                     code,
                     parent: Some(Arc::clone(&self.cf().env)),
@@ -646,6 +647,7 @@ mod tests {
         let mut f = Fiber::from_bytecode(
             vec![
                 PushConst(Val::Lambda(Lambda {
+                    doc: None,
                     params: vec![SymbolId::from("x")],
                     code: vec![GetSym(SymbolId::from("x"))],
                     parent: None,

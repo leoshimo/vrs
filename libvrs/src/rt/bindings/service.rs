@@ -10,6 +10,10 @@ use crate::rt::registry::Registration;
 /// Binding for register
 pub(crate) fn register_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        doc: "(register SVC_NAME [:interface INTERFACE]) - \
+              Register caller as SVC_NAME in service registry, optionally providing \
+              INTERFACE keyword argument for publishing available interface."
+            .to_string(),
         func: |f, args| Box::new(register_impl(f, args)),
     }
 }
@@ -68,6 +72,8 @@ async fn register_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
 /// Binding for ls-srv
 pub(crate) fn ls_srv_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        doc: "(ls-srv) - Returns a list containing all registered services and exported interface"
+            .to_string(),
         func: |f, args| Box::new(ls_srv_impl(f, args)),
     }
 }
@@ -98,6 +104,11 @@ async fn ls_srv_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
 /// Binding for find-srv
 pub(crate) fn find_srv_fn() -> Lambda {
     Lambda {
+        doc: Some(
+            "(find-srv SVC_NAME) - Returns the process id of SVC_NAME in the service registry. \
+              Raises an error if SVC_NAME is not registered."
+                .to_string(),
+        ),
         params: vec![SymbolId::from("srv_name")],
         code: compile(&parse("(info-srv srv_name :pid)").unwrap().into()).unwrap(),
         parent: None,
@@ -108,6 +119,11 @@ pub(crate) fn find_srv_fn() -> Lambda {
 /// Binding for `bind-srv`
 pub(crate) fn bind_srv_fn() -> Lambda {
     Lambda {
+        doc: Some(
+            "(bind-srv SVC_NAME) - Binds to SVC_NAME in service registry, defining new symbols in current process space \
+             that communicate to SVC_NAME over message passing."
+                .to_string(),
+        ),
         params: vec![SymbolId::from("srv_name")],
         code: compile(
             &parse(
@@ -124,6 +140,7 @@ pub(crate) fn bind_srv_fn() -> Lambda {
 /// Binding for info-srv
 pub(crate) fn info_srv_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        doc: "(info-srv SVC_NAME ATTR) - Returns the attribute ATTR for process registered as SVC_NAME in service registry.".to_string(),
         func: |f, args| Box::new(info_srv_impl(f, args)),
     }
 }
@@ -163,6 +180,7 @@ async fn info_srv_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
 /// Binding for def-bind-interface
 pub(crate) fn def_bind_interface() -> NativeFn {
     NativeFn {
+        doc: "(def-bind-interface SVC_NAME INTERFACE) - Runtime internal use only. Shim for service bindings".to_string(),
         func: |f, args| {
             let (svc_name, interface) =
                 match args {
@@ -215,6 +233,8 @@ pub(crate) fn def_bind_interface() -> NativeFn {
 /// Implementation of spawn_srv
 pub(crate) fn spawn_srv_fn() -> NativeFn {
     NativeFn {
+        doc: "(spawn_srv SVC_NAME [:interface INTERFACE]) - Spawn a separate process as service registered as SVC_NAME, \
+              optionally exporting interface INTERFACE.".to_string(),
         func: spawn_srv_impl,
     }
 }
@@ -253,7 +273,12 @@ fn spawn_srv_impl(_f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
 
 /// Binding for `srv`
 pub(crate) fn srv_fn() -> NativeFn {
-    NativeFn { func: srv_impl }
+    NativeFn {
+        doc: "(srv SVC_NAME [:interface INTERFACE]) - Register current process as SVC_NAME, \
+              optionally exporting interface INTERFACE. This function blocks until service exits."
+            .to_string(),
+        func: srv_impl,
+    }
 }
 
 // TODO: Define as lisp macro
@@ -412,6 +437,7 @@ fn lambda_stub_for_interface(
         parse(format!(r#"(call (find-srv {}) {})"#, srv_name, Val::List(msg)).as_str()).unwrap();
     let code = compile(&ast.into()).unwrap();
     Lambda {
+        doc: None,
         params,
         code,
         parent: None,
@@ -429,6 +455,7 @@ mod tests {
     #[test]
     fn lambda_interface_empty() {
         let lambda = Lambda {
+            doc: None,
             params: vec![],
             code: vec![Inst::PushConst(Val::Nil)],
             parent: None,
@@ -443,6 +470,7 @@ mod tests {
     #[test]
     fn lambda_interface_nonempty() {
         let lambda = Lambda {
+            doc: None,
             params: vec![SymbolId::from("arg1"), SymbolId::from("arg2")],
             code: vec![Inst::PushConst(Val::Nil)],
             parent: None,
@@ -457,6 +485,7 @@ mod tests {
     #[test]
     fn lambda_call_empty() {
         let lambda = Lambda {
+            doc: None,
             params: vec![],
             code: vec![Inst::PushConst(Val::Nil)],
             parent: None,
@@ -468,6 +497,7 @@ mod tests {
     #[test]
     fn lambda_call_nonempty() {
         let lambda = Lambda {
+            doc: None,
             params: vec![SymbolId::from("arg1"), SymbolId::from("arg2")],
             code: vec![Inst::PushConst(Val::Nil)],
             parent: None,
@@ -488,6 +518,7 @@ mod tests {
             assert_eq!(
                 lambda,
                 Lambda {
+                    doc: None,
                     params: vec![],
                     code: compile(&v(r#"
                         (call (find-srv :launcher) (list :get_items))
@@ -508,6 +539,7 @@ mod tests {
             assert_eq!(
                 lambda,
                 Lambda {
+                    doc: None,
                     params: vec![SymbolId::from("title"), SymbolId::from("cmd")],
                     code: compile(&v(r#"
                         (call (find-srv :launcher) (list :add_item title cmd))

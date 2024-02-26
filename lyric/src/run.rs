@@ -87,6 +87,7 @@ mod tests {
         env.bind_native_async(
             SymbolId::from("async_call"),
             NativeAsyncFn {
+                doc: "".to_string(),
                 func: |_, _| {
                     Box::new(async {
                         yield_now().await;
@@ -108,6 +109,7 @@ mod tests {
         env.bind_native_async(
             SymbolId::from("async_inc"),
             NativeAsyncFn {
+                doc: "".to_string(),
                 func: |_, args| {
                     let num = match args[..] {
                         [Val::Int(n)] => n,
@@ -133,6 +135,7 @@ mod tests {
         env.bind_native_async(
             SymbolId::from("async_err"),
             NativeAsyncFn {
+                doc: "".to_string(),
                 func: |_, args| {
                     Box::new(async move {
                         yield_now().await;
@@ -157,6 +160,7 @@ mod tests {
         env.bind_native_async(
             SymbolId::from("async_inc"),
             NativeAsyncFn {
+                doc: "".to_string(),
                 func: |_, args| {
                     let num = match args[..] {
                         [Val::Int(n)] => n,

@@ -4,6 +4,7 @@ use crate::{Error, Extern, Locals, NativeFn, NativeFnOp, Val};
 
 pub(crate) fn ok_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        doc: "(ok? FORM) - Returns false if FORM is an error value, otherwise true".to_string(),
         func: |_, args| {
             if args.len() != 1 {
                 return Err(Error::UnexpectedArguments(
@@ -20,6 +21,7 @@ pub(crate) fn ok_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 
 pub(crate) fn err_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        doc: "(err? FORM) - Returns true if FORM is an error value, otherwise false".to_string(),
         func: |_, args| {
             if args.len() != 1 {
                 return Err(Error::UnexpectedArguments(

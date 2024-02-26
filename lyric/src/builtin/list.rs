@@ -4,6 +4,8 @@ use crate::{kwargs, Error, Extern, Inst, Locals, NativeFn, NativeFnOp, SymbolId,
 /// Language bindng for `list`
 pub fn list_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        doc: "(list ELEM_1 ELEM_2 .. ELEM_N) - Creates a new list containing arguments of form. Each argument ELEM is evaluated.\
+              Arguments are optional.".to_string(),
         func: |_, args| Ok(NativeFnOp::Return(Val::List(args.to_vec()))),
     }
 }
@@ -11,6 +13,7 @@ pub fn list_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 /// Language bindng for `push`
 pub fn push_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        doc: "(push LIST ELEM) - Creates a new list containing elements of LIST with ELEM appended at end".to_string(),
         func: |_, args| match args {
             [Val::List(l), elem] => {
                 let mut l = l.to_vec();
@@ -27,6 +30,7 @@ pub fn push_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 /// Language bindng for `get`
 pub fn get_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        doc: "(get LIST ATTR) - Returns element within LIST for given ATTR, which can be 0-indexed position in list, or keywords for association lists".to_string(),
         func: |_, x| match x {
             [Val::List(l), Val::Int(idx)] => {
                 let elem = match l.get(*idx as usize) {
@@ -49,6 +53,7 @@ pub fn get_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 /// Language binding for `map`
 pub(crate) fn map_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        doc: "(map LIST CALLABLE) - Creates a new list containing elements of LIST transformed by CALLABLE".to_string(),
         func: |_, args| match args {
             [Val::List(l), val] if val.is_callable() => {
                 let mut bc = vec![Inst::GetSym(SymbolId::from("list"))];

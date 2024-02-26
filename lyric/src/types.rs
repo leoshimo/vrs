@@ -59,6 +59,7 @@ pub type Bytecode<T, L> = Vec<Inst<T, L>>;
 /// A function object that closes over environment it was created in
 #[derive(Clone)]
 pub struct Lambda<T: Extern, L: Locals> {
+    pub doc: Option<String>,
     pub params: Vec<SymbolId>,
     pub code: Bytecode<T, L>,
     pub parent: Option<Arc<Mutex<Env<T, L>>>>,
@@ -67,6 +68,7 @@ pub struct Lambda<T: Extern, L: Locals> {
 /// A native founction bound to given symbol
 #[derive(Debug, Clone, PartialEq)]
 pub struct NativeFn<T: Extern, L: Locals> {
+    pub doc: String,
     pub func: NativeFnSig<T, L>,
 }
 
@@ -87,6 +89,7 @@ pub enum NativeFnOp<T: Extern, L: Locals> {
 /// A native async function
 #[derive(Debug, Clone, PartialEq)]
 pub struct NativeAsyncFn<T: Extern, L: Locals> {
+    pub doc: String,
     pub func: NativeAsyncFnSig<T, L>,
 }
 

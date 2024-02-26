@@ -10,6 +10,7 @@ pub struct Ref(pub(crate) String);
 /// Binding to create a new unique reference
 pub fn ref_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        doc: "(ref) - Creates a new unique reference in runtime".to_string(),
         func: |_, _| {
             let r = Ref(nanoid!());
             Ok(NativeFnOp::Return(Val::Ref(r)))

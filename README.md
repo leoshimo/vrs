@@ -117,8 +117,15 @@ true                              # booleans are `true` or `false`
 # As a Lisp, Lyric has `eval` and `read`:
 (eval (read "(+ 40 2)")) # => 42
 
-# and there are more builtins and symbols in environment, introspectable via `ls-env`
-(ls-env)
+# and there are more builtins and symbols in environment, introspectable via `ls-env` and `help`
+(ls-env)           # see all symbols defined in environment
+(help recv)        # see documentation via `help`
+
+(bind-srv :counter)
+(inc 10)
+(inc 10)
+(inc 10)
+(get_count)
 ```
 
 TODO: Examples for fibers, coroutines, yielding, infinite iterators, macros

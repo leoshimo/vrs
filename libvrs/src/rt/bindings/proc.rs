@@ -9,6 +9,7 @@ use tracing::debug;
 /// binding to get current process's pid
 pub(crate) fn self_fn() -> NativeFn {
     NativeFn {
+        doc: "(self) - Returns process id of caller".to_string(),
         func: |f, _| {
             let pid = f.locals().pid;
             Ok(NativeFnOp::Return(Val::Extern(Extern::ProcessId(pid))))
@@ -19,6 +20,7 @@ pub(crate) fn self_fn() -> NativeFn {
 /// binding to create a new PID
 pub(crate) fn pid_fn() -> NativeFn {
     NativeFn {
+        doc: "(pid NUMBER) - Creates a new process id type for given NUMBER".to_string(),
         func: |_, args| {
             let pid = match args {
                 [Val::Int(pid)] => pid,
@@ -38,6 +40,7 @@ pub(crate) fn pid_fn() -> NativeFn {
 /// Binding to list processes
 pub(crate) fn ps_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        doc: "(ps) - Returns a list of running process by process id".to_string(),
         func: |f, _| Box::new(ps_impl(f)),
     }
 }
@@ -45,6 +48,7 @@ pub(crate) fn ps_fn() -> NativeAsyncFn {
 /// Binding to kill process
 pub(crate) fn kill_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        doc: "(kill PID) - Kill process with process id PID".to_string(),
         func: |f, args| Box::new(kill_impl(f, args)),
     }
 }
@@ -52,6 +56,8 @@ pub(crate) fn kill_fn() -> NativeAsyncFn {
 /// Binding for sleep
 pub(crate) fn sleep_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        doc: "(sleep SECS) - Sleep current process for SECS seconds, blocking execution."
+            .to_string(),
         func: |_, args| {
             Box::new({
                 async move {
@@ -75,6 +81,8 @@ pub(crate) fn sleep_fn() -> NativeAsyncFn {
 /// Binding for spawn
 pub(crate) fn spawn_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        doc: "(spawn LAMBDA) - Spawn a new child process that runs LAMBDA in new process space."
+            .to_string(),
         func: |f, args| Box::new(spawn_impl(f, args)),
     }
 }

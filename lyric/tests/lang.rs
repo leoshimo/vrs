@@ -14,6 +14,7 @@ fn eval_expr(e: &str) -> Result<Val> {
     env.bind_native(
         SymbolId::from("echo_args"),
         NativeFn {
+            doc: "".to_string(),
             func: |_, x| Ok(NativeFnOp::Return(Val::List(x.to_vec()))),
         },
     );

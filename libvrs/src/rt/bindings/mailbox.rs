@@ -7,6 +7,7 @@ use lyric::{compile, parse, Error, Result, SymbolId};
 
 pub(crate) fn send_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        doc: "(send PID MSG) - Send process PID the message MSG".to_string(),
         func: |f, args| Box::new(send_impl(f, args)),
     }
 }
@@ -14,6 +15,9 @@ pub(crate) fn send_fn() -> NativeAsyncFn {
 /// Binding to recv messages
 pub(crate) fn recv_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        doc: "(recv [PATTERN]) - Poll mailbox for a message. \
+              Optional PATTERN argument can match for messages matching specific patterns."
+            .to_string(),
         func: |f, args| Box::new(recv_impl(f, args)),
     }
 }
@@ -21,6 +25,7 @@ pub(crate) fn recv_fn() -> NativeAsyncFn {
 /// Binding to list messages
 pub(crate) fn ls_msgs_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        doc: "(ls-msgs) - Returns contents of mailbox without consuming messages or blocking when mailbox is empty.".to_string(),
         func: |f, args| Box::new(ls_msgs_impl(f, args)),
     }
 }
@@ -28,6 +33,7 @@ pub(crate) fn ls_msgs_fn() -> NativeAsyncFn {
 /// Binding for call
 pub(crate) fn call_fn() -> Lambda {
     Lambda {
+        doc: Some("(call PID MSG) - Send process PID a message MSG and block until receiving a response for the message".to_string()),
         params: vec![SymbolId::from("pid"), SymbolId::from("msg")],
         code: compile(
             &parse(

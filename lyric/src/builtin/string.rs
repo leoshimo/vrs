@@ -3,6 +3,8 @@ use dyn_fmt::AsStrFormatExt;
 
 pub(crate) fn str_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        doc: "(str ARG1 ARG2 ... ARGN) - Returns a new string by concatenating each argument coerced into string.\
+              Arguments are optional.".to_string(),
         func: |_, args| {
             let mut result = String::new();
             for v in args {
@@ -15,6 +17,7 @@ pub(crate) fn str_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 
 pub(crate) fn display_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        doc: "(display ARG1 ARG2 ... ARGN) - Returns a new string by concatenating each argument as a display string.".to_string(),
         func: |_, args| {
             let mut result = String::new();
             for v in args {
@@ -27,6 +30,7 @@ pub(crate) fn display_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 
 pub(crate) fn format_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        doc: "(format FORMAT ARG1 ARG2 ... ARGN) - Returns a new string by templating FORMAT with arguments coerced into strings.".to_string(),
         func: |_, args| {
             let format = args
                 .first()
@@ -49,6 +53,7 @@ pub(crate) fn format_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 
 pub(crate) fn read_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        doc: "(read STRING) - Returns a symbolic expression by parsing STRING.".to_string(),
         func: |_, args| {
             let expr = match args {
                 [Val::String(s)] => s,
