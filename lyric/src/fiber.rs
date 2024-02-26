@@ -308,6 +308,13 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                         "Missing function bytecode".to_string(),
                     )),
                 }?;
+                let doc = match self.stack.pop() {
+                    Some(Val::String(doc)) => Ok(Some(doc)),
+                    Some(Val::Nil) => Ok(None),
+                    _ => Err(Error::UnexpectedStack(
+                        "Expected doc string in stack".to_string(),
+                    )),
+                }?;
                 let params = match self.stack.pop() {
                     Some(Val::List(p)) => Ok(p),
                     _ => Err(Error::UnexpectedStack("Missing parameter list".to_string())),
@@ -324,7 +331,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                     .collect::<Result<Vec<_>>>()?;
 
                 self.stack.push(Val::Lambda(Lambda {
-                    doc: None,
+                    doc: doc,
                     params,
                     code,
                     parent: Some(Arc::clone(&self.cf().env)),
@@ -627,6 +634,7 @@ mod tests {
         let mut f = Fiber::from_bytecode(
             vec![
                 PushConst(Val::List(vec![Val::symbol("x")])),
+                PushConst(Val::Nil),
                 PushConst(Val::Bytecode(vec![GetSym(SymbolId::from("x"))])),
                 MakeFunc,
             ],
@@ -669,6 +677,7 @@ mod tests {
         let mut f = Fiber::from_bytecode(
             vec![
                 PushConst(Val::List(vec![Val::symbol("x")])),
+                PushConst(Val::Nil),
                 PushConst(Val::Bytecode(vec![GetSym(SymbolId::from("x"))])),
                 MakeFunc,
                 PushConst(Val::string("hello")),
@@ -689,8 +698,10 @@ mod tests {
         let mut f = Fiber::from_bytecode(
             vec![
                 PushConst(Val::List(vec![])),
+                PushConst(Val::Nil),
                 PushConst(Val::Bytecode(vec![
                     PushConst(Val::List(vec![Val::symbol("x")])),
+                    PushConst(Val::Nil),
                     PushConst(Val::Bytecode(vec![GetSym(SymbolId::from("x"))])),
                     MakeFunc,
                 ])),
@@ -710,8 +721,10 @@ mod tests {
         let mut f = Fiber::from_bytecode(
             vec![
                 PushConst(Val::List(vec![Val::symbol("x")])),
+                PushConst(Val::Nil),
                 PushConst(Val::Bytecode(vec![
                     PushConst(Val::List(vec![])),
+                    PushConst(Val::Nil),
                     PushConst(Val::Bytecode(vec![GetSym(SymbolId::from("x"))])),
                     MakeFunc,
                 ])),
