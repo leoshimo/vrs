@@ -14,6 +14,7 @@ tracing = "0.1.40"
 unicode-width = "0.1.11"
 
 [dev-dependencies]
+serde_json = "1.0.114"
 assert_matches = "1.5.0"
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 void = "1.0.2"

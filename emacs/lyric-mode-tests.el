@@ -25,6 +25,14 @@
       (lyric-eval-region (point-min) (point-max) t)
       (should (equal (buffer-string) "\"one\\n\\\"two\\\"\""))
       (erase-buffer)
+      (insert "(let ((window '(:id 7))) `(focus_window ',window))")
+      (let ((lyric-result-width 80)) (lyric-eval-last-sexp t))
+      (should (equal (buffer-string) "(focus_window '(:id 7))"))
+      (erase-buffer)
+      (insert "'(unquote @name)")
+      (lyric-eval-last-sexp t)
+      (should (equal (buffer-string) ", @name"))
+      (erase-buffer)
       (insert "(missing_function)")
       (should-error (lyric-eval-last-sexp t) :type 'user-error)
       (should (equal (buffer-string) "(missing_function)")))))
@@ -168,6 +176,72 @@
       (insert source)
       (lyric-mode)
       (should (equal (lyric--last-sexp-source) source)))))
+
+(ert-deftest lyric-mode-preserves-all-reader-prefixes-and-gaps ()
+  (dolist (source '("`(a ,x ,@xs)" ",(compute x)" ",@(get record :commands)"
+                    "',name" "',@xs" "``(a ,,x)" ", @name" ",@name"
+                    "` # template\n (a , # hole\n x)" "' # literal\n name"))
+    (with-temp-buffer
+      (insert "previous\n" source)
+      (lyric-mode)
+      (goto-char (point-max))
+      (should (equal (lyric--last-sexp-source) source)))))
+
+(ert-deftest lyric-mode-comma-at-is-contextual ()
+  (with-temp-buffer
+    (insert ",@name , @name \"literal ,@name\" # comment ,@name\n\"\"\"raw ,@name\"\"\"")
+    (lyric-mode)
+    (goto-char (point-min))
+    (search-forward "@")
+    (should (eq (syntax-class (syntax-after (1- (point)))) 6)) ; prefix
+    (search-forward "@")
+    (should (eq (syntax-class (syntax-after (1- (point)))) 3)) ; symbol
+    (search-forward "@")
+    (should (nth 3 (syntax-ppss)))
+    (should-not (get-text-property (1- (point)) 'syntax-table))
+    (search-forward "@")
+    (should (nth 4 (syntax-ppss)))
+    (should-not (get-text-property (1- (point)) 'syntax-table))
+    (search-forward "@")
+    (should (nth 3 (syntax-ppss)))
+    (should-not (get-text-property (1- (point)) 'syntax-table))))
+
+(ert-deftest lyric-mode-quotation-context-is-depth-aware ()
+  (dolist (example '(("`(outer `(inner ,(later) ,,(now)))" "later" t)
+                     ("`(outer `(inner ,(later) ,,(now)))" "now" nil)
+                     ("`(outer ',(now))" "now" nil)
+                     ("'`(outer ,(now))" "now" t)
+                     ("(quasiquote (outer (unquote (now))))" "now" nil)
+                     ("(quote (quasiquote (outer (unquote (now)))))" "now" t)))
+    (with-temp-buffer
+      (insert (nth 0 example))
+      (lyric-mode)
+      (goto-char (point-min))
+      (search-forward (concat "(" (nth 1 example)))
+      (goto-char (- (point) (1+ (length (nth 1 example)))))
+      (should (eq (not (null (lyric--data-list-p (point)))) (nth 2 example))))))
+
+(ert-deftest lyric-mode-indents-template-holes-as-code ()
+  (with-temp-buffer
+    (insert "`(a\n,(compute\nfirst\nsecond)\n(nested\nvalues))")
+    (lyric-mode)
+    (indent-region (point-min) (point-max))
+    (should (equal (buffer-string)
+                   "`(a\n  ,(compute\n     first\n     second)\n  (nested\n   values))"))
+    (let ((once (buffer-string)))
+      (indent-region (point-min) (point-max))
+      (should (equal (buffer-string) once)))))
+
+(ert-deftest lyric-mode-repropertizes-edited-comma-at ()
+  (with-temp-buffer
+    (insert ",@name")
+    (lyric-mode)
+    (goto-char 2)
+    (insert " ")
+    (syntax-propertize (point-max))
+    (should (eq (syntax-class (syntax-after 3)) 3))
+    (goto-char (point-max))
+    (should (equal (lyric--last-sexp-source) ", @name"))))
 
 (ert-deftest lyric-mode-inline-block-may-end-with-a-quote ()
   (let ((source "(list \"\"\"inline \"quoted\"\"\"\")"))

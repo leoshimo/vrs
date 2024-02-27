@@ -17,19 +17,64 @@
   :type '(integer :tag "Columns")
   :group 'lyric)
 
-(defun lyric--data-list-p (open)
-  "Whether the list at OPEN contains data rather than a function call."
+(defun lyric--prefixes-before (position)
+  "Return (START . PREFIXES) for reader prefixes before POSITION.
+PREFIXES are ordered from outermost to innermost; preserve spaces/comments."
+  (save-excursion
+    (goto-char position)
+    (let ((start position) prefixes done)
+      (while (not done)
+        (forward-comment (- (point-max)))
+        (cond
+         ((and (eq (char-before) ?@)
+               (eq (char-before (1- (point))) ?,))
+          (backward-char 2) (push ",@" prefixes) (setq start (point)))
+         ((memq (char-before) '(?\' ?` ?,))
+          (push (char-to-string (char-before)) prefixes)
+          (backward-char) (setq start (point)))
+         (t (setq done t))))
+      (cons start prefixes))))
+
+(defun lyric--prefix-context (context prefix)
+  "Apply PREFIX to CONTEXT, a (LITERAL DEPTH DATA) list."
+  (pcase-let ((`(,literal ,depth ,data) context))
+    (cond
+     (literal context)
+     ((and (equal prefix "'") (= depth 0)) (list t 0 t))
+     ((equal prefix "`") (list nil (1+ depth) t))
+     ((and (member prefix '("," ",@")) (> depth 0))
+      (list nil (1- depth) (> depth 1)))
+     (t (list literal depth data)))))
+
+(defun lyric--list-context (open)
+  "Return the quotation and data context of the list at OPEN."
   (save-excursion
     (goto-char open)
-    (or (eq (char-before) ?\')
-        ;; Quoted data remains data at any nesting depth.
-        (let ((parent (nth 1 (syntax-ppss))))
-          (and parent (lyric--data-list-p parent)))
-        (progn
-          (forward-char)
-          (skip-chars-forward " \t\n")
-          (or (memq (char-after) '(?: ?\( ?\" ?\' ?\)))
-              (looking-at "\\(?:-?[0-9]+\\|nil\\|true\\|false\\)\\_>"))))))
+    (let* ((parent (nth 1 (syntax-ppss)))
+           (context (if parent (lyric--list-context parent) (list nil 0 nil))))
+      ;; Long reader forms have the same indentation boundaries as prefixes.
+      (when parent
+        (goto-char (1+ parent))
+        (forward-comment (point-max))
+        (when (looking-at "\\(quote\\|quasiquote\\|unquote-splicing\\|unquote\\)\\_>")
+          (setq context
+                (lyric--prefix-context
+                 context (cdr (assoc (match-string-no-properties 1)
+                                     '(("quote" . "'") ("quasiquote" . "`")
+                                       ("unquote" . ",") ("unquote-splicing" . ",@"))))))))
+      (dolist (prefix (cdr (lyric--prefixes-before open)))
+        (setq context (lyric--prefix-context context prefix)))
+      (goto-char (1+ open))
+      (forward-comment (point-max))
+      (setf (nth 2 context)
+            (or (nth 0 context) (> (nth 1 context) 0) (nth 2 context)
+                (memq (char-after) '(?: ?\( ?\" ?\' ?\)))
+                (looking-at "\\(?:-?[0-9]+\\|nil\\|true\\|false\\)\\_>")))
+      context)))
+
+(defun lyric--data-list-p (open)
+  "Whether the list at OPEN contains data rather than a function call."
+  (nth 2 (lyric--list-context open)))
 
 (defun lyric--indent-column ()
   "Compute Lyric indentation without treating keywords as function names."
@@ -74,9 +119,9 @@
 
 (defvar lyric-mode-syntax-table
   (let ((table (copy-syntax-table janet-mode-syntax-table)))
-    ;; Janet uses backticks as string delimiters; Lyric does not.
-    (modify-syntax-entry ?` "." table)
-    ;; Include Lyric's quote prefix in backward-sexp/evaluation bounds.
+    ;; Reader prefixes are part of a Lyric expression, never string delimiters.
+    (modify-syntax-entry ?` "'" table)
+    (modify-syntax-entry ?, "'" table)
     (modify-syntax-entry ?\' "'" table)
     table)
   "Syntax table used in `lyric-mode'.")
@@ -110,7 +155,17 @@ raw block end with a literal quote without confusing Emacs sexp navigation."
                                  'syntax-table (string-to-syntax "."))
               (put-text-property run-start run-end 'syntax-multiline t)
               (setq inside-block (not inside-block))
-              (syntax-ppss-flush-cache run-start))))))))
+              (syntax-ppss-flush-cache run-start)))))
+      ;; Only the @ immediately following comma is a reader prefix. Elsewhere
+      ;; @ belongs to symbols: , @name and ,@name are different expressions.
+      (goto-char (point-min))
+      (while (re-search-forward ",@" nil t)
+        (let* ((start (match-beginning 0))
+               (state (save-excursion (syntax-ppss start))))
+          (unless (or (nth 3 state) (nth 4 state))
+            (put-text-property (1+ start) (+ start 2)
+                               'syntax-table (string-to-syntax "'"))
+            (syntax-ppss-flush-cache start)))))))
 
 (defun lyric--last-sexp-bounds ()
   "Return the bounds of the Lyric expression preceding point.
@@ -121,6 +176,7 @@ block strings, rather than reading and printing it as Emacs Lisp."
     (skip-chars-backward " \t\r\n")
     (let ((end (point)))
       (backward-sexp)
+      (goto-char (car (lyric--prefixes-before (point))))
       (cons (point) end))))
 
 (defun lyric--last-sexp-source ()
@@ -202,6 +258,8 @@ With prefix argument REPLACE, replace the region with its result."
   (setq-local lisp-indent-function #'lyric-indent-function)
   (setq-local indent-tabs-mode nil)
   (setq-local syntax-propertize-function #'lyric--syntax-propertize)
+  (font-lock-add-keywords nil
+                         '(("(\\(unquote-splicing\\)\\_>" 1 font-lock-keyword-face)))
   (syntax-propertize (point-max)))
 
 (add-to-list 'auto-mode-alist '("\\.ll\\'" . lyric-mode))

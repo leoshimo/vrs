@@ -130,6 +130,13 @@ class TerminalTests(unittest.TestCase):
             os.write(master, (EXPR + "\n").encode())
             self.read_until(master, expected)
 
+    def test_quotation_round_trips_through_client_and_runtime(self):
+        source = "(let ((name 'focus_window) (window '(:id 7))) `(continue_call ',name '(,window)))"
+        self.assertEqual(self.pipe("-c", source), "(continue_call 'focus_window '((:id 7)))\n")
+        self.assertEqual(self.pipe("-c", "'(unquote @name)"), ", @name\n")
+        self.assertEqual(self.pipe("-c", f"(eq? (read (pretty {source} 8)) {source})"), "true\n")
+        self.assertEqual(self.pipe("-c", "(let ((xs '(1 2))) `(a ,@xs))"), "(a 1 2)\n")
+
     def test_subscriptions_once_follow_and_clear(self):
         for index, mode in enumerate([(), ("-f",), ("-F",)]):
             topic = f"format_test_{index}"

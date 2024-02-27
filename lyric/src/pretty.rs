@@ -9,6 +9,20 @@ pub(crate) trait Value: Display + Sized {
     fn is_keyword(&self) -> bool;
 }
 
+/// Shared by compact and pretty printers so prefix tokenization stays identical.
+pub(crate) fn abbreviation<V: Value>(items: &[V]) -> Option<(&'static str, &V)> {
+    let [head, value] = items else { return None };
+    let prefix = match head.symbol()? {
+        "quote" => "'",
+        "quasiquote" => "`",
+        "unquote" if value.symbol().is_some_and(|name| name.starts_with('@')) => ", ",
+        "unquote" => ",",
+        "unquote-splicing" => ",@",
+        _ => return None,
+    };
+    Some((prefix, value))
+}
+
 impl Value for Form {
     fn list(&self) -> Option<&[Self]> {
         match self {
@@ -53,7 +67,7 @@ struct Doc {
 
 enum Kind {
     Atom(String),
-    Quote(Box<Doc>),
+    Prefix(&'static str, Box<Doc>),
     List {
         items: Vec<Doc>,
         indent: usize,
@@ -61,28 +75,63 @@ enum Kind {
     },
 }
 
+#[derive(Clone, Copy, Default)]
+struct Context {
+    data: bool,
+    literal: bool,
+    depth: usize,
+}
+
+impl Context {
+    fn prefixed(self, prefix: &str) -> Self {
+        if self.literal {
+            return self;
+        }
+        match prefix {
+            "'" if self.depth == 0 => Self {
+                literal: true,
+                data: true,
+                ..self
+            },
+            "`" => Self {
+                depth: self.depth + 1,
+                data: true,
+                ..self
+            },
+            "," | ", " | ",@" if self.depth > 0 => Self {
+                depth: self.depth - 1,
+                data: self.depth > 1,
+                ..self
+            },
+            _ => self,
+        }
+    }
+}
+
 impl Doc {
-    fn new(value: &impl Value, quoted: bool) -> Self {
+    fn new(value: &impl Value, context: Context) -> Self {
         if let Some(items) = value.list() {
-            if let [head, value] = items {
-                if head.symbol() == Some("quote") {
-                    let doc = Self::new(value, true);
-                    return Self {
-                        flat_width: doc.flat_width.saturating_add(1),
-                        kind: Kind::Quote(Box::new(doc)),
-                    };
-                }
+            if let Some((prefix, value)) = abbreviation(items) {
+                let doc = Self::new(value, context.prefixed(prefix));
+                return Self {
+                    flat_width: doc.flat_width.saturating_add(prefix.len()),
+                    kind: Kind::Prefix(prefix, Box::new(doc)),
+                };
             }
             let pairs = !items.is_empty()
                 && items.len() % 2 == 0
                 && items.iter().step_by(2).all(Value::is_keyword);
+            let quoted = context.literal || context.data || context.depth > 0;
             let indent = if !quoted && items.first().and_then(Value::symbol).is_some() {
                 2
             } else {
                 1
             };
             let data = quoted || items.first().and_then(Value::symbol).is_none();
-            let items: Vec<_> = items.iter().map(|item| Self::new(item, data)).collect();
+            let items: Vec<_> = items
+                .iter()
+                .map(|item| Self::new(item, Context { data, ..context }))
+                .collect();
             let flat_width = items
                 .iter()
                 .fold(2 + items.len().saturating_sub(1), |width, item| {
@@ -113,8 +162,8 @@ impl Doc {
     fn flat(&self, out: &mut String) {
         match &self.kind {
             Kind::Atom(text) => out.push_str(text),
-            Kind::Quote(doc) => {
-                out.push('\'');
+            Kind::Prefix(prefix, doc) => {
+                out.push_str(prefix);
                 doc.flat(out);
             }
             Kind::List { items, .. } => {
@@ -133,7 +182,7 @@ impl Doc {
     fn can_break(&self) -> bool {
         match &self.kind {
             Kind::Atom(_) => false,
-            Kind::Quote(doc) => doc.can_break(),
+            Kind::Prefix(_, doc) => doc.can_break(),
             Kind::List { items, .. } => !items.is_empty(),
         }
     }
@@ -152,9 +201,9 @@ impl Doc {
                     None => column.saturating_add(text.width()),
                 }
             }
-            Kind::Quote(doc) => {
-                out.push('\'');
-                doc.render(out, width, column + 1, tail)
+            Kind::Prefix(prefix, doc) => {
+                out.push_str(prefix);
+                doc.render(out, width, column + prefix.len(), tail)
             }
             Kind::List {
                 items,
@@ -195,7 +244,7 @@ impl Doc {
 
 pub(crate) fn format(value: &impl Value, width: usize) -> String {
     let mut out = String::new();
-    Doc::new(value, false).render(&mut out, width.max(1), 0, 0);
+    Doc::new(value, Context::default()).render(&mut out, width.max(1), 0, 0);
     out
 }
 
