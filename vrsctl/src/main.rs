@@ -3,6 +3,7 @@ mod repl;
 mod watch;
 
 use anyhow::{Context, Result};
+use clap::builder::EnumValueParser;
 use clap::{arg, command, ArgGroup};
 
 use std::fs::File;
@@ -12,6 +13,14 @@ use std::str::FromStr;
 use tokio::net::UnixStream;
 use tracing::debug;
 use vrs::{Client, Connection, KeywordId};
+
+#[derive(clap::ValueEnum, Debug, Clone, PartialEq)]
+enum Format {
+    #[clap(help = "Default output format")]
+    Default,
+    #[clap(help = "Format for editors")]
+    Editor,
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -36,11 +45,14 @@ async fn main() -> Result<()> {
             args.get_one::<String>("file")
                 .expect("file has a default value"),
         )?;
+        let format = args
+            .get_one::<Format>("format")
+            .expect("format has a default value");
 
         if let Some(cmd) = args.get_one::<String>("command") {
             run_cmd(&client, cmd).await
         } else if let Some(file) = file {
-            run_file(&client, file).await
+            run_file(&client, format, file).await
         } else if let Some(topic) = args.get_one::<String>("subscribe") {
             let follow = args.get_flag("follow");
             let follow_clear = args.get_flag("follow_clear");
@@ -87,6 +99,10 @@ fn cli() -> clap::Command {
              .requires("subscribe"))
         .arg(arg!(follow_clear: -F --followclear "Like --follow, but clears screen after each value")
             .requires("subscribe"))
+        .arg(arg!(format: --format <FORMAT> "Sets format of output")
+             .default_value("default")
+             .value_parser(EnumValueParser::<Format>::new())
+        )
         .arg(
             arg!(socket: -S --socket <SOCKET> "Path to unix socket for vrsd")
                 .default_value(vrs::runtime_socket().into_os_string()),
@@ -120,7 +136,7 @@ async fn run_cmd(client: &Client, cmd: &str) -> Result<()> {
 }
 
 /// Run a script file
-async fn run_file(client: &Client, file: Box<dyn Read>) -> Result<()> {
+async fn run_file(client: &Client, format: &Format, file: Box<dyn Read>) -> Result<()> {
     let mut f = BufReader::new(file);
     let mut line = String::new();
     loop {
@@ -131,11 +147,6 @@ async fn run_file(client: &Client, file: Box<dyn Read>) -> Result<()> {
                 eprintln!("Error reading file - {}", e);
                 break;
             }
-        }
-
-        if line.starts_with('#') {
-            line.clear();
-            continue;
         }
 
         let f = match lyric::parse(&line) {
@@ -149,9 +160,17 @@ async fn run_file(client: &Client, file: Box<dyn Read>) -> Result<()> {
             }
         };
 
+        if *format == Format::Editor {
+            print!("{}", line);
+        }
+
         line.clear();
 
         match client.request(f).await {
+            Ok(resp) if *format == Format::Editor => match resp.contents {
+                Ok(c) => println!("# => {}", c),
+                Err(e) => eprintln!("# => {}", e),
+            },
             Ok(resp) => match resp.contents {
                 Ok(c) => println!("{}", c),
                 Err(e) => eprintln!("{}", e),
@@ -168,3 +187,4 @@ async fn run_file(client: &Client, file: Box<dyn Read>) -> Result<()> {
 // TODO: Test case for executing from stdin
 // TODO: Test case for executing from REPL
 // TODO: Test case for executing from -c CMD
+// TODO: Test case for --format=editor
