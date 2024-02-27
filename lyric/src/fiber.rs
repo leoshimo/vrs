@@ -331,7 +331,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                     .collect::<Result<Vec<_>>>()?;
 
                 self.stack.push(Val::Lambda(Lambda {
-                    doc: doc,
+                    doc,
                     params,
                     code,
                     parent: Some(Arc::clone(&self.cf().env)),
