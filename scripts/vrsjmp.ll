@@ -48,7 +48,6 @@
    (make_item "Send to Kindle" '(open_url "https://www.amazon.com/gp/sendtokindle"))
    (make_item "RC - Presentations" '(open_url "https://presentations.recurse.com"))
    (make_item "AWS Console" '(open_url "http://console.aws.amazon.com"))
-   (make_item "Perplexity" '(open_url "https://www.perplexity.ai"))
    (make_item "ChatGPT" '(open_url "https://chat.openai.com"))
    (make_item "Slack" '(open_app "Slack"))
    (make_item "Soulver" '(open_app "Soulver 3"))
