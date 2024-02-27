@@ -62,9 +62,7 @@ that distinction. Templates use ordinary `Form` lists and retain the existing
 serialization shape. They do not qualify symbols or provide macro hygiene.
 
 Keep `list` for ordinary records, messages, and collections of computed values.
-Use templates where showing the structure of generated code helps. See the
-[quotation design and migration notes](../docs/quotation-design.md) for the
-evaluation model, Lisp comparisons, and migration examples.
+Use templates where showing the structure of generated code helps.
 
 ## Readable values
 
