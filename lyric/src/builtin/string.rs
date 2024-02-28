@@ -28,6 +28,30 @@ pub(crate) fn display_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     }
 }
 
+pub(crate) fn join_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
+    NativeFn {
+        doc: "(join SEP ARG1 ARG2 ... ARGN) - Returns a new string by concatenating each argument separated by SEP.".to_string(),
+        func: |_, args| {
+            let separator = args
+                .first()
+                .ok_or(Error::UnexpectedArguments(
+                    "First argument should be string separator".to_string(),
+                ))?
+                .as_string()?;
+
+            let str_args = args
+                .iter()
+                .skip(1)
+                .map(|v| v.as_string_coerce())
+                .collect::<Result<Vec<_>>>()?;
+
+            println!("{}", separator);
+            let result = str_args.join(separator);
+            Ok(NativeFnOp::Return(Val::String(result)))
+        },
+    }
+}
+
 pub(crate) fn format_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
         doc: "(format FORMAT ARG1 ARG2 ... ARGN) - Returns a new string by templating FORMAT with arguments coerced into strings.".to_string(),
