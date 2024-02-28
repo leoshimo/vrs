@@ -5,10 +5,6 @@
 (bind-srv :os_notify)
 (bind-srv :chat)
 
-(defn notify_user (title subtitle)
-  "(notify_user TITLE SUBTITLE) - shows a notification, where TITLE and SUBTITLE are strings"
-  (notify title subtitle))
-
 (def prompt "Show notification with title hello and subtitle world after a three second delay")
 
 (defn remind_me (prompt)
@@ -24,7 +20,7 @@
 
                  REQUEST: {}"
                             (join "\\n" 
-                                  (help notify_user)
+                                  (help notify)
                                   (help sleep)
                                   )
                             prompt)))
