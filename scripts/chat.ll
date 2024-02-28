@@ -1,25 +1,40 @@
 #!/usr/bin/env vrsctl
+# chat.ll - Chat Dynamic Supervisor Service
+#
 
-(def msgs '())
+(defn msgs_to_cogni_cmd (msgs)
+  "(msgs_to_cogni_cmd MSGS) - Given a set of message s-exprs, return the cogni command for messages"
+  (def exec_cmd '(exec "cogni"))
 
-# HACK: Needs list splicing from msgs into args
-(def msgs_args '(exec "cogni"
-                 "-s" "You are a helpful assistant. Prefer concise answers of one to two sentences"))
+  (map msgs (fn (m) (match m
+                      ((:system msg) (set exec_cmd (+ exec_cmd (list "-s" msg))))
+                      ((:user msg) (set exec_cmd (+ exec_cmd (list "-u" msg))))
+                      ((:assistant msg) (set exec_cmd (+ exec_cmd (list "-a" msg))))
+                      (_ (error "Unrecognized message")))))
 
-(defn chat (user_msg)
-  (set msgs (push msgs (list :user user_msg)))
-  (set msgs_args (push msgs_args "-u"))
-  (set msgs_args (push msgs_args user_msg))
+  exec_cmd)
 
-  (def (:ok assistant_msg) (eval msgs_args))
+(defn run_llm (msgs)
+  "(run_llm MSGS) - Given a set of message s-exprs, run the LLM to receive an assistant message"
+  (eval (msgs_to_cogni_cmd msgs)))
 
-  (set msgs (push msgs (list :assistant assistant_msg)))
-  (set msgs_args (push msgs_args "-a"))
-  (set msgs_args (push msgs_args assistant_msg))
+(defn spawn_chat (chat_name system_prompt)
+  "(spawn_chat CHAT_NAME SYSTEM_PROMPT) - Spawn a new process registered as CHAT_NAME with SYSTEM_PROMPT for a new chat session"
+  (spawn (fn ()
+           (def msgs (list (list :system system_prompt)))
 
-  assistant_msg)
+           (defn send_message (message)
+             "(send_message MESSAGE) - Send message to chat session then return new assistant message"
+             (set msgs (push msgs (list :user message)))
+             (def (:ok assistant_msg) (run_llm msgs))
+             (set msgs (push msgs (list :assistant assistant_msg)))
+             assistant_msg)
 
-(defn messages ()
-  msgs)
+           (defn get_messages ()
+             "(get_messages) - Returns all messages in session"
+             msgs)
 
-(spawn-srv :chat :interface '(chat messages))
+           (spawn-srv chat_name :interface '(get_messages send_message))
+           )))
+
+(spawn-srv :chat :interface '(spawn_chat))
