@@ -41,4 +41,5 @@ pub(crate) use service::srv_fn;
 pub(crate) use pubsub::publish_fn;
 pub(crate) use pubsub::subscribe_fn;
 
+pub(crate) use fs::fdump_fn;
 pub(crate) use fs::fread_fn;

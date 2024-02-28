@@ -209,7 +209,8 @@ pub fn proc_env() -> Env {
     }
 
     {
-        e.bind_native_async(SymbolId::from("fread"), bindings::fread_fn());
+        e.bind_native_async(SymbolId::from("fread"), bindings::fread_fn())
+            .bind_native_async(SymbolId::from("fdump"), bindings::fdump_fn());
     }
 
     {
