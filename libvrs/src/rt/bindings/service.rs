@@ -30,17 +30,43 @@ async fn register_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
     };
 
     let mut reg = Registration::new(keyword);
-    match kwargs::get(&args[1..], &KeywordId::from("interface")) {
-        Some(Val::List(interface)) => {
-            reg.interface(interface);
+
+    if let Some(interface) = kwargs::get(&args[1..], &KeywordId::from("interface")) {
+        let symbols = match interface {
+            Val::List(ref symbols) => Ok(symbols),
+            _ => Err(Error::UnexpectedArguments(
+                ":interface keyword argument must be a list".to_string(),
+            )),
+        }?;
+        let symbols = symbols
+            .iter()
+            .map(|e| match e {
+                Val::Symbol(s) => Ok(s),
+                _ => Err(Error::UnexpectedArguments(
+                    "Forms in :interface list should be symbols".to_string(),
+                )),
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let env = fiber.cur_env().lock().unwrap();
+        let mut interface = vec![];
+        for sym in symbols {
+            let val = env.get(sym).ok_or(Error::InvalidExpression(format!(
+                "No symbol bound to {}",
+                sym
+            )))?;
+            let lambda = match val {
+                Val::Lambda(l) => Ok(l),
+                _ => Err(Error::UnexpectedArguments(format!(
+                    "{} is not a lambda - found {}",
+                    sym, val
+                ))),
+            }?;
+            let pattern = lambda_interface(sym, &lambda);
+            interface.push(pattern.clone());
         }
-        Some(val) => {
-            return Err(Error::UnexpectedArguments(format!(
-                ":interface must be a list - got {}",
-                val
-            )))
-        }
-        None => (),
+
+        reg.interface(interface.clone());
     }
 
     let overwrite_flag =
@@ -320,7 +346,6 @@ fn srv_impl(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
         })
         .collect::<Result<Vec<_>>>()?;
 
-    let mut interface = vec![];
     let mut match_form = vec![Val::symbol("match"), Val::symbol("msg")];
 
     {
@@ -339,7 +364,6 @@ fn srv_impl(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
                 ))),
             }?;
             let pattern = lambda_interface(sym, &lambda);
-            interface.push(pattern.clone());
             match_form.push(Val::List(vec![pattern, lambda_call(sym, &lambda)]));
         }
     }
@@ -360,7 +384,7 @@ fn srv_impl(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
         name.clone(),
         Val::keyword("overwrite"),
         Val::keyword("interface"),
-        Val::List(vec![Val::symbol("quote"), Val::List(interface)]),
+        Val::List(vec![Val::symbol("quote"), interface]),
     ]);
 
     // TODO: Rust macros plz
