@@ -1,6 +1,7 @@
 mod codegen;
 mod error;
 mod lex;
+pub mod macros;
 mod parse;
 mod pretty;
 mod quasiquote;

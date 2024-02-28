@@ -9,6 +9,8 @@ where
     T: Extern,
     L: Locals,
 {
+    /// Prepare and run one source unit in the current process macro namespace.
+    Prepare(Val<T, L>),
     /// Push constant form onto stack
     PushConst(Val<T, L>),
     /// Push value bound to given symbol onto stack
@@ -71,6 +73,8 @@ pub fn compile<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Bytecode<T, L>> {
                     "yield" => return compile_yield(args),
                     "loop" => return compile_loop(args),
                     "match" => return compile_match(args),
+                    name if name.ends_with('!') => return Err(Error::Macro(format!("unprepared macro invocation {name}"))),
+                    "defmacro" | "for_syntax" => return Err(Error::Macro("phase definitions require source preparation".into())),
                     _ => (),
                 }
             }
@@ -518,6 +522,7 @@ fn compile_match<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T,
 impl<T: Extern, L: Locals> std::fmt::Display for Inst<T, L> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Inst::Prepare(form) => write!(f, "prepare {form}"),
             Inst::PushConst(c) => write!(f, "pushco {c}"),
             Inst::GetSym(s) => write!(f, "getsym {s}"),
             Inst::DefSym(s) => write!(f, "defsym {s}"),

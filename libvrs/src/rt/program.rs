@@ -95,7 +95,7 @@ impl Program {
     }
 
     pub fn from_val(val: Val) -> Result<Self> {
-        let code = lyric::compile(&val)?;
+        let code = vec![lyric::Inst::Prepare(val)];
         Ok(Self::from_bytecode(code))
     }
 

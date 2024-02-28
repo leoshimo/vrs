@@ -12,6 +12,8 @@ pub struct Env<T: Extern, L: Locals> {
     bindings: HashMap<SymbolId, Val<T, L>>,
     parent: Option<EnvRef<T, L>>,
     completions: CompletionConfig,
+    pub(crate) macros: Option<crate::macros::MacroEnv>,
+    pub(crate) frozen: bool,
 }
 
 pub type EntityCompletions = HashMap<KeywordId, Vec<SymbolId>>;
@@ -33,6 +35,8 @@ impl<T: Extern, L: Locals> Env<T, L> {
             bindings: HashMap::default(),
             parent: None,
             completions: CompletionConfig::default(),
+            macros: None,
+            frozen: false,
         };
         e.bind_native(SymbolId::from("contains?"), builtin::contains_fn())
             .bind_native(SymbolId::from("eq?"), builtin::eq_fn())
@@ -73,6 +77,8 @@ impl<T: Extern, L: Locals> Env<T, L> {
             )
             .bind_native(SymbolId::from("ls_env"), builtin::ls_env_fn());
 
+        crate::macros::bind_builtins(&mut e);
+
         e
     }
 
@@ -82,6 +88,8 @@ impl<T: Extern, L: Locals> Env<T, L> {
             bindings: HashMap::new(),
             parent: Some(Arc::clone(parent)),
             completions: CompletionConfig::default(),
+            macros: None,
+            frozen: false,
         }
     }
 
@@ -95,6 +103,8 @@ impl<T: Extern, L: Locals> Env<T, L> {
             bindings: self.bindings.clone(),
             parent,
             completions: self.completions.clone(),
+            macros: self.macros.clone(),
+            frozen: self.frozen,
         }
     }
 
@@ -117,6 +127,9 @@ impl<T: Extern, L: Locals> Env<T, L> {
     /// Set value of symbol in lexical scope
     pub fn set(&mut self, symbol: &SymbolId, value: Val<T, L>) -> Result<(), Error> {
         if let Some(b) = self.bindings.get_mut(symbol) {
+            if self.frozen {
+                return Err(Error::Macro(format!("cannot mutate captured phase binding {symbol}")));
+            }
             *b = value;
             return Ok(());
         }
@@ -167,6 +180,38 @@ impl<T: Extern, L: Locals> Env<T, L> {
         symbols.sort_by(|a, b| a.as_str().cmp(b.as_str()));
         symbols.dedup();
         symbols
+    }
+
+    pub fn macro_env(&self) -> crate::macros::MacroEnv {
+        self.macros.clone().or_else(|| self.parent.as_ref().map(|p| p.lock().unwrap().macro_env())).unwrap_or_default()
+    }
+
+    pub fn set_macro_env(&mut self, macros: crate::macros::MacroEnv) {
+        self.macros = Some(macros);
+    }
+
+    pub(crate) fn retain_names(&mut self, names: &[&str]) {
+        self.bindings.retain(|name, _| names.contains(&name.as_str()));
+    }
+
+    /// Freeze only phase environments, including local frames retained by closures.
+    pub(crate) fn freeze_graph(root: &EnvRef<T, L>) {
+        let mut pending = vec![root.clone()];
+        let mut visited = std::collections::HashSet::new();
+        while let Some(env) = pending.pop() {
+            if !visited.insert(Arc::as_ptr(&env) as usize) { continue; }
+            let mut env = env.lock().unwrap();
+            env.frozen = true;
+            if let Some(parent) = &env.parent { pending.push(parent.clone()); }
+            let mut values: Vec<_> = env.bindings.values().collect();
+            while let Some(value) = values.pop() {
+                match value {
+                    Val::Lambda(lambda) => if let Some(parent) = &lambda.parent { pending.push(parent.clone()); },
+                    Val::List(items) => values.extend(items),
+                    _ => (),
+                }
+            }
+        }
     }
 
     pub fn set_entity_completions(&mut self, ty: KeywordId, providers: Option<Vec<SymbolId>>) {
@@ -226,6 +271,8 @@ impl<T: Extern, L: Locals> std::clone::Clone for Env<T, L> {
             bindings: self.bindings.clone(),
             parent,
             completions: self.completions.clone(),
+            macros: self.macros.clone(),
+            frozen: self.frozen,
         }
     }
 }
