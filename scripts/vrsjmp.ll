@@ -6,13 +6,14 @@
 (bind-srv :system_appearance)
 (bind-srv :bookmarks)
 (bind-srv :nl_remind)
+(bind-srv :os_screencap)
 
 (defn get_items (query)
   "Retrieve items to display"
   # TODO: Support N-ary +
   (+ (+ (favorite_items)
         (get_bookmarks))
-     (dynamic_items query)))
+        (dynamic_items query)))
 
 (defn make_item (title command)
   "Create an item with TITLE and COMMAND"
@@ -27,12 +28,14 @@
        (make_item "Search Google"
                   (list 'open_url (format "http://google.com/search?q={}" query)))
        (make_item "Remind Me"
-                  (list 'remind_me query))
-       )))
+                  (list 'remind_me query)))))
 
 (defn on_click (item)
   "Handle an on_click payload from item"
-  (try (eval (get item :on_click))))
+  (def cmd (get item :on_click))
+  (def res (try (eval cmd)))
+  (if (err? res)
+    (notify "Encountered error" (format "{}" err))))
 
 (defn favorite_items ()
   "Returns list of static vrsjmp items"
@@ -60,7 +63,8 @@
 
    (make_item "Bookmarks - Add" '(bookmark_active_tab))
    (make_item "Bookmarks - Clear" '(clear_bookmarks))
-   ))
 
+   (make_item "Screen Capture" '(start_screencap))
+   ))
 
 (spawn-srv :vrsjmp :interface '(get_items on_click))
