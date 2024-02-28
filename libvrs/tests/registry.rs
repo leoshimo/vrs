@@ -29,7 +29,7 @@ async fn list_services() {
     let srv_c = Program::from_expr(
         r#"(begin
         (defn ping (x) x)
-        (defn pong (x) x)
+        (defn pong (y) y)
         (register :service_c :interface '(ping pong))
         (recv)
     )"#,
@@ -60,14 +60,20 @@ async fn list_services() {
         Val::keyword("pid"),
         Val::Extern(Extern::ProcessId(srv_b.id())),
     ])));
-    assert!(svcs.contains(&Val::List(vec![
-        Val::keyword("name"),
-        Val::keyword("service_c"),
-        Val::keyword("pid"),
-        Val::Extern(Extern::ProcessId(srv_c.id())),
-        Val::keyword("interface"),
-        Val::List(vec![Val::symbol("ping"), Val::symbol("pong"),])
-    ])));
+    assert!(
+        svcs.contains(&Val::List(vec![
+            Val::keyword("name"),
+            Val::keyword("service_c"),
+            Val::keyword("pid"),
+            Val::Extern(Extern::ProcessId(srv_c.id())),
+            Val::keyword("interface"),
+            Val::List(vec![
+                Val::List(vec![Val::keyword("ping"), Val::symbol("x")]),
+                Val::List(vec![Val::keyword("pong"), Val::symbol("y")]),
+            ])
+        ])),
+        "Register should expand interface argument of register into lambda signatures"
+    );
 }
 
 #[tokio::test]

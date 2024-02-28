@@ -42,6 +42,7 @@ pub struct Registration {
     keyword: KeywordId,
     interface: Vec<Val>,
     overwrite: bool,
+    docs: HashMap<KeywordId, String>,
 }
 
 impl Registry {
@@ -186,6 +187,10 @@ impl Entry {
     pub fn interface(&self) -> &Vec<Val> {
         &self.registration.interface
     }
+
+    pub fn doc(&self, keyword: &KeywordId) -> Option<&String> {
+        self.registration.docs.get(keyword)
+    }
 }
 
 impl From<Entry> for Val {
@@ -213,6 +218,7 @@ impl Registration {
             keyword,
             interface: vec![],
             overwrite: false,
+            docs: HashMap::new(),
         }
     }
 
@@ -223,6 +229,11 @@ impl Registration {
 
     pub fn interface(&mut self, interface: Vec<Val>) -> &mut Self {
         self.interface = interface;
+        self
+    }
+
+    pub fn docs(&mut self, keyword: KeywordId, doc: String) -> &mut Self {
+        self.docs.insert(keyword, doc);
         self
     }
 }

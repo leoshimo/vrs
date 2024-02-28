@@ -14,10 +14,10 @@
   "Show Notification UI for linux"
   (exec "notify-send" title message "--icon=dialog-information"))
 
-(defn notify (title message)
-  "Show UI for notification"
+(defn notify (title subtitle)
+  "(notify TITLE SUBTITLE) - Show OS Desktop UI for notification"
   (if (macOS?)
-    (macos_ui_notify title message)
-    (linux_ui_notify title message)))
+    (macos_ui_notify title subtitle)
+    (linux_ui_notify title subtitle)))
 
 (spawn-srv :os_notify :interface '(notify))

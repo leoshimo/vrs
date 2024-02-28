@@ -62,8 +62,13 @@ async fn register_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
                     sym, val
                 ))),
             }?;
+
             let pattern = lambda_interface(sym, &lambda);
             interface.push(pattern.clone());
+
+            if let Some(doc) = lambda.doc {
+                reg.docs(sym.clone().to_keyword(), doc);
+            }
         }
 
         reg.interface(interface.clone());
@@ -153,7 +158,8 @@ pub(crate) fn bind_srv_fn() -> Lambda {
         params: vec![SymbolId::from("srv_name")],
         code: compile(
             &parse(
-                "(map (info-srv srv_name :interface) (lambda (i) (def-bind-interface srv_name i)))",
+                "(map (info-srv srv_name :interface_doc) (lambda (idoc)
+                    (def-bind-interface srv_name idoc)))",
             )
             .unwrap()
             .into(),
@@ -195,6 +201,31 @@ async fn info_srv_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
     match query.as_str() {
         "pid" => Ok(Val::Extern(Extern::ProcessId(entry.pid()))),
         "interface" => Ok(Val::List(entry.interface().to_vec())),
+        "interface_doc" => {
+            let mut interface_doc = vec![];
+            for i in entry.interface() {
+                let kwd = i
+                    .as_list()?
+                    .first()
+                    .ok_or(Error::Runtime(
+                        "empty signature in interface list found".to_string(),
+                    ))?
+                    .as_keyword()?;
+
+                let doc = match entry.doc(kwd) {
+                    Some(doc) => doc.to_string(),
+                    None => format!("<no documentation for {}>", kwd.clone().to_symbol()),
+                };
+                interface_doc.push(Val::List(vec![
+                    Val::keyword("interface"),
+                    i.clone(),
+                    Val::keyword("doc"),
+                    Val::String(doc),
+                ]));
+            }
+
+            Ok(Val::List(interface_doc))
+        }
         q => Err(Error::UnexpectedArguments(format!(
             "info-srv got unexpected query: {}",
             q
@@ -206,16 +237,27 @@ async fn info_srv_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
 /// Binding for def-bind-interface
 pub(crate) fn def_bind_interface() -> NativeFn {
     NativeFn {
-        doc: "(def-bind-interface SVC_NAME INTERFACE) - Runtime internal use only. Shim for service bindings".to_string(),
+        doc: "(def-bind-interface SVC_NAME INTERFACE_DOC) - Runtime internal use only. Shim for service bindings".to_string(),
         func: |f, args| {
-            let (svc_name, interface) =
+            let (svc_name, interface_doc) =
                 match args {
-                    [Val::Keyword(svc_name), Val::List(interface)] => (svc_name, interface),
+                    [Val::Keyword(svc_name), Val::List(idoc)] => (svc_name, idoc),
                     _ => return Err(Error::UnexpectedArguments(
-                        "def-bind-interface expects a keyword for service and interface it exposes"
+                        "def-bind-interface expects a keyword for service and interface doc list it exposes"
                             .to_string(),
                     )),
                 };
+
+            let interface = kwargs::get(interface_doc, &KeywordId::from("interface"))
+                .ok_or(Error::UnexpectedArguments(
+                    "interface doc should have interface kwarg".to_string(),
+                ))?.to_list()?;
+            let doc = kwargs::get(interface_doc, &KeywordId::from("doc"))
+                .ok_or(Error::UnexpectedArguments(
+                    "interface doc should have doc kwarg".to_string(),
+                ))?
+                .as_string()?
+                .clone();
 
             let (msg_name, args) = interface.split_first().ok_or(Error::UnexpectedArguments(
                 "interface list must contain at least one item".to_string(),
@@ -246,7 +288,7 @@ pub(crate) fn def_bind_interface() -> NativeFn {
             env.define(
                 sym,
                 Val::Lambda(lambda_stub_for_interface(
-                    svc_name, arg_syms, msg_name, args,
+                    svc_name, arg_syms, msg_name, args, doc
                 )),
             );
 
@@ -451,6 +493,7 @@ fn lambda_stub_for_interface(
     params: Vec<SymbolId>,
     msg_name: &KeywordId,
     msg_args: &[Val],
+    doc: String,
 ) -> Lambda {
     // TODO: Need to do this hack since there's no splice in lists atm
     let msg = [Val::symbol("list"), Val::Keyword(msg_name.clone())]
@@ -461,7 +504,7 @@ fn lambda_stub_for_interface(
         parse(format!(r#"(call (find-srv {}) {})"#, srv_name, Val::List(msg)).as_str()).unwrap();
     let code = compile(&ast.into()).unwrap();
     Lambda {
-        doc: None,
+        doc: Some(doc),
         params,
         code,
         parent: None,
@@ -537,8 +580,13 @@ mod tests {
     fn stub_for_interface() {
         {
             let srv_name = KeywordId::from("launcher");
-            let lambda =
-                lambda_stub_for_interface(&srv_name, vec![], &KeywordId::from("get_items"), &[]);
+            let lambda = lambda_stub_for_interface(
+                &srv_name,
+                vec![],
+                &KeywordId::from("get_items"),
+                &[],
+                String::new(),
+            );
             assert_eq!(
                 lambda,
                 Lambda {
@@ -559,6 +607,7 @@ mod tests {
                 vec![SymbolId::from("title"), SymbolId::from("cmd")],
                 &KeywordId::from("add_item"),
                 &[Val::symbol("title"), Val::symbol("cmd")],
+                String::new(),
             );
             assert_eq!(
                 lambda,
