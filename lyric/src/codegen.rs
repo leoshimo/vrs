@@ -50,6 +50,7 @@ pub fn compile<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Bytecode<T, L>> {
                 match s.as_str() {
                     "begin" => return compile_begin(args),
                     "def" => return compile_def(args),
+                    "fn" => return compile_fn(args),
                     "defn" => return compile_defn(args),
                     "if" => return compile_if(args),
                     "cond" => return compile_cond(args),
@@ -108,6 +109,32 @@ fn compile_set<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L
     Ok(inst)
 }
 
+// TODO: Replace `fn` with a macro
+/// Compile fn
+fn compile_fn<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
+    let (params, docs, body) = match args {
+        [params, Val::String(doc), body @ ..] if !body.is_empty() => (params, Some(doc), body),
+        [params, body @ ..] if !body.is_empty() => (params, None, body),
+        _ => {
+            return Err(Error::InvalidExpression(
+                "defn expects at least three arguments with nonempty body".to_string(),
+            ))
+        }
+    };
+
+    let mut lambda = vec![Val::symbol("lambda"), params.clone()];
+    if let Some(docs) = docs {
+        lambda.push(Val::String(docs.clone()));
+    }
+    lambda.push(Val::List(
+        std::iter::once(Val::symbol("begin"))
+            .chain(body.iter().cloned())
+            .collect(),
+    ));
+    let inst = compile(&Val::List(lambda))?;
+
+    Ok(inst)
+}
 // TODO: Replace `defn` with a macro
 /// Compile defn
 fn compile_defn<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
