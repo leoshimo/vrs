@@ -47,7 +47,7 @@ async fn list_services() {
         _ => panic!("Expected list as result"),
     };
 
-    assert_eq!(svcs.len(), 3);
+    assert_eq!(svcs.len(), 6);
     assert!(svcs.contains(&Val::List(vec![
         Val::keyword("name"),
         Val::keyword("service_a"),
@@ -173,7 +173,11 @@ async fn double_register_fails() {
             _ => panic!("Expected list as result"),
         };
 
-        assert_eq!(svcs.len(), 1, "only one service should be registered");
+        assert_eq!(
+            svcs.len(),
+            2,
+            "only one service should be registered (two entries in association list)"
+        );
         assert!(
             svcs.contains(&Val::List(vec![
                 Val::keyword("name"),
@@ -240,7 +244,7 @@ async fn registry_updates_after_exit() {
             Val::List(v) => v,
             _ => panic!("Expected list as result"),
         };
-        assert_eq!(svcs.len(), 2);
+        assert_eq!(svcs.len(), 4); // double number of services for a_list
     }
 
     // Message srv_b, which should exit after first msg
@@ -258,7 +262,10 @@ async fn registry_updates_after_exit() {
             Val::List(v) => v,
             _ => panic!("Expected list as result"),
         };
-        assert_eq!(svcs.len(), 1);
+        assert_eq!(svcs.len(), 2);
+
+        // TODO: Move to hashmap type instead of association list
+        assert!(svcs.contains(&Val::keyword("service_a")));
         assert!(svcs.contains(&Val::List(vec![
             Val::keyword("name"),
             Val::keyword("service_a"),
@@ -287,7 +294,7 @@ async fn registry_updates_after_kill() {
             Val::List(v) => v,
             _ => panic!("Expected list as result"),
         };
-        assert_eq!(svcs.len(), 2);
+        assert_eq!(svcs.len(), 4);
     }
 
     // Kill srv_a
@@ -304,7 +311,7 @@ async fn registry_updates_after_kill() {
             Val::List(v) => v,
             _ => panic!("Expected list as result"),
         };
-        assert_eq!(svcs.len(), 1);
+        assert_eq!(svcs.len(), 2);
         assert!(svcs.contains(&Val::List(vec![
             Val::keyword("name"),
             Val::keyword("service_b"),

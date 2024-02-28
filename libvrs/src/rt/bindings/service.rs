@@ -128,7 +128,17 @@ async fn ls_srv_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
         .await
         .map_err(|e| Error::Runtime(format!("{e}")))?;
 
-    let entry_values: Vec<_> = entries.into_iter().map(Val::from).collect();
+    let mut entry_values: Vec<_> = vec![];
+
+    for e in entries {
+        let val = Val::from(e);
+        let name = kwargs::get(val.as_list()?, &KeywordId::from("name")).ok_or(Error::Runtime(
+            "service entry did not contain service name".to_string(),
+        ))?;
+        entry_values.push(name);
+        entry_values.push(val.clone());
+    }
+
     Ok(Val::List(entry_values))
 }
 
