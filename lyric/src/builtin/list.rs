@@ -1,5 +1,8 @@
 //! List builtins
-use crate::{kwargs, Error, Extern, Inst, Locals, NativeFn, NativeFnOp, SymbolId, Val};
+use crate::{
+    compile, kwargs, parse, Error, Extern, Inst, Lambda, Locals, NativeFn, NativeFnOp, SymbolId,
+    Val,
+};
 
 /// Language bindng for `list`
 pub fn list_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
@@ -74,5 +77,29 @@ pub(crate) fn map_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     }
 }
 
+/// Language binding for `filter`
+pub(crate) fn filter_fn<T: Extern, L: Locals>() -> Lambda<T, L> {
+    Lambda {
+        doc: Some("(filter LIST CALLABLE) - Creates a new list containing elements of LIST filtered by CALLABLE".to_string()),
+        params: vec![SymbolId::from("lst"), SymbolId::from("callable")],
+        code: compile(
+            &parse(
+                r#"
+            (begin 
+                (def filter_result '())
+                (map lst (fn (it)
+                    (if (callable it) (set filter_result (push filter_result it)))))
+                filter_result)
+        "#,
+            )
+            .unwrap()
+            .into(),
+        )
+        .unwrap(),
+        parent: None,
+    }
+}
+
 // TODO: Write lang.ts tests for list bindings?
 // TODO: Write lang.ts tests for map
+// TODO: Write tests for filter
