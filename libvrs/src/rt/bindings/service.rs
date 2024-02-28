@@ -86,13 +86,13 @@ async fn ls_srv_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
         ));
     }
 
-    let register = fiber
+    let registry = fiber
         .locals()
         .registry
         .as_ref()
         .expect("process should have registry handle");
 
-    let entries = register
+    let entries = registry
         .all()
         .await
         .map_err(|e| Error::Runtime(format!("{e}")))?;
