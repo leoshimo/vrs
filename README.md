@@ -77,7 +77,7 @@ true                              # booleans are `true` or `false`
 # List Operations
 (def l '(1 2 3))
 (def first (get l 0))       # get 0th item in `l`
-(contains l 3)              # check if `l` contains `3`
+(contains? l 3)             # check if `l` contains `3`
 
 # Association Lists
 (def item '(:title "My Title" :subtitle "My Subtitle"))
@@ -95,8 +95,8 @@ true                              # booleans are `true` or `false`
     "msg was hello"
     "msg was not hello")
 
-# and flip conditions with `not`
-(if (not false)
+# and flip conditions with `not?`
+(if (not? false)
     "it was not true")
 
 # Catch error with `try`. Introspect result with `err?` or `ok?`
@@ -276,7 +276,7 @@ Each process has a dedicated mailbox that it can poll to receive messages:
 
 # Toggle current state
 (defn toggle_darkmode ()
-  (set_darkmode (not (is_darkmode))))
+  (set_darkmode (not? (is_darkmode))))
 
 # Fork into service exporting `toggle_darkmode` as service
 (spawn-srv :system_appearance :interface '(toggle_darkmode))

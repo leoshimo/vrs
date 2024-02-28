@@ -22,7 +22,7 @@ impl<T: Extern, L: Locals> Env<T, L> {
             bindings: HashMap::default(),
             parent: None,
         };
-        e.bind_native(SymbolId::from("contains"), builtin::contains_fn())
+        e.bind_native(SymbolId::from("contains?"), builtin::contains_fn())
             .bind_native(SymbolId::from("eq?"), builtin::eq_fn())
             .bind_native(SymbolId::from("+"), builtin::plus_fn())
             .bind_native(SymbolId::from("ref"), builtin::ref_fn())
@@ -30,7 +30,7 @@ impl<T: Extern, L: Locals> Env<T, L> {
             .bind_native(SymbolId::from("push"), builtin::push_fn())
             .bind_native(SymbolId::from("get"), builtin::get_fn())
             .bind_native(SymbolId::from("map"), builtin::map_fn())
-            .bind_native(SymbolId::from("not"), builtin::not_fn())
+            .bind_native(SymbolId::from("not?"), builtin::not_fn())
             .bind_native(SymbolId::from("ok?"), builtin::ok_fn())
             .bind_native(SymbolId::from("err?"), builtin::err_fn())
             .bind_native(SymbolId::from("str"), builtin::str_fn())

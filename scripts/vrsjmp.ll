@@ -21,7 +21,7 @@
 
 (defn dynamic_items (query)
   "Return list of dynamically generated items or empty list"
-  (if (not query) '()
+  (if (not? query) '()
       (list
        (make_item "Search Perplexity"
                   (list 'open_url (format "http://perplexity.ai/?q={}" query)))

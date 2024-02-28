@@ -706,13 +706,13 @@ fn eval_try() {
 
 #[test]
 fn eval_not() {
-    assert_eq!(eval_expr("(not true)").unwrap(), Val::Bool(false),);
-    assert_eq!(eval_expr("(not false)").unwrap(), Val::Bool(true),);
+    assert_eq!(eval_expr("(not? true)").unwrap(), Val::Bool(false),);
+    assert_eq!(eval_expr("(not? false)").unwrap(), Val::Bool(true),);
     assert_eq!(
         eval_expr(
             r#"(begin
             (defn is_true () true)
-            (not (is_true)))"#
+            (not? (is_true)))"#
         )
         .unwrap(),
         Val::Bool(false),
@@ -721,7 +721,7 @@ fn eval_not() {
         eval_expr(
             r#"(begin
             (defn is_false () false)
-            (not (is_false)))"#
+            (not? (is_false)))"#
         )
         .unwrap(),
         Val::Bool(true),

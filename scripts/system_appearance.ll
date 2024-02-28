@@ -23,6 +23,6 @@
   :ok)
 
 (defn toggle_darkmode ()
-  (set_darkmode (not (is_darkmode))))
+  (set_darkmode (not? (is_darkmode))))
 
 (spawn_srv :system_appearance :interface '(toggle_darkmode))
