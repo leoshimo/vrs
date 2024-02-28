@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use tokio::net::UnixStream;
 use tracing::debug;
-use vrs::{Client, Connection, KeywordId};
+use vrs::{Client, Connection, Form, KeywordId};
 
 #[derive(clap::ValueEnum, Debug, Clone, PartialEq)]
 enum Format {
@@ -30,7 +30,7 @@ async fn main() -> Result<()> {
     let path = args
         .get_one::<String>("socket")
         .map(|s| PathBuf::from_str(s))
-        .with_context(|| "No path to runtime socket is configured".to_string())??;
+        .with_context(|| "No path to runtime socket is configured")??;
 
     let conn = UnixStream::connect(&path)
         .await
@@ -41,10 +41,20 @@ async fn main() -> Result<()> {
     let client = Client::new(conn);
 
     let run = async {
+        if let Some(name) = args.get_one::<String>("name") {
+            let reg_req = Form::from_expr(&format!("(register :{})", name))
+                .with_context(|| "Invalid name to register client process")?;
+            client
+                .request(reg_req)
+                .await
+                .with_context(|| "Failed to register client process")?;
+        }
+
         let file = open_file(
             args.get_one::<String>("file")
                 .expect("file has a default value"),
         )?;
+
         let format = args
             .get_one::<Format>("format")
             .expect("format has a default value");
@@ -103,6 +113,7 @@ fn cli() -> clap::Command {
              .default_value("default")
              .value_parser(EnumValueParser::<Format>::new())
         )
+        .arg(arg!(name: -n --name <NAME> "Registers client process for this connection as NAME"))
         .arg(
             arg!(socket: -S --socket <SOCKET> "Path to unix socket for vrsd")
                 .default_value(vrs::runtime_socket().into_os_string()),
@@ -188,3 +199,4 @@ async fn run_file(client: &Client, format: &Format, file: Box<dyn Read>) -> Resu
 // TODO: Test case for executing from REPL
 // TODO: Test case for executing from -c CMD
 // TODO: Test case for --format=editor
+// TODO: Test case for --name=SRV_NAME
