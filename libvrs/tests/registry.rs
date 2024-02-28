@@ -9,7 +9,7 @@ use vrs::{Error, Extern, Program, Runtime, Val};
 async fn list_services_empty() {
     let rt = Runtime::new();
 
-    let prog = Program::from_expr("(ls-srv)").unwrap();
+    let prog = Program::from_expr("(ls_srv)").unwrap();
     let hdl = rt.run(prog).await.unwrap();
 
     let val = hdl.join().await.unwrap().status.unwrap().unwrap();
@@ -37,7 +37,7 @@ async fn list_services() {
     .unwrap();
     let srv_c = rt.run(srv_c).await.unwrap();
 
-    let prog = Program::from_expr("(ls-srv)").unwrap();
+    let prog = Program::from_expr("(ls_srv)").unwrap();
     let hdl = rt.run(prog).await.unwrap();
 
     let val = hdl.join().await.unwrap().status.unwrap().unwrap();
@@ -86,7 +86,7 @@ async fn find_service() {
     let srv_b = Program::from_expr("(begin (register :service_b) (recv))").unwrap();
     let _ = rt.run(srv_b).await.unwrap();
 
-    let prog = Program::from_expr("(find-srv :service_a)").unwrap();
+    let prog = Program::from_expr("(find_srv :service_a)").unwrap();
     let hdl = rt.run(prog).await.unwrap();
     let val = hdl.join().await.unwrap().status.unwrap().unwrap();
     assert_eq!(val, Val::Extern(Extern::ProcessId(srv_a.id())),);
@@ -104,7 +104,7 @@ async fn find_service_dropped() {
     let srv_b = rt.run(srv_b).await.unwrap();
 
     // Send message to service_b
-    let prog = Program::from_expr("(send (find-srv :service_b) :hi)").unwrap();
+    let prog = Program::from_expr("(send (find_srv :service_b) :hi)").unwrap();
     let hdl = rt.run(prog).await.unwrap();
     let _ = hdl.join().await.unwrap().status.unwrap().unwrap();
 
@@ -112,8 +112,8 @@ async fn find_service_dropped() {
         .await
         .expect("srv_b should terminate");
 
-    // find-srv should return Nil after message
-    let prog = Program::from_expr("(find-srv :service_b)").unwrap();
+    // find_srv should return Nil after message
+    let prog = Program::from_expr("(find_srv :service_b)").unwrap();
     let hdl = rt.run(prog).await.unwrap();
     let val = hdl.join().await.unwrap().status;
     assert_matches!(
@@ -133,7 +133,7 @@ async fn find_service_unknown() {
     let srv_b = Program::from_expr("(begin (register :service_b) (recv))").unwrap();
     let _ = rt.run(srv_b).await.unwrap();
 
-    let prog = Program::from_expr("(find-srv :unknown)").unwrap();
+    let prog = Program::from_expr("(find_srv :unknown)").unwrap();
     let hdl = rt.run(prog).await.unwrap();
     let val = hdl.join().await.unwrap().status;
 
@@ -164,7 +164,7 @@ async fn double_register_fails() {
     }
 
     {
-        let prog = Program::from_expr("(ls-srv)").unwrap();
+        let prog = Program::from_expr("(ls_srv)").unwrap();
         let hdl = rt.run(prog).await.unwrap();
 
         let val = hdl.join().await.unwrap().status.unwrap().unwrap();
@@ -203,7 +203,7 @@ async fn overwrite_register_succeeds() {
     // TODO: Validate srv_b overwrote.
     // TOOD: Invest in better test infra to wait for system to "settle" before running validation on final system state
     //     {
-    //         let prog = Program::from_expr("(ls-srv)").unwrap();
+    //         let prog = Program::from_expr("(ls_srv)").unwrap();
     //         let hdl = rt.run(prog).await.unwrap();
     //         let val = hdl.join().await.unwrap().status.unwrap().unwrap();
     //         let svcs = match val {
@@ -237,7 +237,7 @@ async fn registry_updates_after_exit() {
 
     {
         // Baseline
-        let prog = Program::from_expr("(ls-srv)").unwrap();
+        let prog = Program::from_expr("(ls_srv)").unwrap();
         let hdl = rt.run(prog).await.unwrap();
         let val = hdl.join().await.unwrap().status.unwrap().unwrap();
         let svcs = match val {
@@ -255,7 +255,7 @@ async fn registry_updates_after_exit() {
 
     // Verify srv_b is removed from registry
     {
-        let prog = Program::from_expr("(ls-srv)").unwrap();
+        let prog = Program::from_expr("(ls_srv)").unwrap();
         let hdl = rt.run(prog).await.unwrap();
         let val = hdl.join().await.unwrap().status.unwrap().unwrap();
         let svcs = match val {
@@ -287,7 +287,7 @@ async fn registry_updates_after_kill() {
 
     {
         // Baseline
-        let prog = Program::from_expr("(ls-srv)").unwrap();
+        let prog = Program::from_expr("(ls_srv)").unwrap();
         let hdl = rt.run(prog).await.unwrap();
         let val = hdl.join().await.unwrap().status.unwrap().unwrap();
         let svcs = match val {
@@ -304,7 +304,7 @@ async fn registry_updates_after_kill() {
     srv_a.join().await.expect("srv_a should be killed");
 
     {
-        let prog = Program::from_expr("(ls-srv)").unwrap();
+        let prog = Program::from_expr("(ls_srv)").unwrap();
         let hdl = rt.run(prog).await.unwrap();
         let val = hdl.join().await.unwrap().status.unwrap().unwrap();
         let svcs = match val {

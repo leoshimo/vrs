@@ -25,7 +25,7 @@ pub(crate) fn recv_fn() -> NativeAsyncFn {
 /// Binding to list messages
 pub(crate) fn ls_msgs_fn() -> NativeAsyncFn {
     NativeAsyncFn {
-        doc: "(ls-msgs) - Returns contents of mailbox without consuming messages or blocking when mailbox is empty.".to_string(),
+        doc: "(ls_msgs) - Returns contents of mailbox without consuming messages or blocking when mailbox is empty.".to_string(),
         func: |f, args| Box::new(ls_msgs_impl(f, args)),
     }
 }
@@ -108,11 +108,11 @@ async fn recv_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
     Ok(msg.contents)
 }
 
-/// Implementation for (ls-msgs)
+/// Implementation for (ls_msgs)
 async fn ls_msgs_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
     if !args.is_empty() {
         return Err(Error::UnexpectedArguments(
-            "Unexpected ls-msgs call - No arguments expected".to_string(),
+            "Unexpected ls_msgs call - No arguments expected".to_string(),
         ));
     }
 
@@ -209,7 +209,7 @@ mod tests {
         let k = kernel::start();
 
         let hdl = k
-            .spawn_prog(Program::from_expr("(ls-msgs)").unwrap())
+            .spawn_prog(Program::from_expr("(ls_msgs)").unwrap())
             .await
             .unwrap();
 
@@ -229,7 +229,7 @@ mod tests {
                         (send (self) :one)
                         (send (self) :two)
                         (send (self) :three)
-                        (ls-msgs))",
+                        (ls_msgs))",
                 )
                 .unwrap(),
             )
@@ -240,7 +240,7 @@ mod tests {
         assert_eq!(
             exit.status.unwrap(),
             ProcessResult::Done(Val::from_expr("(:one :two :three)").unwrap()),
-            "ls-msgs should contain all messages in order"
+            "ls_msgs should contain all messages in order"
         );
     }
 
@@ -253,7 +253,7 @@ mod tests {
                 Program::from_expr(
                     "(begin
                 (def match (recv :target))
-                (list match (ls-msgs)))",
+                (list match (ls_msgs)))",
                 )
                 .unwrap(),
             )
@@ -287,7 +287,7 @@ mod tests {
                     (:ignored_one :ignored_two (:target :ignored_three))
                 )").unwrap()
             ),
-            "(recv :target) should return :target for first element, ls-msgs should return all ignored messages"
+            "(recv :target) should return :target for first element, ls_msgs should return all ignored messages"
         );
     }
 

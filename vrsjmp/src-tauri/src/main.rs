@@ -105,7 +105,7 @@ fn set_query(query: &str, state: tauri::State<State>) -> Vec<serde_json::Value> 
         .client
         .request(
             Form::from_expr(&format!(
-                "(begin (bind-srv :vrsjmp) (get_items \"{}\"))",
+                "(begin (bind_srv :vrsjmp) (get_items \"{}\"))",
                 query
             ))
             .unwrap(),

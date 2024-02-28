@@ -20,4 +20,4 @@
     (macos_ui_notify title subtitle)
     (linux_ui_notify title subtitle)))
 
-(spawn-srv :os_notify :interface '(notify))
+(spawn_srv :os_notify :interface '(notify))

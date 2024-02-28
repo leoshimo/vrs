@@ -34,7 +34,7 @@
              "(get_messages) - Returns all messages in session"
              msgs)
 
-           (spawn-srv chat_name :interface '(get_messages send_message))
+           (spawn_srv chat_name :interface '(get_messages send_message))
            )))
 
-(spawn-srv :chat :interface '(spawn_chat))
+(spawn_srv :chat :interface '(spawn_chat))

@@ -100,20 +100,20 @@ async fn register_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
     Ok(Val::keyword("ok"))
 }
 
-/// Binding for ls-srv
+/// Binding for ls_srv
 pub(crate) fn ls_srv_fn() -> NativeAsyncFn {
     NativeAsyncFn {
-        doc: "(ls-srv) - Returns a list containing all registered services and exported interface"
+        doc: "(ls_srv) - Returns a list containing all registered services and exported interface"
             .to_string(),
         func: |f, args| Box::new(ls_srv_impl(f, args)),
     }
 }
 
-/// Implementation of (ls-srv)
+/// Implementation of (ls_srv)
 async fn ls_srv_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
     if !args.is_empty() {
         return Err(Error::UnexpectedArguments(
-            "ls-srv expects no arguments".to_string(),
+            "ls_srv expects no arguments".to_string(),
         ));
     }
 
@@ -142,34 +142,34 @@ async fn ls_srv_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
     Ok(Val::List(entry_values))
 }
 
-/// Binding for find-srv
+/// Binding for find_srv
 pub(crate) fn find_srv_fn() -> Lambda {
     Lambda {
         doc: Some(
-            "(find-srv SVC_NAME) - Returns the process id of SVC_NAME in the service registry. \
+            "(find_srv SVC_NAME) - Returns the process id of SVC_NAME in the service registry. \
               Raises an error if SVC_NAME is not registered."
                 .to_string(),
         ),
         params: vec![SymbolId::from("srv_name")],
-        code: compile(&parse("(info-srv srv_name :pid)").unwrap().into()).unwrap(),
+        code: compile(&parse("(info_srv srv_name :pid)").unwrap().into()).unwrap(),
         parent: None,
     }
 }
 
 // TODO: Rust macros for creating Vals - e.g. lambdas
-/// Binding for `bind-srv`
+/// Binding for `bind_srv`
 pub(crate) fn bind_srv_fn() -> Lambda {
     Lambda {
         doc: Some(
-            "(bind-srv SVC_NAME) - Binds to SVC_NAME in service registry, defining new symbols in current process space \
+            "(bind_srv SVC_NAME) - Binds to SVC_NAME in service registry, defining new symbols in current process space \
              that communicate to SVC_NAME over message passing."
                 .to_string(),
         ),
         params: vec![SymbolId::from("srv_name")],
         code: compile(
             &parse(
-                "(map (info-srv srv_name :interface_doc) (lambda (idoc)
-                    (def-bind-interface srv_name idoc)))",
+                "(map (info_srv srv_name :interface_doc) (lambda (idoc)
+                    (def_bind_interface srv_name idoc)))",
             )
             .unwrap()
             .into(),
@@ -179,21 +179,21 @@ pub(crate) fn bind_srv_fn() -> Lambda {
     }
 }
 
-/// Binding for info-srv
+/// Binding for info_srv
 pub(crate) fn info_srv_fn() -> NativeAsyncFn {
     NativeAsyncFn {
-        doc: "(info-srv SVC_NAME ATTR) - Returns the attribute ATTR for process registered as SVC_NAME in service registry.".to_string(),
+        doc: "(info_srv SVC_NAME ATTR) - Returns the attribute ATTR for process registered as SVC_NAME in service registry.".to_string(),
         func: |f, args| Box::new(info_srv_impl(f, args)),
     }
 }
 
-/// Implementation for (info-srv NAME ATTR)
+/// Implementation for (info_srv NAME ATTR)
 async fn info_srv_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
     let (keyword, query) = match &args[..] {
         [Val::Keyword(k), Val::Keyword(q)] => (k, q),
         _ => {
             return Err(Error::UnexpectedArguments(
-                "info-srv expects single keyword argument".to_string(),
+                "info_srv expects single keyword argument".to_string(),
             ))
         }
     };
@@ -237,23 +237,23 @@ async fn info_srv_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
             Ok(Val::List(interface_doc))
         }
         q => Err(Error::UnexpectedArguments(format!(
-            "info-srv got unexpected query: {}",
+            "info_srv got unexpected query: {}",
             q
         ))),
     }
 }
 
 // TODO: This is a hack to workaround not having macros (yet)
-/// Binding for def-bind-interface
+/// Binding for def_bind_interface
 pub(crate) fn def_bind_interface() -> NativeFn {
     NativeFn {
-        doc: "(def-bind-interface SVC_NAME INTERFACE_DOC) - Runtime internal use only. Shim for service bindings".to_string(),
+        doc: "(def_bind_interface SVC_NAME INTERFACE_DOC) - Runtime internal use only. Shim for service bindings".to_string(),
         func: |f, args| {
             let (svc_name, interface_doc) =
                 match args {
                     [Val::Keyword(svc_name), Val::List(idoc)] => (svc_name, idoc),
                     _ => return Err(Error::UnexpectedArguments(
-                        "def-bind-interface expects a keyword for service and interface doc list it exposes"
+                        "def_bind_interface expects a keyword for service and interface doc list it exposes"
                             .to_string(),
                     )),
                 };
@@ -287,7 +287,7 @@ pub(crate) fn def_bind_interface() -> NativeFn {
                 .map(|m| match m {
                     Val::Symbol(sym) => Ok(sym),
                     _ => Err(Error::UnexpectedArguments(
-                        "def-bind-interface expects a symbols after first keyword-argument"
+                        "def_bind_interface expects a symbols after first keyword-argument"
                             .to_string(),
                     )),
                 })
@@ -323,7 +323,7 @@ fn spawn_srv_impl(_f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
     //     (spawn_srv :SRV_NAME :interface '(sym_a sym_b))
     // Into
     //     (spawn (lambda () (begin
-    //            (try (kill (find-srv :SRV_NAME)))
+    //            (try (kill (find_srv :SRV_NAME)))
     //            (srv :SRV_NAME :interface '(sym_a sym_b)))))
 
     let mut srv = vec![Val::symbol("srv")];
@@ -334,7 +334,7 @@ fn spawn_srv_impl(_f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
         srv.push(Val::List(vec![Val::symbol("quote"), interfaces.clone()]));
     }
 
-    let kill_srv = Val::from_expr(&format!("(try (kill (find-srv {})))", args[0].clone())).unwrap();
+    let kill_srv = Val::from_expr(&format!("(try (kill (find_srv {})))", args[0].clone())).unwrap();
 
     let ast = Val::List(vec![
         Val::symbol("spawn"),
@@ -511,7 +511,7 @@ fn lambda_stub_for_interface(
         .chain(msg_args.iter().cloned())
         .collect::<Vec<_>>();
     let ast =
-        parse(format!(r#"(call (find-srv {}) {})"#, srv_name, Val::List(msg)).as_str()).unwrap();
+        parse(format!(r#"(call (find_srv {}) {})"#, srv_name, Val::List(msg)).as_str()).unwrap();
     let code = compile(&ast.into()).unwrap();
     Lambda {
         doc: Some(doc),
@@ -603,7 +603,7 @@ mod tests {
                     doc: None,
                     params: vec![],
                     code: compile(&v(r#"
-                        (call (find-srv :launcher) (list :get_items))
+                        (call (find_srv :launcher) (list :get_items))
                         "#))
                     .unwrap(),
                     parent: None
@@ -625,7 +625,7 @@ mod tests {
                     doc: None,
                     params: vec![SymbolId::from("title"), SymbolId::from("cmd")],
                     code: compile(&v(r#"
-                        (call (find-srv :launcher) (list :add_item title cmd))
+                        (call (find_srv :launcher) (list :add_item title cmd))
                         "#))
                     .unwrap(),
                     parent: None,

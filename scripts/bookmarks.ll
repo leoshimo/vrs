@@ -2,7 +2,7 @@
 # bookmarks.ll - Bookmarking
 #
 
-(bind-srv :os_browser)
+(bind_srv :os_browser)
 
 (def bookmarks '())
 
@@ -22,4 +22,4 @@
   "Clear all bookmarks"
   (set bookmarks '()))
 
-(spawn-srv :bookmarks :interface '(get_bookmarks bookmark_active_tab clear_bookmarks))
+(spawn_srv :bookmarks :interface '(get_bookmarks bookmark_active_tab clear_bookmarks))

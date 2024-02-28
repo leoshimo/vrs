@@ -8,4 +8,4 @@
   "(start_recording) - Start a Screen Recording if recording is not active"
   (exec "osascript" "-e" "tell application \"QuickTime Player\" to new screen recording"))
 
-(spawn-srv :os_screencap :interface '(start_screencap))
+(spawn_srv :os_screencap :interface '(start_screencap))

@@ -25,4 +25,4 @@
     ("Google Chrome" (active_tab_chrome))
     (_ (error "Unrecognized browser"))))
 
-(spawn-srv :os_browser :interface '(active_tab))
+(spawn_srv :os_browser :interface '(active_tab))

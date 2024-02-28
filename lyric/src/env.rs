@@ -40,7 +40,7 @@ impl<T: Extern, L: Locals> Env<T, L> {
             .bind_native(SymbolId::from("dbg"), builtin::dbg_fn())
             .bind_native(SymbolId::from("read"), builtin::read_fn())
             .bind_native(SymbolId::from("help"), builtin::help_fn())
-            .bind_native(SymbolId::from("ls-env"), builtin::ls_env_fn());
+            .bind_native(SymbolId::from("ls_env"), builtin::ls_env_fn());
 
         e
     }

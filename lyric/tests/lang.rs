@@ -92,10 +92,10 @@ fn begin_no_scope() {
     let prog = r#"
         (begin
             (def x :before)
-            (def get-x (lambda () x))
+            (def get_x (lambda () x))
             (begin
                 (def x :after)
-                (get-x)         # should be :after
+                (get_x)         # should be :after
             )
         )"#;
     assert_eq!(
@@ -110,10 +110,10 @@ fn lexical_scope_vars() {
     let prog = r#"
         (let ()
             (def scope :lexical)
-            (def get-scope (lambda () scope))
+            (def get_scope (lambda () scope))
             (let ()
                 (def scope :dynamic)
-                (get-scope)  # should be lexical
+                (get_scope)  # should be lexical
             )
         )"#;
     assert_eq!(eval_expr(prog).unwrap(), Val::keyword("lexical"));
@@ -122,11 +122,11 @@ fn lexical_scope_vars() {
 #[test]
 fn lexical_scope_funcs() {
     let prog = r#"
-             (let () (def get-scope (lambda () :lexical))
-                    (def calls-get-scope (lambda () (get-scope)))
+             (let () (def get_scope (lambda () :lexical))
+                    (def calls-get_scope (lambda () (get_scope)))
                     (let ()
-                        (def get-scope (lambda () :dynamic))
-                        (calls-get-scope)  # should be lexical
+                        (def get_scope (lambda () :dynamic))
+                        (calls-get_scope)  # should be lexical
                     ))
         "#;
     assert_eq!(eval_expr(prog).unwrap(), Val::keyword("lexical"));
@@ -194,8 +194,8 @@ fn native_bindings() {
 fn adder() {
     let prog = r#"
         (begin
-            (def make-addr (lambda (x) (lambda (y) (+ y x))))
-            (def add2 (make-addr 2))
+            (def make_addr (lambda (x) (lambda (y) (+ y x))))
+            (def add2 (make_addr 2))
             (add2 40))
     "#;
     assert_eq!(eval_expr(prog).unwrap(), Val::Int(42));

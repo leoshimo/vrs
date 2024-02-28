@@ -40,8 +40,8 @@
 
 # TODO: Need better DX around calling service functions
 # Service exports needs re-import in client process - Global Namespace?
-(add_item "Toggle Darkmode" '(call (find-srv :system_appearance) '(:toggle_darkmode)))
+(add_item "Toggle Darkmode" '(call (find_srv :system_appearance) '(:toggle_darkmode)))
 
-(spawn-srv :launcher
+(spawn_srv :launcher
    :interface '(get_items add_item))
 

@@ -3,10 +3,10 @@
 #
 
 # TODO: Move to init.ll w/ supervision tree
-(bind-srv :system_appearance)
-(bind-srv :bookmarks)
-(bind-srv :nl_remind)
-(bind-srv :os_screencap)
+(bind_srv :system_appearance)
+(bind_srv :bookmarks)
+(bind_srv :nl_notify)
+(bind_srv :os_screencap)
 
 (defn get_items (query)
   "Retrieve items to display"
@@ -67,4 +67,4 @@
    (make_item "Screen Capture" '(start_screencap))
    ))
 
-(spawn-srv :vrsjmp :interface '(get_items on_click))
+(spawn_srv :vrsjmp :interface '(get_items on_click))

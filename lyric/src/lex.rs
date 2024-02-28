@@ -223,8 +223,8 @@ mod tests {
             Ok(vec![Token::Symbol(String::from("hello_world"))])
         );
         assert_eq!(
-            lex("hello-world"),
-            Ok(vec![Token::Symbol(String::from("hello-world"))])
+            lex("hello_world"),
+            Ok(vec![Token::Symbol(String::from("hello_world"))])
         );
         assert_eq!(
             lex("    hello    "),

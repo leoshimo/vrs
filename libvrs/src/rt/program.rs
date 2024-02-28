@@ -183,20 +183,20 @@ pub fn proc_env() -> Env {
 
     {
         e.bind_native_async(SymbolId::from("recv"), bindings::recv_fn())
-            .bind_native_async(SymbolId::from("ls-msgs"), bindings::ls_msgs_fn())
+            .bind_native_async(SymbolId::from("ls_msgs"), bindings::ls_msgs_fn())
             .bind_native_async(SymbolId::from("send"), bindings::send_fn())
             .bind_lambda(SymbolId::from("call"), bindings::call_fn());
     }
 
     {
         e.bind_native(SymbolId::from("srv"), bindings::srv_fn())
-            .bind_lambda(SymbolId::from("bind-srv"), bindings::bind_srv_fn())
+            .bind_lambda(SymbolId::from("bind_srv"), bindings::bind_srv_fn())
             .bind_native(
-                SymbolId::from("def-bind-interface"),
+                SymbolId::from("def_bind_interface"),
                 bindings::def_bind_interface(),
             )
-            .bind_native_async(SymbolId::from("info-srv"), bindings::info_srv_fn())
-            .bind_native(SymbolId::from("spawn-srv"), bindings::spawn_srv_fn());
+            .bind_native_async(SymbolId::from("info_srv"), bindings::info_srv_fn())
+            .bind_native(SymbolId::from("spawn_srv"), bindings::spawn_srv_fn());
     }
 
     {
@@ -221,8 +221,8 @@ pub fn proc_env() -> Env {
 
     {
         e.bind_native_async(SymbolId::from("register"), bindings::register_fn())
-            .bind_lambda(SymbolId::from("find-srv"), bindings::find_srv_fn())
-            .bind_native_async(SymbolId::from("ls-srv"), bindings::ls_srv_fn());
+            .bind_lambda(SymbolId::from("find_srv"), bindings::find_srv_fn())
+            .bind_native_async(SymbolId::from("ls_srv"), bindings::ls_srv_fn());
     }
 
     {

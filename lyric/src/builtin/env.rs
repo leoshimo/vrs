@@ -1,14 +1,14 @@
 //! Environment related bindings
 use crate::{Error, Extern, Locals, NativeFn, NativeFnOp, Val};
 
-/// Binding for ls-env builtin for dumping environment variables in current scope
+/// Binding for ls_env builtin for dumping environment variables in current scope
 pub fn ls_env_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
-        doc: "(ls-env EXPR) - Returns list of symbols defined in environment".to_string(),
+        doc: "(ls_env EXPR) - Returns list of symbols defined in environment".to_string(),
         func: |f, args| {
             if !args.is_empty() {
                 return Err(Error::UnexpectedArguments(
-                    "ls-env is not expected to have arguments".to_string(),
+                    "ls_env is not expected to have arguments".to_string(),
                 ));
             }
             let mut res = vec![];

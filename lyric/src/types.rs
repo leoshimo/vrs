@@ -509,12 +509,12 @@ mod tests {
     fn list_to_string() {
         assert_eq!(
             Val::List(vec![
-                Val::symbol("my-func"),
+                Val::symbol("my_func"),
                 Val::Int(5),
                 Val::string("string"),
             ])
             .to_string(),
-            "(my-func 5 \"string\")"
+            "(my_func 5 \"string\")"
         );
         assert_eq!(
             Val::List(vec![

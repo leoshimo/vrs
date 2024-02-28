@@ -30,7 +30,7 @@ async fn client_pubsub_from_service() {
         .request(
             Form::from_expr(
                 r#"(begin
-                    (bind-srv :counter)
+                    (bind_srv :counter)
                     (increment 1)
                     (increment 10)
                     (increment 31))
@@ -130,7 +130,7 @@ async fn client_pubsub_from_another_client_via_service() {
         .request(
             Form::from_expr(
                 r#"(begin
-                    (bind-srv :counter)
+                    (bind_srv :counter)
                     (increment 1)
                     (increment 10)
                     (increment 31))
@@ -158,4 +158,4 @@ async fn client_pubsub_from_another_client_via_service() {
     );
 }
 
-// TODO: Test that Client::request (subscribe :my_topic) is different from Client::subscribe(my_topic) (former is observable via ls-msgs + subscribes at process level)
+// TODO: Test that Client::request (subscribe :my_topic) is different from Client::subscribe(my_topic) (former is observable via ls_msgs + subscribes at process level)

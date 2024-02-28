@@ -16,9 +16,9 @@ async fn srv_echo() {
     let req = Program::from_expr(
         r#"
         (list
-            (call (find-srv :echo) '(:echo "one"))
-            (call (find-srv :echo) '(:echo "two"))
-            (call (find-srv :echo) '(:echo "three"))
+            (call (find_srv :echo) '(:echo "one"))
+            (call (find_srv :echo) '(:echo "two"))
+            (call (find_srv :echo) '(:echo "three"))
         )"#,
     )
     .unwrap();
@@ -45,8 +45,8 @@ async fn srv_multi_interface() {
             (defn pong (msg) (list "ping" msg))
             (srv :ping_pong :interface '(ping pong)))))
         (list
-            (call (find-srv :ping_pong) '(:ping "hi"))
-            (call (find-srv :ping_pong) '(:pong "bye")))
+            (call (find_srv :ping_pong) '(:ping "hi"))
+            (call (find_srv :ping_pong) '(:pong "bye")))
     )"#;
     let prog = Program::from_expr(echo_prog).unwrap();
     let hdl = rt.run(prog).await.unwrap();
@@ -72,7 +72,7 @@ async fn srv_echo_invalid_msg() {
     let echo_srv = Program::from_expr(echo_prog).unwrap();
     let _ = rt.run(echo_srv).await.unwrap();
 
-    let req = Program::from_expr(r#"(call (find-srv :echo) '(:jibberish "one"))"#).unwrap();
+    let req = Program::from_expr(r#"(call (find_srv :echo) '(:jibberish "one"))"#).unwrap();
     let req = rt.run(req).await.unwrap();
 
     let resp = req.join().await.unwrap();
@@ -97,7 +97,7 @@ async fn srv_echo_invalid_arg() {
     let _ = rt.run(echo_srv).await.unwrap();
 
     // no arg for :echo export
-    let req = Program::from_expr(r#"(call (find-srv :echo) '(:echo))"#).unwrap();
+    let req = Program::from_expr(r#"(call (find_srv :echo) '(:echo))"#).unwrap();
     let req = rt.run(req).await.unwrap();
 
     let resp = req.join().await.unwrap();
@@ -120,7 +120,7 @@ async fn spawn_echo_svc() {
             (defn echo (name) (list "got" name))
             (srv :echo :interface '(echo))
          )))
-         (call (find-srv :echo) '(:echo "hello")))
+         (call (find_srv :echo) '(:echo "hello")))
     "#;
     let prog = Program::from_expr(prog).unwrap();
     let hdl = rt.run(prog).await.unwrap();
