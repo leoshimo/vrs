@@ -1,0 +1,93 @@
+use vrs::{ProcessResult, Program, Runtime, Val};
+
+async fn run(source: &str) -> Val {
+    let rt = Runtime::new("test");
+    let result = rt
+        .run(Program::from_expr(source).unwrap())
+        .await
+        .unwrap()
+        .join()
+        .await
+        .unwrap();
+    match result.status.unwrap() {
+        ProcessResult::Done(value) => value,
+        other => panic!("{other:?}"),
+    }
+}
+fn value(source: &str) -> Val {
+    Val::from_expr(source).unwrap()
+}
+
+#[tokio::test]
+async fn service_expansion_does_not_evaluate_arguments_or_query_registry() {
+    let result = run("(list (list? (macroexpand_1 '(srv! (error \"name ran\") :interface (error \"interface ran\")))) (list? (macroexpand_1 '(spawn_srv! missing_name :interface missing_interface))) (ls_srv))").await;
+    assert_eq!(result, value("(true true ())"));
+}
+
+#[tokio::test]
+async fn service_macro_preserves_dynamic_arguments_and_global_imports() {
+    let result = run("(begin
+      (def names 0) (def interfaces 0)
+      (defn start (captured)
+        (defn echo (msg) (list captured msg))
+        (spawn_srv! (begin (set names (+ names 1)) :dynamic)
+          :interface (begin (set interfaces (+ interfaces 1)) '(echo))))
+      (def child (start 42))
+      (defn import () (bind_srv :dynamic))
+      (import)
+      (list names interfaces (echo 7) (eq? child (find_srv :dynamic))))")
+    .await;
+    assert_eq!(result, value("(1 1 (42 7) true)"));
+}
+
+#[tokio::test]
+async fn dispatch_retains_startup_patterns_and_looks_up_current_callable() {
+    let result = run("(begin
+      (def parent (self))
+      (def child (spawn (fn ()
+      (defn handler (arg) (list :before arg))
+      (defn replace () (set handler (fn (arg) (list :after arg))) :ok)
+      (defn duplicate (x x) x)
+      (defn ignored (_) :ignored)
+      (srv! :changing :interface '(handler replace duplicate ignored) :ready parent))))
+      (recv (list :service_ready child))
+      (def target (find_srv :changing))
+      (def before (call target '(:handler 1)))
+      (call target '(:replace))
+      (list before (call target '(:handler 2))
+        (call target '(:duplicate 3 3)) (call target '(:duplicate 3 4))
+        (call target '(:ignored :anything)) (call target '(:handler))))")
+    .await;
+    assert_eq!(result,value("((:before 1) (:after 2) 3 (:err \"Unrecognized message\") :ignored (:err \"Unrecognized message\"))"));
+}
+
+#[tokio::test]
+async fn child_macro_namespace_is_a_snapshot_and_message_data_stays_data() {
+    let result = run("(begin
+      (defmacro m () 1)
+      (def parent (self))
+      (spawn (fn ()
+        (eval '(defmacro m () 2))
+        (send parent (list (m!) (eval '(m!)) '(m!)))))
+      (list (recv) (eval '(m!))))")
+    .await;
+    assert_eq!(result, value("((1 2 (m!)) 1)"));
+}
+
+#[tokio::test]
+async fn source_scripts_register_macros_in_order() {
+    let rt = Runtime::new("test");
+    let program =
+        Program::from_script("(defmacro plus_one (x) `(+ ,x 1))\n(plus_one! 41)").unwrap();
+    let result = rt.run(program).await.unwrap().join().await.unwrap();
+    assert_eq!(result.status.unwrap(), ProcessResult::Done(Val::Int(42)));
+}
+
+#[tokio::test]
+async fn service_macro_option_errors_are_catchable_before_spawning() {
+    let result = run("(list (err? (try (srv! :bad)))
+      (err? (try (spawn_srv! :bad :interface '() :ready (self))))
+      (err? (try (srv! :bad :interface '() :interface '()))) (ls_srv))")
+    .await;
+    assert_eq!(result, value("(true true true ())"));
+}

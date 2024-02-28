@@ -228,14 +228,9 @@ pub fn proc_env() -> Env {
 
     {
         e.bind_native(SymbolId::from("srv"), bindings::srv_fn())
-            .bind_lambda(SymbolId::from("bind_srv"), bindings::bind_srv_fn())
             .bind_native(
                 SymbolId::from("import_entity_completions"),
                 bindings::import_entity_completions_fn(),
-            )
-            .bind_native(
-                SymbolId::from("def_bind_interface"),
-                bindings::def_bind_interface(),
             )
             .bind_native_async(SymbolId::from("info_srv"), bindings::info_srv_fn())
             .bind_native(SymbolId::from("spawn_srv"), bindings::spawn_srv_fn());
@@ -285,6 +280,7 @@ pub fn proc_env() -> Env {
             .bind_native_async(SymbolId::from("publish"), bindings::publish_fn());
     }
 
+    bindings::install_service_library(&mut e);
     e
 }
 

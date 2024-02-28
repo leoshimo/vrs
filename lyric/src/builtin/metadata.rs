@@ -1,5 +1,21 @@
 use crate::{Error, Extern, Form, Locals, NativeFn, NativeFnOp, Val};
 
+pub fn with_meta_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
+    NativeFn {
+        metadata: vec![],
+        doc: "(with_meta FUNCTION METADATA) - Return a lambda with source-data keyword metadata; its real signature is retained".into(),
+        func: |_, args| {
+            let [Val::Lambda(function), Val::List(metadata)] = args else { return Err(Error::UnexpectedArguments("with_meta expects a lambda and metadata record".into())); };
+            if metadata.len() % 2 != 0 || metadata.chunks_exact(2).any(|pair| !matches!(pair[0],Val::Keyword(_))) {
+                return Err(Error::UnexpectedArguments("metadata must contain keyword/value pairs".into()));
+            }
+            let mut function = function.clone();
+            function.metadata = metadata.iter().map(crate::macros::source_form).collect::<crate::Result<_>>()?;
+            Ok(NativeFnOp::Return(Val::Lambda(function)))
+        },
+    }
+}
+
 pub fn field<'a>(record: &'a [Form], name: &str) -> Option<&'a Form> {
     record
         .chunks_exact(2)
