@@ -5,6 +5,7 @@
 # TODO: Move to init.ll w/ supervision tree
 (bind-srv :system_appearance)
 (bind-srv :bookmarks)
+(bind-srv :nl_remind)
 
 (defn get_items (query)
   "Retrieve items to display"
@@ -24,7 +25,10 @@
        (make_item "Search Perplexity"
                   (list 'open_url (format "http://perplexity.ai/?q={}" query)))
        (make_item "Search Google"
-                  (list 'open_url (format "http://google.com/search?q={}" query))))))
+                  (list 'open_url (format "http://google.com/search?q={}" query)))
+       (make_item "Remind Me"
+                  (list 'remind_me query))
+       )))
 
 (defn on_click (item)
   "Handle an on_click payload from item"
