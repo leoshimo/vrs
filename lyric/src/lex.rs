@@ -110,7 +110,7 @@ impl Tokens<'_> {
                     let actual_ch = match ch {
                         'n' if escaped => '\n',
                         '"' if escaped => '\"',
-                        _ => ch
+                        _ => ch,
                     };
                     escaped = false;
                     return Some(actual_ch);
