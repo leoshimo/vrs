@@ -11,17 +11,17 @@
 
 (defn get_items (query)
   "Retrieve items to display"
-  (+ (get_todos)
+  (+ (todo_items)
      (favorite_items)
      (get_bookmarks)
-     (dynamic_items query)))
+     (query_items query)))
 
 (defn make_item (title command)
   "Create an item with TITLE and COMMAND"
   (list :title title :on_click command))
 
-(defn dynamic_items (query)
-  "Return list of dynamically generated items or empty list"
+(defn query_items (query)
+  "Return a dynamic list of item for current query"
   (if (not? query) '()
       (list
        (make_item "Add TODO"
@@ -33,12 +33,11 @@
        (make_item "Just Do It"
                   (list 'do_it query)))))
 
-(defn on_click (item)
-  "Handle an on_click payload from item"
-  (def cmd (get item :on_click))
-  (def res (try (eval cmd)))
-  (if (err? res)
-    (notify "Encountered error" (format "{}" err))))
+(defn todo_items ()
+  "(todo_items) - Retrieve todo items and create markup for it"
+  (map (get_todos)
+       (fn (t) (list :title (get t :title)
+                     :on_click (list 'set_todos_done_by_id (get t :id))))))
 
 (defn favorite_items ()
   "Returns list of static vrsjmp items"
@@ -69,5 +68,13 @@
 
    (make_item "Screen Capture" '(start_screencap))
    ))
+
+(defn on_click (item)
+  "Handle an on_click payload from item"
+  (def cmd (get item :on_click))
+  (def res (try (eval cmd)))
+  (if (err? res)
+    (notify "Encountered error" (format "{}" err))))
+
 
 (spawn_srv :vrsjmp :interface '(get_items on_click))

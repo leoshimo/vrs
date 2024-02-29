@@ -10,7 +10,6 @@
 
 (defn save_todos ()
   "(save_todos) - save current state to file"
-  (publish :probe (list :id id :todos todos))
   (fdump todos_path (list :id id :todos todos)))
 
 (defn next_id ()
@@ -23,19 +22,24 @@
   "(add_todo TITLE) - Add a new todo named TITLE"
   (def id (next_id))
   (set todos (push todos
-                     (list :id id
-                           :title (format "TODO - {}" title)
-                           :on_click (list 'todos_on_click id))))
+                   (list :todo
+                      :id id
+                      :title (format "TODO - {}" title))))
   (save_todos))
 
 (defn get_todos ()
   "(get_todos) - Returns the set of pending todos"
   todos)
 
-(defn todos_on_click (id)
-  "(todos_on_click ID) - Handle the click on a given todos item with ID"
+(defn set_todos_done (todo)
+  "(set_todos_done TODO) - Mark the given TODO item from (get_todos) as done"
+  (set_todos_done_by_id (get todo :id))
+  (save_todos))
+
+(defn set_todos_done_by_id (id)
+  "(set_todos_done_by_id ID) - Mark the given TODO item with given ID as done "
   # filter clicked todos
   (set todos (filter todos (fn (it) (not? (contains? it id)))))
   (save_todos))
 
-(spawn_srv :todos :interface '(get_todos add_todo todos_on_click))
+(spawn_srv :todos :interface '(get_todos add_todo set_todos_done set_todos_done_by_id))
