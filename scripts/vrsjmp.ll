@@ -5,7 +5,7 @@
 # TODO: Move to init.ll w/ supervision tree
 (bind_srv :system_appearance)
 (bind_srv :bookmarks)
-(bind_srv :nl_notify)
+(bind_srv :nl_agent)
 (bind_srv :os_screencap)
 (bind_srv :todos)
 
@@ -31,8 +31,8 @@
                   (list 'open_url (format "http://perplexity.ai/?q={}" query)))
        (make_item "Search Google"
                   (list 'open_url (format "http://google.com/search?q={}" query)))
-       (make_item "Remind Me"
-                  (list 'remind_me query)))))
+       (make_item "Just Do It"
+                  (list 'do_it query)))))
 
 (defn on_click (item)
   "Handle an on_click payload from item"

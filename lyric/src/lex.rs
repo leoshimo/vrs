@@ -107,8 +107,13 @@ impl Tokens<'_> {
                 if !escaped && ch == '\\' {
                     escaped = true;
                 } else {
+                    let actual_ch = match ch {
+                        'n' if escaped => '\n',
+                        '"' if escaped => '\"',
+                        _ => ch
+                    };
                     escaped = false;
-                    return Some(ch);
+                    return Some(actual_ch);
                 }
             }
             None
