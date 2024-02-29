@@ -11,11 +11,10 @@
 
 (defn get_items (query)
   "Retrieve items to display"
-  # TODO: Support N-ary +
   (+ (get_todos)
-     (+ (favorite_items)
-        (+ (get_bookmarks)
-           (dynamic_items query)))))
+     (favorite_items)
+     (get_bookmarks)
+     (dynamic_items query)))
 
 (defn make_item (title command)
   "Create an item with TITLE and COMMAND"
