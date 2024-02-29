@@ -118,10 +118,10 @@ true                              # booleans are `true` or `false`
 (eval (read "(+ 40 2)")) # => 42
 
 # and there are more builtins and symbols in environment, introspectable via `ls-env` and `help`
-(ls-env)           # see all symbols defined in environment
+(ls_env)           # see all symbols defined in environment
 (help recv)        # see documentation via `help`
 
-(bind-srv :counter)
+(bind_srv :counter)
 (inc 10)
 (inc 10)
 (inc 10)
@@ -138,16 +138,20 @@ These processes are implemented as [green threads](https://en.wikipedia.org/wiki
 and are lightweight compared to OS processes. Processes are scheduled on
 multiple cores in an IO-aware manner.
 
-Each process has a single thread of execution. CPU-bound and IO-bound work is
-transparent at program level, but the runtime schedules work such that a
+Each process has a single logical thread of execution. CPU-bound and IO-bound
+work is transparent at process level, but the runtime schedules work such that a
 processes waiting for IO or running CPU-intensive work do not block cores.
+
+While processes are preemptively scheduled, each process can create fibers,
+which can be used for cooperative multitasking, coroutines, infinite generators,
+etc within a single service.
 
 Millions of processes can run on a single machine, without a single process
 halting the system altogether.
 
-With lightweight processes and a sequential programming model to handle IO-bound
-and CPU-bound work transparently, the intention is to simplify typical
-event-based or callback-based idioms used for building software.
+The low cost of process allows it to serve as a single abstraction to simplify
+typical event-based, callback-based, or scheduling idioms used in building
+software.
 
 For example, annual jobs can be represented as a infinite looping program that sleeps for a year:
 
@@ -160,7 +164,7 @@ And user flows can be represented sequentially, without blocking the "main threa
 
 ```lyric
 (def query (prompt "Enter search term: ")) # block on user response
-(def items (search-items query))           # network-bound query
+(def items (search_items query))           # network-bound query
 (def selection (select items))             # block on user selection
 ```
 
@@ -172,7 +176,7 @@ between process is via *message passing*, covered below.
 # See list of running processes in runtime
 (ps)
 
-# See this process's process-id
+# See this process's process_id
 (self)
 
 # Spawn a new process
@@ -189,7 +193,7 @@ Each process has a dedicated mailbox that it can poll to receive messages:
 
 ```lyric
 # See messages in mailbox, without blocking or consuming a message
-(ls-msgs)
+(ls_msgs)
 
 # Poll for new message. This blocks execution until a message is received:
 (recv)
@@ -218,10 +222,10 @@ Each process has a dedicated mailbox that it can poll to receive messages:
 
 - `register`
 - `srv`
-- `spawn-srv`
-- `bind-srv`
-- `ls-srv`
-- `find-srv`
+- `spawn_srv`
+- `bind_srv`
+- `ls_srv`
+- `find_srv`
 
 ### PubSub
 
