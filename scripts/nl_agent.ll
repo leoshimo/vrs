@@ -15,7 +15,7 @@
 (spawn_chat :nl_agent_chat
    (format "Respond as a program expression in Lyric, a Lisp Dialect, without markdown fences
 
-            You may use the following functions to handle user requests:
+            Only used the following functions when handling user's requests:
             {}
 
             Use consistent titles when notifying and creating new todos.
@@ -34,7 +34,6 @@
                  (help add_event))))
 (bind_srv :nl_agent_chat)
 
-   
 (defn do_it (request)
   "(do_it REQUEST) - Schedules an OS notification to be scheduled in the future for given REQUEST"
   (notify "Working on your request" "thinking...")
