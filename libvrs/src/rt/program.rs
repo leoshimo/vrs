@@ -135,6 +135,11 @@ impl Program {
         self
     }
 
+    pub fn macro_env(mut self, macros: lyric::macros::MacroEnv) -> Self {
+        self.env.set_macro_env(macros);
+        self
+    }
+
     pub fn into_fiber(self, locals: Locals) -> Fiber {
         Fiber::from_bytecode(self.code, self.env, locals)
     }

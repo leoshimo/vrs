@@ -118,3 +118,30 @@ async fn expansion_limits_recover() {
             .contains("depth exceeded")
     );
 }
+
+#[tokio::test]
+async fn generated_definitions_are_inert_during_inspection() {
+    let source = "(begin (defmacro maker () '(defmacro made () 42))
+      (macroexpand_1 '(maker!)) (def absent (err? (try (made!))))
+      (maker!) (list absent (made!)))";
+    assert_eq!(
+        eval(source).await.unwrap(),
+        Value::from_expr("(true 42)").unwrap()
+    );
+}
+
+#[tokio::test]
+async fn intermediate_values_and_reader_nesting_are_bounded() {
+    assert!(
+        eval("(begin (defmacro grow () (def s \"x\") (loop (set s (str s s)))) (grow!))")
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("string size limit")
+    );
+    let source = format!("{}0{}", "(".repeat(300), ")".repeat(300));
+    assert!(lyric::parse(&source)
+        .unwrap_err()
+        .to_string()
+        .contains("nesting"));
+}

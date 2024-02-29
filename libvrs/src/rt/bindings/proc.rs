@@ -184,7 +184,8 @@ async fn spawn_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
             ))
         }
     };
-    let prog = Program::from_lambda(lambda)?;
+    let macros = fiber.global_env().lock().unwrap().macro_env();
+    let prog = Program::from_lambda(lambda)?.macro_env(macros);
     let kernel = fiber
         .locals()
         .kernel

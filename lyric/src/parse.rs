@@ -33,6 +33,18 @@ fn parse_form<I>(tokens: &mut Peekable<I>) -> Result<Form>
 where
     I: Iterator<Item = Token>,
 {
+    parse_form_at_depth(tokens, 0)
+}
+
+fn parse_form_at_depth<I>(tokens: &mut Peekable<I>, depth: usize) -> Result<Form>
+where
+    I: Iterator<Item = Token>,
+{
+    if depth > 256 {
+        return Err(Error::InvalidExpression(
+            "source nesting exceeds 256 levels".into(),
+        ));
+    }
     let next = tokens
         .next()
         .ok_or(Error::IncompleteExpression("Expected a form".to_string()))?;
@@ -49,7 +61,7 @@ where
                 if next == &Token::ParenRight {
                     break;
                 }
-                items.push(parse_form(tokens)?);
+                items.push(parse_form_at_depth(tokens, depth + 1)?);
             }
             if tokens.peek() != Some(&Token::ParenRight) {
                 return Err(Error::IncompleteExpression(
@@ -85,7 +97,7 @@ where
                 }
                 _ => (),
             }
-            let quoted = parse_form(tokens)?;
+            let quoted = parse_form_at_depth(tokens, depth + 1)?;
             Form::List(vec![Form::symbol(name), quoted])
         }
     };

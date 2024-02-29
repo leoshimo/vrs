@@ -97,7 +97,8 @@ PREFIXES are ordered from outermost to innermost; preserve spaces/comments."
                        (point) (progn (forward-sexp) (point)))))
             (skip-chars-forward " \t")
             (if (or (eolp) (looking-at "#")
-                    (member head '("begin" "defn" "lambda" "loop")))
+                    (member head '("begin" "defn" "defmacro" "for_syntax" "lambda" "loop"))
+                    (string-suffix-p "!" head))
                 body
               (current-column)))))))))
 
@@ -184,9 +185,10 @@ block strings, rather than reading and printing it as Emacs Lisp."
   (pcase-let ((`(,start . ,end) (lyric--last-sexp-bounds)))
     (buffer-substring-no-properties start end)))
 
-(defun lyric--eval (start end replace &optional editor-format)
+(defun lyric--eval (start end replace &optional editor-format source-result)
   "Evaluate START to END; optionally REPLACE or request EDITOR-FORMAT.
-Display text strings raw, but preserve string syntax when replacing source."
+Display text strings raw, but preserve string syntax when replacing source
+or when SOURCE-RESULT is non-nil."
   (unless (and (integerp lyric-result-width) (> lyric-result-width 0))
     (user-error "lyric-result-width must be a positive integer"))
   (let ((output (generate-new-buffer " *Lyric evaluation*"))
@@ -195,7 +197,7 @@ Display text strings raw, but preserve string syntax when replacing source."
                          lyric-vrsctl-command
                          (if editor-format "editor" "pretty")
                          lyric-result-width
-                         (if replace "" " --raw"))))
+                         (if (or replace source-result) "" " --raw"))))
     (unwind-protect
         (let ((status (shell-command-on-region
                        start end command output nil errors)))
@@ -245,10 +247,25 @@ With prefix argument REPLACE, replace the region with its result."
   (interactive "r\nP")
   (lyric--eval start end replace))
 
+(defun lyric-macroexpand-last-sexp (repeat-outer)
+  "Display one expansion of the preceding Lyric form without running its result.
+With prefix REPEAT-OUTER, expand the outermost call repeatedly.  This uses the
+macro namespace of the vrsctl connection; for custom definitions, evaluate a
+region containing both the definitions and an explicit macroexpand_1 call."
+  (interactive "P")
+  (let ((source (lyric--last-sexp-source))
+        (lyric-vrsctl-command lyric-vrsctl-command)
+        (lyric-result-width lyric-result-width))
+    (with-temp-buffer
+      (insert (format "(%s (quote %s))"
+                      (if repeat-outer "macroexpand" "macroexpand_1") source))
+      (lyric--eval (point-min) (point-max) nil nil t))))
+
 (defvar-keymap lyric-mode-map
   :doc "Keymap for `lyric-mode'."
   "C-c C-c" #'lyric-eval-buffer
   "C-c C-e" #'lyric-eval-last-sexp
+  "C-c C-m" #'lyric-macroexpand-last-sexp
   "C-c C-r" #'lyric-eval-region)
 
 (define-derived-mode lyric-mode janet-mode "Lyric"
@@ -259,7 +276,7 @@ With prefix argument REPLACE, replace the region with its result."
   (setq-local indent-tabs-mode nil)
   (setq-local syntax-propertize-function #'lyric--syntax-propertize)
   (font-lock-add-keywords nil
-                         '(("(\\(unquote-splicing\\)\\_>" 1 font-lock-keyword-face)))
+                         '(("(\\(unquote-splicing\\|defmacro\\|for_syntax\\)\\_>" 1 font-lock-keyword-face)))
   (syntax-propertize (point-max)))
 
 (add-to-list 'auto-mode-alist '("\\.ll\\'" . lyric-mode))
