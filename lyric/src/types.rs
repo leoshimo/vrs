@@ -158,6 +158,14 @@ where
         }
     }
 
+    pub fn as_int(&self) -> Result<&i32> {
+        if let Val::Int(inner) = &self {
+            Ok(inner)
+        } else {
+            Err(Error::UnexpectedType("expected int".to_string()))
+        }
+    }
+
     pub fn as_keyword(&self) -> Result<&KeywordId> {
         if let Val::Keyword(inner) = &self {
             Ok(inner)
