@@ -50,7 +50,7 @@ Convenience APIs to see running services and some level of introspection
 - [X] =ls-srv=
 - [X] =find-srv=
 
-** DONE IPC - =srv= and =bind-srv=
+** DONE IPC - =srv= and =bind_srv=
 
 Goal: Provide better wrappers over =call=
 
@@ -74,7 +74,7 @@ Maybe also cover imports / exported interface and discoverability
      :export '(get_favs, add_favs))
 
 # *** client side (gets imports!)
-(bind-srv :launcher)
+(bind_srv :launcher)
 #+end_src
 
 ** DONE PubSub API

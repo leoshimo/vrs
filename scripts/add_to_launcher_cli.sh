@@ -12,4 +12,4 @@ echo -n "Cmd S-Exp: "
 read
 CMD=$REPLY
 
-vrsctl -c "(begin (bind-srv :launcher) (add_item \"$TITLE\" (quote $CMD)))"
+vrsctl -c "(begin (bind_srv :launcher) (add_item \"$TITLE\" (quote $CMD)))"

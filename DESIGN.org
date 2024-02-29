@@ -4,7 +4,7 @@ Scratch pad for high level design notes and ideas
 
 * Influences
 
-Emacs - Extensible, uniform software environment.
+Emacs - Extensible, uniform, interactive, moldable software environment.
 
 Erlang - Message based, distributed software runtime w/ userspace
 concurrency. "Let It Crash" philosophy.

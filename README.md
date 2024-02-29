@@ -309,7 +309,7 @@ vrs> (ls-srv)
  (:name :system_appearance :pid <pid 5> :interface ((:toggle_darkmode))))
  
 # Bind and talk to services:
-vrs> (bind-srv :launcher)
+vrs> (bind_srv :launcher)
 ((:get_items) (:add_item title cmd))
 vrs> (add_item "Hello" '(open_url "http://example.com"))
 :ok
