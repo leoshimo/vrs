@@ -13,6 +13,7 @@ pub mod types;
 
 pub(crate) use cond::contains_fn;
 pub(crate) use cond::eq_fn;
+pub(crate) use cond::is_keyword_fn;
 pub(crate) use cond::not_fn;
 pub(crate) use docs::help_fn;
 pub(crate) use env::ls_env_fn;

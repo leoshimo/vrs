@@ -49,6 +49,20 @@ pub fn not_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     }
 }
 
+/// Language binding for whether or not value is keyword
+pub fn is_keyword_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
+    NativeFn {
+        doc: "(keyword? EXPR) - returns true if EXPR is keyword. Otherwise false".to_string(),
+        func: |_, args| match args {
+            [Val::Keyword(_)] => Ok(NativeFnOp::Return(Val::Bool(true))),
+            [_] => Ok(NativeFnOp::Return(Val::Bool(false))),
+            _ => Err(Error::UnexpectedArguments(
+                "keyword? expects single argument".to_string(),
+            )),
+        },
+    }
+}
+
 /// Defines true values
 pub fn is_true<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<bool> {
     let cond = match v {

@@ -33,6 +33,7 @@ impl<T: Extern, L: Locals> Env<T, L> {
             .bind_lambda(SymbolId::from("filter"), builtin::filter_fn())
             .bind_native(SymbolId::from("not?"), builtin::not_fn())
             .bind_native(SymbolId::from("ok?"), builtin::ok_fn())
+            .bind_native(SymbolId::from("keyword?"), builtin::is_keyword_fn())
             .bind_native(SymbolId::from("err?"), builtin::err_fn())
             .bind_native(SymbolId::from("str"), builtin::str_fn())
             .bind_native(SymbolId::from("join"), builtin::join_fn())
