@@ -7,13 +7,15 @@
 (bind_srv :bookmarks)
 (bind_srv :nl_notify)
 (bind_srv :os_screencap)
+(bind_srv :todos)
 
 (defn get_items (query)
   "Retrieve items to display"
   # TODO: Support N-ary +
-  (+ (+ (favorite_items)
-        (get_bookmarks))
-        (dynamic_items query)))
+  (+ (get_todos)
+     (+ (favorite_items)
+        (+ (get_bookmarks)
+           (dynamic_items query)))))
 
 (defn make_item (title command)
   "Create an item with TITLE and COMMAND"
@@ -23,6 +25,8 @@
   "Return list of dynamically generated items or empty list"
   (if (not? query) '()
       (list
+       (make_item "Add TODO"
+                  (list 'add_todo query))
        (make_item "Search Perplexity"
                   (list 'open_url (format "http://perplexity.ai/?q={}" query)))
        (make_item "Search Google"
