@@ -5,6 +5,7 @@
 (bind_srv :os_notify)
 (bind_srv :chat)
 (bind_srv :todos)
+(bind_srv :os_cal)
 
 (spawn_chat :nl_agent_chat
    (format "Respond as a program expression in Lyric, a Lisp Dialect, without markdown fences
@@ -15,14 +16,19 @@
             Use consistent titles when notifying and creating new todos.
             Show notification describing work being done at each step.
 
+            Do work as quick as possible.
+
             If task cannot be completed show a notification saying why.
 
             The result should be a single S-expression wrapped within a (begin ...) form"
-           (join "\\n\\n" 
+           (join "
+" 
                  (help add_todo)
                  (help notify)
-                 (help sleep))))
+                 (help sleep)
+                 (help add_event))))
 (bind_srv :nl_agent_chat)
+
    
 (defn do_it (request)
   "(do_it REQUEST) - Schedules an OS notification to be scheduled in the future for given REQUEST"
