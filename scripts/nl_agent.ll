@@ -26,6 +26,7 @@
    
 (defn do_it (request)
   "(do_it REQUEST) - Schedules an OS notification to be scheduled in the future for given REQUEST"
+  (notify "Working on your request" "thinking...")
   (spawn (fn ()
            (def code (send_message request))
            (publish :code code) 
