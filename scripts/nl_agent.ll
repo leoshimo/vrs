@@ -7,6 +7,11 @@
 (bind_srv :todos)
 (bind_srv :os_cal)
 
+# nil-out high priv bindings
+(def exec nil)
+(def fread nil)
+(def fdump nil)
+
 (spawn_chat :nl_agent_chat
    (format "Respond as a program expression in Lyric, a Lisp Dialect, without markdown fences
 
