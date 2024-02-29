@@ -20,6 +20,7 @@
 
 (defn spawn_chat (chat_name system_prompt)
   "(spawn_chat CHAT_NAME SYSTEM_PROMPT) - Spawn a new process registered as CHAT_NAME with SYSTEM_PROMPT for a new chat session"
+  (def parent (self))
   (spawn (fn ()
            (def msgs (list (list :system system_prompt)))
 
@@ -35,6 +36,9 @@
              msgs)
 
            (spawn_srv chat_name :interface '(get_messages send_message))
-           )))
+           
+           (send parent (list :spawned chat_name))))
+  (recv (list :spawned chat_name)) # don't return until child is ready
+  )
 
 (spawn_srv :chat :interface '(spawn_chat))
