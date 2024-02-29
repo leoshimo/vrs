@@ -28,7 +28,7 @@
        (make_item "Add TODO"
                   (list 'add_todo query))
        (make_item "Search Perplexity"
-                  (list 'open_url (format "http://perplexity.ai/?q={}" query)))
+                  (list 'open_url (format "http://perplexity.ai/?q={}&copilot=true" query)))
        (make_item "Search Google"
                   (list 'open_url (format "http://google.com/search?q={}" query)))
        (make_item "Just Do It"
