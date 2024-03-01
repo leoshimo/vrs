@@ -16,19 +16,24 @@
 (defn get_bookmarks ()
   bookmarks)
 
-(defn bookmark_active_tab ()
-  "Bookmark active tab, if any"
-  (match (active_tab)
-    (nil nil)
-    ((:title title :url url) (begin
-                              (set bookmarks (push bookmarks
-                                                   (list :title (format "Bookmarks - {}" title)
-                                                         :on_click (list 'open_url url))))
-                              (save_bookmarks)))))
+(defn add_bookmark (title url)
+  "(add_bookmark TITLE URL) - Add bookmark with TITLE and URL"
+  (set bookmarks (push bookmarks
+                       (list :bookmark :title title :url url)))
+  (save_bookmarks)
+  :ok)
 
 (defn clear_bookmarks ()
   "Clear all bookmarks"
   (set bookmarks '())
-  (save_bookmarks))
+  (save_bookmarks)
+  :ok)
 
-(spawn_srv :bookmarks :interface '(get_bookmarks bookmark_active_tab clear_bookmarks))
+(defn add_bookmark_active_tab ()
+  "Bookmark active tab, if any"
+  (def tab (active_tab))
+  (if (def (:title title :url url) (active_tab))
+    (add_bookmark title url)))
+
+(spawn_srv :bookmarks
+   :interface '(get_bookmarks add_bookmark clear_bookmarks add_bookmark_active_tab))

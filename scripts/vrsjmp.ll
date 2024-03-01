@@ -13,7 +13,7 @@
   "Retrieve items to display"
   (+ (favorite_items)
      (todo_items)
-     (get_bookmarks)
+     (bookmark_items)
      (query_items query)))
 
 (defn make_item (title command)
@@ -36,8 +36,14 @@
 (defn todo_items ()
   "(todo_items) - Retrieve todo items and create markup for it"
   (map (get_todos)
-       (fn (t) (list :title (format "Task: {}" (get t :title))
+       (fn (t) (list :title (format "Todos: {}" (get t :title))
                      :on_click (list 'set_todos_done_by_id (get t :id))))))
+
+(defn bookmark_items ()
+  "(bookmark_items) - Retrieve item markup for bookmarks"
+  (map (get_bookmarks)
+       (fn (b) (list :title (format "Bookmark - {}" (get b :title))
+                     :on_click (list 'open_url (get b :url))))))
 
 (defn favorite_items ()
   "Returns list of static vrsjmp items"
@@ -63,7 +69,7 @@
    (make_item "Restart vrsd" '(exec "pkill" "-ax" "vrsd"))
    (make_item "Toggle Darkmode" '(toggle_darkmode))
 
-   (make_item "Bookmarks - Add" '(bookmark_active_tab))
+   (make_item "Bookmarks - Add" '(add_bookmark_active_tab))
    (make_item "Bookmarks - Clear" '(clear_bookmarks))
 
    (make_item "Screen Capture" '(start_screencap))
