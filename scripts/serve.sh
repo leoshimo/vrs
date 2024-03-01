@@ -29,7 +29,6 @@ while true; do
      while true; do
          cargo run --bin vrsctl $CARGO_ARGS -- --command ':healthcheck' >/dev/null 2>&1
          if [ $? -eq 0 ]; then
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/launcher.ll >/dev/null
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/chat.ll >/dev/null
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/system_appearance.ll >/dev/null
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/todos.ll >/dev/null
