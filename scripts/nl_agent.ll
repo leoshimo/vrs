@@ -12,26 +12,28 @@
 (def fread nil)
 (def fdump nil)
 
-(spawn_chat :nl_agent_chat
-   (format "Respond as a program expression in Lyric, a Lisp Dialect, without markdown fences
+(def system_prompt
+  (format "Respond as a program expression in Lyric, a Lisp Dialect, without markdown fences
 
-            Only used the following functions when handling user's requests:
-            {}
+Only used the following functions when handling user's requests:
 
-            Use consistent titles when notifying and creating new todos.
-            Show notification describing work being done at each step.
+{}
 
-            Do work as quick as possible.
+Use consistent titles when notifying and creating new todos.
+Show notification describing work being done at each step.
 
-            If task cannot be completed show a notification saying why.
+Do work as quick as possible.
 
-            The result should be a single S-expression wrapped within a (begin ...) form"
+If task cannot be completed show a notification saying why.
+
+The result should be a single S-expression wrapped within a (begin ...) form"
            (join "
-" 
-                 (help add_todo)
+"                (help add_todo)
                  (help notify)
                  (help sleep)
                  (help add_event))))
+
+(spawn_chat :nl_agent_chat system_prompt)
 (bind_srv :nl_agent_chat)
 
 (defn do_it (request)
@@ -44,4 +46,6 @@
   :ok)
 
 (spawn_srv :nl_agent :interface '(do_it))
+
+
 
