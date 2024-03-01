@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 dyn-fmt = "0.4.0"
 nanoid = "0.4.0"
-serde = { version = "1.0.196", features = ["derive"] }
+serde = { version = "1.0.197", features = ["derive"] }
 thiserror = "1.0.57"
 tracing = "0.1.40"
 
