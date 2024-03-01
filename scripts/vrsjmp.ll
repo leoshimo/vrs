@@ -11,8 +11,8 @@
 
 (defn get_items (query)
   "Retrieve items to display"
-  (+ (todo_items)
-     (favorite_items)
+  (+ (favorite_items)
+     (todo_items)
      (get_bookmarks)
      (query_items query)))
 
@@ -24,12 +24,12 @@
   "Return a dynamic list of item for current query"
   (if (not? query) '()
       (list
-       (make_item "Add Task"
-                  (list 'add_todo query))
        (make_item "Search Perplexity"
                   (list 'open_url (format "http://perplexity.ai/?q={}&copilot=true" query)))
        (make_item "Search Google"
                   (list 'open_url (format "http://google.com/search?q={}" query)))
+       (make_item "Add Task"
+                  (list 'add_todo query))
        (make_item "Just Do It"
                   (list 'do_it query)))))
 
