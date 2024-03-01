@@ -1,13 +1,12 @@
 #!/usr/bin/env zsh
-# launcher.sh - CLI shell for launcher SVC
+# launcher_cli.sh - CLI shell for vrsjmp SVC
 #
 
 set -eu
 
-SELECTED=$(vrsctl -c "(begin (bind_srv :launcher) (get_items))" \
-    | sed -E "s/^\(\(/\(/g" \
-    | sed -E "s/\)\)$/\)/g" \
-    | sed -E "s/\) \(/\)\n\(/g" \
+SELECTED=$(vrsctl -c "(begin (bind_srv :vrsjmp) (get_items \"\"))" \
+    | sed -E "s/^\(\(/\(/g" | sed -E "s/\)\)$/\)/g" | sed -E "s/\) \(/\)\n\(/g" \
     | fzf --exact --no-sort --reverse)
 
-vrsctl -c "(eval (get '$SELECTED :on_click))" >/dev/null
+echo "$SELECTED"
+vrsctl -c "(begin (bind_srv :vrsjmp) (on_click '$SELECTED))" >/dev/null
