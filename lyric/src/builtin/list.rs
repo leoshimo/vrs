@@ -33,10 +33,16 @@ pub fn push_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 /// Language bindng for `get`
 pub fn get_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
-        doc: "(get LIST ATTR) - Returns element within LIST for given ATTR, which can be 0-indexed position in list, or keywords for association lists".to_string(),
+        doc: "(get LIST ATTR) - Returns element within LIST for given ATTR, which can be 0-indexed position in list, or keywords for association lists. Negative indexes return from end of list.".to_string(),
         func: |_, x| match x {
             [Val::List(l), Val::Int(idx)] => {
-                let elem = match l.get(*idx as usize) {
+                let index = if *idx >= 0 {
+                    *idx as usize
+                } else {
+                    l.len() + *idx as usize
+                };
+
+                let elem = match l.get(index) {
                     Some(elem) => elem.clone(),
                     None => Val::Nil,
                 };
