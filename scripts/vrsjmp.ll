@@ -24,7 +24,7 @@
   "Return a dynamic list of item for current query"
   (if (not? query) '()
       (list
-       (make_item "Add TODO"
+       (make_item "Add Task"
                   (list 'add_todo query))
        (make_item "Search Perplexity"
                   (list 'open_url (format "http://perplexity.ai/?q={}&copilot=true" query)))
@@ -36,7 +36,7 @@
 (defn todo_items ()
   "(todo_items) - Retrieve todo items and create markup for it"
   (map (get_todos)
-       (fn (t) (list :title (get t :title)
+       (fn (t) (list :title (format "Task: {}" (get t :title))
                      :on_click (list 'set_todos_done_by_id (get t :id))))))
 
 (defn favorite_items ()

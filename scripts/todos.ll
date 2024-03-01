@@ -21,10 +21,11 @@
 (defn add_todo (title)
   "(add_todo TITLE) - Add a new todo named TITLE"
   (def id (next_id))
+  (publish :todos_event (list :todos_created title))
   (set todos (push todos
                    (list :todo
                       :id id
-                      :title (format "TODO - {}" title))))
+                      :title title)))
   (save_todos))
 
 (defn get_todos ()
@@ -40,6 +41,7 @@
   "(set_todos_done_by_id ID) - Mark the given TODO item with given ID as done "
   # filter clicked todos
   (set todos (filter todos (fn (it) (not? (contains? it id)))))
+  (publish :todos_event (list :todos_completed id))
   (save_todos))
 
 (spawn_srv :todos :interface '(get_todos add_todo set_todos_done set_todos_done_by_id))
