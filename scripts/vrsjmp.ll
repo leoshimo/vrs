@@ -4,7 +4,7 @@
 
 # TODO: Move to init.ll w/ supervision tree
 (bind_srv :system_appearance)
-(bind_srv :bookmarks)
+(bind_srv :rlist)
 (bind_srv :nl_shell)
 (bind_srv :os_screencap)
 (bind_srv :todos)
@@ -13,7 +13,7 @@
   "Retrieve items to display"
   (+ (favorite_items)
      (todo_items)
-     (bookmark_items)
+     (rlist_items)
      (query_items query)))
 
 (defn make_item (title command)
@@ -39,10 +39,10 @@
        (fn (t) (list :title (format "Todos: {}" (get t :title))
                      :on_click (list 'set_todos_done_by_id (get t :id))))))
 
-(defn bookmark_items ()
-  "(bookmark_items) - Retrieve item markup for bookmarks"
-  (map (get_bookmarks)
-       (fn (b) (list :title (format "Bookmark - {}" (get b :title))
+(defn rlist_items ()
+  "(rlist_items) - Retrieve item markup for reading list"
+  (map (get_rlist)
+       (fn (b) (list :title (format "Reading List - {}" (get b :title))
                      :on_click (list 'open_url (get b :url))))))
 
 (defn favorite_items ()
@@ -69,8 +69,8 @@
    (make_item "Restart vrsd" '(exec "pkill" "-ax" "vrsd"))
    (make_item "Toggle Darkmode" '(toggle_darkmode))
 
-   (make_item "Bookmarks - Add" '(add_bookmark_active_tab))
-   (make_item "Bookmarks - Clear" '(clear_bookmarks))
+   (make_item "Add to Reading List" '(add_rlist_active_tab))
+   (make_item "Clear Reading List" '(clear_rlist))
 
    (make_item "Screen Capture" '(start_screencap))
    ))
