@@ -5,6 +5,7 @@
 (bind_srv :os_notify)
 (bind_srv :chat)
 (bind_srv :todos)
+(bind_srv :rlist)
 (bind_srv :os_cal)
 
 # nil-out high priv bindings
@@ -31,6 +32,7 @@ The result should be a single S-expression wrapped within a (begin ...) form"
 "                (help add_todo)
                  (help notify)
                  (help sleep)
+                 (help add_rlist_active_tab)
                  (help add_event))))
 
 (spawn_chat :nl_shell_chat system_prompt)
