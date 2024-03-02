@@ -41,6 +41,7 @@ while true; do
 
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/rlist.ll >/dev/null
 
+             cargo run --bin vrsctl $CARGO_ARGS ./scripts/vrs_shell_refresh.ll >/dev/null
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/nl_shell.ll >/dev/null
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/vrsjmp.ll >/dev/null
 

@@ -36,7 +36,7 @@
 (defn todo_items ()
   "(todo_items) - Retrieve todo items and create markup for it"
   (map (get_todos)
-       (fn (t) (list :title (format "Todos: {}" (get t :title))
+       (fn (t) (list :title (format "Mark Done - {}" (get t :title))
                      :on_click (list 'set_todos_done_by_id (get t :id))))))
 
 (defn rlist_items ()

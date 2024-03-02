@@ -21,12 +21,14 @@
   "(add_rlist TITLE URL) - Add item with TITLE and URL to reading list"
   (set rlist (push rlist (list :rlist :title title :url url)))
   (save_rlist)
+  (publish :rlist_event :updated_rlist)
   :ok)
 
 (defn clear_rlist ()
   "(clear_rlist) - Clear all reading list items"
   (set rlist '())
   (save_rlist)
+  (publish :rlist_event :updated_rlist)
   :ok)
 
 (defn add_rlist_active_tab ()
