@@ -5,7 +5,7 @@
 # TODO: Move to init.ll w/ supervision tree
 (bind_srv :system_appearance)
 (bind_srv :bookmarks)
-(bind_srv :nl_agent)
+(bind_srv :nl_shell)
 (bind_srv :os_screencap)
 (bind_srv :todos)
 

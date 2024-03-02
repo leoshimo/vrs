@@ -1,5 +1,5 @@
 #!/usr/bin/env vrsctl
-# nl_agent.ll - Natural-Language Frontend
+# nl_shell.ll - Natural-Language Frontend
 #
 
 (bind_srv :os_notify)
@@ -33,8 +33,8 @@ The result should be a single S-expression wrapped within a (begin ...) form"
                  (help sleep)
                  (help add_event))))
 
-(spawn_chat :nl_agent_chat system_prompt)
-(bind_srv :nl_agent_chat)
+(spawn_chat :nl_shell_chat system_prompt)
+(bind_srv :nl_shell_chat)
 
 (defn do_it (request)
   "(do_it REQUEST) - Schedules an OS notification to be scheduled in the future for given REQUEST"
@@ -45,7 +45,6 @@ The result should be a single S-expression wrapped within a (begin ...) form"
            (eval (read code))))
   :ok)
 
-(spawn_srv :nl_agent :interface '(do_it))
-
+(spawn_srv :nl_shell :interface '(do_it))
 
 

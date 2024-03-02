@@ -41,7 +41,7 @@ while true; do
 
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/bookmarks.ll >/dev/null
 
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/nl_agent.ll >/dev/null
+             cargo run --bin vrsctl $CARGO_ARGS ./scripts/nl_shell.ll >/dev/null
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/vrsjmp.ll >/dev/null
 
              # Restart vrsjmp if live-on
