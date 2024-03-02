@@ -25,9 +25,11 @@ project, it hopes to accelerate development of my personal software ecosystem.
 
 Its key principles are: 
 
+- joy
+- uniformity
 - simplicity
 - pragmatic
-- joy
+- interactivity
 
 ## Status
 
