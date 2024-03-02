@@ -210,15 +210,28 @@ html, body {
 }
 
 .list {
-    padding: 0 8px;
+    padding: 4px 8px;
     height: 450px;
     overflow: auto;
     overscroll-behavior: contain;
-    scroll-padding-block-end: 40px;
     transition: 100ms ease;
     transition-property: height;
     padding-bottom: 40px;
     user-select: none;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--grayA6);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
 }
 
 .item {
