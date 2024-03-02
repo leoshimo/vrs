@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# launcher_cli.sh - CLI shell for vrsjmp SVC
+# vrsjmp_cli.sh - CLI shell for vrsjmp SVC
 #
 
 set -eu
