@@ -8,5 +8,4 @@ SELECTED=$(vrsctl -c "(begin (bind_srv :vrsjmp) (get_items \"\"))" \
     | sed -E "s/^\(\(/\(/g" | sed -E "s/\)\)$/\)/g" | sed -E "s/\) \(/\)\n\(/g" \
     | fzf --exact --no-sort --reverse)
 
-echo "$SELECTED"
 vrsctl -c "(begin (bind_srv :vrsjmp) (on_click '$SELECTED))" >/dev/null
