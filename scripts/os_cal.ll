@@ -11,3 +11,5 @@
         "--end-date" end_date))
 
 (spawn_srv :os_cal :interface '(add_event))
+
+# DEMO: Run + Test in Editor

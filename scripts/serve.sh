@@ -1,23 +1,25 @@
 #!/usr/bin/env sh
 # serve.sh - Trivial Serve
 #
-# For Dev:
-#     ./serve.sh dev
+# Examples
+#     ./serve.sh       - Live-On
+#     ./serve.sh dev   - Development
+#     ./serve.sh demo  - Demo
 #
-# For Live-On:
-#     ./serve.sh
 
-MODE="live-on"
-if [ "$1" = "dev" ]; then
-    MODE="dev"
+MODE="$1"
+
+if [ -z "$MODE" ]; then
+    MODE="live-on"
 fi
+
 
 if [ "$TMUX" ]; then
     tmux rename-window "vrs-srv-$MODE"
 fi
 
 CARGO_ARGS=
-if [ "$MODE" = "live-on" ]; then
+if [ "$MODE" != "dev" ]; then
     CARGO_ARGS="--release"
 fi
 
@@ -39,14 +41,24 @@ while true; do
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/os_cal.ll >/dev/null
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/os_clipboard.ll >/dev/null
 
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/rlist.ll >/dev/null
+             if [ "$MODE" = "demo" ]; then
+                 cargo run --bin vrsctl $CARGO_ARGS ./scripts/rlist_demo.ll >/dev/null
+                 cargo run --bin vrsctl $CARGO_ARGS ./scripts/nl_shell_demo.ll >/dev/null
+             else
+                 cargo run --bin vrsctl $CARGO_ARGS ./scripts/rlist.ll >/dev/null
+                 cargo run --bin vrsctl $CARGO_ARGS ./scripts/nl_shell.ll >/dev/null
+             fi
 
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/vrs_shell_refresh.ll >/dev/null
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/nl_shell.ll >/dev/null
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/vrsjmp.ll >/dev/null
 
-             # Restart vrsjmp if live-on
-             if [ "$MODE" = "live-on" ]; then
+             if [ "$MODE" = "demo" ]; then
+                 cargo run --bin vrsctl $CARGO_ARGS ./scripts/vrsjmp_demo.ll >/dev/null
+             else
+                 cargo run --bin vrsctl $CARGO_ARGS ./scripts/vrsjmp.ll >/dev/null
+             fi
+
+             # Restart vrsjmp if not dev
+             if [ "$MODE" != "dev" ]; then
                  pkill -ax "vrsjmp"
                  PID=$(RUST_LOG=debug cargo run --bin vrsjmp "$CARGO_ARGS" > /dev/null) &
                  wait $PID

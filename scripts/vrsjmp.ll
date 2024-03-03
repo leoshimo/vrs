@@ -30,7 +30,7 @@
                   (list 'open_url (format "http://google.com/search?q={}" query)))
        (make_item "Add Task"
                   (list 'add_todo query))
-       (make_item "Just Do It"
+       (make_item "Do It"
                   (list 'do_it query)))))
 
 (defn todo_items ()

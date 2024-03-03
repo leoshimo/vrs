@@ -1,5 +1,6 @@
 #!/usr/bin/env vrsctl
 # os_browser.ll - OS-specific Browser
+#
 
 (def current_browser "Safari")
 
@@ -19,7 +20,7 @@
   (list :title title :url url))
 
 (defn active_tab ()
-  "Retrieve the current URL of active browser window"
+  "(active_tab) Retrieve the current URL of active browser window"
   (match current_browser
     ("Safari" (active_tab_safari))
     ("Google Chrome" (active_tab_chrome))
