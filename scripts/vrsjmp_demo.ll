@@ -32,6 +32,34 @@
     (make_item (format "Reading List - {}" (get b :title))
                (list 'open_url (get b :url))))))
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 (defn favorite_items ()
   "Returns list of static vrsjmp items"
   (list

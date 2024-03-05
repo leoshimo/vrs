@@ -250,6 +250,10 @@ html, body {
     transition: all 150ms ease;
     transition-property: none;
     user-select: none;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .item:first-child {

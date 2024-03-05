@@ -44,6 +44,10 @@ while true; do
              if [ "$MODE" = "demo" ]; then
                  cargo run --bin vrsctl $CARGO_ARGS ./scripts/rlist_demo.ll >/dev/null
                  cargo run --bin vrsctl $CARGO_ARGS ./scripts/nl_shell_demo.ll >/dev/null
+
+                 sleep 3
+                 cargo run --bin vrsctl $CARGO_ARGS -- --command "(begin (bind_srv :rlist) (add_rlist \"File over app\" \"https://stephango.com/file-over-app\"))"
+                 cargo run --bin vrsctl $CARGO_ARGS -- --command '(exec "osascript" "-e" "tell application id \"tracesOf.Uebersicht\" to refresh widget id \"vrs_shell-jsx\"")'
              else
                  cargo run --bin vrsctl $CARGO_ARGS ./scripts/rlist.ll >/dev/null
                  cargo run --bin vrsctl $CARGO_ARGS ./scripts/nl_shell.ll >/dev/null

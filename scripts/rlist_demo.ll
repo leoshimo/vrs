@@ -23,8 +23,7 @@
   :ok)
 
 # Fork service
-(spawn_srv :rlist :interface
-   '(get_rlist add_rlist clear_rlist))
+(spawn_srv :rlist :interface '(get_rlist add_rlist clear_rlist))
 
 
 

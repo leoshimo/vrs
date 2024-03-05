@@ -22,9 +22,9 @@ If task cannot be completed show a notification saying why.
 
 The result should be a single S-expression wrapped within a (begin ...) form"
            (join "
-"                (help notify)
-                 (help sleep)
-                 # DEMO:
+"                # DEMO:
+                 # (help notify)
+                 # (help sleep)
                  # (help add_rlist_active_tab)
                  # (help add_event)
 )))
