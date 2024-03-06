@@ -16,7 +16,7 @@
 (def system_prompt
   (format "Respond as a program expression in Lyric, a Lisp Dialect, without markdown fences
 
-Only used the following functions when handling user's requests:
+Only use the following functions when handling user's requests:
 
 {}
 
