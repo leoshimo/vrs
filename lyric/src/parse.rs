@@ -12,7 +12,7 @@ pub fn parse(expr: &str) -> Result<Form> {
     let form = parse_form(&mut tokens)?;
     if tokens.peek().is_some() {
         return Err(Error::IncompleteExpression(
-            "Unterminated expression".to_string(),
+            "Unable to parse full expression - unbalanced trailing expressions".to_string(),
         ));
     }
     Ok(form)

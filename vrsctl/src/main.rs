@@ -150,6 +150,7 @@ async fn run_cmd(client: &Client, cmd: &str) -> Result<()> {
 async fn run_file(client: &Client, format: &Format, file: Box<dyn Read>) -> Result<()> {
     let mut f = BufReader::new(file);
     let mut line = String::new();
+    let mut lineno = 0;
     loop {
         match f.read_line(&mut line) {
             Ok(0) => break,
@@ -160,13 +161,15 @@ async fn run_file(client: &Client, format: &Format, file: Box<dyn Read>) -> Resu
             }
         }
 
+        lineno += 1;
+
         let f = match lyric::parse(&line) {
             Ok(f) => f,
             Err(lyric::Error::IncompleteExpression(_)) => {
                 continue;
             }
             Err(e) => {
-                eprintln!("{} - {}", e, line);
+                eprintln!("{}: {} - {}", lineno, e, line);
                 break;
             }
         };
@@ -192,6 +195,12 @@ async fn run_file(client: &Client, format: &Format, file: Box<dyn Read>) -> Resu
         }
     }
 
+    if !line.trim().is_empty() {
+        if let Err(e) = lyric::parse(&line) {
+            eprintln!("{}: {} - {}", lineno, e, line.trim());
+        }
+    }
+
     Ok(())
 }
 
@@ -200,3 +209,4 @@ async fn run_file(client: &Client, format: &Format, file: Box<dyn Read>) -> Resu
 // TODO: Test case for executing from -c CMD
 // TODO: Test case for --format=editor
 // TODO: Test case for --name=SRV_NAME
+// TODO: Test case for incomplete expressions
