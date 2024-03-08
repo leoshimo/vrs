@@ -171,6 +171,23 @@ Goal: Provide way to extract params from messages w/o indexing
 ** DONE Add =match= 
 Add pattern matching conditional branching
 Test: Make sure that =(a b a)= only matches =(1 2 1)= but not =(1 2 3)=
+** TODO [#A] BUG: Lambdas can be used to break process isolation
+
+A process can send a lambda (which captures its environment) to another process
+to break process isolation
+
+Repro Steps
+- Define variable in process A, =count=, and a function =inc= updating that variable
+- Send the =inc= lambda to another process B via =send=
+- Call =inc= from process B
+
+Issue: Above can be used to update process A from process B without message passing
+
+Not an issue in erlang / elixir due to pure functional types. No values mutating
+via references captured.
+
+Thought: Allow but discourage passing lambdas
+
 ** TODO Better Escape Characters
 
 Currently, escaping backslash is hacked together - see lexer for strings
