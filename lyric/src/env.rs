@@ -47,6 +47,26 @@ impl<T: Extern, L: Locals> Env<T, L> {
         e
     }
 
+    /// Extend an existing environment with given env as parent
+    pub fn extend(parent: &Arc<Mutex<Env<T, L>>>) -> Self {
+        Self {
+            bindings: HashMap::new(),
+            parent: Some(Arc::clone(parent)),
+        }
+    }
+
+    /// Fork this environment in to a *deep copy*
+    pub fn fork(&self) -> Self {
+        let parent = self
+            .parent
+            .as_ref()
+            .map(|parent| Arc::new(Mutex::new(parent.as_ref().lock().unwrap().clone())));
+        Self {
+            bindings: self.bindings.clone(),
+            parent,
+        }
+    }
+
     /// Define a new symbol with given value in current environment
     pub fn define(&mut self, symbol: SymbolId, value: Val<T, L>) {
         self.bindings.insert(symbol.clone(), value);
@@ -76,14 +96,6 @@ impl<T: Extern, L: Locals> Env<T, L> {
         }
 
         Err(Error::UndefinedSymbol(symbol.clone()))
-    }
-
-    /// Extend an existing environment with given env as parent
-    pub fn extend(parent: &Arc<Mutex<Env<T, L>>>) -> Self {
-        Self {
-            bindings: HashMap::new(),
-            parent: Some(Arc::clone(parent)),
-        }
     }
 
     /// Convenience to bind native functions
