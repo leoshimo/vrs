@@ -108,6 +108,7 @@ impl<T: Extern, L: Locals> Env<T, L> {
         self
     }
 
+    /// Iterate over all symbols and bindings
     pub fn iter(&self) -> EnvIter<'_, T, L> {
         EnvIter(self.bindings.iter())
     }
