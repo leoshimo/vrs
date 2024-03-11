@@ -101,11 +101,12 @@ impl Program {
             ));
         }
 
-        let mut prog = Self::from_bytecode(lambda.code);
-        prog.env = match lambda.parent.as_ref() {
+        let code = lambda.code;
+        let env = lambda.parent.as_ref();
+        let prog = Self::from_bytecode(code).env(match env {
             Some(env) => env.lock().unwrap().fork(),
             None => proc_env(),
-        };
+        });
 
         Ok(prog)
     }
