@@ -195,7 +195,7 @@ async fn run_file(client: &Client, format: &Format, file: Box<dyn Read>) -> Resu
         }
     }
 
-    if !line.trim().is_empty() {
+    if !line.trim().is_empty() && !line.trim().starts_with('#') {
         if let Err(e) = lyric::parse(&line) {
             eprintln!("{}: {} - {}", lineno, e, line.trim());
         }
@@ -210,3 +210,4 @@ async fn run_file(client: &Client, format: &Format, file: Box<dyn Read>) -> Resu
 // TODO: Test case for --format=editor
 // TODO: Test case for --name=SRV_NAME
 // TODO: Test case for incomplete expressions
+// TODO: Test case for incomplete expressions that are comments
