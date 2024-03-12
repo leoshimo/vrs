@@ -23,13 +23,12 @@ Its key inspirations are Emacs, Erlang, Unix, Plan 9, and Hypermedia
 applications. By combining powerful ideas from those systems into one cohesive
 project, it hopes to accelerate development of my personal software ecosystem.
 
-Its key principles are: 
+Its key principles are: joy, uniformity, simplicity, pragmatic, and interactivity.
 
-- joy
-- uniformity
-- simplicity
-- pragmatic
-- interactivity
+
+<p align="center">
+    <img width="450" src="https://raw.github.com/leoshimo/vrs/main/assets/vrs-venn.png">
+</p>
 
 ## Status
 
@@ -44,6 +43,11 @@ volatile in both concepts and implementation. Be warned!
 - `lyric`: Embedded Lisp Dialect and Virtual Machine
 - `vrsctl`: A thin CLI client over `libvrs`
 - `vrsjmp`: A GUI launch bar client
+
+<p align="center">
+    <img src="https://raw.github.com/leoshimo/vrs/main/assets/vrs-arch-stack.png">
+</p>
+
 
 ---
 
