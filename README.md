@@ -38,9 +38,9 @@ volatile in both concepts and implementation. Be warned!
 
 ## Structure
 
-- `libvrs`: The `vrs` library crate shared by runtime and client implementations
-- `vrsd`: A runtime implementation as a system daemon
 - `lyric`: Embedded Lisp Dialect and Virtual Machine
+- `vrsd`: A runtime implementation as a system daemon
+- `libvrs`: The `vrs` library crate shared by runtime and client implementations
 - `vrsctl`: A thin CLI client over `libvrs`
 - `vrsjmp`: A GUI launch bar client
 
