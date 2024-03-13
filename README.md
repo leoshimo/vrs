@@ -83,6 +83,7 @@ true                              # booleans are `true` or `false`
 # List Operations
 (def l '(1 2 3))
 (def first (get l 0))       # get 0th item in `l`
+(def last (get l -1))       # get last item in `l`
 (contains? l 3)             # check if `l` contains `3`
 
 # Association Lists
@@ -123,15 +124,9 @@ true                              # booleans are `true` or `false`
 # As a Lisp, Lyric has `eval` and `read`:
 (eval (read "(+ 40 2)")) # => 42
 
-# and there are more builtins and symbols in environment, introspectable via `ls-env` and `help`
+# and there are more builtins and symbols in environment, introspectable via `ls_env` and `help`
 (ls_env)           # see all symbols defined in environment
 (help recv)        # see documentation via `help`
-
-(bind_srv :counter)
-(inc 10)
-(inc 10)
-(inc 10)
-(get_count)
 ```
 
 TODO: Examples for fibers, coroutines, yielding, infinite iterators, macros
@@ -289,7 +284,7 @@ Each process has a dedicated mailbox that it can poll to receive messages:
   (set_darkmode (not? (is_darkmode))))
 
 # Fork into service exporting `toggle_darkmode` as service
-(spawn-srv :system_appearance :interface '(toggle_darkmode))
+(spawn_srv :system_appearance :interface '(toggle_darkmode))
 ```
 
 ---
@@ -310,7 +305,7 @@ vrs> (open_url url)
 (:ok "")
 
 # Introspect runtime state:
-vrs> (ls-srv)
+vrs> (ls_srv)
 ((:name :launcher :pid <pid 28> :interface ((:get_items) (:add_item title cmd)))
  (:name :system_appearance :pid <pid 5> :interface ((:toggle_darkmode))))
  
