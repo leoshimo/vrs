@@ -4,8 +4,6 @@
     <img width="360" src="https://raw.github.com/leoshimo/vrs/main/assets/vrs.png">
 </p>
 
-🚧 Under Heavy Construction
-
 > In the multiverse, you can live up to your ultimate potential. We discovered a
 > way to temporarily link your consciousness to another version of yourself,
 > accessing all of their memories and skills.
@@ -20,10 +18,11 @@
 opinionated take on my "endgame" software platform.
 
 Its key inspirations are Emacs, Erlang, Unix, Plan 9, and Hypermedia
-applications. By combining powerful ideas from those systems into one cohesive
+systems. By combining powerful ideas from those systems into one cohesive
 project, it hopes to accelerate development of my personal software ecosystem.
 
-Its key principles are: joy, uniformity, simplicity, pragmatic, and interactivity.
+Its key principles are: joy, uniformity, simplicity, practicality, and
+interactivity.
 
 
 <p align="center">
@@ -31,6 +30,8 @@ Its key principles are: joy, uniformity, simplicity, pragmatic, and interactivit
 </p>
 
 ## Status
+
+🚧 Under Heavy Construction
 
 vrs is a sandbox project, focused on play and experimentation in a pure-fun,
 pure-utility environment. While I live-on vrs everyday, the platform is very
@@ -137,24 +138,25 @@ In VRS, software runs as *processes* running Lyric lang.
 
 These processes are implemented as [green threads](https://en.wikipedia.org/wiki/Green_thread),
 and are lightweight compared to OS processes. Processes are scheduled on
-multiple cores in an IO-aware manner.
+multiple cores using nonblocking IO.
 
 Each process has a single logical thread of execution. CPU-bound and IO-bound
 work is transparent at process level, but the runtime schedules work such that a
-processes waiting for IO or running CPU-intensive work do not block cores.
+IO or CPU-bound work do not block cores.
 
 While processes are preemptively scheduled, each process can create fibers,
 which can be used for cooperative multitasking, coroutines, infinite generators,
-etc within a single service.
+etc within a single process.
 
 Millions of processes can run on a single machine, without a single process
 halting the system altogether.
 
-The low cost of process allows it to serve as a single abstraction to simplify
+The low cost of processes allows it to serve as a single abstraction to simplify
 typical event-based, callback-based, or scheduling idioms used in building
 software.
 
-For example, annual jobs can be represented as a infinite looping program that sleeps for a year:
+For example, annual jobs can be represented as a infinite looping program that
+sleeps for a year:
 
 ```lyric
 (loop (sleep (duration :years 1))
@@ -202,36 +204,80 @@ Each process has a dedicated mailbox that it can poll to receive messages:
 # `recv` can poll for messages matching specific patterns
 (recv '(:only_poll_for_matching msg))
 
-# A common idiom is an infinite loop that recv messages and dispatches some action internal to service:
+# A common idiom is a "service loop" - an infinite loop that recv messages and runs some function within the process:
 (loop (match (recv)
     ((:event_a ev) (handle_a ev))
     ((:event_b ev) (handle_b ev))
     (_ (error "unexpected message"))))
 
-# Sending messages is done via `(send PID MSG)`, often with `(self)` or `(pid PID_NO)`:
+# Sending messages is done via `(send PID MSG)`.
+# Use process id from `(self)`, `(pid PID_NO)`, and `(find_srv SRV_NAME)`
 (send (pid 10) :hello)
 (send (self) :hello_from_self)
 
-# or from spawned children, back to parent
+# Message from child back to parent
 (def parent_pid (self))
 (spawn (lambda ()
     (sleep 10)
     (send parent_pid :hello_from_child)))
 ```
 
-### Services - Registry, Discovery, Linking
+### Services - Registry, Discovery, Binding
 
-- `register`
-- `srv`
-- `spawn_srv`
-- `bind_srv`
-- `ls_srv`
-- `find_srv`
+Services are long-running processes that:
+- are discoverable via name in service registry
+- process messages in mailbox, which may update internal state, and respond to message sender
+
+Processes (including services) can *bind* to another service, and communicate over message passing.
+There are convenience macros to help define message passing stubs between processes.
+
+```lyric
+# `register` - register a process under name in service registry
+(register :echo)
+
+# `ls_srv` - Can list all services running within runtime
+(ls_srv)         # => ((:name :echo :pid <pid XX>))
+
+# `find_srv` - Get PID for registered processes
+(find_srv :echo) # => <pid XX>
+
+# Register has options to overwrite and expose interfaces (as function names)
+(defn ping (x) x)
+(defn pong (y) y)
+(register :service_c :interface '(ping pong) :overwrite)
+
+# `srv` is a macro to:
+# - Register process under a identifiable name in registry via `register`
+# - Start a service loop (covered under "message passing")
+(defn echo (msg) msg)
+(srv :echo :interface '(echo))
+
+# `srv` is blocking - but often it is more convenient to fork into a new service
+# `spawn_srv` is a macro to expand into `srv` inside a `spawn` block:
+(spawn_srv :echo :interface '(echo))
+
+# `bind_srv` can be used to define matching message-passing stubs within another process to a service process:
+(bind_srv :echo)    # defines `(echo msg)` in current process, which messages `:echo` service
+```
 
 ### PubSub
 
-- `subscribe`
-- `publish`
+The runtime has built-in global pubsub mechanism.
+
+```lyric
+# Subscribe to :my_topic
+(subscribe :my_topic)
+
+# Publish data to :my_topic
+(publish :my_topic '(:hello :world))
+
+# Updates are received via mailbox:
+(recv) # => (:topic_updated :my_topic (:hello :world))
+```
+
+---
+
+## Examples
 
 ### Example: Counter Service
 
@@ -247,7 +293,7 @@ Each process has a dedicated mailbox that it can poll to receive messages:
   (publish :count count))
 
 # Serve a counter service, with `increment` as exported interface:
-(srv :counter :interface '(increment))
+(spawn_srv :counter :interface '(increment))
 ```
 
 ### Example: System Appearance Service
