@@ -2,18 +2,90 @@
 
 Scratch pad for high level design notes and ideas
 
+* Mission and Approach
+
+Goal of VRS is to accelerate my own programming. It hopes to enable individuals
+to build software experiences on the scale of world's largest software
+companies.
+
+To this end, it is designed to minimize impedance at every layer of stack,
+looking at programming as one comprehensive experience.
+
+Every facet of programming - language, execution environment, clients, user
+interfaces, editing, etc - is designed from the ground up to work together. The
+goal isn't to build any one component to be the best, but to provide the best
+holistic experience - deliberately designed, end-to-end, over every aspect of
+building software.
+
+In the latent space, runtime is:
+- An environment where making has character of play
+   - Find out what is being built during building
+- Computer supports the creative spirit - uniform, dynamic, fun
+- Has feeling of being inside a program
+   - Like Common Lisp and Emacs
+
+* Technical Goals
+
+Build an environment that enables:
+- Immediate feedback while building
+- Simple, universal abstractions over all aspects of programming
+- One-time integration cost of data and capabilities, over multiple programs
+
 * Influences
 
-Emacs - Extensible, uniform, interactive, moldable software environment.
+Emacs - Extensible, uniform, interactive, moldable software
+environment. Immediate Feedback while building.
 
 Erlang - Message based, distributed software runtime w/ userspace
-concurrency. "Let It Crash" philosophy.
+concurrency. "Let It Crash" philosophy. Simple, powerful concurrency.
 
 Hypermedia - Self-describing, uniform interface. Thin general-purpose clients.
 
 Unix - Composability of programs via stdio, pipes, and plaintext. Polyglot.
 
 Plan 9 - Per-process hierarchical namespaces and hypermedia approach to plaintext via plumber
+
+[[./assets/vrs-venn.png]]
+
+* Experience
+
+*interactive*
+High-level of introspection and live molding of environment
+
+*hackability*
+Built for hacking software
+
+*simplicity*
+Uniform interface, with small number of primitives
+
+* Design: Uniformity
+
+Uniformity is a key principle to remove friction.
+
+VRS has uniformity:
+- In representation - over data, code, and markup
+- In execution - over processes, services, tasks, and interactive software
+- In boundaries - over functions, clients, external programs, networks, and devices
+- In interactions - over programs, users, automation, and agents.
+
+Uniform Interface - Common Primitives
+Compute and Data Substrate
+Turn O(M*N) problems into O(M+N)
+
+* Architectural Components
+
+lyric - Programming language and data format
+
+lyricVM - Bytecode virtual machine for running lyric
+
+vrsd - Runtime daemon that hosts and runs lyric programs
+
+libvrs - shared client libraries
+
+Clients - CLI programs (=vrsctl=), GUI programs (=vrsjmp=), and editors
+(=emacs=) interact with runtime.
+
+[[./assets/vrs-arch-stack.png]]
 
 * Client and Runtime
 ** Goals
@@ -101,6 +173,12 @@ CLI can be used to bootstrap new clients that is able to launch =vrsctl=
 directly, or as a development tool.
 
 * Lyric Lang
+
+#+begin_quote
+A good system can't have a weak command language.
+- Alan Perlis, Epigrams of Programming
+#+end_quote
+
 ** Goals
 
 An embedded lisp dialect provides a single, uniform interface for everything -
@@ -133,6 +211,28 @@ compilers" to write this code out by hand. Why not let the computer write that
 code via higher-level intermediate language?
 
 See also - [[https://en.wikipedia.org/wiki/Greenspun's_tenth_rule][Greenspun's tenth rule - Wikipedia]]
+
+** On Interactivity and Liveliness
+
+Runtime should be highly interactive - the experience of editing, debugging,
+testing and interacting with a system should seamless - like other Lisp systems
+
+The feeling of being inside a program:
+
+#+begin_quote
+Now second, I learned that I had never truly debugged before. The tools provided
+particularly by Common Lisp and to a slightly lesser degree Clojure allow me to
+be inside my program at all times. Why do print-line-debugging to find out
+what's happening at a location in code when you can just be inside your program
+and inspect everything live as it's running?
+- Colin Woodbury (https://www.fosskers.ca/en/blog/rounds-of-lisp)
+#+end_quote
+
+#+begin_quote
+It's okay to start dynamic and tighten down the API later with gradual-typing
+mechanisms once the domain crystalizes.
+- Simon Peyton-Jones
+#+end_quote
 
 ** Lisp as the Uniform Interface
 
@@ -500,3 +600,72 @@ A high level mental model for async tasks in runtime is:
    - A dedicated mailbox task
    - A optional controlling terminal task
    - Handles to kernel and shared services such as service registry and pubsub
+
+* Characteristics
+
+Interesting Characteristics of System
+
+** Idea: Uniformity in Edittime vs. Runtime
+
+Edittime: Phase when program is being actively edited by programmer
+Runtime: Phase when that program is running
+
+VRS takes advantages of uniformity between these two (generally distinct) stages
+of developing software, e.g.:
+
+- Copilot-like codegen experiences used during edittime can be invoked by
+  programs at runtime.
+- Runtime interactions of programs, users, automation, and agents can be reified
+  at edittime (i.e. user interactions can be turned into a program with little effort)
+
+This extends into test and debug phases of programming - debugging and testing
+can be done via uniform, universal mechanisms without use of secondary tools or concepts.
+
+** Idea: Data, Functions, and Interactive Runtime
+- The shape of data implies certain functions can be applied to access or mutate it.
+- System should support querying set of available functions for given shape of data
+- Functions themselves are function-shaped data
+- Applications:
+   - Programs can use this to dynamically resolve set of actions for given piece
+     of data (e.g. todo list element actions: toggle, add note, etc)
+   - Agents can query for functionality available on piece of data it is working on
+   - Editor can leverage this to generate scaffolding code
+- Related: Plan 9 - Plumber (Rob Pike). Emacs - Embark Package. Hypermedia.
+
+** Idea: Homoiconicity
+- Symbolic expression is data, code, and interface
+- Datagen is codegen is interfacegen
+- Every piece of data can embed every other piece of data
+- Exact same mechanism (S-expression generation) can be across range of scenarios:
+   - for programming - program generation at edit-time (copilot)
+   - for agents - program generation at runtime
+   - for generated interfaces - interface generation at runtime
+   - programs, users, and agents are all modelled like programs
+- Interactions can be reified as code - interaction of user can be recorded as
+  series of function calls - which is a valid program
+
+* Word Cloud
+
+- Homoiconicity:
+   - in representations of data, code, interface
+   - in interactions of users, programs, automation, agents
+- Data as implicit buttons (GNU Hyperbole, Plan 9 Plumber)
+- Compute Fabric: 
+   - Software experiences are universal across multiple surfaces, devices,
+     platforms, and modalities
+   - The collection of my devices feel like one whole computer
+
+* VRS and Agents
+
+VRS's design naturally complements automation and agents:
+- Agents can be modelled as programs that write themselves in real-time
+- Agents use all capability available to programs (zero integration cost)
+- Agents can use processes to:
+   - accumulate complex state in isolation
+   - work in parallel, and in tandem, concurrently with other processes
+   - await indefinitely, for scheudling, user input, external event, 
+   - execute durably
+- Agent's error scenarios leverage full error handling of runtime - stack
+  frames, error catching, supervision trees - to restart, or trigger user intervention
+- Runtime provides virtual, isolated, sandbox execution
+- User Interfaces can be interacted by programs - including agents (Hypermedia)[
