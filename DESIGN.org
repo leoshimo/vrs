@@ -669,3 +669,8 @@ VRS's design naturally complements automation and agents:
   frames, error catching, supervision trees - to restart, or trigger user intervention
 - Runtime provides virtual, isolated, sandbox execution
 - User Interfaces can be interacted by programs - including agents (Hypermedia)[
+
+* References
+
+[[https://www.youtube.com/watch?v=8Ab3ArE8W3s][Strange Loop 2022 - Stop Writing Dead Programs]]
+[[https://caseymuratori.com/blog_0015][Semantic Compression]]
