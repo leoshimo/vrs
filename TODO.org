@@ -8,7 +8,7 @@ Current: Hypermedia Client and VRSJMP Command Bar Client
 
 - [X] Runtime Pubsub
 - [X] Hypermedia Client Design
-- [ ] VRSJMP Command Bar Client
+- [X] VRSJMP Command Bar Client
 
 ** Runtime Core v0.2
 
@@ -27,6 +27,8 @@ Goal: Build Core Runtime Features
 
 Goal: Deploy VRS to the Cloud as a Rust Backend Service
 This is in service of desktop + web + mobile replacement for Things / Org Mode
+
+See Also: Integration with paradigm service
 
 ** Lispy DX
 
