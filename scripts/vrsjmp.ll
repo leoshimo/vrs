@@ -84,7 +84,8 @@
    # apps - nonpersonal
    (if (not? (is_personal?))
      (list (make_item "Linear" '(open_app "Linear"))
-           (make_item "Notion" '(open_app "Notion")))
+           (make_item "Notion" '(open_app "Notion"))
+           (make_item "iCloud Drive - SAI" '(open_file "~/Library/Mobile\ Documents/com\~apple\~CloudDocs/Software\ Applications\ Incorporated")))
      '())
 
    # misc
