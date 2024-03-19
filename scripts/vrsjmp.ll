@@ -33,6 +33,8 @@
                   (list 'open_url (format "http://google.com/search?q={}" query)))
        (make_item "Add Task"
                   (list 'add_todo query))
+       (make_item "Open App"
+                  (list 'open_app query))
        (make_item "Do It"
                   (list 'do_it query)))))
 
@@ -59,7 +61,8 @@
          (make_item "Mail" '(open_app "Spark"))
          (make_item "Cal" '(open_app "Notion Calendar"))
          (make_item "Slack" '(open_app "Slack"))
-         (make_item "Soulver" '(open_app "Soulver 3")))
+         (make_item "Soulver" '(open_app "Soulver 3"))
+         (make_item "Chrome" '(open_app "Google Chrome")))
 
    # directories
    (list (make_item "Downloads" '(open_file "~/Downloads"))
@@ -76,6 +79,12 @@
      (list (make_item "Zulip" '(open_app "Zulip"))
            (make_item "Kindle" '(open_app "Kindle"))
            (make_item "AWS Console" '(open_url "http://console.aws.amazon.com")))
+     '())
+
+   # apps - nonpersonal
+   (if (not? (is_personal?))
+     (list (make_item "Linear" '(open_app "Linear"))
+           (make_item "Notion" '(open_app "Notion")))
      '())
 
    # misc
