@@ -82,13 +82,8 @@
            (make_item "AWS Console" '(open_url "http://console.aws.amazon.com")))
      '())
 
-   # apps - nonpersonal
-   (if (not? (is_personal?))
-     (list (make_item "Linear" '(open_app "Linear"))
-           (make_item "Notion" '(open_app "Notion"))
-           (make_item "Zoom" '(open_app "Zoom"))
-           (make_item "iCloud Drive - SAI" '(open_file "~/Library/Mobile\ Documents/com\~apple\~CloudDocs/Software\ Applications\ Incorporated")))
-     '())
+   # machine-local
+   (local_items)
 
    # misc
    (list (make_item "Restart vrsd" '(exec "pkill" "-ax" "vrsd"))
@@ -101,6 +96,11 @@
    # recording
    (list (make_item "Screen Capture" '(start_screencap)))
    ))
+
+(defn local_items ()
+  "Read set of local items if any"
+  (def res (try (fread "~/vrsjmp_local.ll")))
+  (if (ok? res) res '()))
 
 (defn on_click (item)
   "Handle an on_click payload from item"
