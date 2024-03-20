@@ -35,6 +35,8 @@
                   (list 'add_todo query))
        (make_item "Open App"
                   (list 'open_app query))
+       (make_item "Open URL"
+                  (list 'open_url query))
        (make_item "Do It"
                   (list 'do_it query)))))
 
