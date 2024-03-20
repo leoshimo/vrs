@@ -675,3 +675,4 @@ VRS's design naturally complements automation and agents:
 [[https://www.youtube.com/watch?v=8Ab3ArE8W3s][Strange Loop 2022 - Stop Writing Dead Programs]]
 [[https://caseymuratori.com/blog_0015][Semantic Compression]]
 [[https://www.youtube.com/watch?v=8pTEmbeENF4][Bret Victor   The Future of Programming - YouTube]]
+[[https://notes.andymatuschak.org/zKKB5ENRahwftH96H7mijiu][Andy Matuschak - Premature scaling can stunt system iteration]]
