@@ -29,6 +29,9 @@ PRETTY = ('((:name :echo\n  :node "alpha"\n'
           '  :interface ((ping x) (pong y)))\n'
           ' (:name :clock :interface ((now))))\n')
 
+DEFAULT_PRETTY = ('((:name :echo :node "alpha" :interface ((ping x) (pong y)))\n'
+                  ' (:name :clock :interface ((now))))\n')
+
 
 class TerminalTests(unittest.TestCase):
     @classmethod
@@ -103,8 +106,8 @@ class TerminalTests(unittest.TestCase):
                     return clean
         self.fail(f"Expected {expected!r} in PTY output: {output!r}")
 
-    def test_command_terminal_auto_width_and_compact_override(self):
-        for args, expected in [((), PRETTY), (("--format", "compact"), VALUE + "\n")]:
+    def test_command_terminal_default_width_and_compact_override(self):
+        for args, expected in [((), DEFAULT_PRETTY), (("--format", "compact"), VALUE + "\n")]:
             proc, master = self.terminal(*args, "-c", EXPR)
             self.read_until(master, expected)
             self.assertEqual(proc.wait(timeout=5), 0)
@@ -117,7 +120,7 @@ class TerminalTests(unittest.TestCase):
         source.write_text(EXPR)
         self.assertEqual(self.pipe(str(source)), VALUE + "\n")
         proc, master = self.terminal(str(source))
-        self.read_until(master, PRETTY)
+        self.read_until(master, DEFAULT_PRETTY)
         self.assertEqual(proc.wait(timeout=5), 0)
         proc, master = self.terminal("--width", "200", "-c", EXPR)
         self.read_until(master, VALUE + "\n")
@@ -130,8 +133,18 @@ class TerminalTests(unittest.TestCase):
         self.assertEqual(transcript.splitlines()[0], EXPR)
         self.assertTrue(all(line.startswith("# ") for line in transcript.splitlines()[1:]))
 
+    def test_default_width_is_90_in_builtin_pipes_and_terminals(self):
+        value = "(" + " ".join(["1234567890"] * 8) + ")"
+        self.assertEqual(len(value), 89)
+        self.assertEqual(self.pipe("--raw", "-c", f"(pretty '{value})"), value + "\n")
+        self.assertEqual(self.pipe("--format", "pretty", "-c", "'" + value), value + "\n")
+        for columns in (40, 200):
+            proc, master = self.terminal("-c", "'" + value, columns=columns)
+            self.read_until(master, value + "\n")
+            self.assertEqual(proc.wait(timeout=5), 0)
+
     def test_repl_pretty_and_compact(self):
-        for args, expected in [((), PRETTY), (("--format", "compact"), VALUE + "\n")]:
+        for args, expected in [((), DEFAULT_PRETTY), (("--format", "compact"), VALUE + "\n")]:
             _, master = self.terminal(*args, stdin=True)
             self.read_until(master, "vrs> ")
             os.write(master, (EXPR + "\n").encode())
@@ -170,14 +183,14 @@ class TerminalTests(unittest.TestCase):
             while not select.select([master], [], [], 0.03)[0]:
                 self.pipe("-c", f"(publish :{topic} {EXPR})")
                 self.assertLess(time.monotonic(), deadline)
-            self.read_until(master, PRETTY)
+            self.read_until(master, DEFAULT_PRETTY)
             if mode:
                 self.pipe("-c", f"(publish :{topic} '(:second 42))")
                 self.read_until(master, "(:second 42)\n")
                 self.assertIsNone(proc.poll())
                 fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 200, 0, 0))
                 self.pipe("-c", f"(publish :{topic} {EXPR})")
-                self.read_until(master, VALUE + "\n")
+                self.read_until(master, DEFAULT_PRETTY)
             else:
                 self.assertEqual(proc.wait(timeout=5), 0)
 

@@ -32,14 +32,7 @@ impl Output {
     }
 
     fn width(&self) -> usize {
-        // Query for each result so following subscriptions and the REPL resize.
-        self.width
-            .or_else(|| {
-                stdout_terminal_size()
-                    .map(|(terminal_size::Width(width), _)| usize::from(width))
-                    .filter(|width| *width > 0)
-            })
-            .unwrap_or(80)
+        self.width.unwrap_or(lyric::DEFAULT_PRINT_WIDTH)
     }
 
     pub(crate) fn render(&self, form: &Form) -> String {
@@ -140,19 +133,4 @@ mod tests {
             "# => a\n#    (danger)\n#    \n"
         );
     }
-}
-
-fn stdout_terminal_size() -> Option<(terminal_size::Width, terminal_size::Height)> {
-    #[cfg(unix)]
-    {
-        use std::os::fd::AsRawFd;
-        terminal_size::terminal_size_using_fd(io::stdout().as_raw_fd())
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::io::AsRawHandle;
-        terminal_size::terminal_size_using_handle(io::stdout().as_raw_handle())
-    }
-    #[cfg(not(any(unix, windows)))]
-    { None }
 }

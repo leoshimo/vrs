@@ -119,7 +119,7 @@ fn cli() -> clap::Command {
              .default_value("default")
              .value_parser(EnumValueParser::<Format>::new())
         )
-        .arg(arg!(width: --width <COLUMNS> "Target width for pretty/editor output (terminal width, or 80); atoms may exceed it")
+        .arg(arg!(width: --width <COLUMNS> "Target width for pretty/editor output (default 90); atoms may exceed it")
              .value_parser(clap::value_parser!(NonZeroUsize)))
         .arg(arg!(raw: --raw "Print top-level strings verbatim; nested strings remain quoted"))
         .arg(arg!(name: -n --name <NAME> "Registers client process for this connection as NAME"))
