@@ -1,69 +1,93 @@
-# Expansion helpers receive source forms, never service registry values.
-(for_syntax
-  (defn service_options (options allow_ready)
-    (if (not? (eq? (len options) 2))
-      (if (not? (eq? (len options) 4))
-        (error "service macro expects :interface EXPR and optional :ready EXPR")))
-    (def found_interface false)
-    (def found_ready false)
-    (def bindings '())
-    (def interface nil)
-    (def ready nil)
-    (def index 0)
-    (map (slice options 0) (fn (ignored)
-      (if (not? (eq? index (len options)))
-        (begin
-          (def key (get options index))
-          (def expr (get options (+ index 1)))
-          (def name nil)
-          (cond
-            ((eq? key :interface)
-              (begin
-                (if found_interface (error "duplicate :interface"))
-                (set found_interface true)
-                (set name (gensym "interface"))
-                (set interface name)))
-            ((eq? key :ready)
-              (begin
-                (if (not? allow_ready) (error "spawn_srv! does not accept :ready"))
-                (if found_ready (error "duplicate :ready"))
-                (set found_ready true)
-                (set name (gensym "ready"))
-                (set ready name)))
-            (true (error "unsupported service option")))
-          (set bindings (push bindings (list name expr)))
-          (set index (+ index 2))))))
-    (if (not? found_interface) (error "missing :interface"))
-    (list :bindings bindings :interface interface :ready ready :has_ready found_ready)))
+# Ordinary helpers used by the service transformers.
+(defn vrs/service_options (options allow_ready)
+  (if (not? (eq? (len options) 2))
+    (if (not? (eq? (len options) 4))
+      (error "service macro expects :interface EXPR and optional :ready EXPR")))
+  (def found_interface false)
+  (def found_ready false)
+  (def interface nil)
+  (def ready nil)
+  (def index 0)
+  (map options (fn (ignored)
+    (if (not? (eq? index (len options)))
+      (begin
+        (def key (get options index))
+        (def expr (get options (+ index 1)))
+        (cond
+          ((eq? key :interface)
+            (begin
+              (if found_interface (error "duplicate :interface"))
+              (set found_interface true)
+              (set interface expr)))
+          ((eq? key :ready)
+            (begin
+              (if (not? allow_ready) (error "spawn_srv! does not accept :ready"))
+              (if found_ready (error "duplicate :ready"))
+              (set found_ready true)
+              (set ready expr)))
+          (true (error "unsupported service option")))
+        (set index (+ index 2))))))
+  (if (not? found_interface) (error "missing :interface"))
+  (list :interface interface :ready ready :has_ready found_ready))
+
+(defn vrs/service_clauses (interface)
+  (if (not? (list? interface)) (error ":interface must be a list"))
+  (map interface (fn (name)
+    (if (not? (symbol? name)) (error ":interface entries must be symbols"))
+    (def callable (eval_caller name))
+    (if (not? (lambda? callable)) (error "exported service value must be a lambda"))
+    # Keep ordinary parameter names readable. Rename a parameter if it would
+    # shadow the handler, and capture wildcard arguments for the direct call.
+    (def renamed (gensym "argument"))
+    (def params (map (get (meta callable) :args) (fn (arg)
+      (def param (get arg :name))
+      (cond
+        ((eq? param '_) (gensym "argument"))
+        ((eq? param name) renamed)
+        (true param)))))
+    (list (concat (list (keyword name)) params) (concat (list name) params)))))
 
 (defmacro srv (name & options)
-  "(srv! NAME :interface EXPR [:ready PID-EXPR]) - Serve exported runtime lambdas."
-  (def parsed (service_options options true))
+  "(srv! NAME :interface EXPR [:ready PID-EXPR]) - Expand a match over the current handlers."
+  (def parsed (vrs/service_options options true))
+  (def interface (eval_caller (get parsed :interface)))
+  (def clauses (vrs/service_clauses interface))
   (def service (gensym "service"))
-  (def resolve (gensym "resolve"))
-  (def symbol_arg (gensym "symbol"))
-  (def dispatch (gensym "dispatch"))
+  (def request (gensym "request"))
+  (def source (gensym "source"))
+  (def message (gensym "message"))
+  (def response (gensym "response"))
+  (def ready (gensym "ready"))
+  (def ready_bindings
+    (if (get parsed :has_ready) (list (list ready (get parsed :ready))) '()))
   (def ready_forms
     (if (get parsed :has_ready)
-      (list `(send ,(get parsed :ready) (list :service_ready (self))))
+      (list `(send ,ready (list :service_ready (self))))
       '()))
-  `(let ((,service ,name) ,@(get parsed :bindings))
-     (let ((,resolve (fn (,symbol_arg) (eval ,symbol_arg))))
-       (let ((,dispatch (vrs/service_dispatch ,(get parsed :interface) ,resolve)))
-         (register ,service :overwrite :interface ,(get parsed :interface))
-         ,@ready_forms
-         (vrs/service_loop ,dispatch ,resolve)))))
+  `(let ((,service ,name) ,@ready_bindings)
+     (register ,service :overwrite :interface ',interface)
+     ,@ready_forms
+     (loop
+       (def (,request ,source ,message) (recv))
+       (def ,response
+         (try (match ,message
+                ,@clauses
+                (_ '(:err "Unrecognized message")))))
+       (send ,source (list ,request ,response)))))
 
 (defmacro spawn_srv (name & options)
   "(spawn_srv! NAME :interface EXPR) - Spawn a service and wait for its registration."
-  (def parsed (service_options options false))
+  (def parsed (vrs/service_options options false))
+  (def interface (eval_caller (get parsed :interface)))
+  # Validate before spawning so errors reach the caller instead of losing readiness.
+  (vrs/service_clauses interface)
   (def service (gensym "service"))
   (def parent (gensym "parent"))
   (def child (gensym "child"))
-  `(let ((,service ,name) ,@(get parsed :bindings) (,parent (self)))
+  `(let ((,service ,name) (,parent (self)))
      (let ((,child
              (spawn (fn ()
                (try (kill (find_srv ,service)))
-               (srv! ,service :interface ,(get parsed :interface) :ready ,parent)))))
+               (srv! ,service :interface ',interface :ready ,parent)))))
        (recv (list :service_ready ,child))
        ,child)))

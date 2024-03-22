@@ -2,12 +2,10 @@ use vrs::{ProcessResult, Program, Runtime, Val};
 
 async fn run(source: &str) -> Val {
     let rt = Runtime::new("test");
-    let result = rt
-        .run(Program::from_expr(source).unwrap())
+    let result = rt.run(Program::from_expr(source).unwrap()).await.unwrap();
+    let result = tokio::time::timeout(std::time::Duration::from_secs(5), result.join())
         .await
-        .unwrap()
-        .join()
-        .await
+        .expect("program should finish without hanging")
         .unwrap();
     match result.status.unwrap() {
         ProcessResult::Done(value) => value,
@@ -19,9 +17,30 @@ fn value(source: &str) -> Val {
 }
 
 #[tokio::test]
-async fn service_expansion_does_not_evaluate_arguments_or_query_registry() {
-    let result = run("(list (list? (macroexpand_1 '(srv! (error \"name ran\") :interface (error \"interface ran\")))) (list? (macroexpand_1 '(spawn_srv! missing_name :interface missing_interface))) (ls_srv))").await;
-    assert_eq!(result, value("(true true ())"));
+async fn service_expansion_inspects_runtime_exports_without_starting_service() {
+    let result = run("(begin
+      (def inspections 0)
+      (defn start (exports)
+        (defn echo (x) x)
+        (macroexpand_1 '(srv! (error \"name ran\")
+          :interface (begin (set inspections (+ inspections 1)) exports)
+          :ready (error \"ready ran\"))))
+      (def expansion (start '(echo)))
+      (list expansion inspections (ls_srv)))")
+    .await;
+    let parts = result.as_list().unwrap();
+    let rendered = parts[0].to_string();
+    assert!(rendered.contains("((:echo x) (echo x))"), "{rendered}");
+    assert!(
+        rendered.contains("(_ '(:err \"Unrecognized message\"))"),
+        "{rendered}"
+    );
+    assert!(
+        !rendered.contains("service_dispatch") && !rendered.contains("resolve"),
+        "{rendered}"
+    );
+    assert_eq!(parts[1], Val::Int(1));
+    assert_eq!(parts[2], value("()"));
 }
 
 #[tokio::test]
@@ -62,7 +81,7 @@ async fn dispatch_retains_startup_patterns_and_looks_up_current_callable() {
 }
 
 #[tokio::test]
-async fn service_loop_locals_do_not_shadow_handlers_and_options_run_in_source_order() {
+async fn service_loop_locals_do_not_shadow_handlers_and_interface_is_evaluated_first() {
     let result = run("(begin
       (def parent (self))
       (def child (spawn (fn ()
@@ -89,7 +108,7 @@ async fn service_loop_locals_do_not_shadow_handlers_and_options_run_in_source_or
     assert_eq!(
         result,
         value(
-            "(true :request :source :message :response :resolve :symbol (:name :ready :interface))"
+            "(true :request :source :message :response :resolve :symbol (:interface :name :ready))"
         )
     );
 }
@@ -104,7 +123,7 @@ async fn child_macro_namespace_is_a_snapshot_and_message_data_stays_data() {
         (send parent (list (m!) (eval '(m!)) '(m!)))))
       (list (recv) (eval '(m!))))")
     .await;
-    assert_eq!(result, value("((1 2 (m!)) 1)"));
+    assert_eq!(result, value("((2 2 (m!)) 1)"));
 }
 
 #[tokio::test]
@@ -148,4 +167,30 @@ async fn service_macro_option_errors_are_catchable_before_spawning() {
       (err? (try (srv! :bad :interface '() :interface '()))) (ls_srv))")
     .await;
     assert_eq!(result, value("(true true true ())"));
+}
+
+#[tokio::test]
+async fn generated_patterns_do_not_capture_handler_names_or_match_temporary() {
+    let result = run("(begin
+      (defn echo (echo) echo)
+      (defn _expr (x) x)
+      (defn wild (_ _) :ok)
+      (spawn_srv! :collisions :interface '(echo _expr wild))
+      (def target (find_srv :collisions))
+      (list (call target '(:echo 42)) (call target '(:_expr 43))
+        (call target '(:wild 1 2))))")
+    .await;
+    assert_eq!(result, value("(42 43 :ok)"));
+}
+
+#[tokio::test]
+async fn macros_can_call_async_runtime_functions_and_catch_their_errors() {
+    let result = run("(begin
+      (defmacro ask ()
+        (send (self) 42)
+        (recv))
+      (defmacro fail () (find_srv :missing_macro_service))
+      (list (ask!) (err? (try (fail!))) (when! true :recovered)))")
+    .await;
+    assert_eq!(result, value("(42 true :recovered)"));
 }

@@ -113,24 +113,34 @@ A transformer returns one source form, using `begin` for multiple expressions.
 `macroexpand_1` runs one outer transformer; `macroexpand` repeats only at the
 outermost position. Neither executes its returned program or walks quoted data.
 
-Define phase helpers in `(for_syntax (defn helper (...) ...))`. Their completed
-block is frozen, and each macro captures the helper revision present when it is
-defined. Runtime variables and host capabilities are unavailable in this phase.
-Local calculation is allowed; mutation of captured phase bindings is rejected.
-Use `(gensym "hint")` for fresh printable local names. This is a datum macro
-system, with no implicit qualification or automatic hygiene for free identifiers.
+Macros expand when execution reaches the call, including inside a function or
+loop. The transformer runs on the same fiber as ordinary code and can call
+ordinary helpers, mutate state, yield, or await host functions. Its result must
+still be source data; opaque runtime values cannot be embedded in an expansion.
+The result is compiled and evaluated in the call's scope. Unexecuted branches
+are not expanded. Redefining a macro changes subsequent calls in existing
+functions; expansions are not cached.
 
-Top-level definitions and evaluations run in order, including inside a top-level
-`begin`. A later compile error can follow earlier effects. Macros in lambda
-bodies expand when the function is compiled; redefining the macro requires
-reevaluating that function to change its expansion. `try` and explicit `eval`
-remain deferred compilation boundaries and use the current process namespace.
-No macros are transported with quoted source data; the evaluating process must
-have the needed definitions.
+Transformers capture their definition's lexical environment, just like lambdas.
+`(eval_caller FORM)` explicitly evaluates an argument's source in the active
+macro call's environment, and works from helper functions too. Ordinary `eval`
+retains its lexical behavior. `for_syntax` is no longer necessary; its old spelling
+is accepted as an alias for `begin`.
 
-Expansion allows up to 1,000,000 phase instructions, 10,000 macro invocations,
-1,000,000 accumulated output nodes, 256 outer expansions, and 64 nested
-transformer executions per budget. Intermediate phase values also have size
-bounds. Source nesting is limited to 256 levels, including in runtime `read`.
-Generated top-level sequences share their preparation budget; a later
-independent evaluation starts a fresh budget and can recover after an error.
+`macroexpand_1` and `macroexpand` execute transformers with the same permissions
+as an actual call. They do not execute the returned program, but transformer
+effects still happen. Quote the call being inspected. Use `(gensym "hint")` for
+fresh printable local names; there is no implicit qualification or automatic
+hygiene for free identifiers.
+
+Macro definitions belong to a process. A spawned process receives a snapshot of
+the definitions; it can redefine them independently. No macros are transported
+with quoted source data; the evaluating process needs its own definitions.
+
+Each expansion chain is bounded by 1,000,000 transformer instructions, 10,000
+macro invocations, and 1,000,000 accumulated output nodes. Expansion also checks
+call depth (256 frames) and nested transformer depth (64). Intermediate values
+have size bounds. Source nesting is limited to 256 levels, including in `read`.
+Generated code runs outside the transformer instruction budget. Independent
+invocations start fresh budgets and can recover after a caught expansion error.
+These limits do not put a wall-clock timeout on I/O initiated by a transformer.

@@ -1,161 +1,43 @@
-//! Process-local, data-in/data-out source expansion. Runtime environments never
-//! enter the phase VM; captures in the separate phase environment are frozen.
+//! Macros are ordinary lexical functions invoked with unevaluated source at runtime.
+//! Expansion runs on the calling fiber, so ordinary helpers and async calls work.
 use crate::{
-    env::EnvRef, Bytecode, Env, Error, Extern, Fiber, Form, Inst, Lambda, Locals, NativeFn,
-    NativeFnOp, Result, Signal, SymbolId, Val,
+    env::EnvRef, Env, Error, Extern, Fiber, Form, Inst, Lambda, Locals, NativeFn, NativeFnOp,
+    Result, SymbolId, Val,
 };
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum PhaseExtern {}
-impl std::fmt::Display for PhaseExtern {
-    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match *self {}
+#[derive(Clone, Debug)]
+pub struct MacroEnv<T: Extern, L: Locals> {
+    definitions: HashMap<String, Definition<T, L>>,
+}
+#[derive(Clone, Debug)]
+pub(crate) struct Definition<T: Extern, L: Locals> {
+    pub(crate) rest: bool,
+    pub(crate) function: Lambda<T, L>,
+}
+impl<T: Extern, L: Locals> Default for MacroEnv<T, L> {
+    fn default() -> Self {
+        let mut env = Self {
+            definitions: HashMap::new(),
+        };
+        let source = crate::parse("(defmacro when (test & body) \"Evaluate BODY when TEST is true.\" (list 'if test (concat '(begin) body) nil))").unwrap();
+        env.define(&Val::from(source), None)
+            .expect("standard macro must compile");
+        env
     }
 }
-type PhaseVal = Val<PhaseExtern, ()>;
-
-#[derive(Clone, Debug, Default)]
-pub struct MacroEnv {
-    state: Option<Arc<State>>,
-}
-#[derive(Debug)]
-struct State {
-    definitions: HashMap<String, Definition>,
-    helpers: EnvRef<PhaseExtern, ()>,
-}
-#[derive(Debug, Clone)]
-struct Definition {
-    required: usize,
-    rest: bool,
-    function: Lambda<PhaseExtern, ()>,
-}
-
-#[derive(Debug)]
-pub(crate) struct Budget {
-    fuel: usize,
-    calls: usize,
-    nodes: usize,
-    active: usize,
-}
-pub(crate) type BudgetRef = Arc<Mutex<Budget>>;
-pub(crate) fn budget() -> BudgetRef {
-    Arc::new(Mutex::new(Budget {
-        fuel: 1_000_000,
-        calls: 10_000,
-        nodes: 1_000_000,
-        active: 0,
-    }))
-}
-struct Invocation(BudgetRef);
-impl Drop for Invocation {
-    fn drop(&mut self) {
-        self.0.lock().unwrap().active -= 1;
-    }
-}
-fn fail(message: impl Into<String>) -> Error {
-    Error::Macro(message.into())
-}
-pub(crate) fn tick(budget: &BudgetRef) -> Result<()> {
-    let mut b = budget.lock().unwrap();
-    b.fuel = b
-        .fuel
-        .checked_sub(1)
-        .ok_or_else(|| fail("phase instruction limit exceeded"))?;
-    Ok(())
-}
-
-const PHASE_NAMES: &[&str] = &[
-    "contains?",
-    "eq?",
-    "+",
-    "-",
-    "list",
-    "list?",
-    "error",
-    "push",
-    "get",
-    "map",
-    "apply",
-    "len",
-    "filter",
-    "not?",
-    "ok?",
-    "empty?",
-    "keyword?",
-    "err?",
-    "str",
-    "join",
-    "split",
-    "format",
-    "read",
-    "meta",
-    "concat",
-    "slice",
-    "symbol",
-    "symbol?",
-    "keyword",
-    "lambda?",
-    "gensym",
-    "macroexpand",
-    "macroexpand_1",
-];
-
-impl MacroEnv {
-    fn state(&mut self) -> Arc<State> {
-        if self.state.is_none() {
-            // This isolated environment is the phase capability boundary.
-            // source_form rejects runtime callables/externs before they can
-            // enter it. Do not identify permitted natives by function address:
-            // optimized generic functions can have multiple machine addresses.
-            let mut helpers = Env::standard();
-            helpers.retain_names(PHASE_NAMES);
-            let helpers = Arc::new(Mutex::new(helpers));
-            Env::freeze_graph(&helpers);
-            self.state = Some(Arc::new(State {
-                definitions: HashMap::new(),
-                helpers,
-            }));
-            // No quasiquote bootstrap dependency.
-            let when = crate::parse("(defmacro when (test & body) \"Evaluate BODY when TEST is true.\" (list 'if test (concat '(begin) body) nil))").unwrap();
-            self.define::<PhaseExtern, ()>(&when.into(), &budget())
-                .expect("standard macro should compile");
-        }
-        self.state.as_ref().unwrap().clone()
-    }
-
-    /// Load definitions without executing runtime code. Intended for host macro libraries.
-    pub fn load(&mut self, source: &str) -> Result<()> {
-        let mut next = self.clone();
-        let b = budget();
-        for form in crate::parse_script(source)? {
-            let value: PhaseVal = form.into();
-            match head(&value) {
-                Some("defmacro") => {
-                    next.define(&value, &b)?;
-                }
-                Some("for_syntax") => {
-                    next.helpers(&value, &b)?;
-                }
-                _ => return Err(fail("macro libraries accept only defmacro and for_syntax")),
-            }
-        }
-        *self = next;
-        Ok(())
-    }
-
-    fn define<T: Extern, L: Locals>(
+impl<T: Extern, L: Locals> MacroEnv<T, L> {
+    pub(crate) fn define(
         &mut self,
         source: &Val<T, L>,
-        b: &BudgetRef,
-    ) -> Result<Val<T, L>> {
-        let source = source_form(source)?;
-        let source: PhaseVal = source.into();
-        let args = &source.as_list()?[1..];
-        let [Val::Symbol(name), Val::List(params), body @ ..] = args else {
+        parent: Option<EnvRef<T, L>>,
+    ) -> Result<SymbolId> {
+        source_form(source)?;
+        let [_, Val::Symbol(name), Val::List(params), body @ ..] = source.as_list()?.as_slice()
+        else {
             return Err(fail("defmacro expects a name, parameter list and body"));
         };
         if name.as_str().is_empty() || name.as_str().ends_with('!') {
@@ -193,338 +75,81 @@ impl MacroEnv {
         if body.is_empty() {
             return Err(fail("defmacro requires a body"));
         }
-        let state = self.state();
         let body = Val::List(
             std::iter::once(Val::symbol("begin"))
                 .chain(body.iter().cloned())
                 .collect(),
         );
-        let body = self.expression(&body, b, 0)?;
         let function = Lambda {
             metadata: vec![],
             doc,
-            params: names.clone(),
+            params: names,
             code: crate::compile(&body)?,
-            parent: Some(state.helpers.clone()),
+            parent,
         };
-        let mut definitions = state.definitions.clone();
-        definitions.insert(
-            name.as_str().into(),
-            Definition {
-                required: names.len() - usize::from(rest),
-                rest,
-                function,
-            },
-        );
-        self.state = Some(Arc::new(State {
-            definitions,
-            helpers: state.helpers.clone(),
-        }));
-        Ok(Val::Symbol(name.clone()))
+        self.definitions
+            .insert(name.as_str().into(), Definition { rest, function });
+        Ok(name.clone())
     }
-
-    fn helpers<T: Extern, L: Locals>(&mut self, value: &Val<T, L>, b: &BudgetRef) -> Result<()> {
-        let source: PhaseVal = source_form(value)?.into();
-        let body = Val::List(
-            std::iter::once(Val::symbol("begin"))
-                .chain(source.as_list()?[1..].iter().cloned())
-                .collect(),
-        );
-        let state = self.state();
-        let body = self.expression(&body, b, 0)?;
-        let mut env = Env::extend(&state.helpers);
-        env.macros = Some(self.clone());
-        let mut fiber = Fiber::from_bytecode(crate::compile(&body)?, env, ());
-        fiber.set_phase_budget(b.clone());
-        match fiber.start()? {
-            Signal::Done(_) => (),
-            _ => return Err(fail("phase code cannot suspend")),
+    pub(crate) fn get(&self, name: &str) -> Result<Definition<T, L>> {
+        if name == "!" || name.ends_with("!!") {
+            return Err(fail(format!("invalid macro invocation {name}")));
         }
-        let root = fiber.global_env().clone();
-        // Do not retain a phase namespace through a captured helper root: the
-        // active phase evaluator supplies its own snapshot for deferred eval.
-        root.lock().unwrap().macros = None;
-        Env::freeze_graph(&root);
-        self.state = Some(Arc::new(State {
-            definitions: state.definitions.clone(),
-            helpers: root,
-        }));
-        Ok(())
+        self.definitions
+            .get(&name[..name.len() - 1])
+            .cloned()
+            .ok_or_else(|| fail(format!("undefined macro {name}")))
     }
-
-    pub(crate) fn prepare<T: Extern, L: Locals>(
-        &mut self,
-        value: &Val<T, L>,
-        b: &BudgetRef,
-        phase: bool,
-    ) -> Result<Bytecode<T, L>> {
-        let original = value;
-        self.state();
-        let value = self.outer(value, b, false)?;
-        match head(&value) {
-            Some("begin") => {
-                let mut code = vec![];
-                for item in &value.as_list()?[1..] {
-                    if !code.is_empty() {
-                        code.push(Inst::PopTop);
-                    }
-                    code.push(Inst::Prepare(item.clone()));
-                }
-                if code.is_empty() {
-                    code.push(Inst::PushConst(Val::Nil));
-                }
-                Ok(code)
-            }
-            Some("defmacro" | "for_syntax") if phase => {
-                Err(fail("phase execution cannot register definitions"))
-            }
-            Some("defmacro") => Ok(vec![Inst::PushConst(self.define(&value, b)?)]),
-            Some("for_syntax") => {
-                self.helpers(&value, b)?;
-                Ok(vec![Inst::PushConst(Val::Nil)])
-            }
-            _ => {
-                let expanded = self.expression(&value, b, 0)?;
-                crate::compile(&expanded).map_err(|error| {
-                    if &expanded != original {
-                        fail(format!("generated syntax for {original}: {error}"))
-                    } else {
-                        error
-                    }
-                })
-            }
+    /// Host libraries use the destination process's globals, like native library lambdas.
+    pub fn use_global_scope(&mut self) {
+        for definition in self.definitions.values_mut() {
+            definition.function.parent = None;
         }
-    }
-
-    pub(crate) fn outer<T: Extern, L: Locals>(
-        &mut self,
-        value: &Val<T, L>,
-        b: &BudgetRef,
-        once: bool,
-    ) -> Result<Val<T, L>> {
-        self.state();
-        let mut result = value.clone();
-        let mut trace = vec![];
-        loop {
-            let Some(name) = head(&result)
-                .filter(|name| name.ends_with('!'))
-                .map(str::to_owned)
-            else {
-                return Ok(result);
-            };
-            if name == "!" || name.ends_with("!!") {
-                return Err(fail(format!("invalid macro invocation {name}")));
-            }
-            trace.push(name.clone());
-            if trace.len() > 256 {
-                return Err(fail(format!(
-                    "macro expansion depth exceeded: {}",
-                    trace.join(" -> ")
-                )));
-            }
-            let expanded = self
-                .invoke(&name[..name.len() - 1], &result, b)
-                .map_err(|error| fail(format!("{} in {result}: {error}", trace.join(" -> "))))?;
-            result = expanded;
-            if once {
-                return Ok(result);
-            }
-        }
-    }
-
-    fn invoke<T: Extern, L: Locals>(
-        &mut self,
-        name: &str,
-        call: &Val<T, L>,
-        b: &BudgetRef,
-    ) -> Result<Val<T, L>> {
-        {
-            let mut budget = b.lock().unwrap();
-            budget.calls = budget
-                .calls
-                .checked_sub(1)
-                .ok_or_else(|| fail("macro invocation limit exceeded"))?;
-            if budget.active >= 64 {
-                return Err(fail("nested transformer execution depth exceeded"));
-            }
-            budget.active += 1;
-        }
-        let _invocation = Invocation(b.clone());
-        let state = self.state();
-        let definition = state
-            .definitions
-            .get(name)
-            .ok_or_else(|| fail(format!("undefined macro {name}!")))?;
-        let source: PhaseVal = source_form(call)?.into();
-        let args = &source.as_list()?[1..];
-        if args.len() < definition.required
-            || (!definition.rest && args.len() != definition.required)
-        {
-            return Err(fail(format!(
-                "{name}! expects {}{} arguments, got {} in {call}",
-                definition.required,
-                if definition.rest { " or more" } else { "" },
-                args.len()
-            )));
-        }
-        let mut values = args[..definition.required].to_vec();
-        if definition.rest {
-            values.push(Val::List(args[definition.required..].to_vec()));
-        }
-        let mut code = vec![Inst::PushConst(Val::Lambda(definition.function.clone()))];
-        code.extend(values.into_iter().map(Inst::PushConst));
-        code.push(Inst::CallFunc(definition.function.params.len()));
-        let mut env = Env::extend(&state.helpers);
-        env.macros = Some(self.clone());
-        let mut fiber = Fiber::from_bytecode(code, env, ());
-        fiber.set_phase_budget(b.clone());
-        let result = match fiber.start()? {
-            Signal::Done(value) => value,
-            _ => return Err(fail("macro transformer cannot suspend")),
-        };
-        let form = source_form_counted(&result, 0, &mut b.lock().unwrap().nodes, "result")?;
-        Ok(form.into())
-    }
-
-    fn expression<T: Extern, L: Locals>(
-        &mut self,
-        value: &Val<T, L>,
-        b: &BudgetRef,
-        depth: usize,
-    ) -> Result<Val<T, L>> {
-        if depth > 256 {
-            return Err(fail("source expression depth exceeded"));
-        }
-        let value = self.outer(value, b, false)?;
-        let Val::List(mut items) = value else {
-            return Ok(value);
-        };
-        let name = items
-            .first()
-            .and_then(|v| {
-                if let Val::Symbol(s) = v {
-                    Some(s.as_str())
-                } else {
-                    None
-                }
-            })
-            .unwrap_or("")
-            .to_owned();
-        match name.as_str() {
-            "quote" | "try" => (),
-            "quasiquote" => {
-                if items.len() == 2 {
-                    items[1] = self.template(&items[1], b, 1, depth + 1)?;
-                }
-            }
-            "defmacro" | "for_syntax" => {
-                return Err(fail(format!(
-                    "{name} is only allowed at the top level of an evaluation unit"
-                )))
-            }
-            "def" | "set" => {
-                if items.len() == 3 {
-                    items[2] = self.expression(&items[2], b, depth + 1)?;
-                }
-            }
-            "lambda" | "fn" | "defn" => {
-                let mut start = if name == "defn" { 3 } else { 2 };
-                if matches!(items.get(start), Some(Val::String(_))) {
-                    start += 1;
-                }
-                if name != "lambda" && items.get(start).and_then(head) == Some("interactive") {
-                    start += 1;
-                }
-                for item in items.iter_mut().skip(start) {
-                    *item = self.expression(item, b, depth + 1)?;
-                }
-            }
-            "let" => {
-                if let Some(Val::List(bindings)) = items.get_mut(1) {
-                    for binding in bindings {
-                        if let Val::List(pair) = binding {
-                            if pair.len() == 2 {
-                                pair[1] = self.expression(&pair[1], b, depth + 1)?;
-                            }
-                        }
-                    }
-                }
-                for item in items.iter_mut().skip(2) {
-                    *item = self.expression(item, b, depth + 1)?;
-                }
-            }
-            "match" => {
-                if let Some(expr) = items.get_mut(1) {
-                    *expr = self.expression(expr, b, depth + 1)?;
-                }
-                for clause in items.iter_mut().skip(2) {
-                    if let Val::List(pair) = clause {
-                        if pair.len() == 2 {
-                            pair[1] = self.expression(&pair[1], b, depth + 1)?;
-                        }
-                    }
-                }
-            }
-            "cond" => {
-                for clause in items.iter_mut().skip(1) {
-                    if let Val::List(pair) = clause {
-                        for item in pair {
-                            *item = self.expression(item, b, depth + 1)?;
-                        }
-                    }
-                }
-            }
-            _ => {
-                for item in &mut items {
-                    *item = self.expression(item, b, depth + 1)?;
-                }
-            }
-        }
-        Ok(Val::List(items))
-    }
-
-    fn template<T: Extern, L: Locals>(
-        &mut self,
-        value: &Val<T, L>,
-        b: &BudgetRef,
-        quote_depth: usize,
-        depth: usize,
-    ) -> Result<Val<T, L>> {
-        if depth > 256 {
-            return Err(fail("quasiquote source depth exceeded"));
-        }
-        let Val::List(items) = value else {
-            return Ok(value.clone());
-        };
-        if items.len() == 2 {
-            match head(value) {
-                Some("quasiquote") => {
-                    return Ok(Val::List(vec![
-                        items[0].clone(),
-                        self.template(&items[1], b, quote_depth + 1, depth + 1)?,
-                    ]))
-                }
-                Some("unquote" | "unquote-splicing") => {
-                    let inner = if quote_depth == 1 {
-                        self.expression(&items[1], b, depth + 1)?
-                    } else {
-                        self.template(&items[1], b, quote_depth - 1, depth + 1)?
-                    };
-                    return Ok(Val::List(vec![items[0].clone(), inner]));
-                }
-                _ => (),
-            }
-        }
-        Ok(Val::List(
-            items
-                .iter()
-                .map(|x| self.template(x, b, quote_depth, depth + 1))
-                .collect::<Result<_>>()?,
-        ))
     }
 }
 
-fn head<T: Extern, L: Locals>(value: &Val<T, L>) -> Option<&str> {
+#[derive(Debug)]
+pub(crate) struct Budget {
+    fuel: usize,
+    calls: usize,
+    nodes: usize,
+}
+pub(crate) type BudgetRef = Arc<Mutex<Budget>>;
+pub(crate) fn budget() -> BudgetRef {
+    Arc::new(Mutex::new(Budget {
+        fuel: 1_000_000,
+        calls: 10_000,
+        nodes: 1_000_000,
+    }))
+}
+fn fail(message: impl Into<String>) -> Error {
+    Error::Macro(message.into())
+}
+pub(crate) fn tick(budget: &BudgetRef) -> Result<()> {
+    let mut b = budget.lock().unwrap();
+    b.fuel = b
+        .fuel
+        .checked_sub(1)
+        .ok_or_else(|| fail("macro instruction limit exceeded"))?;
+    Ok(())
+}
+pub(crate) fn invocation(budget: &BudgetRef) -> Result<()> {
+    let mut b = budget.lock().unwrap();
+    b.calls = b
+        .calls
+        .checked_sub(1)
+        .ok_or_else(|| fail("macro invocation limit exceeded"))?;
+    Ok(())
+}
+pub(crate) fn validate_result<T: Extern, L: Locals>(
+    value: &Val<T, L>,
+    budget: &BudgetRef,
+) -> Result<()> {
+    check_expansion_value(value)?;
+    source_form_counted(value, 0, &mut budget.lock().unwrap().nodes, "macro result")?;
+    Ok(())
+}
+pub(crate) fn head<T: Extern, L: Locals>(value: &Val<T, L>) -> Option<&str> {
     match value {
         Val::List(items) => match items.first() {
             Some(Val::Symbol(s)) => Some(s.as_str()),
@@ -533,25 +158,26 @@ fn head<T: Extern, L: Locals>(value: &Val<T, L>) -> Option<&str> {
         _ => None,
     }
 }
+
 pub fn source_form<T: Extern, L: Locals>(value: &Val<T, L>) -> Result<Form> {
-    check_phase_value(value)?;
+    check_expansion_value(value)?;
     source_form_counted(value, 0, &mut 1_000_000, "source")
 }
 
-/// Bound intermediate phase data, before it can be repeatedly copied into a
-/// growing expansion. Runtime evaluation is unaffected by these phase limits.
-pub(crate) fn check_phase_value<T: Extern, L: Locals>(value: &Val<T, L>) -> Result<()> {
-    check_phase_values(std::slice::from_ref(value))
+/// Bound intermediate transformer data, before it can be repeatedly copied into a
+/// growing expansion. Ordinary evaluation is unaffected by these expansion limits.
+pub(crate) fn check_expansion_value<T: Extern, L: Locals>(value: &Val<T, L>) -> Result<()> {
+    check_expansion_values(std::slice::from_ref(value))
 }
 
-pub(crate) fn check_phase_values<T: Extern, L: Locals>(values: &[Val<T, L>]) -> Result<()> {
+pub(crate) fn check_expansion_values<T: Extern, L: Locals>(values: &[Val<T, L>]) -> Result<()> {
     let mut pending: Vec<_> = values.iter().map(|value| (value, 0)).collect();
     let mut nodes = 0usize;
     let mut bytes = 0usize;
     while let Some((value, depth)) = pending.pop() {
         nodes += 1;
         if nodes > 1_000_000 || depth > 256 {
-            return Err(fail("phase value size/depth limit exceeded"));
+            return Err(fail("expansion value size/depth limit exceeded"));
         }
         match value {
             Val::String(s) => bytes = bytes.saturating_add(s.len()),
@@ -561,7 +187,7 @@ pub(crate) fn check_phase_values<T: Extern, L: Locals>(values: &[Val<T, L>]) -> 
             _ => (),
         }
         if bytes > 1_000_000 {
-            return Err(fail("phase string size limit exceeded"));
+            return Err(fail("expansion string size limit exceeded"));
         }
     }
     Ok(())
@@ -613,6 +239,13 @@ fn native<T: Extern, L: Locals>(
     }
 }
 pub(crate) fn bind_builtins<T: Extern, L: Locals>(env: &mut Env<T, L>) {
+    env.bind_native(SymbolId::from("eval_caller"), native(
+        "(eval_caller FORM) - During macro expansion, evaluate source in the macro call's scope",
+        |_, args| match args {
+            [value] => Ok(NativeFnOp::Exec(vec![Inst::PushConst(value.clone()), Inst::EvalCaller])),
+            _ => Err(fail("eval_caller expects one source form")),
+        },
+    ));
     env.bind_native(
         SymbolId::from("eval_global"),
         native(
@@ -676,7 +309,7 @@ fn one<T: Extern, L: Locals>(
     }
 }
 fn inspect<T: Extern, L: Locals>(
-    fiber: &mut Fiber<T, L>,
+    _fiber: &mut Fiber<T, L>,
     args: &[Val<T, L>],
     once: bool,
 ) -> Result<NativeFnOp<T, L>> {
@@ -684,7 +317,8 @@ fn inspect<T: Extern, L: Locals>(
         return Err(fail("macroexpand expects one source-data argument"));
     };
     source_form(value)?;
-    let mut env = fiber.global_env().lock().unwrap().macro_env();
-    let result = env.outer(value, &fiber.expansion_budget(), once)?;
-    Ok(NativeFnOp::Return(result))
+    Ok(NativeFnOp::Exec(vec![
+        Inst::PushConst(value.clone()),
+        Inst::Expand(once),
+    ]))
 }

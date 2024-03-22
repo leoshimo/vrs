@@ -60,7 +60,7 @@ pub(crate) fn join_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
                 .as_string()?;
 
             if fiber.is_expanding() && separator.len().saturating_mul(args.len()) > 1_000_000 {
-                return Err(Error::Macro("phase join size limit exceeded".into()));
+                return Err(Error::Macro("expansion join size limit exceeded".into()));
             }
 
             let str_args = args

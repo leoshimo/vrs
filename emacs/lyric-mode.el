@@ -284,8 +284,9 @@ With prefix argument REPLACE, replace the region with its result."
   (lyric--eval start end replace))
 
 (defun lyric-macroexpand-last-sexp (repeat-outer)
-  "Display one expansion of the Lyric form at or before point without running it.
-With prefix REPEAT-OUTER, expand the outermost call repeatedly.  This uses the
+  "Display one expansion without executing the generated program.
+The macro body runs and can perform effects.  With prefix REPEAT-OUTER,
+expand the outermost call repeatedly.  This uses the
 macro namespace of the vrsctl connection; for custom definitions, evaluate a
 region containing both the definitions and an explicit macroexpand_1 call."
   (interactive "P")
