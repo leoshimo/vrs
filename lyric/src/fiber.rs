@@ -23,7 +23,6 @@ pub struct Fiber<T: Extern, L: Locals> {
     global: Arc<Mutex<Env<T, L>>>,
     locals: L,
     phase_budget: Option<crate::macros::BudgetRef>,
-    phase_natives: std::collections::HashSet<usize>,
 }
 
 /// The status of fiber
@@ -93,7 +92,6 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
             global,
             locals,
             phase_budget: None,
-            phase_natives: Default::default(),
         }
     }
 
@@ -171,7 +169,10 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
 
     pub(crate) fn set_phase_budget(&mut self, budget: crate::macros::BudgetRef) {
         self.phase_budget = Some(budget);
-        self.phase_natives = crate::macros::phase_natives::<T, L>();
+    }
+
+    pub(crate) fn is_expanding(&self) -> bool {
+        self.phase_budget.is_some()
     }
 }
 
@@ -453,16 +454,9 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                         ))
                     }
                     Some(Val::NativeFn(n)) => {
-                        if self.phase_budget.is_some()
-                            && !self.phase_natives.contains(&(n.func as usize))
-                        {
-                            return Err(Error::Macro(
-                                "native operation is unavailable during expansion".into(),
-                            ));
-                        }
                         let args = args.collect::<Vec<_>>();
                         if self.phase_budget.is_some() {
-                            crate::macros::check_phase_native_args(&n, &args)?;
+                            crate::macros::check_phase_values(&args)?;
                         }
                         let v = (n.func)(self, &args)?;
                         match v {

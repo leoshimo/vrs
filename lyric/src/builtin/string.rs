@@ -51,13 +51,17 @@ pub(crate) fn join_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
         metadata: vec![],
         doc: "(join SEP ARG1 ARG2 ... ARGN) - Returns a new string by concatenating each argument separated by SEP.".to_string(),
-        func: |_, args| {
+        func: |fiber, args| {
             let separator = args
                 .first()
                 .ok_or(Error::UnexpectedArguments(
                     "First argument should be string separator".to_string(),
                 ))?
                 .as_string()?;
+
+            if fiber.is_expanding() && separator.len().saturating_mul(args.len()) > 1_000_000 {
+                return Err(Error::Macro("phase join size limit exceeded".into()));
+            }
 
             let str_args = args
                 .iter()

@@ -102,8 +102,11 @@ pub fn map_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
         metadata: vec![],
         doc: "(map LIST CALLABLE) - Creates a new list containing elements of LIST transformed by CALLABLE".to_string(),
-        func: |_, args| match args {
+        func: |fiber, args| match args {
             [Val::List(l), val] if val.is_callable() => {
+                if fiber.is_expanding() && l.len() > 100_000 {
+                    return Err(Error::Macro("phase map size limit exceeded".into()));
+                }
                 let mut bc = vec![Inst::GetSym(SymbolId::from("list"))];
                 for elem in l {
                     bc.extend([
