@@ -643,8 +643,16 @@ pub(crate) fn bind_builtins<T: Extern, L: Locals>(env: &mut Env<T, L>) {
         .bind_native(SymbolId::from("macroexpand"),native("(macroexpand FORM) - Expand outer macro calls until the head is ordinary code; does not walk nested forms",|f,args|inspect(f,args,false)))
         .bind_native(SymbolId::from("gensym"),native("(gensym [HINT]) - Fresh printable source symbol",|_,args| {
             let hint=match args {[]=>"tmp",[Val::String(s)]=>s,_=>return Err(fail("gensym expects an optional string hint"))};
-            let hint:String=hint.chars().filter(|c|c.is_ascii_alphanumeric()||*c=='_').take(32).collect();
-            Ok(NativeFnOp::Return(Val::symbol(&format!("__lyric_g_{}_{}",nanoid::nanoid!(26),hint))))
+            let mut hint:String=hint.chars().filter(|c|c.is_ascii_alphanumeric()||*c=='_').take(32).collect();
+            if hint.is_empty() {
+                hint.push_str("tmp");
+            } else if hint.as_bytes()[0].is_ascii_digit() {
+                // The reader treats a token starting with a digit as an integer.
+                hint.insert(0, '_');
+            }
+            // Keep 96 random bits in the actual symbol, including across processes
+            // and printed/read-back expansions; display aliases would lose identity.
+            Ok(NativeFnOp::Return(Val::symbol(&format!("{}__{}",hint,nanoid::nanoid!(16)))))
         }))
         .bind_native(SymbolId::from("symbol?"),native("(symbol? VALUE)",|_,args|one(args,|v|Ok(Val::Bool(matches!(v,Val::Symbol(_)))))))
         .bind_native(SymbolId::from("lambda?"),native("(lambda? VALUE)",|_,args|one(args,|v|Ok(Val::Bool(matches!(v,Val::Lambda(_)))))))

@@ -62,6 +62,39 @@ async fn dispatch_retains_startup_patterns_and_looks_up_current_callable() {
 }
 
 #[tokio::test]
+async fn service_loop_locals_do_not_shadow_handlers_and_options_run_in_source_order() {
+    let result = run("(begin
+      (def parent (self))
+      (def child (spawn (fn ()
+        (def trace '())
+        (def service :names)
+        (def interface '(request source message response resolve symbol description))
+        (defn request () :request)
+        (defn source () :source)
+        (defn message () :message)
+        (defn response () :response)
+        (defn resolve () :resolve)
+        (defn symbol () :symbol)
+        (defn description () trace)
+        (srv! (begin (set trace (push trace :name)) service)
+          :ready (begin (set trace (push trace :ready)) parent)
+          :interface (begin (set trace (push trace :interface)) interface)))))
+      (recv (list :service_ready child))
+      (list (eq? child (find_srv :names))
+        (call child '(:request)) (call child '(:source))
+        (call child '(:message)) (call child '(:response))
+        (call child '(:resolve)) (call child '(:symbol))
+        (call child '(:description))))")
+    .await;
+    assert_eq!(
+        result,
+        value(
+            "(true :request :source :message :response :resolve :symbol (:name :ready :interface))"
+        )
+    );
+}
+
+#[tokio::test]
 async fn child_macro_namespace_is_a_snapshot_and_message_data_stays_data() {
     let result = run("(begin
       (defmacro m () 1)

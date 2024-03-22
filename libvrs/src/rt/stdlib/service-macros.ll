@@ -15,18 +15,20 @@
         (begin
           (def key (get options index))
           (def expr (get options (+ index 1)))
-          (def name (gensym "option"))
+          (def name nil)
           (cond
             ((eq? key :interface)
               (begin
                 (if found_interface (error "duplicate :interface"))
                 (set found_interface true)
+                (set name (gensym "interface"))
                 (set interface name)))
             ((eq? key :ready)
               (begin
                 (if (not? allow_ready) (error "spawn_srv! does not accept :ready"))
                 (if found_ready (error "duplicate :ready"))
                 (set found_ready true)
+                (set name (gensym "ready"))
                 (set ready name)))
             (true (error "unsupported service option")))
           (set bindings (push bindings (list name expr)))
@@ -41,10 +43,6 @@
   (def resolve (gensym "resolve"))
   (def symbol_arg (gensym "symbol"))
   (def dispatch (gensym "dispatch"))
-  (def request (gensym "request"))
-  (def source (gensym "source"))
-  (def message (gensym "message"))
-  (def response (gensym "response"))
   (def ready_forms
     (if (get parsed :has_ready)
       (list `(send ,(get parsed :ready) (list :service_ready (self))))
@@ -54,10 +52,7 @@
        (let ((,dispatch (vrs/service_dispatch ,(get parsed :interface) ,resolve)))
          (register ,service :overwrite :interface ,(get parsed :interface))
          ,@ready_forms
-         (loop
-           (def (,request ,source ,message) (recv))
-           (def ,response (try (vrs/dispatch ,dispatch ,resolve ,message)))
-           (send ,source (list ,request ,response)))))))
+         (vrs/service_loop ,dispatch ,resolve)))))
 
 (defmacro spawn_srv (name & options)
   "(spawn_srv! NAME :interface EXPR) - Spawn a service and wait for its registration."
