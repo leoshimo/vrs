@@ -35,7 +35,7 @@ impl<T: Extern, L: Locals> MacroEnv<T, L> {
         source: &Val<T, L>,
         parent: Option<EnvRef<T, L>>,
     ) -> Result<SymbolId> {
-        source_form(source)?;
+        validate_source(source)?;
         let [_, Val::Symbol(name), Val::List(params), body @ ..] = source.as_list()?.as_slice()
         else {
             return Err(fail("defmacro expects a name, parameter list and body"));
@@ -146,7 +146,12 @@ pub(crate) fn validate_result<T: Extern, L: Locals>(
     budget: &BudgetRef,
 ) -> Result<()> {
     check_expansion_value(value)?;
-    source_form_counted(value, 0, &mut budget.lock().unwrap().nodes, "macro result")?;
+    validate_source_counted(
+        value,
+        &mut vec![],
+        &mut budget.lock().unwrap().nodes,
+        "macro result",
+    )?;
     Ok(())
 }
 pub(crate) fn head<T: Extern, L: Locals>(value: &Val<T, L>) -> Option<&str> {
@@ -160,8 +165,13 @@ pub(crate) fn head<T: Extern, L: Locals>(value: &Val<T, L>) -> Option<&str> {
 }
 
 pub fn source_form<T: Extern, L: Locals>(value: &Val<T, L>) -> Result<Form> {
+    validate_source(value)?;
+    Form::try_from(value.clone())
+}
+
+pub(crate) fn validate_source<T: Extern, L: Locals>(value: &Val<T, L>) -> Result<()> {
     check_expansion_value(value)?;
-    source_form_counted(value, 0, &mut 1_000_000, "source")
+    validate_source_counted(value, &mut vec![], &mut 1_000_000, "source")
 }
 
 /// Bound intermediate transformer data, before it can be repeatedly copied into a
@@ -193,39 +203,38 @@ pub(crate) fn check_expansion_values<T: Extern, L: Locals>(values: &[Val<T, L>])
     Ok(())
 }
 
-fn source_form_counted<T: Extern, L: Locals>(
+fn validate_source_counted<T: Extern, L: Locals>(
     value: &Val<T, L>,
-    depth: usize,
+    indices: &mut Vec<usize>,
     nodes: &mut usize,
-    path: &str,
-) -> Result<Form> {
-    if depth > 256 {
-        return Err(fail(format!("source depth exceeded at {path}")));
-    }
+    root: &str,
+) -> Result<()> {
+    // check_expansion_value has already bounded depth and string sizes.
     *nodes = nodes
         .checked_sub(1)
         .ok_or_else(|| fail("source node limit exceeded"))?;
-    Ok(match value {
-        Val::Nil => Form::Nil,
-        Val::Bool(x) => Form::Bool(*x),
-        Val::Int(x) => Form::Int(*x),
-        Val::String(x) => Form::String(x.clone()),
-        Val::Symbol(x) => Form::Symbol(x.clone()),
-        Val::Keyword(x) => Form::Keyword(x.clone()),
-        Val::List(items) => Form::List(
-            items
-                .iter()
-                .enumerate()
-                .map(|(i, x)| source_form_counted(x, depth + 1, nodes, &format!("{path}[{i}]")))
-                .collect::<Result<_>>()?,
-        ),
-        _ => {
-            return Err(fail(format!(
-                "expected source data at {path}, got {}",
-                value
-            )))
+    match value {
+        Val::Nil
+        | Val::Bool(_)
+        | Val::Int(_)
+        | Val::String(_)
+        | Val::Symbol(_)
+        | Val::Keyword(_) => (),
+        Val::List(items) => {
+            for (i, item) in items.iter().enumerate() {
+                indices.push(i);
+                validate_source_counted(item, indices, nodes, root)?;
+                indices.pop();
+            }
         }
-    })
+        _ => {
+            let path = indices
+                .iter()
+                .fold(root.to_owned(), |path, i| format!("{path}[{i}]"));
+            return Err(fail(format!("expected source data at {path}, got {value}")));
+        }
+    }
+    Ok(())
 }
 
 fn native<T: Extern, L: Locals>(
@@ -316,9 +325,39 @@ fn inspect<T: Extern, L: Locals>(
     let [value] = args else {
         return Err(fail("macroexpand expects one source-data argument"));
     };
-    source_form(value)?;
+    validate_source(value)?;
     Ok(NativeFnOp::Exec(vec![
         Inst::PushConst(value.clone()),
         Inst::Expand(once),
     ]))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    type Value = Val<void::Void, ()>;
+
+    #[test]
+    fn result_node_budget_is_shared_across_expansions() {
+        let budget = budget();
+        budget.lock().unwrap().nodes = 5;
+        let value = Value::from_expr("(1 2)").unwrap();
+        validate_result(&value, &budget).unwrap();
+        assert!(validate_result(&value, &budget)
+            .unwrap_err()
+            .to_string()
+            .contains("source node limit exceeded"));
+    }
+
+    #[test]
+    fn validation_retains_nested_error_paths_and_readable_conversion() {
+        let value = Value::List(vec![Value::List(vec![Value::NativeFn(
+            crate::builtin::dbg_fn(),
+        )])]);
+        for result in [validate_source(&value), source_form(&value).map(|_| ())] {
+            assert!(result.unwrap_err().to_string().contains("source[0][0]"));
+        }
+        let value = Value::from_expr("(nil true 42 \"hello\" name :key (nested))").unwrap();
+        assert_eq!(Value::from(source_form(&value).unwrap()), value);
+    }
 }

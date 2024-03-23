@@ -175,6 +175,18 @@ impl<T: Extern, L: Locals> Env<T, L> {
         symbols
     }
 
+    pub(crate) fn macro_definition(
+        &self,
+        name: &str,
+    ) -> crate::Result<crate::macros::Definition<T, L>> {
+        match (&self.macros, &self.parent) {
+            (Some(macros), _) => macros.get(name),
+            (None, Some(parent)) => parent.lock().unwrap().macro_definition(name),
+            (None, None) => crate::macros::MacroEnv::default().get(name),
+        }
+    }
+
+    /// Snapshot the macro namespace when creating a process or installing a library.
     pub fn macro_env(&self) -> crate::macros::MacroEnv<T, L> {
         self.macros
             .clone()

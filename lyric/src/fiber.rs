@@ -327,8 +327,8 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                     {
                         return Err(Error::Macro("macro expansion depth exceeded".into()));
                     }
-                    crate::macros::source_form(source)?;
-                    let definition = self.global.lock().unwrap().macro_env().get(name)?;
+                    crate::macros::validate_source(source)?;
+                    let definition = self.global.lock().unwrap().macro_definition(name)?;
                     let function = definition.function;
                     let required = function.params.len() - usize::from(definition.rest);
                     let args = &source.as_list()?[1..];
@@ -347,11 +347,6 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                     crate::macros::invocation(&budget)?;
                     self.stack.pop();
                     let caller = self.cur_env().clone();
-                    let mut env =
-                        Env::extend(&function.parent.unwrap_or_else(|| self.global.clone()));
-                    for (name, value) in function.params.into_iter().zip(values) {
-                        env.define(name, value);
-                    }
                     let mut code = vec![Inst::ValidateExpansion];
                     if !once {
                         code.push(Inst::Expand(false));
@@ -363,12 +358,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                         self.cf().unwind_cf_len,
                     );
                     continuation.expansion_budget = Some(budget.clone());
-                    let mut transformer = CallFrame::from_bytecode(
-                        Arc::new(Mutex::new(env)),
-                        function.code,
-                        self.stack.len(),
-                        self.cf().unwind_cf_len,
-                    );
+                    let mut transformer = self.lambda_frame(function, values);
                     transformer.transformer = Some(Expansion { caller, budget });
                     self.cframes.push(continuation);
                     self.cframes.push(transformer);
@@ -539,17 +529,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                                 l.params.len()
                             )));
                         }
-                        let parent_env = l.parent.unwrap_or_else(|| Arc::clone(&self.global));
-                        let mut fn_env = Env::extend(&parent_env);
-                        for (s, arg) in l.params.into_iter().zip(args) {
-                            fn_env.define(s, arg);
-                        }
-                        self.cframes.push(CallFrame::from_bytecode(
-                            Arc::new(Mutex::new(fn_env)),
-                            l.code,
-                            self.stack.len(),
-                            self.cf().unwind_cf_len,
-                        ))
+                        self.cframes.push(self.lambda_frame(l, args));
                     }
                     Some(Val::NativeFn(n)) => {
                         let args = args.collect::<Vec<_>>();
@@ -653,6 +633,23 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
         };
 
         Ok(())
+    }
+
+    fn lambda_frame(
+        &self,
+        function: Lambda<T, L>,
+        args: impl IntoIterator<Item = Val<T, L>>,
+    ) -> CallFrame<T, L> {
+        let mut env = Env::extend(&function.parent.unwrap_or_else(|| self.global.clone()));
+        for (name, value) in function.params.into_iter().zip(args) {
+            env.define(name, value);
+        }
+        CallFrame::from_bytecode(
+            Arc::new(Mutex::new(env)),
+            function.code,
+            self.stack.len(),
+            self.cf().unwind_cf_len,
+        )
     }
 
     /// Next instruction in fiber, or None if fiber is complete
