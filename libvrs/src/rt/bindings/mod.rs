@@ -41,8 +41,6 @@ pub(crate) use service::info_srv_fn;
 pub(crate) use service::install_service_library;
 pub(crate) use service::ls_srv_fn;
 pub(crate) use service::register_fn;
-pub(crate) use service::spawn_srv_fn;
-pub(crate) use service::srv_fn;
 
 pub(crate) use pubsub::publish_fn;
 pub(crate) use pubsub::subscribe_fn;

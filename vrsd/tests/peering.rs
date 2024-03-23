@@ -144,7 +144,7 @@ async fn configured_node_reconnects_and_routes_service_calls() {
         &beta_init,
         concat!(
             "(defn ping (message) (list :pong message))\n",
-            "(spawn_srv :remote_probe :interface '(ping))",
+            "(spawn_srv! :remote_probe :interface '(ping))",
         ),
     )
     .unwrap();
@@ -237,7 +237,7 @@ async fn remote_bind_preserves_interactive_metadata_and_completion_defaults() {
         (defn objects () '((:example/object :id 7)))
         (defn choose (object) (interactive :example/object) object)
         (set_entity_completions :example/object 'objects)
-        (spawn_srv :remote_probe :interface '(objects choose))
+        (spawn_srv! :remote_probe :interface '(objects choose))
     "#,
     )
     .unwrap();
@@ -284,7 +284,7 @@ async fn republished_service_replaces_previous_remote_registration() {
             Form::from_expr(
                 "(begin
                     (defn first_hook (cmd) cmd)
-                    (spawn_srv :replaceable :interface '(first_hook)))",
+                    (spawn_srv! :replaceable :interface '(first_hook)))",
             )
             .unwrap(),
         )
@@ -307,7 +307,7 @@ async fn republished_service_replaces_previous_remote_registration() {
             Form::from_expr(
                 "(begin
                     (defn second_hook (expr) (list :second expr))
-                    (spawn_srv :replaceable :interface '(second_hook)))",
+                    (spawn_srv! :replaceable :interface '(second_hook)))",
             )
             .unwrap(),
         )
@@ -374,7 +374,7 @@ async fn later_registration_shadows_same_named_service_on_another_node() {
             Form::from_expr(
                 "(begin
                     (defn first_local_hook () :first_local)
-                    (spawn_srv :shared :interface '(first_local_hook)))",
+                    (spawn_srv! :shared :interface '(first_local_hook)))",
             )
             .unwrap(),
         )
@@ -396,7 +396,7 @@ async fn later_registration_shadows_same_named_service_on_another_node() {
             Form::from_expr(
                 "(begin
                     (defn remote_hook () :remote)
-                    (spawn_srv :shared :interface '(remote_hook)))",
+                    (spawn_srv! :shared :interface '(remote_hook)))",
             )
             .unwrap(),
         )
@@ -418,7 +418,7 @@ async fn later_registration_shadows_same_named_service_on_another_node() {
             Form::from_expr(
                 "(begin
                     (defn second_local_hook () :second_local)
-                    (spawn_srv :shared :interface '(second_local_hook)))",
+                    (spawn_srv! :shared :interface '(second_local_hook)))",
             )
             .unwrap(),
         )

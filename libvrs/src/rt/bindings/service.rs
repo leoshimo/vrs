@@ -284,45 +284,6 @@ pub(crate) fn import_entity_completions_fn() -> NativeFn {
     }
 }
 
-/// Legacy evaluated-argument entry points use the same language macros. The
-/// temporary argument frame retains the caller's lexical service definitions.
-pub(crate) fn srv_fn() -> NativeFn {
-    service_adapter("srv!")
-}
-pub(crate) fn spawn_srv_fn() -> NativeFn {
-    service_adapter("spawn_srv!")
-}
-fn service_adapter(name: &'static str) -> NativeFn {
-    NativeFn {
-        metadata: vec![],
-        doc: format!("Legacy service call; prefer ({name} NAME :interface EXPR)"),
-        func: if name == "srv!" {
-            |_, args| adapt_service("srv!", args)
-        } else {
-            |_, args| adapt_service("spawn_srv!", args)
-        },
-    }
-}
-fn adapt_service(name: &str, args: &[Val]) -> Result<NativeFnOp> {
-    if args.is_empty() {
-        return Err(Error::UnexpectedArguments(
-            "service name is required".into(),
-        ));
-    }
-    let mut call = vec![Val::symbol(name)];
-    let mut bindings = vec![];
-    for (index, value) in args.iter().enumerate() {
-        if index > 0 && index % 2 == 1 {
-            call.push(value.clone());
-        } else {
-            let symbol = SymbolId::from(format!("__lyric_service_arg_{}", nanoid::nanoid!()));
-            call.push(Val::Symbol(symbol.clone()));
-            bindings.push((symbol, value.clone()));
-        }
-    }
-    Ok(NativeFnOp::EvalIn(Val::List(call), bindings))
-}
-
 /// Cache the standard source library, then install its global-lookup lambdas
 /// into each process. No registry operations execute while loading definitions.
 pub(crate) fn install_service_library(env: &mut crate::Env) {

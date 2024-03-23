@@ -1,4 +1,4 @@
-// Test service runtime bindings
+// Test service macros and runtime bindings
 
 use vrs::{ProcessResult, Program, Runtime, Val};
 
@@ -8,7 +8,7 @@ async fn srv_echo() {
 
     let echo_prog = r#" (begin 
         (defn echo (name) (list "got" name))
-        (srv :echo :interface '(echo))
+        (srv! :echo :interface '(echo))
     )"#;
     let echo_srv = Program::from_expr(echo_prog).unwrap();
     let _ = rt.run(echo_srv).await.unwrap();
@@ -43,7 +43,7 @@ async fn srv_multi_interface() {
         (spawn (lambda () (begin
             (defn ping (msg) (list "pong" msg))
             (defn pong (msg) (list "ping" msg))
-            (srv :ping_pong :interface '(ping pong)))))
+            (srv! :ping_pong :interface '(ping pong)))))
         (list
             (call (find_srv :ping_pong) '(:ping "hi"))
             (call (find_srv :ping_pong) '(:pong "bye")))
@@ -67,7 +67,7 @@ async fn srv_echo_invalid_msg() {
 
     let echo_prog = r#" (begin 
         (defn echo (name) (list "got" name))
-        (srv :echo :interface '(echo))
+        (srv! :echo :interface '(echo))
     )"#;
     let echo_srv = Program::from_expr(echo_prog).unwrap();
     let _ = rt.run(echo_srv).await.unwrap();
@@ -91,7 +91,7 @@ async fn srv_echo_invalid_arg() {
 
     let echo_prog = r#" (begin 
         (defn echo (name) (list "got" name))
-        (srv :echo :interface '(echo))
+        (srv! :echo :interface '(echo))
     )"#;
     let echo_srv = Program::from_expr(echo_prog).unwrap();
     let _ = rt.run(echo_srv).await.unwrap();
@@ -118,7 +118,7 @@ async fn spawn_echo_svc() {
     let prog = r#"(begin
          (spawn (lambda () (begin
             (defn echo (name) (list "got" name))
-            (srv :echo :interface '(echo))
+            (srv! :echo :interface '(echo))
          )))
          (call (find_srv :echo) '(:echo "hello")))
     "#;
@@ -138,8 +138,8 @@ async fn spawn_srv_returns_after_service_registration() {
     let prog = Program::from_expr(
         r#"(begin
             (defn ping () :pong)
-            (def spawned (spawn_srv :ready_probe :interface '(ping)))
-            (list spawned (find_srv :ready_probe) (ping)))"#,
+            (def spawned (spawn_srv! :ready_probe :interface '(ping)))
+            (list spawned (find_srv :ready_probe) (call spawned '(:ping))))"#,
     )
     .unwrap();
     let result = rt.run(prog).await.unwrap().join().await.unwrap();
@@ -150,6 +150,3 @@ async fn spawn_srv_returns_after_service_registration() {
     assert_eq!(values[0], values[1]);
     assert_eq!(values[2], Val::keyword("pong"));
 }
-
-// TODO: Test srv w/o service name errors
-// TODO: Test srv w/o :interface errors
