@@ -161,12 +161,54 @@ async fn source_scripts_register_macros_in_order() {
 }
 
 #[tokio::test]
-async fn service_macro_option_errors_are_catchable_before_spawning() {
-    let result = run("(list (err? (try (srv! :bad)))
-      (err? (try (spawn_srv! :bad :interface '() :ready (self))))
-      (err? (try (srv! :bad :interface '() :interface '()))) (ls_srv))")
+async fn service_options_preserve_source_and_explicit_ready_presence() {
+    let result = run("(list
+      (vrs/service_options '(:interface (exports)) false)
+      (vrs/service_options '(:interface '() :ready nil) true)
+      (vrs/service_options '(:ready nil :interface '()) true))")
     .await;
-    assert_eq!(result, value("(true true true ())"));
+    assert_eq!(
+        result,
+        value(
+            "((:interface (exports) :ready nil :has_ready false)
+      (:interface '() :ready nil :has_ready true)
+      (:interface '() :ready nil :has_ready true))"
+        )
+    );
+}
+
+#[tokio::test]
+async fn service_macro_option_errors_are_catchable_before_spawning() {
+    for name in ["srv!", "spawn_srv!"] {
+        for options in [
+            "",
+            ":interface",
+            ":ready (self)",
+            ":unknown '()",
+            ":interface '() :unknown nil",
+            ":interface '() :ready",
+            ":interface '() :interface '()",
+            ":ready nil :ready nil",
+            ":interface '() :ready nil :ready nil",
+        ] {
+            let result = run(&format!(
+                "(begin (def effects 0)
+              (def failed (err? (try ({name} (set effects 1) {options}))))
+              (list failed effects (ls_srv)))"
+            ))
+            .await;
+            assert_eq!(result, value("(true 0 ())"), "{name} {options}");
+        }
+    }
+    for options in [":interface '() :ready nil", ":ready nil :interface '()"] {
+        assert_eq!(
+            run(&format!(
+                "(list (err? (try (spawn_srv! :bad {options}))) (ls_srv))"
+            ))
+            .await,
+            value("(true ())")
+        );
+    }
 }
 
 #[tokio::test]

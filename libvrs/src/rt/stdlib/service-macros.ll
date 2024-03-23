@@ -1,34 +1,14 @@
 # Ordinary helpers used by the service transformers.
 (defn vrs/service_options (options allow_ready)
-  (if (not? (eq? (len options) 2))
-    (if (not? (eq? (len options) 4))
-      (error "service macro expects :interface EXPR and optional :ready EXPR")))
-  (def found_interface false)
-  (def found_ready false)
-  (def interface nil)
-  (def ready nil)
-  (def index 0)
-  (map options (fn (ignored)
-    (if (not? (eq? index (len options)))
-      (begin
-        (def key (get options index))
-        (def expr (get options (+ index 1)))
-        (cond
-          ((eq? key :interface)
-            (begin
-              (if found_interface (error "duplicate :interface"))
-              (set found_interface true)
-              (set interface expr)))
-          ((eq? key :ready)
-            (begin
-              (if (not? allow_ready) (error "spawn_srv! does not accept :ready"))
-              (if found_ready (error "duplicate :ready"))
-              (set found_ready true)
-              (set ready expr)))
-          (true (error "unsupported service option")))
-        (set index (+ index 2))))))
-  (if (not? found_interface) (error "missing :interface"))
-  (list :interface interface :ready ready :has_ready found_ready))
+  (def (interface ready has_ready)
+    (match options
+      ((:interface interface) (list interface nil false))
+      ((:interface interface :ready ready) (list interface ready true))
+      ((:ready ready :interface interface) (list interface ready true))
+      (_ (error "service macro expects :interface EXPR and optional :ready EXPR"))))
+  (if has_ready
+    (if (not? allow_ready) (error "spawn_srv! does not accept :ready")))
+  (list :interface interface :ready ready :has_ready has_ready))
 
 (defn vrs/service_clauses (interface)
   (if (not? (list? interface)) (error ":interface must be a list"))
