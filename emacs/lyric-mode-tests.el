@@ -96,6 +96,28 @@
       (should-error (lyric-eval-last-sexp t) :type 'user-error)
       (should (equal (buffer-string) "(missing_function)")))))
 
+(ert-deftest lyric-defn-macroexpansion-with-test-runtime ()
+  "Inspect plain defn and replace an explicit inspection with its expansion."
+  (skip-unless (getenv "LYRIC_TEST_VRSCTL"))
+  (let ((lyric-vrsctl-command (getenv "LYRIC_TEST_VRSCTL"))
+        (lyric-result-width 90)
+        (source "(defn echo (x) \"Echo\" x)")
+        (expansion "(def echo (fn (x) \"Echo\" x))"))
+    (with-temp-buffer
+      (insert source)
+      (lyric-mode)
+      (goto-char (1- (point-max)))
+      (dolist (repeat '(nil t))
+        (lyric-macroexpand-last-sexp repeat)
+        (with-current-buffer "*Lyric Result*"
+          (should (equal (buffer-string) (concat expansion "\n"))))
+        (should (equal (buffer-string) source)))
+      (erase-buffer)
+      (insert (format "(macroexpand_1 '%s)" source))
+      (goto-char (point-max))
+      (lyric-eval-last-sexp t)
+      (should (equal (buffer-string) expansion)))))
+
 (ert-deftest lyric-macroexpansion-and-quit-with-test-runtime ()
   "Inspect a real service macro, then cancel an accidental server loop."
   (skip-unless (getenv "LYRIC_TEST_VRSCTL"))

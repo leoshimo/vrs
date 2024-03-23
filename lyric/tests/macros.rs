@@ -326,3 +326,83 @@ async fn boolean_macros_evaluate_once_in_order_without_capturing_names() {
         Value::from_expr("(0 3 42 42 (1 2 0 false 3) 5 (1 2 0 false 3 5))").unwrap()
     );
 }
+
+#[tokio::test]
+async fn defn_expands_with_its_plain_spelling_without_defining_the_function() {
+    let expanded =
+        Value::from_expr("(def echo (fn (x) \"Echo\" (interactive :number) x))").unwrap();
+    for spelling in ["defn", "defn!"] {
+        for expand in ["macroexpand_1", "macroexpand"] {
+            let source = format!(
+                "(begin
+              (def form ({expand} '({spelling} echo (x) \"Echo\" (interactive :number) x)))
+              (list form (err? (try echo))))"
+            );
+            assert_eq!(
+                eval(&source).await.unwrap(),
+                Value::List(vec![expanded.clone(), Value::Bool(true)])
+            );
+        }
+    }
+    let source = "(begin
+      (defmacro named () '(defn echo (x) x))
+      (list (macroexpand_1 '(named!)) (macroexpand '(named!))
+            (macroexpand ''(defn echo (x) x))))";
+    assert_eq!(
+        eval(source).await.unwrap(),
+        Value::from_expr("((defn echo (x) x) (def echo (fn (x) x)) (quote (defn echo (x) x)))")
+            .unwrap()
+    );
+}
+
+#[tokio::test]
+async fn defn_retains_lexical_state_recursion_and_function_metadata() {
+    let source = "(begin
+      (defn make_counter (value)
+        (defn next (amount) \"Advance\" (interactive :number)
+          (set value (+ value amount)) value)
+        next)
+      (def counter (make_counter 40))
+      (defn count (n) (if (eq? n 0) 0 (+ 1 (count (- n 1)))))
+      (list (counter 1) (counter 2) (count 3)
+        (get (meta counter) :doc) (get (meta counter) :interactive)
+        (get (meta counter) :args)))";
+    assert_eq!(
+        eval(source).await.unwrap(),
+        Value::from_expr("(41 43 3 \"Advance\" true ((:type :number :name amount)))").unwrap()
+    );
+}
+
+#[tokio::test]
+async fn defn_uses_runtime_macro_redefinitions_including_existing_call_sites() {
+    let source = "(begin
+      (defn before () 1)
+      (defn create () (defn later () 2) (later))
+      (defmacro defn (name params & body) `(def ,name (fn ,params 42)))
+      (defn after () 3)
+      (list (before) (create) (after)
+        (macroexpand_1 '(defn inspected () 4))))";
+    assert_eq!(
+        eval(source).await.unwrap(),
+        Value::from_expr("(1 42 42 (def inspected (fn () 42)))").unwrap()
+    );
+}
+
+#[tokio::test]
+async fn defn_errors_are_catchable_when_the_definition_executes() {
+    let source = "(begin
+      (defn delayed () (defn broken))
+      (list (lambda? delayed) (err? (try (delayed)))
+        (err? (try (defn missing_body ())))
+        (err? (try (defn invalid_params 42 1)))
+        (err? (try (defn invalid_metadata (x) (interactive) x)))
+        (begin (defn recovered () 42) (recovered))))";
+    assert_eq!(
+        eval(source).await.unwrap(),
+        Value::from_expr("(true true true true true 42)").unwrap()
+    );
+    assert_eq!(
+        eval("(if false (defn broken) :skipped)").await.unwrap(),
+        Value::keyword("skipped")
+    );
+}
