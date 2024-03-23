@@ -10,13 +10,16 @@ use nucleo_matcher::{
 };
 use serde_json::json;
 use std::sync::Mutex;
-use tauri::{async_runtime::JoinHandle, GlobalShortcutManager, Manager, ActivationPolicy};
+use tauri::{async_runtime::JoinHandle, GlobalShortcutManager, Manager};
 use tokio::{
     net::UnixStream,
     sync::{mpsc, oneshot},
 };
 use tracing::error;
 use vrs::{Connection, KeywordId, Response, Val};
+
+#[cfg(target_os = "macos")]
+use tauri::ActivationPolicy;
 
 #[cfg(target_os = "macos")]
 use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
