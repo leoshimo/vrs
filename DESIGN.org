@@ -72,6 +72,13 @@ Uniform Interface - Common Primitives
 Compute and Data Substrate
 Turn O(M*N) problems into O(M+N)
 
+Everything is a Function Call
+- Generate user interfaces off function call signature
+- User interactions are function calls
+- Agents can use function calls
+- Data queries are function calls
+- User interactions directly translate to a program - same for agent
+
 * Architectural Components
 
 lyric - Programming language and data format
