@@ -270,12 +270,6 @@ pub fn proc_env() -> Env {
     }
 
     {
-        e.bind_lambda(SymbolId::from("open_app"), bindings::open_app_fn())
-            .bind_lambda(SymbolId::from("open_file"), bindings::open_file_fn())
-            .bind_lambda(SymbolId::from("open_url"), bindings::open_url_fn());
-    }
-
-    {
         e.bind_native_async(SymbolId::from("register"), bindings::register_fn())
             .bind_lambda(SymbolId::from("find_srv"), bindings::find_srv_fn())
             .bind_native_async(SymbolId::from("ls_srv"), bindings::ls_srv_fn());

@@ -2,7 +2,6 @@ mod fs;
 mod fuzzy;
 mod mailbox;
 mod node;
-mod open;
 mod proc;
 mod pubsub;
 mod service;
@@ -30,10 +29,6 @@ pub(crate) use proc::spawn_fn;
 pub(crate) use system::decode_fn;
 pub(crate) use system::exec_fn;
 pub(crate) use system::shell_expand_fn;
-
-pub(crate) use open::open_app_fn;
-pub(crate) use open::open_file_fn;
-pub(crate) use open::open_url_fn;
 
 pub(crate) use service::find_srv_fn;
 pub(crate) use service::import_entity_completions_fn;
