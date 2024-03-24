@@ -83,7 +83,7 @@ fn pretty_rejects_invalid_arity_and_width() {
 fn interactive_is_metadata_not_executed_function_body() {
     let value = eval_expr(
         r#"(begin
-        (defn focus (window) "Focus Window" (interactive :os/window) window)
+        (defn! focus (window) "Focus Window" (interactive :os/window) window)
         (list (focus '(:os/window :id 7)) (get (meta focus) :interactive)
               (get (get (get (meta focus) :args) 0) :name)
               (get (get (get (meta focus) :args) 0) :type)))"#,
@@ -102,9 +102,9 @@ fn environment_discovery_and_completion_overrides_are_process_local() {
     assert_eq!(
         eval_expr(
             r#"(begin
-        (defn source () '())
+        (defn! source () '())
         (set_entity_completions :example/object 'source)
-        (defn nested () (list (contains? (ls_env) 'source)
+        (defn! nested () (list (contains? (ls_env) 'source)
                              (get_entity_completions :example/object)))
         (nested))"#
         )
@@ -356,7 +356,7 @@ fn eval_quote() {
 fn eval_defn() {
     let prog = r#"(begin
         (def count 0)
-        (defn inc (x)
+        (defn! inc (x)
             (set count (+ count x))
             count)
         (inc 1)
@@ -482,7 +482,7 @@ fn cond_simple() {
 fn cond_multi() {
     {
         let prog = r#"(begin
-            (defn categorize (x)
+            (defn! categorize (x)
                 (cond
                     ((eq? x 10) "is int ten")
                     ((eq? x "ten") "is string ten")
@@ -506,7 +506,7 @@ fn cond_multi() {
 
     {
         let prog = r#"(begin
-            (defn categorize (x)
+            (defn! categorize (x)
                 (cond
                     ((eq? x 10) "is int ten")
                     ((eq? x "ten") "is string ten")
@@ -831,7 +831,7 @@ fn eval_not() {
     assert_eq!(
         eval_expr(
             r#"(begin
-            (defn is_true () true)
+            (defn! is_true () true)
             (not? (is_true)))"#
         )
         .unwrap(),
@@ -840,7 +840,7 @@ fn eval_not() {
     assert_eq!(
         eval_expr(
             r#"(begin
-            (defn is_false () false)
+            (defn! is_false () false)
             (not? (is_false)))"#
         )
         .unwrap(),
@@ -856,7 +856,7 @@ fn eval_match() {
     }
     {
         let prog = r#"(begin
-            (defn matcher (x)
+            (defn! matcher (x)
                 (match x
                     (10 "got ten")
                     (20 "got twenty")
@@ -877,7 +877,7 @@ fn eval_match() {
     }
     {
         let prog = r#"(begin
-            (defn matcher (x)
+            (defn! matcher (x)
                 (match x
                     ((:ok val) val)
                     ((:err val) val)))
@@ -896,7 +896,7 @@ fn eval_match() {
     }
     {
         let prog = r#"(begin
-            (defn weird_add (x)
+            (defn! weird_add (x)
                 (match x
                     ((:add x y) (+ x y))
                     (("add" x y) (+ x y))))
@@ -912,7 +912,7 @@ fn eval_match() {
 
     {
         let prog = r#"(begin
-            (defn extract (x)
+            (defn! extract (x)
                 (match x
                     ((:first (a b c)) a)
                     ((:second (a b c)) b)
@@ -934,7 +934,7 @@ fn eval_match() {
     {
         // match w/ nesting
         let prog = r#"(begin
-            (defn matcher (x)
+            (defn! matcher (x)
                 (match x
                     ((a (a (a))) :one)
                     ((a (b (c))) :two)

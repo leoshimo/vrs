@@ -20,8 +20,8 @@ fn value(source: &str) -> Val {
 async fn service_expansion_inspects_runtime_exports_without_starting_service() {
     let result = run("(begin
       (def inspections 0)
-      (defn start (exports)
-        (defn echo (x) x)
+      (defn! start (exports)
+        (defn! echo (x) x)
         (macroexpand_1 '(srv! (error \"name ran\")
           :interface (begin (set inspections (+ inspections 1)) exports)
           :ready (error \"ready ran\"))))
@@ -47,12 +47,12 @@ async fn service_expansion_inspects_runtime_exports_without_starting_service() {
 async fn service_macro_preserves_dynamic_arguments_and_global_imports() {
     let result = run("(begin
       (def names 0) (def interfaces 0)
-      (defn start (captured)
-        (defn echo (msg) (list captured msg))
+      (defn! start (captured)
+        (defn! echo (msg) (list captured msg))
         (spawn_srv! (begin (set names (+ names 1)) :dynamic)
           :interface (begin (set interfaces (+ interfaces 1)) '(echo))))
       (def child (start 42))
-      (defn import () (bind_srv :dynamic))
+      (defn! import () (bind_srv :dynamic))
       (import)
       (list names interfaces (echo 7) (eq? child (find_srv :dynamic))))")
     .await;
@@ -64,10 +64,10 @@ async fn dispatch_retains_startup_patterns_and_looks_up_current_callable() {
     let result = run("(begin
       (def parent (self))
       (def child (spawn (fn ()
-      (defn handler (arg) (list :before arg))
-      (defn replace () (set handler (fn (arg) (list :after arg))) :ok)
-      (defn duplicate (x x) x)
-      (defn ignored (_) :ignored)
+      (defn! handler (arg) (list :before arg))
+      (defn! replace () (set handler (fn (arg) (list :after arg))) :ok)
+      (defn! duplicate (x x) x)
+      (defn! ignored (_) :ignored)
       (srv! :changing :interface '(handler replace duplicate ignored) :ready parent))))
       (recv (list :service_ready child))
       (def target (find_srv :changing))
@@ -88,13 +88,13 @@ async fn service_loop_locals_do_not_shadow_handlers_and_interface_is_evaluated_f
         (def trace '())
         (def service :names)
         (def interface '(request source message response resolve symbol description))
-        (defn request () :request)
-        (defn source () :source)
-        (defn message () :message)
-        (defn response () :response)
-        (defn resolve () :resolve)
-        (defn symbol () :symbol)
-        (defn description () trace)
+        (defn! request () :request)
+        (defn! source () :source)
+        (defn! message () :message)
+        (defn! response () :response)
+        (defn! resolve () :resolve)
+        (defn! symbol () :symbol)
+        (defn! description () trace)
         (srv! (begin (set trace (push trace :name)) service)
           :ready (begin (set trace (push trace :ready)) parent)
           :interface (begin (set trace (push trace :interface)) interface)))))
@@ -218,9 +218,9 @@ async fn service_macro_option_errors_are_catchable_before_spawning() {
 #[tokio::test]
 async fn generated_patterns_do_not_capture_handler_names_or_match_temporary() {
     let result = run("(begin
-      (defn echo (echo) echo)
-      (defn _expr (x) x)
-      (defn wild (_ _) :ok)
+      (defn! echo (echo) echo)
+      (defn! _expr (x) x)
+      (defn! wild (_ _) :ok)
       (spawn_srv! :collisions :interface '(echo _expr wild))
       (def target (find_srv :collisions))
       (list (call target '(:echo 42)) (call target '(:_expr 43))
@@ -250,15 +250,15 @@ async fn service_construction_has_no_legacy_function_bindings() {
 }
 
 #[tokio::test]
-async fn plain_defn_uses_the_spawned_process_macro_namespace() {
+async fn defn_macro_uses_the_spawned_process_macro_namespace() {
     let result = run("(begin
-      (defn original () 1)
+      (defn! original () 1)
       (def parent (self))
       (spawn (fn ()
         (defmacro defn (name params & body) `(def ,name (fn ,params 42)))
-        (defn child_function () 2)
+        (defn! child_function () 2)
         (send parent (list (original) (child_function)))))
-      (defn parent_function () 3)
+      (defn! parent_function () 3)
       (list (recv) (parent_function)))")
     .await;
     assert_eq!(result, value("((1 42) 3)"));

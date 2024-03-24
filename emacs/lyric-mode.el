@@ -97,7 +97,7 @@ PREFIXES are ordered from outermost to innermost; preserve spaces/comments."
                        (point) (progn (forward-sexp) (point)))))
             (skip-chars-forward " \t")
             (if (or (eolp) (looking-at "#")
-                    (member head '("begin" "defn" "defmacro" "for_syntax" "lambda" "loop"))
+                    (member head '("begin" "defmacro" "for_syntax" "lambda" "loop"))
                     (string-suffix-p "!" head))
                 body
               (current-column)))))))))

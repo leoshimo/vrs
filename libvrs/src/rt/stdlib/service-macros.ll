@@ -1,5 +1,5 @@
 # Ordinary helpers used by the service transformers.
-(defn vrs/service_options (options allow_ready)
+(defn! vrs/service_options (options allow_ready)
   (def (interface ready has_ready)
     (match options
       ((:interface interface) (list interface nil false))
@@ -10,7 +10,7 @@
     (if (not? allow_ready) (error "spawn_srv! does not accept :ready")))
   (list :interface interface :ready ready :has_ready has_ready))
 
-(defn vrs/service_clauses (interface)
+(defn! vrs/service_clauses (interface)
   (if (not? (list? interface)) (error ":interface must be a list"))
   (map interface (fn (name)
     (if (not? (symbol? name)) (error ":interface entries must be symbols"))

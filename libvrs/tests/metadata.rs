@@ -19,8 +19,8 @@ async fn eval(source: &str) -> Val {
 async fn bind_imports_metadata_and_completions_without_running_provider() {
     let value = eval(
         r#"
-        (defn objects () (error "must not run during registration or binding"))
-        (defn choose (object) (interactive :example/object) object)
+        (defn! objects () (error "must not run during registration or binding"))
+        (defn! choose (object) (interactive :example/object) object)
         (set_entity_completions :example/object 'objects)
         (spawn_srv! :example :interface '(objects choose))
         (set_entity_completions :example/object nil)
@@ -43,9 +43,9 @@ async fn bind_imports_metadata_and_completions_without_running_provider() {
 async fn defaults_compose_and_local_override_survives_rebinding() {
     let value = eval(
         r#"
-        (defn first_objects () '())
-        (defn second_objects () '())
-        (defn local_objects () '())
+        (defn! first_objects () '())
+        (defn! second_objects () '())
+        (defn! local_objects () '())
         (set_entity_completions :example/object 'first_objects)
         (spawn_srv! :first :interface '(first_objects))
         (set_entity_completions :example/object 'second_objects)
@@ -74,8 +74,8 @@ async fn defaults_compose_and_local_override_survives_rebinding() {
 async fn rebinding_replaces_stale_defaults_and_private_providers_are_not_exported() {
     let value = eval(
         r#"
-        (defn public_objects () '())
-        (defn private_objects () '())
+        (defn! public_objects () '())
+        (defn! private_objects () '())
         (set_entity_completions :public/object 'public_objects)
         (set_entity_completions :private/object 'private_objects)
         (spawn_srv! :example :interface '(public_objects))
@@ -84,7 +84,7 @@ async fn rebinding_replaces_stale_defaults_and_private_providers_are_not_exporte
         (bind_srv :example)
         (def before (get_entity_completions :public/object))
         (def private (get_entity_completions :private/object))
-        (defn ping () :pong)
+        (defn! ping () :pong)
         (spawn_srv! :example :interface '(ping))
         (bind_srv :example)
         (list before private (get_entity_completions :public/object))

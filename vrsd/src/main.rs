@@ -117,7 +117,7 @@ mod tests {
         ));
         std::fs::write(
             &path,
-            "(defn ping () :pong)\n(spawn_srv! :init_probe :interface '(ping))",
+            "(defn! ping () :pong)\n(spawn_srv! :init_probe :interface '(ping))",
         )
         .unwrap();
 

@@ -97,11 +97,11 @@
       (should (equal (buffer-string) "(missing_function)")))))
 
 (ert-deftest lyric-defn-macroexpansion-with-test-runtime ()
-  "Inspect plain defn and replace an explicit inspection with its expansion."
+  "Inspect defn! and replace an explicit inspection with its expansion."
   (skip-unless (getenv "LYRIC_TEST_VRSCTL"))
   (let ((lyric-vrsctl-command (getenv "LYRIC_TEST_VRSCTL"))
         (lyric-result-width 90)
-        (source "(defn echo (x) \"Echo\" x)")
+        (source "(defn! echo (x) \"Echo\" x)")
         (expansion "(def echo (fn (x) \"Echo\" x))"))
     (with-temp-buffer
       (insert source)
@@ -156,7 +156,7 @@
               . "(:echo\n (:name :echo\n  :pid 1)\n :clock (:name :clock))")
              ("(pretty\n(ls_srv)\n40)" . "(pretty\n  (ls_srv)\n  40)")
              ("(pretty (ls_srv)\n40)" . "(pretty (ls_srv)\n        40)")
-             ("(defn f (x)\n(begin\n(list x\n1)))" . "(defn f (x)\n  (begin\n    (list x\n          1)))")))
+             ("(defn! f (x)\n(begin\n(list x\n1)))" . "(defn! f (x)\n  (begin\n    (list x\n          1)))")))
     (with-temp-buffer
       (insert (car example))
       (lyric-mode)

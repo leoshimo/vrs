@@ -80,7 +80,7 @@ pub fn compile<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Bytecode<T, L>> {
                     "yield" => return compile_yield(args),
                     "loop" => return compile_loop(args),
                     "match" => return compile_match(args),
-                    name if crate::macros::is_invocation(name) => {
+                    name if name.ends_with('!') => {
                         return Ok(vec![
                             Inst::PushConst(v.clone()),
                             Inst::Expand(false),

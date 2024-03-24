@@ -173,7 +173,7 @@ fn script_functions(script: &str, names: &[&str], source: &str) -> Value {
     let selected: Vec<_> = forms
         .into_iter()
         .filter(|form| {
-            matches!(form, Form::List(items) if items.first() == Some(&Form::symbol("defn"))
+            matches!(form, Form::List(items) if items.first() == Some(&Form::symbol("defn!"))
           && matches!(items.get(1), Some(Form::Symbol(name)) if names.contains(&name.as_str())))
         })
         .collect();
@@ -258,14 +258,14 @@ fn holes_run_once_in_lexical_order_and_template_code_runs_later() {
     assert_value(
         "(begin
       (def calls '())
-      (defn mark (x) (set calls (push calls x)) x)
+      (defn! mark (x) (set calls (push calls x)) x)
       (def code (let ((x 2)) `(mark ,(mark 1) (nested ,(mark x)) ,@(list (mark 3)))))
       (list calls code))",
         "((1 2 3) (mark 1 (nested 2) 3))",
     );
     assert_value(
         "(begin
-      (def calls '()) (defn mark (x) (set calls (push calls x)))
+      (def calls '()) (defn! mark (x) (set calls (push calls x)))
       (def code `(begin (mark ,1) (mark ,2)))
       (def before calls) (eval code) (list before calls))",
         "(() (1 2))",

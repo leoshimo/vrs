@@ -47,7 +47,7 @@ mod tests {
     #[tokio::test]
     async fn run_returns_fiber_result() {
         let prog = r#"(begin
-            (defn inc (x)
+            (defn! inc (x)
                 (+ x 1))
             (def x 39)
             (set x (inc x))
@@ -68,7 +68,7 @@ mod tests {
     #[tokio::test]
     async fn run_hits_error() {
         let prog = r#"(begin
-            (defn inc (x)
+            (defn! inc (x)
                 (undefined_function)
                 (+ x 1))
             (def x 39)

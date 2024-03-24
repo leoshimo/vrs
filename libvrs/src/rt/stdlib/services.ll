@@ -1,4 +1,4 @@
-(defn vrs/service_stub_form (service record)
+(defn! vrs/service_stub_form (service record)
   "Build source for one imported method; does not install or call it."
   (def signature (get record :interface))
   (if (not? (list? signature)) (error "interface record needs a signature"))
@@ -16,7 +16,7 @@
          (call (find_srv ,service) (list ,message ,@params)))
        ',metadata)))
 
-(defn bind_srv (service)
+(defn! bind_srv (service)
   "(bind_srv NAME) - Discover current interfaces and install global message-passing stubs."
   (map (info_srv service :interface_doc) (fn (record)
     (eval_global (vrs/service_stub_form service record))))
