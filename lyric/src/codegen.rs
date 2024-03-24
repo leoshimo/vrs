@@ -447,7 +447,6 @@ fn compile_loop<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, 
     Ok(inst)
 }
 
-// TODO: Implement `gensym`?
 // TODO: Replace `match` with macro
 /// Compile `match` expr
 fn compile_match<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
