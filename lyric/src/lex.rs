@@ -411,13 +411,13 @@ mod tests {
                 "Supported escapes should decode to their characters"
             );
             assert_eq!(
-                lex(r#"(exec "osascript" "-e" "tell application \"System Events\"")"#),
+                lex(r#"(invoke "program" "--text" "nested \"quotes\"")"#),
                 Ok(vec![
                     Token::ParenLeft,
-                    Token::Symbol("exec".to_string()),
-                    Token::String("osascript".to_string()),
-                    Token::String("-e".to_string()),
-                    Token::String(r#"tell application "System Events""#.to_string()),
+                    Token::Symbol("invoke".to_string()),
+                    Token::String("program".to_string()),
+                    Token::String("--text".to_string()),
+                    Token::String(r#"nested "quotes""#.to_string()),
                     Token::ParenRight,
                 ])
             );

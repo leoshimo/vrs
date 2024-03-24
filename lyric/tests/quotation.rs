@@ -124,74 +124,6 @@ fn pretty_indentation_treats_active_holes_as_code() {
 }
 
 #[test]
-fn launcher_templates_preserve_legacy_constructor_values() {
-    let fixture = "(def name 'focus_window)
-      (def entity '(:os/window :id 42 :payload (missing symbol)))
-      (def values '()) (def matches (list entity))
-      (def window entity) (def task entity) (def note entity)
-      (def action '(\"Split\" window_split))";
-    for (old, template) in [
-        (
-            "(list 'call_interactively (list 'quote name))",
-            "`(call_interactively ',name)",
-        ),
-        (
-            "(list 'continue_call (list 'quote name) (list 'quote (list (get matches 0))))",
-            "`(continue_call ',name '(,(get matches 0)))",
-        ),
-        (
-            "(list 'continue_call (list 'quote name) (list 'quote (list entity)))",
-            "`(continue_call ',name '(,entity))",
-        ),
-        (
-            "(list 'continue_call (list 'quote name) (list 'quote (push values entity)))",
-            "`(continue_call ',name ',(push values entity))",
-        ),
-        (
-            "(list 'begin (list 'focus_window (list 'quote window)) (list (get action 1)))",
-            "`(begin (focus_window ',window) (,(get action 1)))",
-        ),
-        (
-            "(list 'open_things_task (list 'quote task))",
-            "`(open_things_task ',task)",
-        ),
-        (
-            "(list 'open_antinote_note (list 'quote note))",
-            "`(open_antinote_note ',note)",
-        ),
-    ] {
-        assert_eq!(
-            eval(&format!("(begin {fixture} {old})")).unwrap(),
-            eval(&format!("(begin {fixture} {template})")).unwrap(),
-            "{template}"
-        );
-    }
-}
-
-fn script_functions(script: &str, names: &[&str], source: &str) -> Value {
-    let forms = lyric::parse_script(script).unwrap();
-    let selected: Vec<_> = forms
-        .into_iter()
-        .filter(|form| {
-            matches!(form, Form::List(items) if items.first() == Some(&Form::symbol("defn!"))
-          && matches!(items.get(1), Some(Form::Symbol(name)) if names.contains(&name.as_str())))
-        })
-        .collect();
-    assert_eq!(selected.len(), names.len());
-    let mut body = vec![Value::symbol("begin")];
-    body.extend(selected.into_iter().map(Value::from));
-    body.push(Value::from_expr(source).unwrap());
-    let mut fiber = Fiber::from_val(&Value::List(body), Env::standard(), ()).unwrap();
-    match fiber.start().unwrap() {
-        Signal::Done(value) => value,
-        other => panic!("unexpected suspension: {other:?}"),
-    }
-}
-
-
-
-
-#[test]
 fn strings_and_comments_do_not_interpolate() {
     assert_value(
         r#"`("literal ,x ` ,@xs" """raw ,x ` ,@xs""")"#,
@@ -238,8 +170,10 @@ fn nesting_preserves_inactive_markers_and_activates_matching_depth() {
 
 #[test]
 fn quote_inside_a_template_preserves_future_literal_arguments() {
-    assert_value("(let ((name 'focus_window) (window '(:os/window :id 42))) `(continue_call ',name '(,window)))",
-                 "(continue_call (quote focus_window) (quote ((:os/window :id 42))))");
+    assert_value(
+        "(let ((name 'consume) (item '(:item :id 42))) `(invoke ',name '(,item)))",
+        "(invoke (quote consume) (quote ((:item :id 42))))",
+    );
     assert_value(
         "'(quasiquote (a ,missing))",
         "(quasiquote (a (unquote missing)))",

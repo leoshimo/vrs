@@ -1,17 +1,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-// TODO: Major Cleanup for Cowboy Coding
-
 use anyhow::{Context, Result};
 use clap::Parser;
 use lyric::Form;
-#[cfg(test)]
-use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 #[cfg(test)]
-mod input_tests;
+mod client_tests;
 mod protocol;
 use tauri::{async_runtime::JoinHandle, GlobalShortcutManager, Manager, PhysicalPosition, Window};
 use tokio::{
@@ -50,34 +46,6 @@ struct Client {
 
 enum Cmd {
     Request(Form, oneshot::Sender<Result<Response>>),
-}
-
-#[cfg(test)]
-async fn request_once(
-    client: &mut Option<vrs::Client>,
-    socket: &Path,
-    form: Form,
-) -> Result<Response> {
-    if client.is_none() {
-        let conn = UnixStream::connect(socket)
-            .await
-            .map(Connection::new)
-            .with_context(|| "Failed to connect to vrsd socket")?;
-        *client = Some(vrs::Client::new(conn));
-    }
-
-    let result = client
-        .as_ref()
-        .expect("client should be connected")
-        .request(form)
-        .await;
-    match result {
-        Ok(response) => Ok(response),
-        Err(error) => {
-            *client = None;
-            Err(error).with_context(|| "VRS request failed")
-        }
-    }
 }
 
 impl Client {
@@ -391,11 +359,4 @@ fn center_in_primary_monitor(window: &Window) {
     if let Err(e) = window.set_position(PhysicalPosition::new(x, y)) {
         tracing::error!("Failed to set position - {e}");
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-
 }
