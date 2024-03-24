@@ -38,8 +38,19 @@ export class Navigation {
         this.visible = true;
         this.push(page, query);
     }
-    async begin() {
-        if (this.frames.length && this.hiddenAt !== null && Date.now() - this.hiddenAt < retentionMs) {
+    async begin({ background = false } = {}) {
+        // Reconnect checks may recover pending input without opening an idle
+        // palette. The service still chooses the page through the same hook.
+        if (background && !this.visible) {
+            const opening = {};
+            this.opening = opening;
+            const result = await this.transport.begin();
+            if (this.opening !== opening || this.visible) return;
+            if (result.type !== "push_page") throw new Error("Expected an initial page");
+            if (result.page.on_cancel) this.open(result.page);
+            return;
+        }
+        if (this.frames.length && (this.visible || (this.hiddenAt !== null && Date.now() - this.hiddenAt < retentionMs))) {
             this.visible = true;
             this.hiddenAt = null;
             const frames = this.frames;
@@ -54,6 +65,12 @@ export class Navigation {
                 const result = await this.transport.begin();
                 if (this.opening !== opening || this.frames !== frames || !this.visible) return;
                 if (result.type !== "push_page") throw new Error("Expected an initial page");
+                // A pending input request takes precedence over retained
+                // ordinary navigation. The same request keeps its subpages.
+                if ((root.page.on_cancel ?? null) !== (result.page.on_cancel ?? null)) {
+                    this.open(result.page);
+                    return;
+                }
                 root.page = result.page;
                 root.loaded = false;
             } catch (error) {
@@ -95,6 +112,9 @@ export class Navigation {
     }
     push(page, query = "") {
         this.invalidate();
+        if (!page.on_cancel && this.current?.page.on_cancel) {
+            page = { ...page, on_cancel: this.current.page.on_cancel };
+        }
         this.frames.push({ page, query: "", items: [], selected: 0, loading: false, loaded: false, error: "" });
         this.search(query, true);
     }
@@ -168,7 +188,7 @@ export class Navigation {
             if (request.obsolete || !this.visible || this.current !== frame) return;
             this.action = null;
             if (result.type === "push_page") this.push(result.page);
-            else if (result.type === "close") this.close();
+            else if (result.type === "close") this.close(false);
             else throw new Error("Unrecognized navigation response");
         } catch (error) {
             if (!request.obsolete && this.visible && this.current === frame) frame.error = String(error);
@@ -180,7 +200,8 @@ export class Navigation {
     back() {
         if (this.frames.length <= 1) { this.close(); return; }
         this.invalidate();
-        this.frames.pop();
+        const leaving = this.frames.pop();
+        if (leaving.page.on_cancel !== this.current.page.on_cancel) this.cancelPage(leaving.page);
         this.current.loading = false;
         if (!this.current.loaded) this.search(this.current.query, true);
         else this.changed();
@@ -193,9 +214,11 @@ export class Navigation {
         this.opening = null;
         this.changed();
     }
-    close() {
-        // TODO: Propagate Escape cancellation through VRS/Lyric. Abandoning the
-        // response does not interrupt a command or undo completed side effects.
+    cancelPage(page) {
+        if (page?.on_cancel) Promise.resolve(this.transport.dispatch(page.on_cancel)).catch(console.error);
+    }
+    close(cancel = true) {
+        if (cancel) this.cancelPage(this.current?.page);
         this.suspend();
         this.transport.close();
     }

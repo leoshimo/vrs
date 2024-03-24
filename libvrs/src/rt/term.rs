@@ -40,6 +40,10 @@ enum Cmd {
 }
 
 impl TermHandle {
+    pub(crate) async fn closed(&self) {
+        self.tx.closed().await;
+    }
+
     /// Read request from terminal
     pub(crate) async fn read_request(&self) -> Result<Request> {
         let (req_tx, req_rx) = oneshot::channel();
@@ -57,6 +61,14 @@ impl TermHandle {
             .await
             .map_err(|e| Error::NoMessageReceiver(format!("send_response failed - {e}")))?;
         Ok(())
+    }
+}
+
+impl Drop for Term {
+    fn drop(&mut self) {
+        for subscription in self.active_subs.values() {
+            subscription.abort();
+        }
     }
 }
 

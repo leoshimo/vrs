@@ -10,6 +10,7 @@
   (def doc (get record :doc))
   (def metadata (get record :metadata))
   (if (eq? metadata nil) (set metadata '()))
+  (set metadata (+ (list :service service) metadata))
   `(def ,(symbol message)
      (with_meta
        (lambda ,params ,doc

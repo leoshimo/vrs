@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Navigation, rootPage, retentionMs } from "./navigation.mjs";
-import { createOpening, createTransport } from "./transport.mjs";
+import { createOpening, createShowHandler, createTransport } from "./transport.mjs";
 
 test("Tauri transport never overwrites reserved IPC envelope keys", async () => {
     const calls = [];
@@ -207,4 +207,78 @@ test("reopening a root page never dispatches stale context while refreshing", as
     t.starts[0].resolve({type: "push_page", page: {...rootPage(), args: "(((:web/page :url new)))"}}); await tick();
     assert.equal(t.queries[1].text, "Save");
     assert.equal(t.queries[1].page.args, "(((:web/page :url new)))");
+});
+
+const inputPage = id => ({...rootPage(), get_items: "function_items", args: `("${id}")`,
+    on_cancel: `(:on_click (cancel_input "${id}"))`});
+
+test("show bursts share an opening and never toggle a visible input closed", async () => {
+    const t = setup(), shown = [];
+    const show = createShowHandler(t.nav, () => shown.push(true));
+    const first = show();
+    assert.equal(show(), first);
+    assert.equal(t.starts.length, 1);
+    t.starts[0].resolve({type:"push_page", page:inputPage("one")}); await first;
+    t.queries[0].resolve([item("function")]); await tick();
+    t.nav.push({...rootPage(), get_items:"fill_call_items"}, "typed argument");
+    await show();
+    assert.equal(t.starts.length, 1);
+    assert.equal(t.nav.current.query, "typed argument");
+    assert.equal(t.nav.visible, true);
+    assert.equal(t.closed(), 0);
+    assert.equal(shown.length, 2);
+});
+
+test("pending input overrides retained ordinary history, and the same input resumes", async () => {
+    const t = setup(); t.nav.open();
+    t.queries[0].resolve([]); await tick();
+    t.nav.push({...rootPage(), get_items:"ordinary_items"});
+    t.queries[1].resolve([]); await tick();
+    t.nav.suspend(); t.nav.begin();
+    t.starts[0].resolve({type:"push_page", page:inputPage("one")}); await tick();
+    assert.equal(t.nav.frames.length, 1);
+    assert.equal(t.nav.current.page.get_items, "function_items");
+    t.queries[2].resolve([]); await tick();
+    t.nav.push({...rootPage(), get_items:"fill_call_items"}, "argument");
+    t.queries[3].resolve([]); await tick();
+    t.nav.suspend(); t.nav.begin();
+    t.starts[1].resolve({type:"push_page", page:inputPage("one")}); await tick();
+    assert.equal(t.nav.current.query, "argument");
+    assert.equal(t.nav.frames.length, 2);
+    // Cancellation elsewhere must not resurrect an abandoned input page.
+    t.nav.suspend(); t.nav.begin();
+    t.starts[2].resolve({type:"push_page", page:rootPage()}); await tick();
+    assert.equal(t.nav.frames.length, 1);
+    assert.equal(t.nav.current.page.get_items, "root_items");
+});
+
+test("Escape cancels an input only when leaving its page stack; completion doesn't cancel", async () => {
+    const t = setup(); t.nav.open(inputPage("one"));
+    t.queries[0].resolve([]); await tick();
+    t.nav.push({...rootPage(), get_items:"fill_call_items"});
+    t.queries[1].resolve([]); await tick();
+    t.nav.back();
+    assert.equal(t.actions.length, 0);
+    t.nav.back();
+    assert.equal(t.actions[0].form, inputPage("one").on_cancel);
+    assert.equal(t.closed(), 1);
+    t.nav.open(inputPage("two"));
+    t.queries[2].resolve([item("finish")]); await tick();
+    t.nav.activate();
+    t.actions[1].resolve({type:"close"}); await tick();
+    assert.equal(t.actions.length, 2, "successful completion doesn't also dispatch cancel");
+});
+
+test("reconnect checks pending work without showing an idle palette", async () => {
+    const t = setup(), shown = [];
+    const show = createShowHandler(t.nav, () => shown.push(true));
+    const idle = show({background:true});
+    t.starts[0].resolve({type:"push_page", page:rootPage()}); await idle;
+    assert.equal(t.nav.visible, false);
+    assert.equal(shown.length, 0);
+    const pending = show({background:true});
+    t.starts[1].resolve({type:"push_page", page:inputPage("waiting")}); await pending;
+    assert.equal(t.nav.visible, true);
+    assert.equal(shown.length, 1);
+    assert.equal(t.queries[0].page.get_items, "function_items");
 });

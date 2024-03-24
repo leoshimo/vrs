@@ -2,10 +2,16 @@
 
 // TODO: Major Cleanup for Cowboy Coding
 
-use anyhow::{Context, Error, Result};
+use anyhow::{Context, Result};
 use clap::Parser;
 use lyric::Form;
-use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
+#[cfg(test)]
+mod input_tests;
 mod protocol;
 use tauri::{async_runtime::JoinHandle, GlobalShortcutManager, Manager, PhysicalPosition, Window};
 use tokio::{
@@ -46,6 +52,7 @@ enum Cmd {
     Request(Form, oneshot::Sender<Result<Response>>),
 }
 
+#[cfg(test)]
 async fn request_once(
     client: &mut Option<vrs::Client>,
     socket: &Path,
@@ -82,7 +89,7 @@ impl Client {
         }
     }
 
-    fn start(&mut self) -> Result<()> {
+    fn start(&mut self, notify: impl Fn(&str) + Send + 'static) -> Result<()> {
         if self.task.is_some() {
             panic!("Client is unexpectedly started twice");
         }
@@ -92,18 +99,66 @@ impl Client {
         let socket = self.socket.clone();
 
         self.task = Some(tauri::async_runtime::spawn(async move {
-            let mut client = None;
-
-            while let Some(cmd) = rx.recv().await {
-                match cmd {
-                    Cmd::Request(f, resp_tx) => {
-                        let res = request_once(&mut client, &socket, f).await;
-                        let _ = resp_tx.send(res);
+            loop {
+                let connection = async {
+                    let stream = UnixStream::connect(&socket).await?;
+                    let client = Arc::new(vrs::Client::new(Connection::new(stream)));
+                    let subscription = client.subscribe(vrs::KeywordId::from("vrsjmp")).await?;
+                    // Requests and subscriptions share this one socket. This
+                    // round trip also orders startup after subscription setup.
+                    client.request(Form::Nil).await?;
+                    Ok::<_, anyhow::Error>((client, subscription))
+                }
+                .await;
+                let (client, mut subscription) = match connection {
+                    Ok(connection) => connection,
+                    Err(error) => {
+                        tracing::warn!("VRS connection unavailable: {error}");
+                        let retry = tokio::time::sleep(Duration::from_secs(1));
+                        tokio::pin!(retry);
+                        loop {
+                            tokio::select! {
+                                _ = &mut retry => break,
+                                command = rx.recv() => match command {
+                                    Some(Cmd::Request(_, reply)) => {
+                                        let _ = reply.send(Err(anyhow::anyhow!("VRS connection unavailable: {error}")));
+                                    }
+                                    None => return Ok(()),
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                };
+                notify("vrs-connected");
+                let mut requests = tokio::task::JoinSet::new();
+                loop {
+                    tokio::select! {
+                        command = rx.recv() => match command {
+                            Some(Cmd::Request(form, reply)) => {
+                                let client = client.clone();
+                                requests.spawn(async move {
+                                    let result = client.request(form).await.map_err(anyhow::Error::from);
+                                    let _ = reply.send(result);
+                                });
+                            }
+                            None => return Ok(()),
+                        },
+                        event = subscription.recv() => match event {
+                            Ok(Form::Keyword(event)) if event.as_str() == "show" => notify("show-palette"),
+                            Ok(_) => {},
+                            Err(error) => {
+                                tracing::warn!("VRS subscription interrupted: {error}");
+                                break;
+                            }
+                        },
+                        _ = client.closed() => break,
+                        _ = requests.join_next(), if !requests.is_empty() => {},
                     }
                 }
+                requests.abort_all();
+                client.shutdown().await;
             }
-
-            Ok::<(), Error>(())
         }));
         Ok(())
     }
@@ -204,10 +259,7 @@ fn on_blur(app: tauri::AppHandle) {
 
 fn main() -> Result<()> {
     let args = Args::parse();
-    let mut client = Client::new(args.socket.unwrap_or_else(vrs::runtime_socket));
-    client
-        .start()
-        .with_context(|| "Failed to start vrs client")?;
+    let socket = args.socket.unwrap_or_else(vrs::runtime_socket);
 
     let context = tauri::generate_context!();
     #[cfg(target_os = "macos")]
@@ -231,19 +283,24 @@ fn main() -> Result<()> {
     };
 
     tauri::Builder::default()
-        .manage(State::new(client))
         .on_page_load(|_window, _| {
             #[cfg(target_os = "macos")]
             if let Err(error) = setup_native_frame(&_window) {
                 error!("Failed to set up palette frame: {error}");
             }
         })
-        .setup(|app| {
+        .setup(move |app| {
             // Tauri 1/tao dereferences a missing zoom button when maximizable is
             // false on a borderless macOS window (caught by debug Rust builds).
             // Leave it true in config; the palette remains non-resizable and
             // has no titlebar controls. TODO: Remove after upgrading Tauri.
             let window = app.get_window("main").unwrap();
+            let notifications = window.clone();
+            let mut client = Client::new(socket.clone());
+            client.start(move |event| {
+                let _ = notifications.emit(event, ());
+            })?;
+            app.manage(State::new(client));
 
             #[cfg(target_os = "macos")]
             app.set_activation_policy(ActivationPolicy::Accessory);
