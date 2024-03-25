@@ -24,13 +24,15 @@ export class Navigation {
             error: frame?.error ?? "", canBack: this.frames.length > 1, visible: this.visible };
     }
     changed() { this.render(this.snapshot()); }
-    invalidate() {
+    invalidate(keepAction = false) {
         if (this.timer !== null) this.timers.clearTimeout(this.timer);
         this.timer = null;
         this.pending = null;
         if (this.flight) this.flight.obsolete = true;
-        if (this.action) this.action.obsolete = true;
-        this.action = null;
+        if (!keepAction) {
+            if (this.action) this.action.obsolete = true;
+            this.action = null;
+        }
     }
     open(page = rootPage(), query = "") {
         this.invalidate();
@@ -39,6 +41,7 @@ export class Navigation {
         this.push(page, query);
     }
     async begin({ background = false } = {}) {
+        if (!this.visible) this.invalidate();
         // Reconnect checks may recover pending input without opening an idle
         // palette. The service still chooses the page through the same hook.
         if (background && !this.visible) {
@@ -185,11 +188,18 @@ export class Navigation {
         this.changed();
         try {
             const result = await this.transport.dispatch(item.on_click);
-            if (request.obsolete || !this.visible || this.current !== frame) return;
+            if (request.obsolete || this.current !== frame) return;
             this.action = null;
-            if (result.type === "push_page") this.push(result.page);
-            else if (result.type === "close") this.close(false);
-            else throw new Error("Unrecognized navigation response");
+            if (result.type === "close") {
+                frame.query = "";
+                frame.items = [];
+                frame.selected = 0;
+                frame.loaded = false;
+                if (this.visible) this.close(false);
+            } else if (this.visible) {
+                if (result.type === "push_page") this.push(result.page);
+                else throw new Error("Unrecognized navigation response");
+            }
         } catch (error) {
             if (!request.obsolete && this.visible && this.current === frame) frame.error = String(error);
         } finally {
@@ -208,7 +218,9 @@ export class Navigation {
     }
     suspend() {
         if (!this.visible) return;
-        this.invalidate();
+        // An action can move focus before its reply arrives. Let completion
+        // clear its query while hidden; reopening invalidates the old action.
+        this.invalidate(true);
         this.visible = false;
         this.hiddenAt = Date.now();
         this.opening = null;

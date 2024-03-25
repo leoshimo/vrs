@@ -149,18 +149,58 @@ test("errors leave the GUI usable and a later query can recover", async () => {
     t.queries[1].resolve([item("works")]); await tick();
     t.nav.activate(); t.actions[0].reject(new Error("action failed")); await tick();
     assert.equal(t.nav.visible, true);
+    assert.equal(t.nav.current.query, "retry");
     assert.match(t.nav.snapshot().error, /action failed/);
     t.nav.activate(); t.actions[1].resolve({type:"close"}); await tick();
     assert.equal(t.closed(), 1);
 });
 
 test("a secondary action dispatches its own opaque command on the selected row", async () => {
-    const t = setup(); t.nav.open();
+    const t = setup(); t.nav.open(rootPage(), "Article");
     t.queries[0].resolve([{...item("Article"), actions: [item("Copy URL")]}]); await tick();
     t.nav.activate(0, 0);
     assert.equal(t.actions[0].form, "Copy URL");
     t.actions[0].resolve({type: "close"}); await tick();
     assert.equal(t.closed(), 1);
+    assert.equal(t.nav.current.query, "");
+});
+
+for (const subpage of [false, true]) {
+    for (const blur of [false, true]) {
+        test(`running clears the query and refreshes on reopen (subpage=${subpage}, blur=${blur})`, async () => {
+            const t = setup(); t.nav.open(rootPage(), "Browse");
+            t.queries[0].resolve([item("Browse Functions")]); await tick();
+            if (subpage) {
+                t.nav.push({...rootPage(), get_items: "service_function_items"}, "get_windows");
+                t.queries[1].resolve([item("get_windows")]); await tick();
+            }
+            const page = t.nav.current.page;
+            t.nav.activate();
+            if (blur) t.nav.suspend();
+            t.actions[0].resolve({type: "close"}); await tick();
+            assert.equal(t.nav.visible, false);
+            assert.equal(t.nav.current.query, "");
+            assert.equal(t.nav.current.items.length, 0);
+            t.nav.begin();
+            t.starts[0].resolve({type: "push_page", page: rootPage()}); await tick();
+            assert.equal(t.queries.at(-1).text, "");
+            assert.equal(t.queries.at(-1).page.get_items, page.get_items);
+            t.queries.at(-1).resolve([item("fresh")]); await tick();
+            assert.equal(t.nav.current.items[0].title, "fresh");
+        });
+    }
+}
+
+test("an old action finishing after reopening cannot clear a new query", async () => {
+    const t = setup(); t.nav.open(rootPage(), "old");
+    t.queries[0].resolve([item("old action")]); await tick();
+    t.nav.activate(); t.nav.suspend(); t.nav.begin();
+    t.starts[0].resolve({type: "push_page", page: rootPage()}); await tick();
+    t.nav.search("new");
+    t.actions[0].resolve({type: "close"}); await tick();
+    assert.equal(t.nav.visible, true);
+    assert.equal(t.nav.current.query, "new");
+    assert.equal(t.closed(), 0);
 });
 
 test("a failed query cannot re-enable stale actions from the previous query", async () => {
