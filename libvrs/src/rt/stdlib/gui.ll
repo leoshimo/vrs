@@ -19,4 +19,4 @@
 (defn! vrsjmp_browse_functions ()
   "(vrsjmp_browse_functions) - Open vrsjmp to browse bound service functions and return a call form, optionally filling arguments. Does not execute the selected call."
   (request_input '(:push_page :get_items function_items :args ()
-                  :title "Browse service functions" :prompt "Find a service function…")))
+                  :title "Browse service functions" :prompt "Search functions or services…")))
