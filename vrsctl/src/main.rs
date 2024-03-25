@@ -1,6 +1,7 @@
 mod editor;
 mod output;
 mod repl;
+mod session;
 mod watch;
 
 use anyhow::{Context, Result};
@@ -67,7 +68,9 @@ async fn main() -> Result<()> {
         );
         let mut stdout = io::stdout();
 
-        if let Some(cmd) = args.get_one::<String>("command") {
+        if args.get_flag("session") {
+            session::run(&client, &output, BufReader::new(io::stdin()), &mut stdout).await
+        } else if let Some(cmd) = args.get_one::<String>("command") {
             run_cmd(&client, cmd, &output, &mut stdout).await
         } else if let Some(topic) = args.get_one::<String>("subscribe") {
             let follow = args.get_flag("follow");
@@ -105,11 +108,13 @@ fn cli() -> clap::Command {
     command!()
         .arg(arg!(file: [FILE] "If present, executes contents of FILE")
              .default_value("-")
-             .conflicts_with_all(["command", "subscribe"]))
+             .conflicts_with_all(["command", "subscribe", "session"]))
+        .arg(arg!(session: --session "Keep a connection for editor requests: one JSON object per stdin line")
+             .long_help("Keep a connection for editor requests. Each stdin line is JSON with source (required), format, width, and raw fields. Each stdout line is JSON with ok and output or error fields. Definitions persist until the connection closes; evaluation errors leave the session open."))
         .arg(arg!(command: -c --command <EXPR> "If present, EXPR is sent as request, then program exits"))
         .arg(arg!(subscribe: -s --subscribe <TOPIC> "If present, watches a specific topic for data"))
         .group(ArgGroup::new("main")
-               .args(["command", "subscribe"])
+               .args(["command", "subscribe", "session"])
                .required(false))
         .arg(arg!(follow: -f --follow "If present, continues polling subscription after first topic update")
              .requires("subscribe"))
@@ -236,6 +241,7 @@ mod tests {
             vec!["-"],
             vec!["-s", "topic", "-f"],
             vec!["-s", "topic", "-F"],
+            vec!["--session"],
         ] {
             let mut args = vec!["vrsctl", "--format", "pretty", "--width", "40", "--raw"];
             args.extend(mode);
@@ -249,6 +255,13 @@ mod tests {
         assert!(cli()
             .try_get_matches_from(["vrsctl", "example.ll", "-s", "topic"])
             .is_err());
+        for arguments in [
+            vec!["vrsctl", "--session", "-c", "42"],
+            vec!["vrsctl", "--session", "example.ll"],
+            vec!["vrsctl", "--session", "-s", "topic"],
+        ] {
+            assert!(cli().try_get_matches_from(arguments).is_err());
+        }
     }
 
     #[tokio::test]
