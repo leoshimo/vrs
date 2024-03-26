@@ -4,7 +4,7 @@ mod watch;
 
 use anyhow::{Context, Result};
 use clap::builder::EnumValueParser;
-use clap::{arg, command, ArgGroup};
+use clap::{arg, command, ArgAction, ArgGroup};
 
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, IsTerminal, Read};
@@ -48,6 +48,17 @@ async fn main() -> Result<()> {
                 .request(reg_req)
                 .await
                 .with_context(|| "Failed to register client process")?;
+        }
+
+        if let Some(services) = args.get_many::<String>("bind_service") {
+            for s in services {
+                let reg_req = Form::from_expr(&format!("(bind_srv :{})", s))
+                    .with_context(|| format!("Invalid service name: {}", s))?;
+                client
+                    .request(reg_req)
+                    .await
+                    .with_context(|| format!("Failed to bind_srv to {}", s))?;
+            }
         }
 
         let file = open_file(
@@ -114,6 +125,8 @@ fn cli() -> clap::Command {
              .value_parser(EnumValueParser::<Format>::new())
         )
         .arg(arg!(name: -n --name <NAME> "Registers client process for this connection as NAME"))
+        .arg(arg!(bind_service: -b --bind <NAME> "Binds client process to service named NAME")
+             .action(ArgAction::Append))
         .arg(
             arg!(socket: -S --socket <SOCKET> "Path to unix socket for vrsd")
                 .default_value(vrs::runtime_socket().into_os_string()),
@@ -211,3 +224,4 @@ async fn run_file(client: &Client, format: &Format, file: Box<dyn Read>) -> Resu
 // TODO: Test case for --name=SRV_NAME
 // TODO: Test case for incomplete expressions
 // TODO: Test case for incomplete expressions that are comments
+// TODO: Test case for --bind=SRV_NAME
