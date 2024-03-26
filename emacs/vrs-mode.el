@@ -416,7 +416,7 @@ With prefix argument REPLACE, replace the region with its result."
   (interactive "r\nP")
   (vrs--eval start end replace))
 
-(defun vrs-browse-functions ()
+(defun vrsjmp-browse-functions ()
   "Open vrsjmp to choose a service call and insert it at point.
 Press Enter in vrsjmp for argument placeholders, or use its Fill arguments
 action to choose values.  The selected call is not executed.  Cancelling
@@ -467,7 +467,7 @@ the shared VRS session are available during expansion."
     (define-key map (kbd "C-c C-e") #'vrs-eval-last-sexp)
     (define-key map (kbd "C-c C-m") #'vrs-macroexpand-last-sexp)
     (define-key map (kbd "C-c C-r") #'vrs-eval-region)
-    (define-key map (kbd "C-c C-b") #'vrs-browse-functions-minibuffer)
+    (define-key map (kbd "C-c C-b") #'vrs-browse-functions)
     (define-key map (kbd "C-c C-v") #'vrs-choose-value)
     (define-key map (kbd "C-c C-a") #'vrs-act-on-value)
     map)
@@ -491,7 +491,8 @@ the shared VRS session are available during expansion."
 
 (autoload 'vrs-choose-value "vrs-choose" nil t)
 (autoload 'vrs-choose-field "vrs-choose" nil t)
-(autoload 'vrs-browse-functions-minibuffer "vrs-choose" nil t)
+(autoload 'vrs-browse-functions "vrs-choose" nil t)
+(defalias 'vrs-browse-functions-minibuffer #'vrs-browse-functions)
 (autoload 'vrs-act-on-value "vrs-choose" nil t)
 (autoload 'vrs-execute-action "vrs-choose" nil t)
 

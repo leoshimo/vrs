@@ -3,6 +3,13 @@
 (require 'ert)
 (require 'vrs-choose)
 
+(ert-deftest vrs-function-browser-defaults-to-emacs ()
+  (should (eq (lookup-key vrs-mode-map (kbd "C-c C-b")) 'vrs-browse-functions))
+  (should (commandp 'vrs-browse-functions))
+  (should (commandp 'vrsjmp-browse-functions))
+  (should (eq (indirect-function 'vrs-browse-functions-minibuffer)
+              (indirect-function 'vrs-browse-functions))))
+
 (defmacro vrs-test--select (choices &rest body)
   "Run BODY selecting CHOICES through the normal completion table interface."
   (declare (indent 1))
@@ -128,7 +135,7 @@
                         (("one" ":example/item") ("two" ":example/item"))))
                    '(("First" "'(:example/item :id 1)"))))))
       (vrs-test--select '(0 0 quit)
-        (should (condition-case nil (progn (vrs-browse-functions-minibuffer t) nil) (quit t)))))
+        (should (condition-case nil (progn (vrs-browse-functions t) nil) (quit t)))))
     (should (equal (buffer-string) "before "))))
 
 (ert-deftest vrs-native-packet-does-not-interpret-lyric-source ()
@@ -215,12 +222,12 @@
           (should (equal (vrs-test--request "(err? (try (find_srv :vrsjmp)))") "true"))
           (with-temp-buffer
             (vrs-mode) (insert "(begin\n  \n  :after)") (goto-char 10)
-            (vrs-test--select '("native_copy") (vrs-browse-functions-minibuffer nil))
+            (vrs-test--select '("native_copy") (vrs-browse-functions nil))
             (should (equal (buffer-string) "(begin\n  (native_copy object destination)\n  :after)")))
           (should (equal (vrs-test--request "(native_status)") "(() 0)"))
           (with-temp-buffer
             (vrs-mode)
-            (vrs-test--select '("native_copy" 1 0) (vrs-browse-functions-minibuffer t))
+            (vrs-test--select '("native_copy" 1 0) (vrs-browse-functions t))
             (should (equal (buffer-string)
                            "(native_copy '(:test/object :title \"Same\" :id 2) '(:test/dest :title \"Here\" :path (a b)))")))
           (should (equal (vrs-test--request "(native_status)") "(() 1)"))
@@ -234,7 +241,7 @@
           (with-temp-buffer
             (vrs-mode)
             (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "(native_objects)")))
-              (vrs-test--select '("native_plain") (vrs-browse-functions-minibuffer t)))
+              (vrs-test--select '("native_plain") (vrs-browse-functions t)))
             (should (equal (buffer-string) "(native_plain (native_objects))")))
           (should (equal (vrs-test--request "(native_status)") "(() 2)"))
           (with-temp-buffer
