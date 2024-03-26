@@ -11,11 +11,13 @@
 (bind_srv :nl_shell)
 (bind_srv :os_screencap)
 (bind_srv :todos)
+(bind_srv :os_window)
 
 (defn get_items (query)
   "Retrieve items to display"
   (+ (favorite_items)
      (todo_items)
+     (window_items query)
      (rlist_items)
      (query_items query)))
 
@@ -39,6 +41,21 @@
                   (list 'open_url query))
        (make_item "Do It"
                   (list 'codegen_exec query)))))
+
+(defn window_items (query)
+  "Return item for window commands"
+  # Only match if query contains win
+  (if (not? (contains? query "win"))
+        '()
+      (list
+       (make_item "Window - Fullscreen" '(window_fullscreen))
+       (make_item "Window - Center" '(window_center))
+       (make_item "Window - Left" '(window_left))
+       (make_item "Window - Right" '(window_right))
+       (make_item "Window - Top Left" '(window_top_left))
+       (make_item "Window - Top Right" '(window_top_right))
+       (make_item "Window - Bottom Left" '(window_bottom_left))
+       (make_item "Window - Bottom Right" '(window_bottom_right)))))
 
 (defn todo_items ()
   "(todo_items) - Retrieve todo items and create markup for it"
@@ -109,9 +126,9 @@
 (defn on_click (item)
   "Handle an on_click payload from item"
   (def cmd (get item :on_click))
-  (def res (try (eval cmd)))
-  (if (err? res)
-    (notify "Encountered error" (format "{}" err))))
-
+  (spawn (fn ()
+           (def res (try (eval cmd)))
+           (if (err? res)
+             (notify "Encountered error" (format "{}" err))))))
 
 (spawn_srv :vrsjmp :interface '(get_items on_click))
