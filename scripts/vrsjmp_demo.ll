@@ -21,7 +21,7 @@
   "Return a dynamic list of item for current query"
   (if (not? query) '() (list
        # DEMO: Integrate Do It
-       # (make_item "Do It" (list 'do_it query))
+       # (make_item "Do It" (list 'codegen_exec query))
        (make_item "Search Perplexity" (list 'open_url (format "http://perplexity.ai/?q={}&copilot=true" query)))
        (make_item "Search Google" (list 'open_url (format "http://google.com/search?q={}" query)))
     )))

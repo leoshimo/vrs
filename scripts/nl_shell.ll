@@ -38,15 +38,19 @@ The result should be a single S-expression wrapped within a (begin ...) form"
 (spawn_chat :nl_shell_chat system_prompt)
 (bind_srv :nl_shell_chat)
 
-(defn do_it (request)
-  "(do_it REQUEST) - Schedules an OS notification to be scheduled in the future for given REQUEST"
+(defn codegen (request)
+  "(codegen REQUEST) - Generates an symbolic expression for a program to handle given user request"
+  (def code_str (send_message request))
+  (try (read code_str)))
+
+(defn codegen_exec (request)
+  "(codegen_exec REQUEST) - Generates an program to process user request then executes it"
   (notify "Working on your request" "thinking...")
   (spawn (fn ()
-           (def code (send_message request))
+           (def code (codegen request))
            (publish :code code) 
            (eval (read code))))
   :ok)
 
-(spawn_srv :nl_shell :interface '(do_it))
-
+(spawn_srv :nl_shell :interface '(codegen_exec codegen))
 

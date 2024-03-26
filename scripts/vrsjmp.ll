@@ -38,7 +38,7 @@
        (make_item "Open URL"
                   (list 'open_url query))
        (make_item "Do It"
-                  (list 'do_it query)))))
+                  (list 'codegen_exec query)))))
 
 (defn todo_items ()
   "(todo_items) - Retrieve todo items and create markup for it"
