@@ -27,6 +27,9 @@
 
 (defn! vrsjmp_choose_field (record)
   "(vrsjmp_choose_field RECORD) - Open vrsjmp and return a field's value. Accepts keyword/value records and tagged entities."
+  (vrs/choose_page (vrs/record_fields record) :fields))
+
+(defn! vrs/record_fields (record)
   (if (not? (list? record)) (error "Expected a keyword/value record"))
   (def pairs (try (vrs/field_pairs record)))
   # A tagged entity has one leading keyword before its key/value pairs.
@@ -34,7 +37,7 @@
     (if (keyword? (get record 0))
       (set pairs (vrs/field_pairs (slice record 1)))
       (error "Expected a keyword/value record")))
-  (vrs/choose_page pairs :fields))
+  pairs)
 
 (defn! vrs/field_pairs (fields)
   (if (empty? fields) '()

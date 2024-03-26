@@ -296,7 +296,11 @@ pub(crate) fn install_service_library(env: &mut crate::Env) {
             "\n",
             include_str!("../stdlib/services.ll"),
             "\n",
-            include_str!("../stdlib/gui.ll")
+            include_str!("../stdlib/gui.ll"),
+            "\n",
+            include_str!("../stdlib/commands.ll"),
+            "\n",
+            include_str!("../stdlib/editor.ll")
         );
         let forms = lyric::parse_script(source).expect("standard service library must parse");
         let names: Vec<_> = forms

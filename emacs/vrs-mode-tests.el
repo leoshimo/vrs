@@ -3,6 +3,7 @@
 (require 'ert)
 (require 'vrs-mode)
 (require 'cl-lib)
+(require 'vrs-choose-tests)
 
 (defconst vrs-test--block-expression
   (concat

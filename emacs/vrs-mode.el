@@ -467,6 +467,9 @@ the shared VRS session are available during expansion."
     (define-key map (kbd "C-c C-e") #'vrs-eval-last-sexp)
     (define-key map (kbd "C-c C-m") #'vrs-macroexpand-last-sexp)
     (define-key map (kbd "C-c C-r") #'vrs-eval-region)
+    (define-key map (kbd "C-c C-b") #'vrs-browse-functions-minibuffer)
+    (define-key map (kbd "C-c C-v") #'vrs-choose-value)
+    (define-key map (kbd "C-c C-a") #'vrs-act-on-value)
     map)
   "Keymap for `vrs-mode'.")
 
@@ -485,6 +488,12 @@ the shared VRS session are available during expansion."
   (syntax-propertize (point-max)))
 
 (add-to-list 'auto-mode-alist '("\\.ll\\'" . vrs-mode))
+
+(autoload 'vrs-choose-value "vrs-choose" nil t)
+(autoload 'vrs-choose-field "vrs-choose" nil t)
+(autoload 'vrs-browse-functions-minibuffer "vrs-choose" nil t)
+(autoload 'vrs-act-on-value "vrs-choose" nil t)
+(autoload 'vrs-execute-action "vrs-choose" nil t)
 
 (provide 'vrs-mode)
 
