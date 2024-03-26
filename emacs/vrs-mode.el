@@ -281,6 +281,7 @@ FORMAT, RAW, and WIDTH apply to this request.  C-g closes the connection;
 ordinary evaluation errors leave the session available."
   (let ((process (vrs--session command))
         (inhibit-quit nil)
+        pending-input
         completed)
     (when (process-get process 'busy)
       (user-error "This VRS session is busy; finish or cancel its current evaluation"))
@@ -299,7 +300,14 @@ ordinary evaluation errors leave the session available."
                    "\n"))
           (while (and (process-live-p process)
                       (not (process-get process 'response)))
-            (accept-process-output process 0.05))
+            (accept-process-output process 0.05)
+            ;; A daemon's terminal frames need keyboard input read explicitly;
+            ;; waiting only on the subprocess can leave C-g unprocessed.
+            (unless noninteractive
+              (when-let* ((event (read-event nil nil 0.01)))
+                (if (eq event ?\C-g)
+                    (signal 'quit nil)
+                  (push event pending-input)))))
           (while (accept-process-output (process-get process 'stderr) 0.01))
           (let* ((reply (process-get process 'response))
                  (ok (and (eq (plist-get reply :ok) t)
@@ -316,6 +324,9 @@ ordinary evaluation errors leave the session available."
             (setq completed t)
             (if ok 0 1)))
       (process-put process 'busy nil)
+      (when completed
+        (setq unread-command-events
+              (nconc (nreverse pending-input) unread-command-events)))
       (unless (and completed (process-live-p process))
         (vrs--close-session command)))))
 
