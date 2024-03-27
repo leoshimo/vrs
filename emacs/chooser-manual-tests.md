@@ -76,17 +76,18 @@ before the action prompt; the selected action only runs when explicitly executed
 
 ## 1. Choose a value
 
-Insert `(demo_items)` and press `C-c C-v`. Choose **Green notebook**.
+Insert `(demo_items)` and press `C-c C-v`. Each row shows a full Lyric value;
+choose the one containing `"Green notebook"` and `:id 2`.
 The expression becomes:
 
 ```lyric
 '(:demo/item :title "Green notebook" :id 2 :note "line\n\"quoted\"" :tags (gamma delta))
 ```
 
-The title comes from the value's `:title`; it is ordinary data and can be
-anything. The original fixture called both items **Same** solely to test
-duplicate labels. Neither that word nor identical titles are required.
-Numbered choices distinguish rows even when their labels match.
+Emacs displays the value directly, without extracting a title. `:title` is just
+one of the fields in this fixture. The original fixture called both items
+**Same** to check that equal titles did not confuse selection; no special name
+or title field is required. Row numbers distinguish even identical values.
 
 The tag, nested symbols, string escaping, and outer quote should survive.
 Evaluate the retained value with `C-c C-e` to confirm it is usable source.
@@ -113,9 +114,10 @@ On a blank line, run `C-c C-b` (`M-x vrs-browse-functions`). Search for
 `demo_move`; its signature, service, and **Move demo item** documentation appear.
 Select it. Expect `(demo_move item place)` with placeholders.
 
-On another blank line, run `C-u C-c C-b`. Choose `demo_move`, then
-**Green notebook**, then **Desk**. Expect a call with both complete, quoted
-entities. Evaluate `(demo_log)` on a separate line: it should still be `()`.
+On another blank line, run `C-u C-c C-b`. Choose `demo_move`, then the value
+containing **Green notebook**, then the value containing **Desk**. Expect a call
+with both complete, quoted entities. Evaluate `(demo_log)` on a separate line:
+it should still be `()`.
 
 Repeat with `demo_note`. After choosing an item, type `"hello"` for the text
 argument, including quotes. The call should be inserted with `"hello"`, and the
@@ -205,7 +207,7 @@ own service, so it need not show the same functions as the Emacs session.
 
 ## Additional checks
 
-- To check duplicate labels, choose the second item from
+- To check items with equal titles, choose the second item from
   `'((:demo/item :title "Same" :id 1) (:demo/item :title "Same" :id 2))`
   with `C-c C-v`. The retained value must have `:id 2`.
 - Start `C-u C-c C-b`, choose a function and one argument, then press `C-g`.

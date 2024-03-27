@@ -73,7 +73,7 @@
           "\""))
 
 (defun vrs--choose-row (prompt rows label detail category)
-  "Choose an actual row from ROWS; never use a display label as value identity."
+  "Choose an actual row from ROWS; optionally annotate it with DETAIL."
   (unless rows (user-error "No %s available" category))
   (let* ((index 0)
          (candidates
@@ -90,9 +90,11 @@
                   (category . ,category)
                   (annotation-function
                    . ,(lambda (candidate)
-                        (concat "  " (replace-regexp-in-string
-                                      "[\n\r\t]" " "
-                                      (funcall detail (cdr (assoc candidate candidates))))))))
+                        (if detail
+                            (concat "  " (replace-regexp-in-string
+                                          "[\n\r\t]" " "
+                                          (funcall detail (cdr (assoc candidate candidates)))))
+                          ""))))
               (complete-with-action action candidates string predicate))))
          (selection (completing-read prompt table nil t)))
     (vrs--chooser-check)
@@ -128,7 +130,7 @@
        (let* ((rows (vrs--chooser-data
                      (format "(vrs/editor_choices %s %s)" source (if fields "true" "false"))))
               (row (vrs--choose-row (if fields "Field: " "Value: ") rows
-                                    #'car #'cadr 'vrs-value)))
+                                    #'car (when fields #'cadr) 'vrs-value)))
          (vrs--chooser-replace (cadr row)))))))
 
 ;;;###autoload
@@ -149,7 +151,7 @@ Accept keyword/value records and tagged entities; use native completion."
   "Choose a function from ROWS, displaying docs, service, and signature."
   (vrs--choose-row prompt rows
                    (lambda (row) (format "%s · %s · %s" (nth 3 row) (nth 2 row) (nth 1 row)))
-                   (lambda (_row) "") 'vrs-function))
+                   nil 'vrs-function))
 
 (defun vrs--read-argument (arg)
   "Choose a typed ARG or read source without evaluating that source."
@@ -157,7 +159,7 @@ Accept keyword/value records and tagged entities; use native completion."
                (rows (unless (string-empty-p type)
                        (vrs--chooser-data (format "(vrs/editor_argument %s)" type)))))
     (if rows
-        (cadr (vrs--choose-row (format "%s (%s): " name type) rows #'car #'cadr 'vrs-value))
+        (cadr (vrs--choose-row (format "%s (%s): " name type) rows #'car nil 'vrs-value))
       (let ((source (read-string (format "%s%s (Lyric expression): " name
                                         (if (string-empty-p type) "" (concat " · " type))))))
         (vrs--chooser-check)

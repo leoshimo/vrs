@@ -11,7 +11,7 @@
   source)
 
 (defn! vrs/editor_value (value)
-  (list (choice_label value) (vrs/source (literal_form value))))
+  (list (display value) (vrs/source (literal_form value))))
 
 (defn! vrs/editor_choices (values fields)
   (if fields (set values (vrs/record_fields values)))
