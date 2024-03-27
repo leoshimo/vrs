@@ -1,0 +1,236 @@
+#+TITLE: Working in Emacs
+#+OPTIONS: toc:2 num:nil
+
+Evaluate Lyric in a running VRS, keep values in your source, and use those
+values to build or execute the next call. This guide covers the Emacs workflow;
+the examples use a small notebook service you define below.
+
+* Start in scratch.ll
+
+Use your running VRS and an Emacs buffer in =vrs-mode=. Load the current
+=emacs/vrs-mode.el= and =emacs/vrs-choose.el= with =M-x load-file= if needed;
+the daemon and =vrsctl= must also include the chooser helpers from this version.
+
+Copy the examples into =scratch.ll=, or press =C-c '= inside a =vrs= source
+block to open it in the VRS source editor. Use the evaluation commands there;
+press =C-c '= again to bring your edited source back into this guide.
+
+Buffers using the same =vrs-vrsctl-command= share a persistent session. Evaluated
+definitions, macros, and service bindings remain available in later expressions.
+Set that variable to choose a different =vrsctl= executable or runtime socket.
+
+* Set up the notebook example
+:PROPERTIES:
+:CUSTOM_ID: notebook-setup
+:END:
+
+This block defines every =demo_*= function used in the guide. Paste it into
+=scratch.ll=, select it, and evaluate with =C-c C-r=. It supplies notebooks and
+destinations, actions to try on them, and a log that lets you see what ran.
+
+#+name: notebook-setup
+#+begin_src vrs
+(def demo_history '())
+
+(defn! demo_items ()
+  '((:demo/item :title "Blue notebook" :id 1 :note "first" :tags (alpha beta))
+    (:demo/item :title "Green notebook" :id 2 :note "line\n\"quoted\"" :tags (gamma delta))))
+
+(defn! demo_places ()
+  '((:demo/place :title "Desk" :id 10)
+    (:demo/place :title "Backpack" :id 20)))
+
+(defn! demo_move (item place)
+  "Move demo item"
+  (interactive :demo/item :demo/place)
+  (set demo_history (push demo_history (list :item item :place place)))
+  :moved)
+
+(defn! demo_note (item text)
+  "Note demo item"
+  (interactive :demo/item :demo/text)
+  (set demo_history (push demo_history (list :item item :note text)))
+  :noted)
+
+(defn! demo_log () demo_history)
+
+(set_entity_completions :demo/item 'demo_items)
+(set_entity_completions :demo/place 'demo_places)
+(spawn_srv! :chooser_demo :interface '(demo_items demo_places demo_move demo_note demo_log))
+(bind_srv :chooser_demo)
+#+end_src
+
+The final =:ok= comes from =bind_srv=. Definitions and bindings remain available
+for later evaluations. Re-evaluating this setup starts a new demo service with
+an empty log.
+
+For each expression below, put point immediately after its closing parenthesis
+unless a region is specified. =TAB= shows choices when your completion setup
+does not show them automatically. Use =C-c C-e= to inspect =(demo_items)= now.
+
+* Command reference
+
+| Interaction | Command | Effect on source |
+|-------------+---------+------------------|
+| Evaluate an expression | =C-c C-e= | Keep source; display its result. |
+| Evaluate a region / buffer | =C-c C-r= / =C-c C-c= | Keep source; display the last result. |
+| Evaluate a buffer with a transcript | =C-u C-c C-c= | Keep source; show expressions with commented results. |
+| Retain an evaluated result | =C-u C-c C-e= / =C-u C-c C-r= | Replace source with its printed result; add a quote yourself for literal lists or symbols. |
+| Choose a list element | =C-c C-v= | Replace source with the chosen literal, including needed quotes. |
+| Choose a record field | =M-x vrs-choose-field= | Replace source with the field's literal value. |
+| Insert a function call | =C-c C-b= | Insert argument names as placeholders. |
+| Insert a filled function call | =C-u C-c C-b= | Prompt for arguments and insert the call; do not execute it. |
+| Build an action on an entity | =C-c C-a= | Replace the entity expression with a filled call; do not execute it. |
+| Execute an action on an entity | =M-x vrs-execute-action= | Keep source; run the chosen action and display its result. |
+| Build a call in the GUI | =M-x vrsjmp-browse-functions= | Insert the call returned by vrsjmp. |
+| Inspect a macro expansion | =C-c C-m= / =C-u C-c C-m= | Keep source; display one expansion or repeat outer expansion. |
+| Start a fresh session | =M-x vrs-reset-session= | Keep source; clear the shared session's definitions and bindings. |
+
+Value, field, and action commands accept an active region too. If it contains
+several expressions, they use the last value. An entity expression runs once
+before the action prompt; the selected action only runs when explicitly executed.
+
+* Choose a value
+
+Insert =(demo_items)= and press =C-c C-v=. Each row shows a full Lyric value;
+choose the one containing ="Green notebook"= and =:id 2=.
+The expression becomes:
+
+#+begin_example
+'(:demo/item :title "Green notebook" :id 2 :note "line\n\"quoted\"" :tags (gamma delta))
+#+end_example
+
+Emacs displays the value directly. =:title= is just one of this example's
+fields; no title field is required. Row numbers distinguish identical values.
+
+The tag, nested symbols, string escaping, and outer quote should survive.
+Evaluate the retained value with =C-c C-e= to confirm it is usable source.
+
+* Choose fields and regions
+
+Insert =(get (demo_items) 1)= and run =M-x vrs-choose-field=.
+Choose =:note=: the source should become ="line\n\"quoted\""=.
+Repeat on a fresh copy and choose =:tags=: expect ='(gamma delta)=.
+This retains the field's current value; it does not generate a =get= expression.
+
+Then select this whole region and press =C-c C-v=:
+
+#+begin_src vrs
+(def chosen_items (demo_items))
+chosen_items
+#+end_src
+
+Choose either item. The whole region should be replaced by that one literal.
+
+* Browse functions and fill arguments
+
+On a blank line, run =C-c C-b= (=M-x vrs-browse-functions=). Search for
+=demo_move=; its signature, service, and *Move demo item* documentation appear.
+Select it. Expect =(demo_move item place)= with placeholders.
+
+On another blank line, run =C-u C-c C-b=. Choose =demo_move=, then the value
+containing *Green notebook*, then the value containing *Desk*. Expect a call
+with both complete, quoted entities. Evaluate =(demo_log)= on a separate line:
+it should still be =()=.
+
+Repeat with =demo_note=. After choosing an item, type ="hello"= for the text
+argument, including quotes. The call should be inserted with ="hello"=, and the
+log should still be empty. Entering a call such as =(demo_items)= as an argument
+also only inserts that expression; it does not evaluate it during construction.
+
+* Start with an entity and construct an action
+
+Insert =(get (demo_items) 1)= and press =C-c C-a=.
+Choose *Move demo item*, then *Desk*. Expect:
+
+#+begin_example
+(demo_move '(:demo/item :title "Green notebook" :id 2 :note "line\n\"quoted\"" :tags (gamma delta))
+           '(:demo/place :title "Desk" :id 10))
+#+end_example
+
+=(demo_log)= should still be empty. You now have a complete call you can edit,
+save, or evaluate explicitly with =C-c C-e=. The same interaction works on the
+quoted entity retained earlier. The leading =:demo/item= matches the action's
+first declared argument type; the title does not decide which actions apply.
+
+* Execute an action on a literal or a call
+
+Paste this literal and run =M-x vrs-execute-action=:
+
+#+begin_src vrs
+'(:demo/item :title "Green notebook" :id 2 :tags (gamma delta))
+#+end_src
+
+Choose *Move demo item*, then *Desk*. The literal stays in the buffer,
+=*VRS Result*= shows =:moved=, and =(demo_log)= contains one new entry.
+
+Now paste this call and run the same command directly, without first retaining
+its result with a chooser:
+
+#+begin_src vrs
+(get (demo_items) 1)
+#+end_src
+
+Choose *Move demo item*, then *Backpack*. The call runs once to obtain the
+entity. Its source stays in place, the chosen action runs once, and =(demo_log)=
+has one more entry. This is also how to act directly on live service results.
+
+To inspect the concrete call published for macro recording, evaluate
+=(subscribe :cmd)= with =C-c C-e=, perform one more =vrs-execute-action=, then
+evaluate:
+
+#+begin_src vrs
+(recv '(:topic_updated :cmd _))
+#+end_src
+
+The event contains the action call with the chosen entity and destination.
+
+* Show an evaluation transcript
+
+In another scratch buffer in =vrs-mode=, paste only:
+
+#+begin_src vrs
+(+ 1 2)
+(+ 3 4)
+#+end_src
+
+=C-c C-c= currently displays =7=, the buffer's final value. =C-u C-c C-c=
+evaluates the expressions separately and shows this in =*VRS Result*=:
+
+#+begin_example
+(+ 1 2)
+# => 3
+(+ 3 4)
+# => 7
+#+end_example
+
+The source buffer stays unchanged. The prefix command evaluates the buffer
+again; it does not recover output from the previous evaluation.
+
+* Make a choice in vrsjmp and keep it in Emacs
+
+With vrsjmp running on your runtime, insert
+=(vrsjmp_choose '("tea" "coffee"))= and press =C-u C-c C-e=.
+Choose *coffee* in the GUI. The waiting editor expression becomes ="coffee"=.
+
+You can also run =M-x vrsjmp-browse-functions= to bring a call built in the GUI
+back into the editor. Enter selects placeholders; its *Fill arguments* action
+chooses values before returning the call. The GUI lists functions bound in its
+own service, so it need not show the same functions as the Emacs session.
+=C-c C-b= and =C-u C-c C-b= use Emacs completion for those two interactions.
+
+* Cancel and keep working
+
+Start =C-u C-c C-b=, choose a function and one argument, then press =C-g=.
+The buffer and =(demo_log)= stay unchanged. You can explore a call and abandon
+it before anything runs.
+
+An evaluation error also leaves the source in place. Try =(missing_function)=
+with =C-c C-v=, then evaluate =(demo_items)= to keep working in the same session.
+
+To interrupt a waiting call, evaluate =(recv)= and press =C-g=. That resets the
+editor session. Evaluate =(bind_srv :chooser_demo)= to reconnect to the notebook
+service; its history remains available in =(demo_log)=.
+
+=M-x vrs-reset-session= also starts a fresh session. See the
+[[file:../README.md][Emacs reference]] for loading the mode and configuring the connection.
