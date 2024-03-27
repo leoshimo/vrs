@@ -58,11 +58,16 @@ function setup() {
         fire: () => { const pending = [...timers.values()]; timers.clear(); pending.forEach(fn => fn()); }};
 }
 
-test("push is lazy and Back restores query, results, and selection", async () => {
+test("activating a row selects it and Back restores query, results, and selection", async () => {
     const t = setup(); t.nav.open(rootPage(), "Read");
     t.queries[0].resolve([item("Read Later"), item("Focus Window")]); await tick();
-    t.nav.select(1);
-    t.nav.push({...rootPage(), get_items: "read_later_items", prompt: "Read Later", debounce_ms: 200});
+    let rendered;
+    t.nav.render = state => { rendered = state; };
+    t.nav.activate(1);
+    assert.equal(t.actions[0].form, "Focus Window");
+    assert.equal(rendered.selected, 1, "the activated row is highlighted while dispatch is pending");
+    t.actions[0].resolve({type: "push_page", page: {...rootPage(), get_items: "read_later_items", prompt: "Read Later", debounce_ms: 200}});
+    await tick();
     assert.equal(t.queries.length, 2);
     t.nav.back();
     assert.equal(t.nav.current.query, "Read");
