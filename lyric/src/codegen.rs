@@ -35,6 +35,10 @@ where
     CallFunc(usize),
     /// A source-level call, with compile-time provenance.
     CallAt(usize, crate::source::SourceSite),
+    /// A callback invoked by a native higher-order function.
+    CallCallback(usize),
+    /// Execute in the same lexical scope, with an observation boundary.
+    DebugScope(Bytecode<T, L>, crate::source::SourceSite),
     /// Definition provenance at the start of a function's bytecode.
     FunctionSource(crate::source::SourceSite),
     /// Append TOS to the list immediately below it, leaving the list on stack.
@@ -58,7 +62,9 @@ where
 /// Compile a value to bytecode representation
 pub fn compile<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Bytecode<T, L>> {
     let mut code = compile_inner(v)?;
-    if let Some(site) = crate::source::site(v) {
+    if let Some(site) = crate::source::site(v)
+        .or_else(|| is_call(v).then(|| crate::source::SourceSite::synthetic(v.to_string())))
+    {
         if is_call(v) {
             if let Some(Inst::CallFunc(n)) = code.last() {
                 let n = *n;
@@ -123,6 +129,17 @@ fn compile_inner<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Bytecode<T, L>> 
             // special forms
             if let Val::Symbol(s) = first {
                 match s.as_str() {
+                    "__debug_scope" => {
+                        let site = s.sources.first().map(|s| (**s).clone()).unwrap_or_else(|| {
+                            let source = Val::List(
+                                std::iter::once(Val::symbol("dbg!"))
+                                    .chain(args.iter().cloned())
+                                    .collect(),
+                            );
+                            crate::source::SourceSite::synthetic(source.to_string())
+                        });
+                        return Ok(vec![Inst::DebugScope(compile_begin(args)?, site)]);
+                    }
                     "begin" => return compile_begin(args),
                     "def" => return compile_def(args),
                     "fn" => return compile_fn(args),
@@ -392,7 +409,7 @@ fn compile_let<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L
     ])];
     lambda.extend(args);
 
-    compile(&Val::List(lambda))
+    compile_inner(&Val::List(lambda))
 }
 
 /// Compile builtin begin
@@ -586,6 +603,8 @@ impl<T: Extern, L: Locals> std::fmt::Display for Inst<T, L> {
                 "callfn {nargs} at {}:{}:{}",
                 site.file, site.line, site.column
             ),
+            Inst::CallCallback(nargs) => write!(f, "callback {nargs}"),
+            Inst::DebugScope(_, site) => write!(f, "debug_scope {}:{}", site.file, site.line),
             Inst::FunctionSource(site) => {
                 write!(f, "source {}:{}:{}", site.file, site.line, site.column)
             }
@@ -615,6 +634,21 @@ mod tests {
     use void::Void;
 
     type Val = super::Val<Void, Void>;
+    fn compile(v: &Val) -> Result<Bytecode<Void, Void>> {
+        fn strip(code: Bytecode<Void, Void>) -> Bytecode<Void, Void> {
+            code.into_iter()
+                .map(|inst| match inst {
+                    Inst::CallAt(n, _) => Inst::CallFunc(n),
+                    Inst::PushConst(Val::Bytecode(code)) => {
+                        Inst::PushConst(Val::Bytecode(strip(code)))
+                    }
+                    inst => inst,
+                })
+                .collect()
+        }
+        super::compile(v).map(strip)
+    }
+
     #[test]
     fn compile_self_evaluating() {
         assert_eq!(compile(&Val::Int(10)), Ok(vec![PushConst(Val::Int(10)),]));

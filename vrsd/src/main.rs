@@ -81,7 +81,7 @@ async fn run_init(runtime: &Runtime, path: &Path) -> Result<()> {
     let source = tokio::fs::read_to_string(path)
         .await
         .with_context(|| format!("Failed to read init script {}", path.display()))?;
-    let program = Program::from_script(&source)
+    let program = Program::from_source(&source, &path.to_string_lossy())
         .with_context(|| format!("Failed to parse init script {}", path.display()))?;
     let exit = runtime
         .run(program)

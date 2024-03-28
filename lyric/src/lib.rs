@@ -1,4 +1,5 @@
 mod codegen;
+pub mod debug;
 mod error;
 mod lex;
 pub mod macros;

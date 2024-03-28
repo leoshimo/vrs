@@ -70,7 +70,7 @@ async fn run_script_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
     let contents = tokio::fs::read_to_string(&path)
         .await
         .map_err(|e| Error::Runtime(format!("Failed to read script {path} - {e}")))?;
-    let program = Program::from_script(&contents)?;
+    let program = Program::from_source(&contents, &path)?;
     let kernel = fiber
         .locals()
         .kernel

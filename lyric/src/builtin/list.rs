@@ -13,7 +13,7 @@ pub fn apply_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
             [callable, Val::List(values)] => {
                 let mut code = vec![Inst::PushConst(callable.clone())];
                 code.extend(values.iter().cloned().map(Inst::PushConst));
-                code.push(Inst::CallFunc(values.len()));
+                code.push(Inst::CallCallback(values.len()));
                 Ok(NativeFnOp::Exec(code))
             }
             _ => Err(Error::UnexpectedArguments(
@@ -112,7 +112,7 @@ pub fn map_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
                     bc.extend([
                         Inst::PushConst(val.clone()),
                         Inst::PushConst(elem.clone()),
-                        Inst::CallFunc(1),
+                        Inst::CallCallback(1),
                     ]);
                 }
                 bc.push(Inst::CallFunc(l.len()));

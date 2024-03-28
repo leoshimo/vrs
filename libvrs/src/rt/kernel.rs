@@ -158,6 +158,7 @@ struct Kernel {
     next_proc_id: usize,
     registry: Registry,
     pubsub: PubSubHandle,
+    debug: crate::debug::Store,
     node_name: String,
     peers: Option<PeerHandle>,
 }
@@ -169,13 +170,15 @@ impl Kernel {
         registry: Registry,
         peers: Option<PeerHandle>,
     ) -> Self {
+        let pubsub = PubSub::spawn();
         Self {
+            debug: crate::debug::Store::new(pubsub.clone()),
             weak_hdl: handle.downgrade(),
             procs: ProcessSet::new(),
             proc_hdls: HashMap::new(),
             next_proc_id: 0,
             registry,
-            pubsub: PubSub::spawn(),
+            pubsub,
             node_name,
             peers,
         }
@@ -220,7 +223,8 @@ impl Kernel {
             .kernel(self.weak_hdl.clone())
             .registry(self.registry.clone())
             .node_name(self.node_name.clone())
-            .pubsub(self.pubsub.clone());
+            .pubsub(self.pubsub.clone())
+            .debug(self.debug.clone());
         if let Some(peers) = &self.peers {
             proc = proc.peers(peers.clone());
         }
