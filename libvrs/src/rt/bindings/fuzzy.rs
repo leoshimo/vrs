@@ -12,9 +12,18 @@ use crate::rt::program::{NativeFn, NativeFnOp, Val};
 pub(crate) fn fuzzy_match_fn() -> NativeFn {
     NativeFn {
         metadata: vec![],
-        doc: "(fuzzy_match QUERY ITEMS KEY) - Rank original items by KEY's text or list of text fields; exact fields first"
+        doc: "(fuzzy_match QUERY ITEMS [KEY]) - Rank original items by display text, or KEY's text/list of text fields; exact fields first"
             .into(),
         func: |_, args| match args {
+            [Val::String(_), Val::List(items)] => Ok(NativeFnOp::Exec(vec![
+                Inst::PushConst(Val::NativeFn(sort_matches_fn())),
+                Inst::PushConst(args[0].clone()),
+                Inst::PushConst(args[1].clone()),
+                Inst::PushConst(Val::List(
+                    items.iter().map(|item| Val::string(&item.to_string())).collect(),
+                )),
+                Inst::CallFunc(3),
+            ])),
             [Val::String(_), Val::List(_), key] => Ok(NativeFnOp::Exec(vec![
                 Inst::PushConst(Val::NativeFn(sort_matches_fn())),
                 Inst::PushConst(args[0].clone()),
@@ -26,7 +35,7 @@ pub(crate) fn fuzzy_match_fn() -> NativeFn {
                 Inst::CallFunc(3),
             ])),
             _ => Err(Error::UnexpectedArguments(
-                "fuzzy_match expects text, items, and a key function".into(),
+                "fuzzy_match expects text, items, and an optional key function".into(),
             )),
         },
     }
