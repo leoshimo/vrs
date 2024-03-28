@@ -117,12 +117,6 @@ impl Observer for ProcessObserver {
             .0
             .pubsub
             .try_publish(&TOPIC.into(), Val::from(form));
-        if record.event.status != "running" {
-            tracing::info!(target:"vrs::dbg", process=%record.process, call=%record.event.id,
-                "{}:{}:{} {} => {} [{}]", record.event.site.file, record.event.site.line,
-                record.event.site.column, record.event.site.form,
-                record.event.result.as_ref().map(|r| r.text.as_str()).unwrap_or(""), record.event.status);
-        }
     }
 }
 

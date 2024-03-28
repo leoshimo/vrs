@@ -6,11 +6,14 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::io::{BufRead, Cursor, Write};
 use std::num::NonZeroUsize;
-use vrs::{Client, Form};
+use vrs::Client;
 
 #[derive(Deserialize)]
 struct Request {
     source: String,
+    file: Option<String>,
+    line: Option<NonZeroUsize>,
+    column: Option<NonZeroUsize>,
     format: Option<Format>,
     width: Option<NonZeroUsize>,
     raw: Option<bool>,
@@ -56,18 +59,30 @@ async fn evaluate(client: &Client, defaults: &Output, line: &str) -> Result<Stri
         request.raw.unwrap_or(defaults.raw),
     );
     let mut text = Vec::new();
+    let origin = request.file.as_deref().unwrap_or("<editor>");
+    let line = request.line.map(NonZeroUsize::get).unwrap_or(1);
+    let column = request.column.map(NonZeroUsize::get).unwrap_or(1);
     if output.format == Format::Editor {
-        crate::run_file(
+        crate::run_file_at(
             client,
             &output,
             Box::new(Cursor::new(request.source)),
             &mut text,
+            origin,
+            line,
+            column,
         )
         .await?;
     } else {
-        let mut forms = vec![Form::symbol("begin")];
-        forms.extend(lyric::parse_script(&request.source)?);
-        let value = client.request(Form::List(forms)).await?.contents?;
+        let value = client
+            .request(lyric::source::request(
+                &request.source,
+                origin,
+                line,
+                column,
+            ))
+            .await?
+            .contents?;
         output.write(&mut text, &value, &request.source)?;
     }
     Ok(String::from_utf8(text)?)

@@ -130,14 +130,20 @@ fn compile_inner<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Bytecode<T, L>> 
             if let Val::Symbol(s) = first {
                 match s.as_str() {
                     "__debug_scope" => {
-                        let site = s.sources.first().map(|s| (**s).clone()).unwrap_or_else(|| {
-                            let source = Val::List(
-                                std::iter::once(Val::symbol("dbg!"))
-                                    .chain(args.iter().cloned())
-                                    .collect(),
-                            );
-                            crate::source::SourceSite::synthetic(source.to_string())
-                        });
+                        let mut site =
+                            s.sources.first().map(|s| (**s).clone()).unwrap_or_else(|| {
+                                let source = Val::List(
+                                    std::iter::once(Val::symbol("dbg!"))
+                                        .chain(args.iter().cloned())
+                                        .collect(),
+                                );
+                                crate::source::SourceSite::synthetic(source.to_string())
+                            });
+                        // The primitive is generated, but its wrapper has an
+                        // exact source location at the dbg! invocation.
+                        if site.line > 0 && site.expression.starts_with("(dbg!") {
+                            site.generated = false;
+                        }
                         return Ok(vec![Inst::DebugScope(compile_begin(args)?, site)]);
                     }
                     "begin" => return compile_begin(args),

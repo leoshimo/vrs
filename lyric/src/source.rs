@@ -59,7 +59,6 @@ pub fn site<T: Extern, L: Locals>(value: &Val<T, L>) -> Option<SourceSite> {
             name.sources.iter().find(|s| s.generated).map(|s| {
                 let mut site = (**s).clone();
                 site.form = form.clone();
-                site.expression = form;
                 site
             })
         })
@@ -68,12 +67,28 @@ pub fn site<T: Extern, L: Locals>(value: &Val<T, L>) -> Option<SourceSite> {
 /// Give newly constructed macro syntax the invocation's origin. Existing syntax
 /// retains its exact locations; generated calls are explicitly marked as such.
 pub(crate) fn expansion_origin<T: Extern, L: Locals>(v: &mut Val<T, L>, origin: &SourceSite) {
-    match v {
-        Val::Symbol(s) if s.sources.is_empty() => {
-            let mut site = origin.clone();
-            site.generated = true;
-            s.sources.push(Arc::new(site));
+    fn attach_head<T: Extern, L: Locals>(v: &mut Val<T, L>, origin: &SourceSite) {
+        match v {
+            Val::Symbol(s) => {
+                let mut site = origin.clone();
+                site.generated = true;
+                s.sources.push(Arc::new(site));
+            }
+            Val::List(items) => {
+                if let Some(first) = items.first_mut() {
+                    attach_head(first, origin);
+                }
+            }
+            _ => (),
         }
+    }
+    // A template's head may already have provenance, but substitution changes
+    // its form. Such generated syntax belongs to this invocation's origin.
+    if matches!(v, Val::List(_)) && site(v).is_none() {
+        attach_head(v, origin);
+    }
+    match v {
+        Val::Symbol(s) if s.sources.is_empty() => attach_head(v, origin),
         Val::List(items) => {
             for item in items {
                 expansion_origin(item, origin);

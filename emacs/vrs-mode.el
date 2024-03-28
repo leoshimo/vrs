@@ -294,6 +294,9 @@ ordinary evaluation errors leave the session available."
            process
            (concat (json-serialize
                     (list :source (buffer-substring-no-properties start end)
+                          :file (or buffer-file-name (format "<buffer:%s>" (buffer-name)))
+                          :line (line-number-at-pos start t)
+                          :column (save-excursion (goto-char start) (1+ (- (point) (line-beginning-position))))
                           :format (or format "pretty") :width (or width 90)
                           :raw (if raw t :false))
                     :false-object :false)

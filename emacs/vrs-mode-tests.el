@@ -657,3 +657,26 @@
 (provide 'vrs-mode-tests)
 
 ;;; vrs-mode-tests.el ends here
+
+(ert-deftest vrs-dbg-retains-editor-file-and-region-origin-with-test-runtime ()
+  "The source embedded observation points back to the region in its buffer."
+  (skip-unless (getenv "VRS_TEST_VRSCTL"))
+  (let ((vrs-vrsctl-command (getenv "VRS_TEST_VRSCTL")))
+    (unwind-protect
+        (with-temp-buffer
+          (setq buffer-file-name "/tmp/vrs-emacs-debug-origin.ll")
+          (vrs-mode)
+          (insert "# 東京\n  (dbg! (+ 20 22))")
+          (goto-char (point-max))
+          (vrs-eval-last-sexp nil)
+          (let* ((source "(filter (get (dbg_history) :records) (fn (r) (eq? (get (get r :site) :file) \"/tmp/vrs-emacs-debug-origin.ll\")))")
+                 (result (with-temp-buffer
+                           (vrs-mode)
+                           (insert source)
+                           (vrs-eval-region (point-min) (point-max) t)
+                           (buffer-string))))
+            (should (string-match-p ":line 2" result))
+            (should (string-match-p ":column 3" result))
+            (should (string-match-p ":column 9" result))
+            (should (equal (buffer-string) "# 東京\n  (dbg! (+ 20 22))"))))
+      (vrs--close-session vrs-vrsctl-command))))
