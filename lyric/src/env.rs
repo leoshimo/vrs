@@ -62,6 +62,10 @@ impl<T: Extern, L: Locals> Env<T, L> {
             .bind_native(SymbolId::from("display"), builtin::display_fn())
             .bind_native(SymbolId::from("pretty"), builtin::pretty_fn())
             .bind_native(SymbolId::from("dbg"), builtin::dbg_fn())
+            .bind_native(
+                SymbolId::from("eval_source"),
+                crate::source::eval_source_fn(),
+            )
             .bind_native(SymbolId::from("read"), builtin::read_fn())
             .bind_native(SymbolId::from("help"), builtin::help_fn())
             .bind_native(SymbolId::from("meta"), builtin::metadata::meta_fn())

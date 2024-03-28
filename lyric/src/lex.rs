@@ -1,5 +1,4 @@
 //! Lexer for Lyric
-use std::iter::Peekable;
 
 use crate::{types::escape_string, Error, Result};
 
@@ -44,16 +43,60 @@ pub(crate) fn lex(expr: &str) -> Result<Vec<Token>> {
     Tokens::new(expr).collect()
 }
 
+/// The next character can be inspected without moving the byte offset.
+#[derive(Clone)]
+struct Cursor<'a> {
+    chars: std::str::Chars<'a>,
+    offset: usize,
+}
+impl Iterator for Cursor<'_> {
+    type Item = char;
+    fn next(&mut self) -> Option<char> {
+        let ch = self.chars.next()?;
+        self.offset += ch.len_utf8();
+        Some(ch)
+    }
+}
+impl Cursor<'_> {
+    fn peek(&self) -> Option<char> {
+        self.chars.clone().next()
+    }
+    fn next_if(&mut self, f: impl FnOnce(&char) -> bool) -> Option<char> {
+        if self.peek().is_some_and(|ch| f(&ch)) {
+            self.next()
+        } else {
+            None
+        }
+    }
+    fn next_if_eq(&mut self, ch: &char) -> Option<char> {
+        self.next_if(|next| next == ch)
+    }
+}
+
+pub(crate) fn lex_spanned(expr: &str) -> Result<Vec<(Token, usize, usize)>> {
+    let mut tokens = Tokens::new(expr);
+    let mut result = vec![];
+    while let Some(token) = tokens.next() {
+        result.push((token?, tokens.start, tokens.inner.offset));
+    }
+    Ok(result)
+}
+
 /// An iterator over Tokens
 struct Tokens<'a> {
-    inner: Peekable<std::str::Chars<'a>>,
+    inner: Cursor<'a>,
+    start: usize,
 }
 
 impl Tokens<'_> {
     /// Create Tokens iterator from &str
     fn new(expr: &str) -> Tokens<'_> {
         Tokens {
-            inner: expr.chars().peekable(),
+            inner: Cursor {
+                chars: expr.chars(),
+                offset: 0,
+            },
+            start: 0,
         }
     }
 
@@ -274,7 +317,7 @@ impl<'a> Iterator for Tokens<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let mut is_comment = false;
 
-        while let Some(ch) = self.inner.peek().copied() {
+        while let Some(ch) = self.inner.peek() {
             if ch == '\n' && is_comment {
                 is_comment = false;
             }
@@ -285,6 +328,7 @@ impl<'a> Iterator for Tokens<'a> {
                 let _ = self.inner.next();
                 continue;
             }
+            self.start = self.inner.offset;
             let token = match ch {
                 '\"' => self.next_string(),
                 ':' => self.next_keyword(),

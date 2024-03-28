@@ -81,6 +81,7 @@ struct CallFrame<T: Extern, L: Locals> {
 struct Expansion<T: Extern, L: Locals> {
     caller: Arc<Mutex<Env<T, L>>>,
     budget: crate::macros::BudgetRef,
+    origin: Option<crate::source::SourceSite>,
 }
 
 impl<T: Extern, L: Locals> Fiber<T, L> {
@@ -274,7 +275,12 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                 // tracing::debug!("panic {:?}", self);
                 panic!("Unexpected state during execution - all function are expected to have stack effect of 1. Was {}", cf.stack_len + 1);
             }
-            let _ = self.cframes.pop();
+            let frame = self.cframes.pop().unwrap();
+            if let Some(origin) = frame.transformer.and_then(|t| t.origin) {
+                if let Some(value) = self.stack.last_mut() {
+                    crate::source::expansion_origin(value, &origin);
+                }
+            }
         }
 
         let inst = match self.inst() {
@@ -345,6 +351,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                     }
                     let budget = self.expansion_budget();
                     crate::macros::invocation(&budget)?;
+                    let origin = crate::source::site(source);
                     self.stack.pop();
                     let caller = self.cur_env().clone();
                     let mut code = vec![Inst::ValidateExpansion];
@@ -359,7 +366,11 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                     );
                     continuation.expansion_budget = Some(budget.clone());
                     let mut transformer = self.lambda_frame(function, values);
-                    transformer.transformer = Some(Expansion { caller, budget });
+                    transformer.transformer = Some(Expansion {
+                        caller,
+                        budget,
+                        origin,
+                    });
                     self.cframes.push(continuation);
                     self.cframes.push(transformer);
                 }
@@ -511,7 +522,8 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                     parent: Some(Arc::clone(&self.cf().env)),
                 }));
             }
-            Inst::CallFunc(nargs) => {
+            Inst::FunctionSource(_) => (),
+            Inst::CallFunc(nargs) | Inst::CallAt(nargs, _) => {
                 let mut args = vec![];
                 for _ in 0..nargs {
                     let v = self.stack.pop().ok_or(Error::UnexpectedStack(

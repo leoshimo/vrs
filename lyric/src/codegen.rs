@@ -33,6 +33,10 @@ where
     MakeFunc,
     /// Call func by popping N forms and function object off stack, and pushing result
     CallFunc(usize),
+    /// A source-level call, with compile-time provenance.
+    CallAt(usize, crate::source::SourceSite),
+    /// Definition provenance at the start of a function's bytecode.
+    FunctionSource(crate::source::SourceSite),
     /// Append TOS to the list immediately below it, leaving the list on stack.
     ListPush,
     /// Splice the elements of TOS into the list below it; TOS must be a list.
@@ -53,6 +57,63 @@ where
 
 /// Compile a value to bytecode representation
 pub fn compile<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Bytecode<T, L>> {
+    let mut code = compile_inner(v)?;
+    if let Some(site) = crate::source::site(v) {
+        if is_call(v) {
+            if let Some(Inst::CallFunc(n)) = code.last() {
+                let n = *n;
+                *code.last_mut().unwrap() = Inst::CallAt(n, site.clone());
+            }
+        }
+        if matches!(crate::macros::head(v), Some("fn" | "lambda")) {
+            for inst in &mut code {
+                if let Inst::PushConst(Val::Bytecode(body)) = inst {
+                    if matches!(body.first(), Some(Inst::FunctionSource(_))) {
+                        body.remove(0);
+                    }
+                    body.insert(0, Inst::FunctionSource(site.clone()));
+                }
+            }
+        }
+    }
+    Ok(code)
+}
+
+fn is_call<T: Extern, L: Locals>(v: &Val<T, L>) -> bool {
+    if !matches!(v, Val::List(_)) {
+        return false;
+    }
+    match crate::macros::head(v) {
+        Some(name) => {
+            !name.ends_with('!')
+                && !matches!(
+                    name,
+                    "begin"
+                        | "def"
+                        | "fn"
+                        | "if"
+                        | "cond"
+                        | "lambda"
+                        | "let"
+                        | "quote"
+                        | "quasiquote"
+                        | "unquote"
+                        | "unquote-splicing"
+                        | "set"
+                        | "try"
+                        | "eval"
+                        | "yield"
+                        | "loop"
+                        | "match"
+                        | "defmacro"
+                        | "for_syntax"
+                )
+        }
+        None => true,
+    }
+}
+
+fn compile_inner<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Bytecode<T, L>> {
     match v {
         Val::List(l) => {
             let (first, args) = l.split_first().ok_or(Error::InvalidExpression(
@@ -520,6 +581,14 @@ impl<T: Extern, L: Locals> std::fmt::Display for Inst<T, L> {
             Inst::SetSym(s) => write!(f, "setsym {s}"),
             Inst::MakeFunc => write!(f, "makefn"),
             Inst::CallFunc(nargs) => write!(f, "callfn {nargs}"),
+            Inst::CallAt(nargs, site) => write!(
+                f,
+                "callfn {nargs} at {}:{}:{}",
+                site.file, site.line, site.column
+            ),
+            Inst::FunctionSource(site) => {
+                write!(f, "source {}:{}:{}", site.file, site.line, site.column)
+            }
             Inst::ListPush => write!(f, "listpush"),
             Inst::ListExtend => write!(f, "listextend"),
             Inst::PopTop => write!(f, "poptop"),
