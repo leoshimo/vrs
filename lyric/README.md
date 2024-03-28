@@ -155,3 +155,16 @@ have size bounds. Source nesting is limited to 256 levels, including in `read`.
 Generated code runs outside the transformer instruction budget. Independent
 invocations start fresh budgets and can recover after a caught expansion error.
 These limits do not put a wall-clock timeout on I/O initiated by a transformer.
+
+## Source observations
+
+`(dbg! BODY...)` runs like `begin`, while an optional host observer records its
+calls, returns, errors, and cancellation. Hosts attach a `debug::Observer` through
+`Fiber::set_observer`. Without an observer, the body executes normally without a
+recording. The observer must never block on a viewer or reenter the fiber.
+
+`parse_source` retains file, line, column, and expression provenance through
+macro list operations. The compiler embeds call/function source descriptors;
+`(eval_source SOURCE FILE LINE COLUMN)` evaluates located text in the current
+lexical scope. See VRS's [source-embedded debug tools](../docs/source-embedded-debug-tools.md)
+for the macro, recording policy, clients, and limits.
