@@ -14,9 +14,10 @@ function row(r,byParent,ancestors=new Set()){
   if(ancestors.has(r.id))return el('div','Cycle in incomplete recording','muted');
   const next=new Set(ancestors);next.add(r.id);
   const children=byParent.get(r.id)||[], wrap=el('div',undefined,`row ${r.status}`), line=el('div',undefined,'line');wrap.append(line);
-  const opened=!collapsed.has(r.id)&&($('#all').checked||expanded.has(r.id)||Object.values(filters()).some(Boolean));
+  const view=$('#group').value, key=`${view}:${r.id}`;
+  const opened=!collapsed.has(key)&&($('#all').checked||expanded.has(key)||(view==='run'&&Object.values(filters()).some(Boolean)));
   const showingValues=!hiddenValues.has(r.id)&&($('#details').checked||values.has(r.id));
-  const arrow=button(children.length?(opened?'▾':'▸'):'·','arrow',()=>{if(opened){collapsed.add(r.id);}else{collapsed.delete(r.id);expanded.add(r.id);}render();});arrow.disabled=!children.length;arrow.dataset.focusKey=`children:${r.id}`;arrow.setAttribute('aria-label',`${opened?'Collapse':'Expand'} nested calls for ${r.site.form}`);arrow.setAttribute('aria-expanded',String(opened));line.append(arrow);
+  const arrow=button(children.length?(opened?'▾':'▸'):'·','arrow',()=>{if(opened){collapsed.add(key);}else{collapsed.delete(key);expanded.add(key);}render();});arrow.disabled=!children.length;arrow.dataset.focusKey=`children:${r.id}`;arrow.setAttribute('aria-label',`${opened?'Collapse':'Expand'} nested calls for ${r.site.form}`);arrow.setAttribute('aria-expanded',String(opened));line.append(arrow);
   const source=button(r.site.form,'source',()=>{if(showingValues){hiddenValues.add(r.id);}else{hiddenValues.delete(r.id);values.add(r.id);}render();});source.dataset.focusKey=`values:${r.id}`;source.title='Inspect actual arguments and result';source.setAttribute('aria-expanded',String(showingValues));line.append(source);
   const loc=button(`${r.site.file.split('/').pop()}:${r.site.line}:${r.site.column}`,'link location',()=>focusFilter('at',site(r)));loc.title=`History at ${site(r)}`;line.append(loc);
   if(r.kind==='callback'||r.site.generated)line.append(el('span',r.kind==='callback'?'callback':'generated','tag'));
@@ -53,7 +54,7 @@ function render(){
     for(const [id,items] of groups){const group=el('section',undefined,'group'),heading=el('div',undefined,'group-heading');heading.append(button(`Run ${short(id)}`,'link',()=>focusFilter('run',id)),el('span',new Date(items[0].started_ms).toLocaleTimeString(),'muted'),el('span',items[0].process,'muted'));group.append(heading);
       for(const r of items.filter(r=>!r.parent||!ids.has(r.parent))){
         // Scope children are immediately useful; deeper calls start collapsed.
-        if(r.kind==='scope')expanded.add(r.id);
+        if(r.kind==='scope')expanded.add(`run:${r.id}`);
         group.append(row(r,byParent));
       }
       container.append(group);
@@ -61,8 +62,8 @@ function render(){
   }
   if(focusName){const target=Array.from(container.querySelectorAll('[data-focus-key]')).find(e=>e.dataset.focusKey===focusName);target?.focus({preventScroll:true});}
   // Bound UI state alongside the bounded daemon recording.
-  for(const id of expanded)if(!ids.has(id))expanded.delete(id);
-  for(const set of [values,collapsed,hiddenValues])for(const id of set)if(!ids.has(id))set.delete(id);
+  for(const set of [expanded,collapsed])for(const key of set)if(!ids.has(key.slice(key.indexOf(':')+1)))set.delete(key);
+  for(const set of [values,hiddenValues])for(const id of set)if(!ids.has(id))set.delete(id);
 }
 async function refresh(){
   if(busy||paused)return;busy=true;

@@ -122,6 +122,21 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
         self.observer = Some(observer);
     }
 
+    /// A host can reject a VM signal (for example a top-level yield) without
+    /// resuming the fiber. End its observations with that actual error.
+    pub(crate) fn fail_observations(&mut self, error: &Error) {
+        let text = error.to_string();
+        let result = crate::debug::Preview {
+            text: crate::debug::clipped(&text, 1024),
+            truncated: text.len() > 1024,
+        };
+        for frame in self.cframes.iter_mut().rev() {
+            if let Some(trace) = frame.trace.as_mut() {
+                trace.finish("error", Some(result.clone()));
+            }
+        }
+    }
+
     fn trace(&self) -> Option<&crate::debug::Trace> {
         self.cframes
             .iter()
