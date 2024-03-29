@@ -138,18 +138,7 @@ function renderMenu() {
         button.id = "action-" + index;
         button.dataset.separator = String(!actionFilter.value.trim() && visibleIndex > 0
             && entries[visibleIndex - 1].command.primary && !command.primary);
-        const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        icon.classList.add("action-icon");
-        icon.setAttribute("viewBox", "0 0 24 24");
-        icon.setAttribute("aria-hidden", "true");
-        const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-        const name = ["open", "link", "copy", "command"].includes(command.icon) ? command.icon : "command";
-        use.setAttribute("href", "assets/action-icons.svg#" + name);
-        icon.append(use);
-        const key = document.createElement("kbd");
-        key.textContent = "↵";
-        key.setAttribute("aria-hidden", "true");
-        button.append(icon, textSpan("action-label", command.title), key);
+        button.append(textSpan("action-label", command.title));
         button.addEventListener("pointermove", () => selectMenu(visibleIndex));
         button.onclick = () => {
             // Menu actions apply to the exact row that opened the menu.
