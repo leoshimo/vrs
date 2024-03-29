@@ -1,5 +1,6 @@
 import { Navigation } from "./navigation.mjs";
 import { createShowHandler, createTransport } from "./transport.mjs";
+import { menuEntries, defaultMenuSelection } from "./action-menu.mjs";
 
 const { invoke } = window.__TAURI__.tauri;
 const input = document.querySelector("#input-field");
@@ -14,6 +15,7 @@ const actions = document.querySelector("#actions");
 const menu = document.querySelector("#action-menu");
 const actionList = document.querySelector("#action-list");
 const actionFilter = document.querySelector("#action-filter");
+const actionSearch = document.querySelector("#action-search");
 const actionStatus = document.querySelector("#action-status");
 let loadingTimer = null, toastTimer = null;
 let previousItems = null, previousSelected = null, previousError = "";
@@ -25,6 +27,8 @@ function closeMenu(focus = false) {
     menuItem = null;
     menuRow = -1;
     actionFilter.value = "";
+    actionSearch.dataset.active = "false";
+    input.readOnly = false;
     actions.setAttribute("aria-expanded", "false");
     if (focus) input.focus();
 }
@@ -124,17 +128,28 @@ function selectMenu(index) {
 }
 
 function renderMenu() {
-    const words = actionFilter.value.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+    const entries = menuEntries(menuItem, actionFilter.value);
     actionList.replaceChildren();
-    menuItem.actions.forEach((command, index) => {
-        if (!words.every(word => command.title.toLocaleLowerCase().includes(word))) return;
+    entries.forEach(({ command, index }, visibleIndex) => {
         const button = document.createElement("button");
         button.type = "button";
         button.role = "option";
         button.tabIndex = -1;
         button.id = "action-" + index;
-        button.textContent = command.title;
-        const visibleIndex = actionList.children.length;
+        button.dataset.separator = String(!actionFilter.value.trim() && visibleIndex > 0
+            && entries[visibleIndex - 1].command.primary && !command.primary);
+        const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        icon.classList.add("action-icon");
+        icon.setAttribute("viewBox", "0 0 24 24");
+        icon.setAttribute("aria-hidden", "true");
+        const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+        const name = ["open", "link", "copy", "command"].includes(command.icon) ? command.icon : "command";
+        use.setAttribute("href", "assets/action-icons.svg#" + name);
+        icon.append(use);
+        const key = document.createElement("kbd");
+        key.textContent = "↵";
+        key.setAttribute("aria-hidden", "true");
+        button.append(icon, textSpan("action-label", command.title), key);
         button.addEventListener("pointermove", () => selectMenu(visibleIndex));
         button.onclick = () => {
             // Menu actions apply to the exact row that opened the menu.
@@ -146,7 +161,7 @@ function renderMenu() {
         actionList.append(button);
     });
     actionStatus.hidden = actionList.children.length > 0;
-    selectMenu(0);
+    selectMenu(defaultMenuSelection(entries, actionFilter.value));
 }
 
 function toggleMenu() {
@@ -157,15 +172,20 @@ function toggleMenu() {
     menuItem = item;
     menuRow = state.selected;
     actionFilter.value = "";
+    actionSearch.dataset.active = "false";
     document.querySelector("#action-title").textContent = item.title;
-    document.querySelector("#action-subtitle").textContent = item.subtitle ?? item.aside ?? "";
     menu.hidden = false;
+    input.readOnly = true;
     actions.setAttribute("aria-expanded", "true");
     renderMenu();
-    actionFilter.focus();
+    actionFilter.focus({ preventScroll: true });
 }
 
-actionFilter.addEventListener("input", renderMenu);
+const revealActionSearch = () => { actionSearch.dataset.active = "true"; };
+actionFilter.addEventListener("beforeinput", revealActionSearch);
+actionFilter.addEventListener("compositionstart", revealActionSearch);
+actionFilter.addEventListener("input", () => { revealActionSearch(); renderMenu(); });
+actionList.addEventListener("pointerdown", event => event.preventDefault());
 input.addEventListener("input", () => { closeMenu(); navigation.search(input.value); });
 window.addEventListener("keydown", event => {
     if (event.isComposing) return;
@@ -175,8 +195,7 @@ window.addEventListener("keydown", event => {
     if (!menu.hidden) {
         if (event.key === "Escape") {
             event.preventDefault();
-            if (actionFilter.value) { actionFilter.value = ""; renderMenu(); }
-            else closeMenu(true);
+            closeMenu(true);
         }
         else if (step) {
             event.preventDefault();
