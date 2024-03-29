@@ -2,6 +2,96 @@
 
 use vrs::{ProcessResult, Program, Runtime, Val};
 
+async fn run_service_program(source: &str) -> Val {
+    let rt = Runtime::new("test");
+    let handle = rt.run(Program::from_expr(source).unwrap()).await.unwrap();
+    let result = tokio::time::timeout(std::time::Duration::from_secs(5), handle.join())
+        .await
+        .expect("service program should finish")
+        .unwrap();
+    let ProcessResult::Done(value) = result.status.unwrap() else {
+        panic!("service program should return a value");
+    };
+    value
+}
+
+#[tokio::test]
+async fn service_topics_are_ready_and_share_state_with_calls() {
+    let result = run_service_program(
+        r#"(begin
+      (def parent (self))
+      (def evaluations 0)
+      (def received '())
+      (defn! remember (data)
+        (set received (push received data))
+        (send parent (list :handled (self) data)))
+      (defn! snapshot () received)
+      (def service (spawn_srv! :events
+        :topics (begin (set evaluations (+ evaluations 1)) '((:changed remember)))
+        :interface '(snapshot)))
+      (publish :changed '(:completed :id 7 :command (+ 1 2)))
+      (def ack (recv (list :handled service '_)))
+      (list evaluations (get ack 2) (call service '(:snapshot))))"#,
+    )
+    .await;
+    assert_eq!(
+        result,
+        Val::from_expr(
+            "(1 (:completed :id 7 :command (+ 1 2)) ((:completed :id 7 :command (+ 1 2))))"
+        )
+        .unwrap()
+    );
+}
+
+#[tokio::test]
+async fn service_dispatch_survives_event_errors_and_uses_current_handler() {
+    let result = run_service_program(
+        r#"(begin
+      (def parent (self))
+      (def service (spawn (fn ()
+      (defn! event (data)
+        (if (eq? data :fail) (error "event failed"))
+        (send parent (list :handled data)))
+      (defn! replace ()
+        (set event (fn (data) (send parent (list :replaced data)))))
+      (defn! ping () :pong)
+      (srv! :events :interface '(replace ping)
+        :topics '((:first event) (:second event)) :ready parent))))
+      (recv (list :service_ready service))
+      (send service '(:topic_updated :first :fail))
+      (send service :unrelated)
+      (send service '(:topic_updated :unknown :ignored))
+      (send service '(:unrelated :triple :ignored))
+      (send service '(:not_a_request :not_a_pid (:replace)))
+      (publish :second :ok)
+      (def first (recv '(:handled _)))
+      (call service '(:replace))
+      (send service '(:topic_updated :first :new))
+      (list first (recv '(:replaced _)) (call service '(:ping))))"#,
+    )
+    .await;
+    assert_eq!(
+        result,
+        Val::from_expr("((:handled :ok) (:replaced :new) :pong)").unwrap()
+    );
+}
+
+#[tokio::test]
+async fn current_process_service_supports_topics_without_exported_calls() {
+    let result = run_service_program(
+        r#"(begin
+      (def parent (self))
+      (def child (spawn (fn ()
+        (defn! report (report) (send parent (list :payload report)))
+        (srv! :listener :ready parent :topics '((:value report)) :interface '()))))
+      (recv (list :service_ready child))
+      (publish :value '(one two))
+      (recv '(:payload _)))"#,
+    )
+    .await;
+    assert_eq!(result, Val::from_expr("(:payload (one two))").unwrap());
+}
+
 #[tokio::test]
 async fn srv_echo() {
     let rt = Runtime::new("test");

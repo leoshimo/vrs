@@ -284,10 +284,48 @@ pub(crate) fn import_entity_completions_fn() -> NativeFn {
     }
 }
 
+/// Keep protocol type checks in the runtime; dispatch remains visible Lyric.
+fn service_request_fn() -> NativeFn {
+    NativeFn {
+        metadata: vec![],
+        doc: "Internal service helper: whether a message is a call request envelope".into(),
+        func: |_, args| match args {
+            [Val::List(message)] => Ok(NativeFnOp::Return(Val::Bool(matches!(
+                message.as_slice(),
+                [Val::Ref(_), Val::Extern(crate::Extern::ProcessId(_)), _]
+            )))),
+            [_] => Ok(NativeFnOp::Return(Val::Bool(false))),
+            _ => Err(Error::UnexpectedArguments("expected one message".into())),
+        },
+    }
+}
+
+fn service_event_error_fn() -> NativeFn {
+    NativeFn {
+        metadata: vec![],
+        doc: "Internal service helper: report an event handler error without sending a reply"
+            .into(),
+        func: |fiber, args| {
+            let [service, topic, error] = args else {
+                return Err(Error::UnexpectedArguments(
+                    "expected service, topic, and error".into(),
+                ));
+            };
+            tracing::error!(pid = %fiber.locals().pid, %service, %topic, %error, "service event handler failed");
+            Ok(NativeFnOp::Return(Val::Nil))
+        },
+    }
+}
+
 /// Cache the standard source library, then install its global-lookup lambdas
 /// into each process. No registry operations execute while loading definitions.
 pub(crate) fn install_service_library(env: &mut crate::Env) {
     use std::sync::OnceLock;
+    env.bind_native(SymbolId::from("vrs/service_request?"), service_request_fn());
+    env.bind_native(
+        SymbolId::from("vrs/report_service_event_error"),
+        service_event_error_fn(),
+    );
     type Macros = lyric::macros::MacroEnv<crate::Extern, crate::Locals>;
     static LIBRARY: OnceLock<(Macros, Vec<(SymbolId, Val)>)> = OnceLock::new();
     let (macros, definitions) = LIBRARY.get_or_init(|| {
