@@ -38,6 +38,9 @@ async fn main() -> Result<()> {
     let client = Client::new(conn);
 
     let run = async {
+        if let Some(node) = args.get_one::<String>("node") {
+            client.select_node(node).await?.contents?;
+        }
         if let Some(dbg) = args.subcommand_matches("dbg") {
             return dbg::run(
                 &client,
@@ -125,6 +128,7 @@ async fn main() -> Result<()> {
 /// The clap CLI interface
 fn cli() -> clap::Command {
     command!()
+        .arg(arg!(node: --node <NODE> "Evaluate on a named connected node; files are read by this client").global(true))
         .subcommand(dbg::command())
         .arg(arg!(file: [FILE] "If present, executes contents of FILE")
              .default_value("-")

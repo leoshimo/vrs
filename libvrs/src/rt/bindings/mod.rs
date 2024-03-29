@@ -16,6 +16,7 @@ pub(crate) use mailbox::ls_msgs_fn;
 pub(crate) use mailbox::recv_fn;
 pub(crate) use mailbox::send_fn;
 pub(crate) use node::configure_fn;
+pub(crate) use node::{eval_remote_fn, wait_srv_fn};
 
 pub(crate) use proc::call_timeout_fn;
 pub(crate) use proc::kill_fn;
@@ -42,6 +43,7 @@ pub(crate) use pubsub::subscribe_fn;
 
 pub(crate) use fs::fdump_fn;
 pub(crate) use fs::fread_fn;
+pub(crate) use fs::read_script_fn;
 pub(crate) use fs::run_script_fn;
 pub(crate) use fuzzy::fuzzy_match_fn;
 pub(crate) use fuzzy::match_excerpt_fn;
