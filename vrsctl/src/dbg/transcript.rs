@@ -16,8 +16,6 @@ pub struct Transcript {
 }
 pub struct Options {
     pub all: bool,
-    pub values: bool,
-    pub time: bool,
     pub width: usize,
 }
 
@@ -78,13 +76,9 @@ impl Transcript {
                 let origin = by_id.get(e.run.as_str()).copied().unwrap_or(r);
                 writeln!(
                     writer,
-                    "\n# evaluation {number} · {}{}",
+                    "\n# evaluation {number} · {} · run::{}",
                     safe(&location(origin)),
-                    if opts.values {
-                        format!(" · run::{}", &e.run[..e.run.len().min(8)])
-                    } else {
-                        String::new()
-                    }
+                    &e.run[..e.run.len().min(8)]
                 )?;
                 self.current = Some(e.run.clone());
             }
@@ -95,19 +89,15 @@ impl Transcript {
                     "error" => "failed",
                     other => other,
                 };
-                let timing = if opts.time {
-                    format!(" · {}", duration(e.elapsed_us))
-                } else {
-                    String::new()
-                };
                 writeln!(
                     writer,
-                    "# evaluation {number} {status}{}{timing}",
+                    "# evaluation {number} {status}{} · {}",
                     if result.is_empty() {
                         String::new()
                     } else {
                         format!(" {}", safe(result))
-                    }
+                    },
+                    duration(e.elapsed_us)
                 )?;
             } else {
                 if e.status == "running" {
@@ -178,9 +168,7 @@ fn print_record(
     if let Some(number) = pending {
         meta += &format!(" · wait {number}");
     }
-    if opts.time {
-        meta += &format!(" · {}", duration(elapsed_us(r, now)));
-    }
+    meta += &format!(" · {}", duration(elapsed_us(r, now)));
     if e.site.generated && e.kind != "callback" {
         meta += " · generated";
     }
@@ -199,23 +187,23 @@ fn print_record(
             writeln!(writer, "# {line}")?;
         }
     }
-    if opts.values {
-        writeln!(writer, "# call::{}", &e.id[..e.id.len().min(8)])?;
-        for (i, arg) in e.arguments.iter().enumerate() {
-            writeln!(
-                writer,
-                "# arg {}: {}{}",
-                i + 1,
-                safe(&arg.text),
-                if arg.truncated { " [truncated]" } else { "" }
-            )?;
+    writeln!(writer, "  # call::{}", &e.id[..e.id.len().min(8)])?;
+    for (i, arg) in e.arguments.iter().enumerate() {
+        let value = format!(
+            "arg {}: {}{}",
+            i + 1,
+            safe(&arg.text),
+            if arg.truncated { " [truncated]" } else { "" }
+        );
+        for line in value.lines() {
+            writeln!(writer, "  # {line}")?;
         }
-        if e.arguments_truncated {
-            writeln!(writer, "# additional arguments omitted")?;
-        }
-        if e.result.as_ref().is_some_and(|r| r.truncated) {
-            writeln!(writer, "# result truncated")?;
-        }
+    }
+    if e.arguments_truncated {
+        writeln!(writer, "  # additional arguments omitted")?;
+    }
+    if e.result.as_ref().is_some_and(|r| r.truncated) {
+        writeln!(writer, "  # result truncated")?;
     }
     Ok(())
 }
@@ -230,8 +218,6 @@ mod tests {
         let mut out = vec![];
         let opts = Options {
             all: false,
-            values: false,
-            time: false,
             width: 120,
         };
         Transcript::default()
@@ -249,8 +235,11 @@ mod tests {
             "{text}"
         );
         assert!(!text.contains("(dbg!"));
-        assert!(!text.contains("(+ x x)"));
-        assert!(!text.contains("ms"));
+        assert!(!text.lines().any(|line| line.starts_with("(+ x x)")));
+        assert!(text.contains("  # arg 1: (2 3)"));
+        assert!(text.contains("  # arg 1: 4"));
+        assert!(text.contains("  # arg 2: (fn (x) (+ x x))"));
+        assert!(text.contains("ms"));
     }
     #[tokio::test]
     async fn pending_gets_elapsed_time_and_same_label_on_completion_without_duplicates() {
@@ -263,8 +252,6 @@ mod tests {
         let now = history.records[0].event.started_ms + 1250;
         let opts = Options {
             all: true,
-            values: true,
-            time: true,
             width: 160,
         };
         let mut transcript = Transcript::default();

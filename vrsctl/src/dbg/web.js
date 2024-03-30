@@ -42,7 +42,7 @@ function addFilter(key, value) {
   query.value = terms.join(' '); force = true; refresh();
 }
 function command() {
-  $('#cli').textContent = `vrsctl dbg${appliedQuery.trim() ? ` --filter ${shellQuote(appliedQuery)}` : ''}${allInitially || expanded.size || $('#group').value === 'source' || $('#order').value === 'slowest' ? ' --all' : ''}${$('#order').value === 'slowest' ? ' --time' : ''}`;
+  $('#cli').textContent = `vrsctl dbg${appliedQuery.trim() ? ` --filter ${shellQuote(appliedQuery)}` : ''}${allInitially || expanded.size || $('#group').value === 'source' || $('#order').value === 'slowest' ? ' --all' : ''}`;
 }
 function choose(id, compare = false) {
   if (compare) {
