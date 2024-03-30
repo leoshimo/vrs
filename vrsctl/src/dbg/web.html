@@ -5,8 +5,11 @@
 <header>
   <div class="title"><h1>vrs <span>dbg</span></h1><span id="connection" role="status">Connecting…</span><span class="spacer"></span><span class="retention" title="Memory-only, per runtime. Old records are evicted at either cap. Restarting the runtime clears history.">512 records · 4 MiB cap</span></div>
   <form id="filters" role="search">
-    <label class="query-label" for="query">Filter calls</label><input id="query" name="filter" autocomplete="off" spellcheck="false" placeholder='file::scratch.ll:7  expr::"(+ x x)"'>
-    <button type="reset">Clear</button>
+    <label class="query-label" for="query">Filter calls</label>
+    <div class="query-control">
+      <input id="query" name="filter" autocomplete="off" spellcheck="false" placeholder='file::scratch.ll:7  expr::"(+ x x)"'>
+      <button class="clear-filter" type="reset" aria-label="Clear filter" title="Clear filter"><span aria-hidden="true">×</span></button>
+    </div>
     <details id="syntax"><summary aria-label="Filter syntax help">?</summary><div class="cheatsheet">
       <strong>Filter syntax</strong><p>Terms narrow the selection together. Quote text containing spaces.</p>
       <dl><dt><code>file::scratch.ll</code></dt><dd>File path contains this text</dd><dt><code>file::scratch.ll:7:3</code></dt><dd>Exact line and optional column</dd><dt><code>expr::"(+ x x)"</code></dt><dd>Source contains this expression</dd><dt><code>status::running</code></dt><dd>running, returned, error, cancelled</dd><dt><code>time::&gt;100ms</code></dt><dd>Elapsed wall time; also &lt;1s</dd><dt><code>run::ID / call::ID</code></dt><dd>Evaluation / call and descendants</dd></dl>
