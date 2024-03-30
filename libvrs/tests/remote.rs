@@ -86,6 +86,31 @@ async fn remote_code_is_quoted_isolated_and_returns_real_pids() {
 }
 
 #[tokio::test]
+async fn remote_startup_failure_returns_error_and_link_remains_usable() {
+    let (_alpha, _beta, a, _) = nodes().await;
+    assert_eq!(
+        eval(
+            &a,
+            "(err? (try (remote! \"beta\" (spawn_srv! \"invalid service name\" :interface '()))))"
+        )
+        .await,
+        Form::Bool(true)
+    );
+    assert_eq!(eval(&a, "(remote! \"beta\" 42)").await, Form::Int(42));
+}
+
+#[tokio::test]
+async fn simultaneous_nested_remote_calls_keep_making_progress() {
+    let (_alpha, _beta, a, b) = nodes().await;
+    let (from_a, from_b) = tokio::join!(
+        eval(&a, "(remote! \"beta\" (remote! \"alpha\" (node_name)))"),
+        eval(&b, "(remote! \"alpha\" (remote! \"beta\" (node_name)))"),
+    );
+    assert_eq!(from_a, Form::string("alpha"));
+    assert_eq!(from_b, Form::string("beta"));
+}
+
+#[tokio::test]
 async fn forked_service_is_immediately_bindable_and_existing_stub_follows_reload() {
     let (alpha, _beta, a, _) = nodes().await;
     let caller = client(&alpha).await;

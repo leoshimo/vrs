@@ -4,6 +4,9 @@ use crate::{Extern, Fiber, NativeAsyncFn, Val};
 use lyric::{kwargs, Error, KeywordId, Result};
 
 pub(crate) fn eval_remote_fn() -> NativeAsyncFn {
+    // VRS host binding, not a Lyric special form: the VM's normal native-async
+    // path awaits this future and resumes the calling fiber with its result.
+    // Registry synchronization happens in remote.rs before that future resolves.
     NativeAsyncFn {
         metadata: vec![],
         doc: "(eval_remote NODE FORM) - Evaluate code in a fresh process on NODE. Wait for its result and local visibility of the target's completed registrations.".into(),

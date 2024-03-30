@@ -176,6 +176,53 @@ async fn kill_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
 
 /// Implementation for (spawn PROG)
 async fn spawn_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
+    let hdl = spawn_process(fiber, args).await?;
+    Ok(Val::Extern(Extern::ProcessId(hdl.id())))
+}
+
+/// Private stdlib helper: retain the new child's exit notification from the
+/// moment it is spawned, so even an immediate startup failure cannot be missed.
+pub(crate) fn spawn_service_fn() -> NativeAsyncFn {
+    NativeAsyncFn {
+        metadata: vec![],
+        doc: "Internal: spawn a service body and wait for its readiness or exit.".into(),
+        func: |fiber, args| {
+            Box::new(async move {
+                let child = spawn_process(fiber, args).await?;
+                let pid = Val::Extern(Extern::ProcessId(child.id()));
+                let mailbox = fiber
+                    .locals()
+                    .self_handle
+                    .as_ref()
+                    .expect("process should have self handle")
+                    .mailbox();
+                let pattern = crate::rt::program::Pattern::from_val(Val::List(vec![
+                    Val::keyword("service_ready"),
+                    pid.clone(),
+                ]));
+                tokio::select! {
+                    biased;
+                    ready = mailbox.poll(Some(pattern)) => {
+                        ready.map_err(|e| Error::Runtime(e.to_string()))?;
+                        Ok(pid)
+                    }
+                    exit = child.join() => {
+                        // Dropping poll alone leaves a pending mailbox receive.
+                        // Clear it before Lyric can catch this error and recv again.
+                        mailbox.cancel_poll().await.map_err(|e| Error::Runtime(e.to_string()))?;
+                        match exit.map_err(|e| Error::Runtime(e.to_string()))?.status {
+                            Err(crate::Error::EvaluationError(error)) => Err(error),
+                            Err(error) => Err(Error::Runtime(error.to_string())),
+                            Ok(_) => Err(Error::Runtime(format!("service child {pid} exited before readiness"))),
+                        }
+                    }
+                }
+            })
+        },
+    }
+}
+
+async fn spawn_process(fiber: &mut Fiber, args: Vec<Val>) -> Result<crate::ProcessHandle> {
     let lambda = match args.as_slice() {
         [Val::Lambda(l)] => l.clone(),
         _ => {
@@ -192,11 +239,10 @@ async fn spawn_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
         .as_ref()
         .and_then(|k| k.upgrade())
         .ok_or(Error::Runtime("Kernel is missing for process".to_string()))?;
-    let hdl = kernel
+    kernel
         .spawn_prog(prog)
         .await
-        .map_err(|e| Error::Runtime(format!("{e}")))?;
-    Ok(Val::Extern(Extern::ProcessId(hdl.id())))
+        .map_err(|e| Error::Runtime(format!("{e}")))
 }
 
 #[cfg(test)]

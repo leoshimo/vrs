@@ -25,7 +25,8 @@ static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_REMOTE_ID: AtomicU64 = AtomicU64::new(1);
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(15);
-const NODE_PROTOCOL_VERSION: u32 = 2;
+// Version 3 adds an explicit evaluation failure when registry sync cannot finish.
+const NODE_PROTOCOL_VERSION: u32 = 3;
 
 #[derive(Debug, Clone)]
 pub(crate) struct PeerHandle {
@@ -382,9 +383,16 @@ impl PeerManager {
                                 }
                                 if let Some(active) = sessions.remove(&node) {
                                     remote.disconnect(active.id);
-                                    let _ = registry.remove_node(node.clone()).await;
                                     let _ = active.shutdown.send(());
                                 }
+                            }
+                            // A previous disconnect may have timed out while
+                            // cleaning the registry. Never accept a fresh link
+                            // with that old runtime's revision counter still set.
+                            if let Err(error) = registry.remove_node(node.clone()).await {
+                                warn!("cannot reset registry for node {node}: {error}");
+                                let _ = shutdown.send(());
+                                continue;
                             }
                             info!("node connected: {node}");
                             sessions.insert(node.clone(), ActiveSession {
@@ -401,41 +409,48 @@ impl PeerManager {
                             if !sessions.get(&node).is_some_and(|active| active.id == id) {
                                 continue;
                             }
-                            match message {
+                            let applied = match message {
                                 PeerMessage::Remote(message) => {
                                     let tx = sessions.get(&node).unwrap().tx.clone();
-                                    if let Err(error) = remote.incoming(id, &node, tx, message, &registry, &kernel).await {
-                                        warn!("remote request from {node} failed: {error}");
-                                        remote.disconnect(id);
-                                        sessions.remove(&node);
-                                        let _ = registry.remove_node(node).await;
-                                    }
+                                    remote.incoming(id, &node, tx, message, &registry, &kernel).await
                                 }
                                 PeerMessage::RegistrySnapshot { revision, services } => {
-                                    let _ = registry.apply_remote(node, RemoteChange::Snapshot(Snapshot { revision, services })).await;
+                                    registry.apply_remote(node.clone(), RemoteChange::Snapshot(Snapshot { revision, services })).await
                                 }
                                 PeerMessage::RegistryUp { revision, service } if service.pid.node() == node => {
-                                    let _ = registry.apply_remote(node, RemoteChange::Up(revision, *service)).await;
+                                    registry.apply_remote(node.clone(), RemoteChange::Up(revision, *service)).await
                                 }
                                 PeerMessage::RegistryDown { revision, name, pid } if pid.node() == node => {
-                                    let _ = registry.apply_remote(node, RemoteChange::Down(revision, name, pid)).await;
+                                    registry.apply_remote(node.clone(), RemoteChange::Down(revision, name, pid)).await
                                 }
-                                PeerMessage::Deliver { pid, contents } => match contents.into_val() {
-                                    Ok(contents) => {
-                                        if pid.node() != node_name {
-                                            warn!("node {node} tried to deliver to foreign process {pid}");
-                                        } else if let Some(kernel) = kernel.upgrade() {
-                                            if let Err(e) = kernel.send_message(pid, contents).await {
-                                                debug!("remote delivery failed: {e}");
+                                PeerMessage::Deliver { pid, contents } => {
+                                    match contents.into_val() {
+                                        Ok(contents) => {
+                                            if pid.node() != node_name {
+                                                warn!("node {node} tried to deliver to foreign process {pid}");
+                                            } else if let Some(kernel) = kernel.upgrade() {
+                                                if let Err(e) = kernel.send_message(pid, contents).await {
+                                                    debug!("remote delivery failed: {e}");
+                                                }
                                             }
                                         }
+                                        Err(e) => warn!("invalid message from node {node}: {e}"),
                                     }
-                                    Err(e) => warn!("invalid message from node {node}: {e}"),
+                                    Ok(())
                                 },
                                 PeerMessage::Hello { .. }
                                 | PeerMessage::Heartbeat
                                 | PeerMessage::RegistryUp { .. }
-                                | PeerMessage::RegistryDown { .. } => {}
+                                | PeerMessage::RegistryDown { .. } => Ok(())
+                            };
+                            if let Err(error) = applied {
+                                // Continuing after a missed registry delta can
+                                // make later revisions hide the missing entry.
+                                // Reconnect for a full snapshot; never replay evals.
+                                warn!("node update from {node} failed: {error}");
+                                remote.disconnect(id);
+                                sessions.remove(&node);
+                                let _ = registry.remove_node(node).await;
                             }
                         }
                         SessionEvent::Disconnected { id, node } => {

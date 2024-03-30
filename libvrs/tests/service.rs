@@ -240,3 +240,37 @@ async fn spawn_srv_returns_after_service_registration() {
     assert_eq!(values[0], values[1]);
     assert_eq!(values[2], Val::keyword("pong"));
 }
+
+#[tokio::test]
+async fn spawn_srv_reports_failure_before_readiness() {
+    let result = run_service_program(
+        r#"(begin
+          (def failed (try (spawn_srv! "invalid service name" :interface '())))
+          (if (not? (err? failed)) (error "startup should fail"))
+          # A failed startup must leave this parent's mailbox usable.
+          (send (self) :after_failure)
+          (recv :after_failure))"#,
+    )
+    .await;
+    assert_eq!(result, Val::keyword("after_failure"));
+}
+
+#[tokio::test]
+async fn spawn_srv_reports_child_killed_before_readiness() {
+    let result = run_service_program(
+        r#"(begin
+          (def observer (self))
+          (spawn (fn ()
+            # Pause exactly at registration, before the readiness message.
+            (def register (fn (name overwrite interface_key interface)
+              (send observer (list :starting (self)))
+              (recv :never)))
+            (def failed (try (spawn_srv! :killed_startup :interface '())))
+            (send observer (list :startup_failed (err? failed)))))
+          (def child (get (recv '(:starting _)) 1))
+          (kill child)
+          (get (recv '(:startup_failed _)) 1))"#,
+    )
+    .await;
+    assert_eq!(result, Val::Bool(true));
+}
