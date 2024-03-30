@@ -285,14 +285,14 @@ mod tests {
     #[test]
     fn cli_accepts_output_options_in_all_modes_and_validates_width() {
         for args in [
-            vec!["vrsctl", "--socket", "/tmp/vrs.sock", "dbg", "--once"],
+            vec!["vrsctl", "--socket", "/tmp/vrs.sock", "dbg", "--time"],
             vec![
                 "vrsctl",
                 "dbg",
                 "--socket",
                 "/tmp/vrs.sock",
                 "--all",
-                "--details",
+                "--values",
             ],
             vec![
                 "vrsctl",
@@ -300,8 +300,8 @@ mod tests {
                 "120",
                 "dbg",
                 "--web",
-                "--file",
-                "example.ll",
+                "--filter",
+                "file::example.ll",
             ],
         ] {
             assert_eq!(
