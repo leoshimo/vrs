@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use vrs::debug::{Record, Snapshot};
 
-pub const HELP: &str = "Filter syntax (terms are ANDed; double-quote text containing spaces):\n  file::scratch.ll       file path contains scratch.ll\n  file::scratch.ll:7:3   exact line and optional column\n  expr::\"(+ x x)\"       source expression contains (+ x x)\n  status::error          running, returned, error, or cancelled\n  time::>100ms           elapsed wall time, including waits and children\n  run::ID / call::ID     one evaluation / one call and its descendants\nPlain words search source expressions. Click locations in the browser to add filters.\nHistory is memory-only: at most 512 records and 4 MiB of encoded data per runtime.\nCtrl-C closes this viewer; it does not cancel the observed evaluation.";
+pub const HELP: &str = "Filter syntax (terms are ANDed; double-quote text containing spaces):\n  file:scratch.ll       file path contains scratch.ll\n  file:scratch.ll:7:3   exact line and optional column\n  expr:\"(+ x x)\"       source expression contains (+ x x)\n  status:error          running, returned, error, or cancelled\n  time:>100ms           elapsed wall time, including waits and children\n  run:ID / call:ID     one evaluation / one call and its descendants\nPlain words search source expressions. Click locations in the browser to add filters.\nViewers show observations received after connecting. Recent data stays in bounded memory only.\nCtrl-C closes this viewer; it does not cancel the observed evaluation.";
 
 #[derive(Debug, Default, Clone)]
 pub struct Filter {
@@ -33,7 +33,11 @@ impl Filter {
     pub fn parse(query: &str) -> Result<Self> {
         let mut terms = Vec::new();
         for token in tokenize(query)? {
-            let (key, value) = token.split_once("::").unwrap_or(("expr", &token));
+            let (key, value) = token
+                .split_once(':')
+                .filter(|(key, _)| !key.is_empty() && key.chars().all(|c| c.is_ascii_alphabetic()))
+                .map(|(key, value)| (key, value.strip_prefix(':').unwrap_or(value)))
+                .unwrap_or(("expr", &token));
             ensure!(!value.is_empty(), "{key} requires a value");
             terms.push(match key {
                 "file" => {
@@ -44,8 +48,10 @@ impl Filter {
                 "run" => Term::Run(value.into()),
                 "call" => Term::Call(value.into()),
                 "status" => {
-                    ensure!(matches!(value, "running" | "returned" | "error" | "cancelled"),
-                        "status must be running, returned, error, or cancelled");
+                    ensure!(
+                        matches!(value, "running" | "returned" | "error" | "cancelled"),
+                        "status must be running, returned, error, or cancelled"
+                    );
                     Term::Status(value.into())
                 }
                 "time" => {
@@ -53,17 +59,23 @@ impl Filter {
                         (true, v)
                     } else if let Some(v) = value.strip_prefix('<') {
                         (false, v)
-                    } else { bail!("time expects >100ms or <1s"); };
+                    } else {
+                        bail!("time expects >100ms or <1s");
+                    };
                     let (number, scale) = if let Some(v) = duration.strip_suffix("ms") {
                         (v, 1000.)
                     } else if let Some(v) = duration.strip_suffix('s') {
                         (v, 1_000_000.)
-                    } else { bail!("time requires ms or s units"); };
+                    } else {
+                        bail!("time requires ms or s units");
+                    };
                     let micros = number.parse::<f64>().context("invalid duration")? * scale;
                     ensure!(micros.is_finite() && micros >= 0., "invalid duration");
                     Term::Time(greater, micros)
                 }
-                _ => bail!("Unknown filter {key:?}; use file::, expr::, status::, time::, run::, or call::"),
+                _ => bail!(
+                    "Unknown filter {key:?}; use file:, expr:, status:, time:, run:, or call:"
+                ),
             });
         }
         Ok(Self {
@@ -233,23 +245,31 @@ mod tests {
     use super::*;
     #[test]
     fn query_handles_quoted_source_paths_buffers_and_invalid_terms() {
+        for query in [
+            "file:scratch.ll:7:3",
+            "file::scratch.ll:7:3",
+            ":ok",
+            "\"(get :name)\"",
+        ] {
+            assert!(Filter::parse(query).is_ok(), "{query}");
+        }
         assert_eq!(
-            tokenize("file::\"my file.ll:7:3\" expr::\"(map '(2 3) twice)\"").unwrap(),
-            ["file::my file.ll:7:3", "expr::(map '(2 3) twice)"]
+            tokenize("file:\"my file.ll:7:3\" expr:\"(map '(2 3) twice)\"").unwrap(),
+            ["file:my file.ll:7:3", "expr:(map '(2 3) twice)"]
         );
         assert_eq!(
             file_location("<buffer:notes>:8:2").unwrap(),
             ("<buffer:notes>", Some((8, Some(2))))
         );
         for query in [
-            "file::x:0",
-            "file::x:1:0",
-            "file::",
+            "file:x:0",
+            "file:x:1:0",
+            "file:",
             "wat::x",
-            "expr::\"oops",
-            "time::>NaNms",
-            "time::100ms",
-            "status::pending",
+            "expr:\"oops",
+            "time:>NaNms",
+            "time:100ms",
+            "status:pending",
         ] {
             assert!(Filter::parse(query).is_err(), "{query}");
         }

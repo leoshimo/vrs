@@ -27,13 +27,13 @@ pub fn command() -> Command {
                 .long("filter")
                 .value_name("QUERY")
                 .default_value("")
-                .help("One query, e.g. 'file::scratch.ll:7 expr::sleep' (see below)"),
+                .help("One query, e.g. 'file:scratch.ll:7 expr:sleep' (see below)"),
         )
         .arg(
             Arg::new("all")
                 .long("all")
                 .action(ArgAction::SetTrue)
-                .help("Include nested calls and function invocations"),
+                .help("Include nested calls"),
         )
 }
 
@@ -56,30 +56,15 @@ pub async fn run(client: &Client, args: &ArgMatches, width: usize) -> Result<()>
     };
     let mut interrupt = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
     let mut subscription = client.subscribe(vrs::debug::TOPIC.into()).await?;
-    let mut transcript = transcript::Transcript::default();
-    let mut counters = None;
+    let initial = snapshot(client).await?;
+    let mut transcript = transcript::Transcript::after(initial.cursor);
+    let mut dropped = initial.dropped;
     loop {
         let history = snapshot(client).await?;
-        if counters.is_none() {
-            eprintln!("Following dbg! calls. Ctrl-C closes the viewer.");
-            if filter
-                .select(&history, now_ms())
-                .snapshot
-                .records
-                .is_empty()
-            {
-                eprintln!("Waiting for matching observations. Evaluate a (dbg! …) block.");
-            }
+        if history.dropped > dropped {
+            eprintln!("dbg: {} observations dropped", history.dropped - dropped);
         }
-        if counters != Some((history.dropped, history.evicted))
-            && (history.dropped > 0 || history.evicted > 0)
-        {
-            eprintln!(
-                "dbg: {} observations dropped; {} records evicted from bounded history",
-                history.dropped, history.evicted
-            );
-        }
-        counters = Some((history.dropped, history.evicted));
+        dropped = history.dropped;
         transcript.update(&mut io::stdout(), &history, &filter, &opts, now_ms())?;
         io::stdout().flush()?;
         tokio::select! {

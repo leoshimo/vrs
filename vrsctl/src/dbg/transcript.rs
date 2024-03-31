@@ -7,6 +7,7 @@ use vrs::debug::{Record, Snapshot};
 
 #[derive(Default)]
 pub struct Transcript {
+    after: u64,
     seen: HashMap<String, u64>,
     evaluations: HashMap<String, usize>,
     pending: HashMap<String, usize>,
@@ -20,6 +21,13 @@ pub struct Options {
 }
 
 impl Transcript {
+    pub fn after(cursor: u64) -> Self {
+        Self {
+            after: cursor,
+            ..Self::default()
+        }
+    }
+
     pub fn update(
         &mut self,
         writer: &mut impl Write,
@@ -52,6 +60,9 @@ impl Transcript {
         }
         updates.sort_by_key(|r| r.sequence);
         for r in updates {
+            if r.sequence <= self.after {
+                continue;
+            }
             let e = &r.event;
             let scope = e.kind == "scope" && e.id == e.run;
             let immediate = e
@@ -76,7 +87,7 @@ impl Transcript {
                 let origin = by_id.get(e.run.as_str()).copied().unwrap_or(r);
                 writeln!(
                     writer,
-                    "\n# evaluation {number} · {} · run::{}",
+                    "\n# run {number} · {} · run:{}",
                     safe(&location(origin)),
                     &e.run[..e.run.len().min(8)]
                 )?;
@@ -91,7 +102,7 @@ impl Transcript {
                 };
                 writeln!(
                     writer,
-                    "# evaluation {number} {status}{} · {}",
+                    "# run {number} {status}{} · {}",
                     if result.is_empty() {
                         String::new()
                     } else {
@@ -106,7 +117,15 @@ impl Transcript {
                         self.next_pending
                     });
                 }
-                print_record(writer, r, opts, self.pending.get(&e.id).copied(), now)?;
+                let parent = e.parent.as_deref().and_then(|id| by_id.get(id).copied());
+                print_record(
+                    writer,
+                    r,
+                    parent,
+                    opts,
+                    self.pending.get(&e.id).copied(),
+                    now,
+                )?;
             }
             self.seen.insert(e.id.clone(), r.sequence);
         }
@@ -152,6 +171,7 @@ fn safe(text: &str) -> String {
 fn print_record(
     writer: &mut impl Write,
     r: &Record,
+    parent: Option<&Record>,
     opts: &Options,
     pending: Option<usize>,
     now: u64,
@@ -172,22 +192,20 @@ fn print_record(
     if e.site.generated && e.kind != "callback" {
         meta += " · generated";
     }
-    // A callback's source denotes the invoked function, not a function literal
-    // being evaluated. Keep this boundary: it owns arguments, errors, and children.
-    let invocation = if e.kind == "callback" { "invoke " } else { "" };
-    let line = format!("{invocation}{}  # {outcome}  [{meta}]", e.site.form);
+    let label = call_label(r, parent);
+    let line = format!("{label}  # {outcome}  [{meta}]");
     if line.chars().count() <= opts.width && !line.contains('\n') {
         writeln!(writer, "{}", safe(&line))?;
     } else {
-        let source = lyric::parse(&e.site.form)
+        let source = lyric::parse(&label)
             .map(|f| f.to_pretty_string(opts.width))
-            .unwrap_or_else(|_| e.site.form.clone());
-        writeln!(writer, "{invocation}{}  # {}", safe(&source), safe(&meta))?;
+            .unwrap_or(label);
+        writeln!(writer, "{}  # {}", safe(&source), safe(&meta))?;
         for line in safe(&outcome).lines() {
             writeln!(writer, "# {line}")?;
         }
     }
-    writeln!(writer, "  # call::{}", &e.id[..e.id.len().min(8)])?;
+    writeln!(writer, "  # call:{}", &e.id[..e.id.len().min(8)])?;
     for (i, arg) in e.arguments.iter().enumerate() {
         let value = format!(
             "arg {}: {}{}",
@@ -208,10 +226,83 @@ fn print_record(
     Ok(())
 }
 
+/// Calls made by higher-order functions have a function definition, rather
+/// than a written call expression. Reuse a source name only when it can be
+/// matched unambiguously; never invent an expression with substituted values.
+pub fn call_label(r: &Record, parent: Option<&Record>) -> String {
+    if r.event.kind != "callback" {
+        return r.event.site.form.clone();
+    }
+    if let Some(parent) = parent {
+        let matching: Vec<_> = parent
+            .event
+            .arguments
+            .iter()
+            .enumerate()
+            .filter(|(_, arg)| !arg.truncated && arg.text == r.event.site.form)
+            .map(|(i, _)| i)
+            .collect();
+        if matching.len() == 1 {
+            if let Ok(lyric::Form::List(items)) = lyric::parse(&parent.event.site.form) {
+                if items.len() == parent.event.arguments.len() + 1 {
+                    if let lyric::Form::Symbol(name) = &items[matching[0] + 1] {
+                        return name.to_string();
+                    }
+                }
+            }
+        }
+    }
+    "fn".into()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::dbg::tests::fixture;
+    #[tokio::test]
+    async fn connecting_skips_old_records_but_keeps_future_completions() {
+        let (_runtime, _client, mut history) = fixture().await;
+        let mut transcript = Transcript::after(history.cursor);
+        let options = Options {
+            all: true,
+            width: 160,
+        };
+        let mut out = vec![];
+        transcript
+            .update(&mut out, &history, &Filter::default(), &options, u64::MAX)
+            .unwrap();
+        assert!(out.is_empty());
+        // A call that began before connection can still complete afterward.
+        history.records.retain(|r| r.event.site.form == "(twice 4)");
+        history.cursor += 1;
+        history.records[0].sequence = history.cursor;
+        transcript
+            .update(&mut out, &history, &Filter::default(), &options, u64::MAX)
+            .unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.contains("(twice 4)  # => 8"));
+        assert!(!text.contains("(map"));
+    }
+
+    #[tokio::test]
+    async fn function_calls_reuse_unambiguous_source_names() {
+        let (_runtime, _client, history) = fixture().await;
+        let callback = history
+            .records
+            .iter()
+            .find(|r| r.event.kind == "callback")
+            .unwrap();
+        let parent = history
+            .records
+            .iter()
+            .find(|r| Some(&r.event.id) == callback.event.parent.as_ref())
+            .unwrap();
+        assert_eq!(call_label(callback, Some(parent)), "twice");
+        assert_eq!(call_label(callback, None), "fn");
+        let mut anonymous_parent = parent.clone();
+        anonymous_parent.event.site.form = "(map '(2 3) (fn (x) (+ x x)))".into();
+        assert_eq!(call_label(callback, Some(&anonymous_parent)), "fn");
+    }
     #[tokio::test]
     async fn completions_precede_scope_footer_and_filtering_a_file_does_not_expand() {
         let (_runtime, _client, history) = fixture().await;
@@ -231,7 +322,7 @@ mod tests {
             .unwrap();
         let text = String::from_utf8(out).unwrap();
         assert!(
-            text.find("(map '(2 3) twice)").unwrap() < text.find("evaluation 1 returned").unwrap(),
+            text.find("(map '(2 3) twice)").unwrap() < text.find("run 1 returned").unwrap(),
             "{text}"
         );
         assert!(!text.contains("(dbg!"));
