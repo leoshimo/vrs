@@ -36,6 +36,12 @@
 (defn! vrs/editor_functions ()
   (map (service_functions "") vrs/editor_function))
 
+(defn! vrs/editor_services ()
+  (map (service_names "") (fn (service) (list (vrs/source service)))))
+
+(defn! vrs/editor_service_functions (service)
+  (map (service_interface_functions service "") vrs/editor_function))
+
 (defn! vrs/editor_actions (entity)
   (if (or! (not? (list? entity)) (not? (keyword? (get entity 0))))
     (error "Expected a tagged entity"))

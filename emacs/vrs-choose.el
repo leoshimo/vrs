@@ -186,6 +186,25 @@ arguments using entity completion providers, or enter unevaluated Lyric source."
      (let ((row (vrs--choose-function (vrs--chooser-data "(vrs/editor_functions)") "Function: ")))
        (vrs--chooser-replace (if fill (vrs--filled-call row nil) (nth 3 row)))))))
 
+;;;###autoload
+(defun vrs-browse-services (&optional fill)
+  "Choose a registered service, then insert a call from its exported interface.
+Bind the selected service in the shared session, making its functions and
+completion providers available.  Use native completion; do not execute the call.
+By default insert argument names as placeholders.  With prefix FILL, prompt
+for argument values as in `vrs-browse-functions'."
+  (interactive "P")
+  (vrs--chooser
+   (cons (point) (point))
+   (lambda ()
+     (let* ((service (car (vrs--choose-row
+                          "Service: " (vrs--chooser-data "(vrs/editor_services)")
+                          #'car nil 'vrs-service)))
+            (row (vrs--choose-function
+                  (vrs--chooser-data (format "(vrs/editor_service_functions %s)" service))
+                  (format "%s function: " service))))
+       (vrs--chooser-replace (if fill (vrs--filled-call row nil) (nth 3 row)))))))
+
 (defun vrs--act-on-value (execute)
   "Construct a call on the evaluated entity; run it only when EXECUTE is non-nil."
   (let* ((bounds (vrs--choice-bounds))

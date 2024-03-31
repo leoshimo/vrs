@@ -5,7 +5,9 @@
 
 (ert-deftest vrs-function-browser-defaults-to-emacs ()
   (should (eq (lookup-key vrs-mode-map (kbd "C-c C-b")) 'vrs-browse-functions))
+  (should (eq (lookup-key vrs-mode-map (kbd "C-c C-s")) 'vrs-browse-services))
   (should (commandp 'vrs-browse-functions))
+  (should (commandp 'vrs-browse-services))
   (should (commandp 'vrsjmp-browse-functions))
   (should (eq (indirect-function 'vrs-browse-functions-minibuffer)
               (indirect-function 'vrs-browse-functions))))
@@ -19,7 +21,7 @@
                   (should require-match)
                   (should (memq (completion-metadata-get
                                  (completion-metadata "" table predicate) 'category)
-                                '(vrs-value vrs-function)))
+                                '(vrs-value vrs-function vrs-service)))
                   (let* ((candidates (all-completions "" table predicate))
                          (choice (pop choices)))
                     (cond ((eq choice 'quit) (signal 'quit nil))
@@ -137,6 +139,20 @@
       (vrs-test--select '(0 0 quit)
         (should (condition-case nil (progn (vrs-browse-functions t) nil) (quit t)))))
     (should (equal (buffer-string) "before "))))
+
+(ert-deftest vrs-native-service-browser-cancels-at-every-step ()
+  (dolist (choices '((quit) (0 quit) (0 0 quit)))
+    (with-temp-buffer
+      (vrs-mode) (insert "before ")
+      (cl-letf (((symbol-function 'vrs--chooser-data)
+                 (lambda (source)
+                   (cond ((equal source "(vrs/editor_services)") '((":example")))
+                         ((equal source "(vrs/editor_service_functions :example)")
+                          '(("act" "Action" ":example" "(act item)" (("item" ":example/item")))))
+                         (t '(("First" "'(:example/item :id 1)")))))))
+        (vrs-test--select choices
+          (should (condition-case nil (progn (vrs-browse-services t) nil) (quit t)))))
+      (should (equal (buffer-string) "before ")))))
 
 (ert-deftest vrs-native-packet-does-not-interpret-lyric-source ()
   (with-temp-buffer
@@ -280,6 +296,43 @@
             (vrs-test--select '("Failure")
               (should-error (vrs-execute-action) :type 'user-error))
             (should (equal (buffer-string) "'(:test/object :id 1)"))))
+      (vrs--close-session vrs-vrsctl-command))))
+
+(ert-deftest vrs-native-service-browser-discovers-unbound-interfaces-with-test-runtime ()
+  (skip-unless (getenv "VRS_TEST_VRSCTL"))
+  (let ((vrs-vrsctl-command (getenv "VRS_TEST_VRSCTL")))
+    (unwind-protect
+        (progn
+          (vrs-test--request vrs-test--native-fixture)
+          (vrs-test--request "(spawn_srv! :native_empty :interface '())")
+          (vrs--close-session vrs-vrsctl-command)
+          (should (equal (vrs-test--request "(vrs/editor_functions)") "()"))
+          (with-temp-buffer
+            (vrs-mode) (insert "(begin\n  \n  :after)") (goto-char 10)
+            (vrs-test--select '(":native_fixture" "native_copy") (vrs-browse-services))
+            (should (equal (buffer-string) "(begin\n  (native_copy object destination)\n  :after)")))
+          (should (equal (vrs-test--request "(native_status)") "(() 0)"))
+          (with-temp-buffer
+            (vrs-mode)
+            (vrs-test--select '(":native_fixture" "native_copy" 1 0) (vrs-browse-services t))
+            (should (equal (buffer-string)
+                           "(native_copy '(:test/object :title \"Same\" :id 2) '(:test/dest :title \"Here\" :path (a b)))")))
+          (should (equal (vrs-test--request "(native_status)") "(() 1)"))
+          (with-temp-buffer
+            (vrs-mode) (insert "before ")
+            (vrs-test--select '(":native_empty")
+              (should-error (vrs-browse-services) :type 'user-error))
+            (should (equal (buffer-string) "before ")))
+          ;; Re-registration must hide removed exports even if old stubs remain.
+          (vrs-test--request
+           "(begin (defn! native_new (value) \"New interface\" value)
+                   (spawn_srv! :native_fixture :interface '(native_new)))")
+          (should (equal (vrs-test--request "(service_interface_functions :native_fixture \"\")")
+                         "(native_new)"))
+          (with-temp-buffer
+            (vrs-mode)
+            (vrs-test--select '(":native_fixture" "native_new") (vrs-browse-services))
+            (should (equal (buffer-string) "(native_new value)"))))
       (vrs--close-session vrs-vrsctl-command))))
 
 (ert-deftest vrs-native-cancels-a-pending-request-with-test-runtime ()
