@@ -275,9 +275,10 @@ block strings, rather than reading and printing it as Emacs Lisp."
         (puthash command process vrs--sessions)))
     process))
 
-(defun vrs--run-region (start end command output errors &optional format raw width)
+(defun vrs--run-region (start end command output errors &optional format raw width literal)
   "Evaluate START to END in COMMAND's session, collecting OUTPUT and ERRORS.
-FORMAT, RAW, and WIDTH apply to this request.  C-g closes the connection;
+FORMAT, RAW, WIDTH, and LITERAL apply to this request.  LITERAL requests
+source that retains the returned value.  C-g closes the connection;
 ordinary evaluation errors leave the session available."
   (let ((process (vrs--session command))
         (inhibit-quit nil)
@@ -298,7 +299,8 @@ ordinary evaluation errors leave the session available."
                           :line (line-number-at-pos start t)
                           :column (save-excursion (goto-char start) (1+ (- (point) (line-beginning-position))))
                           :format (or format "pretty") :width (or width 90)
-                          :raw (if raw t :false))
+                          :raw (if raw t :false)
+                          :literal (if literal t :false))
                     :false-object :false)
                    "\n"))
           (while (and (process-live-p process)
@@ -313,14 +315,20 @@ ordinary evaluation errors leave the session available."
                   (push event pending-input)))))
           (while (accept-process-output (process-get process 'stderr) 0.01))
           (let* ((reply (process-get process 'response))
+                 (unsupported-literal
+                  (and literal (eq (plist-get reply :ok) t)
+                       (not (eq (plist-get reply :literal) t))))
                  (ok (and (eq (plist-get reply :ok) t)
+                          (not unsupported-literal)
                           (stringp (plist-get reply :output)))))
             (if ok
                 (with-current-buffer output (insert (plist-get reply :output)))
               (let ((diagnostic (with-current-buffer (process-get process 'errors)
                                   (buffer-string))))
                 (with-current-buffer errors
-                  (insert (or (plist-get reply :error)
+                  (insert (or (when unsupported-literal
+                                "Update vrsctl and reset the editor session to retain literal values.")
+                              (plist-get reply :error)
                               (unless (string-empty-p diagnostic) diagnostic)
                               "VRS connection closed; the next evaluation starts a fresh session.")
                           "\n"))))
@@ -358,7 +366,8 @@ All buffers using the same `vrs-vrsctl-command' share this reset."
 (defun vrs--eval (start end replace &optional editor-format source-result)
   "Evaluate START to END; optionally REPLACE or request EDITOR-FORMAT.
 Display text strings raw, but preserve string syntax when replacing source
-or when SOURCE-RESULT is non-nil."
+or when SOURCE-RESULT is non-nil.  REPLACE equal to `literal' retains the
+value with any necessary quote; other non-nil values insert generated code."
   (unless (and (integerp vrs-result-width) (> vrs-result-width 0))
     (user-error "vrs-result-width must be a positive integer"))
   (let ((output (generate-new-buffer " *VRS evaluation*"))
@@ -372,7 +381,8 @@ or when SOURCE-RESULT is non-nil."
           (let ((status (vrs--run-region start end command output errors
                                         (if editor-format "editor" "pretty")
                                         (not (or replace source-result))
-                                        vrs-result-width)))
+                                        vrs-result-width
+                                        (eq replace 'literal))))
             (unless (equal status 0)
               (display-buffer errors)
               (user-error "VRS evaluation failed (status %s); see *VRS Errors*" status))
@@ -407,17 +417,30 @@ With prefix argument EDITOR-FORMAT, request editor-formatted output."
 (defun vrs-eval-last-sexp (replace)
   "Evaluate the Lyric expression at its closing paren or preceding point.
 
-With prefix argument REPLACE, replace the expression with its result."
+With prefix argument REPLACE, retain the result as literal source, quoting
+lists and symbols.  Use `vrs-insert-evaluated-code' for generated code."
   (interactive "P")
   (pcase-let ((`(,start . ,end) (vrs--last-sexp-bounds)))
-    (vrs--eval start end replace)))
+    (vrs--eval start end (when replace 'literal))))
 
 (defun vrs-eval-region (start end replace)
   "Evaluate Lyric source between START and END.
 
-With prefix argument REPLACE, replace the region with its result."
+With prefix argument REPLACE, retain the final value as literal source,
+quoting lists and symbols.  Use `vrs-insert-evaluated-code' for generated code."
   (interactive "r\nP")
-  (vrs--eval start end replace))
+  (vrs--eval start end (when replace 'literal)))
+
+(defun vrs-insert-evaluated-code ()
+  "Evaluate the region or expression and insert the result as code.
+Unlike prefix evaluation, do not add a quote to lists or symbols.  The
+inserted code is not executed.  Evaluation errors leave source unchanged."
+  (interactive)
+  (pcase-let ((`(,start . ,end)
+               (if (use-region-p)
+                   (cons (region-beginning) (region-end))
+                 (vrs--last-sexp-bounds))))
+    (vrs--eval start end t)))
 
 (defun vrsjmp-browse-functions ()
   "Open vrsjmp to choose a service call and insert it at point.
