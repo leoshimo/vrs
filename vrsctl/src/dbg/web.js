@@ -3,8 +3,8 @@
 const $ = selector => document.querySelector(selector);
 const form = $('#filters'), query = $('#query'), container = $('#recording'), scroller = $('#calls');
 const panels = $('#inspectors');
-const expanded = new Set(), collapsed = new Set(), pinned = [], runNumbers = new Map();
-let snapshot = null, records = new Map(), selected = null, nextRun = 0, allInitially = false;
+const expanded = new Set(), collapsed = new Set(), selected = new Set(), runNumbers = new Map();
+let snapshot = null, records = new Map(), focused = null, anchorId = null, nextRun = 0, allInitially = false;
 let busy = false, force = true, cursor = '', filterTimer, appliedQuery = '', newCount = 0;
 const el = (tag, text, cls) => {
   const node = document.createElement(tag);
@@ -21,7 +21,6 @@ const shortLocation = r => `${r.site.file.split('/').pop()}:${r.site.line}:${r.s
 const elapsed = r => r.status === 'running' ? Math.max(0, Date.now() - r.started_ms) * 1000 : r.elapsed_us;
 const duration = us => us >= 1000000 ? `${(us / 1000000).toFixed(2)}s` : `${(us / 1000).toFixed(2)}ms`;
 const preview = r => r.status === 'running' ? 'running' : r.status === 'cancelled' ? 'cancelled' : r.result?.text ?? r.status;
-const shellQuote = value => `'${value.replaceAll("'", "'\\''")}'`;
 const quote = value => JSON.stringify(value);
 
 // Keep spelling/quoting intact when replacing one clicked filter term.
@@ -37,19 +36,33 @@ function queryTokens(text) {
   return tokens;
 }
 function addFilter(key, value) {
-  const terms = queryTokens(query.value).filter(term => !term.startsWith(`${key}::`));
-  terms.push(`${key}::${quote(value)}`);
+  const terms = queryTokens(query.value).filter(term => !term.startsWith(`${key}:`));
+  terms.push(`${key}:${quote(value)}`);
   query.value = terms.join(' '); force = true; refresh();
 }
-function command() {
-  $('#cli').textContent = `vrsctl dbg${appliedQuery.trim() ? ` --filter ${shellQuote(appliedQuery)}` : ''}${allInitially || expanded.size || $('#group').value === 'source' || $('#order').value === 'slowest' ? ' --all' : ''}`;
-}
-function choose(id, compare = false) {
-  if (compare) {
-    if (pinned.includes(id)) pinned.splice(pinned.indexOf(id), 1);
-    else if (pinned.length < 3) pinned.push(id);
-  } else selected = id;
+const callLabel = r => snapshot?.labels?.[r.id] || (r.kind === 'callback' ? 'fn' : r.site.form);
+const visibleIds = () => [...container.querySelectorAll('[data-call-id]')].map(node => node.dataset.callId);
+function choose(id, event = {}) {
+  const ids = visibleIds(), anchor = ids.indexOf(anchorId), end = ids.indexOf(id);
+  if (event.shiftKey && anchor >= 0 && end >= 0) {
+    selected.clear();
+    ids.slice(Math.min(anchor, end), Math.max(anchor, end) + 1).forEach(id => selected.add(id));
+  } else if (event.metaKey || event.ctrlKey) {
+    if (selected.has(id)) selected.delete(id); else selected.add(id);
+    anchorId = id;
+  } else {
+    selected.clear(); selected.add(id); anchorId = id;
+  }
+  focused = id;
   render();
+  container.focus({preventScroll:true});
+}
+function removeSelection(id) {
+  selected.delete(id);
+  if (focused === id) focused = [...selected].at(-1) || null;
+  if (anchorId === id) anchorId = focused;
+  render();
+  container.focus({preventScroll:true});
 }
 function liveEdge() {
   if ($('#order').value === 'slowest') return false;
@@ -74,56 +87,63 @@ function row(r, children, fresh, ancestors = new Set(), flat = false) {
   const next = new Set(ancestors); next.add(r.id);
   const nested = children.get(r.id) || [];
   const opened = !collapsed.has(r.id) && (allInitially || expanded.has(r.id));
-  const wrap = el('div', undefined, `row ${r.status}${selected === r.id || pinned.includes(r.id) ? ' selected' : ''}${fresh.has(r.id) ? ' fresh' : ''}`);
-  wrap.dataset.callId = r.id;
+  const wrap = el('div', undefined, `row ${r.status}${selected.has(r.id) ? ' selected' : ''}${fresh.has(r.id) ? ' fresh' : ''}`);
+  wrap.dataset.callId = r.id; wrap.id = `call-${r.id}`;
+  wrap.classList.toggle('current', focused === r.id);
+  wrap.setAttribute('role', 'treeitem');
+  wrap.setAttribute('aria-selected', String(selected.has(r.id)));
+  wrap.setAttribute('aria-label', `${callLabel(r)}: ${preview(r)}`);
+  if (!flat && nested.length) wrap.setAttribute('aria-expanded', String(opened));
   const line = el('div', undefined, 'line'); wrap.append(line);
-  const arrow = button(!flat && nested.length ? (opened ? '▾' : '▸') : '·', 'arrow', () => {
+  const arrow = button(!flat && nested.length ? (opened ? '⌄' : '›') : '', 'arrow', () => {
     if (opened) collapsed.add(r.id); else { collapsed.delete(r.id); expanded.add(r.id); }
     render();
   });
   arrow.disabled = flat || !nested.length;
-  arrow.setAttribute('aria-label', flat || !nested.length ? 'No collapsed children in this view' : `${opened ? 'Collapse' : 'Expand'} calls inside ${r.site.form}`);
+  arrow.setAttribute('aria-label', flat || !nested.length ? 'No collapsed children in this view' : `${opened ? 'Collapse' : 'Expand'} calls inside ${callLabel(r)}`);
   arrow.setAttribute('aria-expanded', String(!flat && opened));
   arrow.dataset.focusKey = `expand:${r.id}`;
   const sourceCell = el('div', undefined, 'source-cell');
-  if (r.kind === 'callback') sourceCell.append(el('span', 'invoke', 'invocation'));
   if (r.site.generated && r.kind !== 'callback') sourceCell.append(el('span', 'generated', 'invocation'));
-  const source = button(r.site.form, 'source', event => choose(r.id, event.shiftKey));
-  source.title = 'Inspect this invocation; Shift-click to pin a comparison';
+  const source = button(callLabel(r), 'source', event => choose(r.id, event));
+  source.tabIndex = -1;
+  source.title = 'Inspect call; Shift-click selects a range';
   source.dataset.focusKey = `select:${r.id}`;
   sourceCell.append(source);
+  if (r.kind === 'callback' && r.arguments.length) {
+    const inputs = el('div', r.arguments.map(arg => arg.text).join(', '), 'input-preview');
+    inputs.title = 'Arguments'; sourceCell.append(inputs);
+  }
   const loc = button(shortLocation(r), 'link location', () => addFilter('file', location(r)));
   loc.title = `Filter history at ${location(r)}`; sourceCell.append(loc);
   const result = el('span', preview(r), 'result'); result.title = preview(r);
   const time = el('span', undefined, 'duration'); time.dataset.duration = r.id;
   line.append(arrow, sourceCell, result, time);
+  line.addEventListener('click', event => {
+    if (!event.target.closest('button')) choose(r.id, event);
+  });
   if (!flat && opened && nested.length) {
-    const inner = el('div', undefined, 'children');
+    const inner = el('div', undefined, 'children'); inner.setAttribute('role', 'group');
     for (const child of nested) inner.append(row(child, children, fresh, next));
     wrap.append(inner);
   }
   return wrap;
 }
-function inspector(r, isPinned) {
+function inspector(r) {
   const panel = el('section', undefined, 'inspector'); panel.dataset.inspector = r.id;
   const head = el('div', undefined, 'inspector-head');
-  head.append(el('strong', isPinned ? 'Pinned comparison' : 'Selected call'));
-  const pin = button(isPinned ? 'Unpin' : 'Pin comparison', '', () => choose(r.id, true));
-  pin.disabled = !isPinned && pinned.length >= 3;
-  pin.title = pin.disabled ? 'Up to three pinned comparisons' : 'Keep this call beside other inspectors';
-  head.append(pin, button('×', '', () => {
-    const i = pinned.indexOf(r.id); if (i >= 0) pinned.splice(i, 1);
-    if (selected === r.id) selected = null;
-    render();
-  }));
-  head.lastChild.setAttribute('aria-label', 'Close inspector'); panel.append(head);
+  head.append(el('strong', 'Call'), button('×', 'close-inspector', () => removeSelection(r.id)));
+  head.lastChild.setAttribute('aria-label', 'Deselect call'); panel.append(head);
+  if (r.kind === 'callback') {
+    panel.append(el('pre', callLabel(r)));
+    panel.append(el('h2', 'Function definition'));
+  }
   panel.append(el('pre', r.site.expression || r.site.form));
-  if (r.kind === 'callback') panel.append(el('p', 'This function was invoked by its parent call. The result below is what this invocation returned.', 'call-note'));
   const links = el('div', undefined, 'links');
   links.append(button(r.site.file, 'link', () => addFilter('file', r.site.file)), button(`line ${r.site.line}:${r.site.column}`, 'link', () => addFilter('file', location(r))));
   panel.append(links);
   panel.append(el('h2', 'Inputs'));
-  if (!r.arguments.length) panel.append(el('p', r.kind === 'scope' ? 'Evaluation scope' : 'No arguments', 'muted'));
+  if (!r.arguments.length) panel.append(el('p', r.kind === 'scope' ? 'Debug block' : 'No arguments', 'muted'));
   r.arguments.forEach((arg, i) => {
     panel.append(el('div', `Argument ${i + 1}`, 'muted'));
     panel.append(el('pre', arg.text + (arg.truncated ? ' [truncated]' : '')));
@@ -135,10 +155,9 @@ function inspector(r, isPinned) {
   const outcome = el('div', undefined, 'outcome');
   outcome.append(button(r.status, 'link', () => addFilter('status', r.status)), document.createTextNode(' · '));
   const time = el('span'); time.dataset.duration = r.id; outcome.append(time); panel.append(outcome);
-  panel.append(el('p', 'Elapsed time includes waiting and child calls.', 'call-note'));
   panel.append(el('h2', 'Context'));
   const identity = el('div', undefined, 'links');
-  identity.append(button(`Evaluation ${runNumbers.get(r.run) || ''}`, 'link', () => addFilter('run', r.run)), button('This call and children', 'link', () => addFilter('call', r.id)));
+  identity.append(button(`Run ${runNumbers.get(r.run) || ''}`, 'link', () => addFilter('run', r.run)), button('This call and children', 'link', () => addFilter('call', r.id)));
   panel.append(identity);
   const parent = records.get(r.parent);
   if (parent) {
@@ -149,7 +168,7 @@ function inspector(r, isPinned) {
   return panel;
 }
 function render(fresh = new Set(), follow = false) {
-  command(); if (!snapshot) return;
+  if (!snapshot) return;
   const activeKey = document.activeElement?.dataset.focusKey;
   const oldTop = scroller.scrollTop;
   const oldAnchor = [...container.querySelectorAll('[data-call-id]')].find(node => node.getBoundingClientRect().top >= scroller.getBoundingClientRect().top + 28);
@@ -181,15 +200,15 @@ function render(fresh = new Set(), follow = false) {
     for (const [key, items] of ordered) {
       const group = el('section', undefined, 'group'), heading = el('div', undefined, 'group-heading');
       if (groupBy === 'source') {
-        heading.append(button(key, 'link', () => addFilter('file', key)), el('span', `${items.length} invocations`, 'muted'));
+        heading.append(button(key, 'link', () => addFilter('file', key)), el('span', `${items.length} calls`, 'muted'));
         items.sort((a,b) => direction * (a.started_ms - b.started_ms || a.sequence - b.sequence));
       } else {
         const scope = records.get(key);
-        heading.append(button(`Evaluation ${runNumbers.get(key)}`, 'link', () => addFilter('run', key)), el('span', new Date(items[0].started_ms).toLocaleTimeString(), 'muted'));
+        heading.append(button(`Run ${runNumbers.get(key)}`, 'link', () => addFilter('run', key)), el('span', new Date(items[0].started_ms).toLocaleTimeString(), 'muted'));
         if (scope) {
           heading.append(button(shortLocation(scope), 'link', () => addFilter('file', location(scope))));
           const state = button(preview(scope), `link${scope.status === 'running' ? ' running-label' : ''}`, () => choose(scope.id));
-          state.title = 'Inspect the whole evaluation'; heading.append(state);
+          state.title = 'Inspect this dbg! block'; heading.append(state);
         }
       }
       group.append(heading);
@@ -201,16 +220,15 @@ function render(fresh = new Set(), follow = false) {
       container.append(group);
     }
   }
-  if (!container.childElementCount) container.append(el('div', 'No matching calls yet. Evaluate a (dbg! …) block.', 'empty'));
+  if (!container.childElementCount) container.append(el('div', 'No matching calls yet.', 'empty'));
   panels.replaceChildren();
-  const inspectorIds = [...pinned];
-  if (selected && !inspectorIds.includes(selected)) inspectorIds.push(selected);
-  panels.classList.toggle('comparing', inspectorIds.length > 1);
-  for (const id of inspectorIds) {
+  for (const id of selected) {
     const r = records.get(id); if (!r) continue;
-    const panel = inspector(r, pinned.includes(id)); panels.append(panel); panel.scrollTop = panelScroll.get(id) || 0;
+    const panel = inspector(r); panels.append(panel); panel.scrollTop = panelScroll.get(id) || 0;
   }
-  if (!panels.childElementCount) panels.append(el('div', 'Select a call to inspect its inputs and result. Pin calls to compare them side by side.', 'inspector-empty'));
+  if (!panels.childElementCount) panels.append(el('div', 'Select a call to inspect its inputs and result.', 'inspector-empty'));
+  if (focused && document.getElementById(`call-${focused}`)) container.setAttribute('aria-activedescendant', `call-${focused}`);
+  else container.removeAttribute('aria-activedescendant');
   panels.scrollLeft = panelLeft;
   updateTimers();
   if (follow) jumpToLive();
@@ -228,10 +246,13 @@ async function refresh() {
   const requested = query.value;
   try {
     const response = await fetch(`api?${new URLSearchParams({filter:requested})}`, {cache:'no-store'});
+    if (response.status === 400) {
+      $('#query-error').textContent = await response.text(); $('#connection').hidden = true; return;
+    }
     if (!response.ok) throw Error(await response.text());
     const next = await response.json();
     if (query.value !== requested) return;
-    $('#query-error').textContent = ''; $('#connection').textContent = '● Live';
+    $('#query-error').textContent = ''; $('#connection').hidden = true;
     const nextKey = JSON.stringify([next.cursor, next.dropped, next.evicted, requested, next.matches.slice().sort()]);
     if (!force && nextKey === cursor) return;
     const queryChanged = appliedQuery !== requested;
@@ -239,23 +260,22 @@ async function refresh() {
     const fresh = new Set(), oldRecords = records;
     records = new Map(next.records.map(r => [r.id, r]));
     for (const r of next.records) {
-      if (!runNumbers.has(r.run)) runNumbers.set(r.run, ++nextRun);
+      if (next.matches.includes(r.id) && !runNumbers.has(r.run)) runNumbers.set(r.run, ++nextRun);
       if (snapshot && !queryChanged && oldRecords.get(r.id)?.sequence !== r.sequence) fresh.add(r.id);
     }
     const added = snapshot && !queryChanged ? next.records.filter(r => r.kind !== 'scope' && !oldRecords.has(r.id) && next.matches.includes(r.id)).length : 0;
     if (!wasAtEdge && added) { newCount += added; $('#new').textContent = `${newCount} new ${newCount === 1 ? 'call' : 'calls'}`; $('#new').hidden = false; }
     if (queryChanged) { newCount = 0; $('#new').hidden = true; }
     snapshot = next; appliedQuery = requested; cursor = nextKey; force = false;
-    for (const set of [expanded, collapsed]) for (const id of set) if (!records.has(id)) set.delete(id);
-    for (let i = pinned.length - 1; i >= 0; i--) if (!records.has(pinned[i])) pinned.splice(i, 1);
-    if (selected && !records.has(selected)) selected = null;
+    for (const set of [expanded, collapsed, selected]) for (const id of set) if (!records.has(id)) set.delete(id);
+    if (focused && !records.has(focused)) focused = null;
+    if (anchorId && !records.has(anchorId)) anchorId = null;
     const runs = new Set(next.records.map(r => r.run));
     for (const run of runNumbers.keys()) if (!runs.has(run)) runNumbers.delete(run);
-    $('#notice').textContent = next.dropped || next.evicted ? `${next.dropped} observations dropped · ${next.evicted} records evicted. Older calls may no longer be available.` : '';
+    $('#notice').textContent = next.dropped ? `${next.dropped} observations could not be recorded.` : '';
     render(fresh, !queryChanged && wasAtEdge && added > 0);
   } catch (error) {
-    $('#query-error').textContent = `${error.message}. Showing the previous results.`;
-    $('#connection').textContent = 'View not updated';
+    $('#connection').hidden = false; $('#connection').title = error.message;
   } finally { busy = false; }
 }
 form.addEventListener('submit', event => { event.preventDefault(); force = true; refresh(); });
@@ -265,6 +285,44 @@ $('#group').addEventListener('change', () => { render(); jumpToLive(); });
 $('#order').addEventListener('change', () => { render(); jumpToLive(); });
 $('#new').addEventListener('click', jumpToLive);
 scroller.addEventListener('scroll', () => { if (liveEdge()) { newCount = 0; $('#new').hidden = true; } });
+container.addEventListener('keydown', event => {
+  if (!['ArrowUp', 'ArrowDown'].includes(event.key) || event.altKey || event.metaKey || event.ctrlKey) return;
+  const ids = visibleIds(); if (!ids.length) return;
+  event.preventDefault();
+  const current = ids.indexOf(focused);
+  const index = current < 0 ? (event.key === 'ArrowUp' ? ids.length - 1 : 0)
+    : Math.max(0, Math.min(ids.length - 1, current + (event.key === 'ArrowUp' ? -1 : 1)));
+  choose(ids[index], event);
+  document.getElementById(`call-${ids[index]}`)?.querySelector('.line').scrollIntoView({block:'nearest'});
+});
+const divider = $('#divider'), workspace = $('#workspace');
+function resizeSplit(value) {
+  const percent = Math.max(25, Math.min(75, value));
+  workspace.style.setProperty('--list-width', `${percent}%`);
+  divider.setAttribute('aria-valuenow', String(Math.round(percent)));
+}
+divider.addEventListener('pointerdown', event => {
+  if (event.button !== 0) return;
+  event.preventDefault(); divider.focus(); divider.setPointerCapture(event.pointerId);
+  workspace.classList.add('resizing');
+});
+divider.addEventListener('pointermove', event => {
+  if (!divider.hasPointerCapture(event.pointerId)) return;
+  const rect = workspace.getBoundingClientRect();
+  resizeSplit((event.clientX - rect.left) / rect.width * 100);
+});
+const endResize = () => workspace.classList.remove('resizing');
+divider.addEventListener('lostpointercapture', endResize);
+divider.addEventListener('pointerup', event => { divider.releasePointerCapture(event.pointerId); endResize(); });
+divider.addEventListener('pointercancel', endResize);
+divider.addEventListener('keydown', event => {
+  if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+  event.preventDefault();
+  const value = Number(divider.getAttribute('aria-valuenow'));
+  resizeSplit(event.key === 'Home' ? 25 : event.key === 'End' ? 75 : value + (event.key === 'ArrowLeft' ? -2 : 2));
+});
+document.addEventListener('keydown', event => { if (event.key === 'Escape') $('#help').open = false; });
+document.addEventListener('click', event => { if (!event.target.closest('#help')) $('#help').open = false; });
 (async () => {
   try {
     const config = await (await fetch('config')).json(); query.value = config.filter; allInitially = config.all;

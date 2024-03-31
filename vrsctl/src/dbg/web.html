@@ -3,25 +3,30 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VRS dbg</title><link rel="stylesheet" href="style.css"><script src="app.js" defer></script></head>
 <body><main>
 <header>
-  <div class="title"><h1>vrs <span>dbg</span></h1><span id="connection" role="status">Connecting…</span><span class="spacer"></span><span class="retention" title="Memory-only, per runtime. Old records are evicted at either cap. Restarting the runtime clears history.">512 records · 4 MiB cap</span></div>
+  <div class="title"><h1>vrs <span>dbg</span></h1><span class="spacer"></span><span id="connection" role="status" hidden>Disconnected — showing the last received calls</span></div>
   <form id="filters" role="search">
     <label class="query-label" for="query">Filter calls</label>
     <div class="query-control">
-      <input id="query" name="filter" autocomplete="off" spellcheck="false" placeholder='file::scratch.ll:7  expr::"(+ x x)"'>
+      <input id="query" name="filter" autocomplete="off" spellcheck="false" placeholder='file:scratch.ll:7  expr:"(+ x x)"'>
       <button class="clear-filter" type="reset" aria-label="Clear filter" title="Clear filter"><span aria-hidden="true">×</span></button>
     </div>
-    <details id="syntax"><summary aria-label="Filter syntax help">?</summary><div class="cheatsheet">
+    <details id="help"><summary aria-label="Debugger help">?</summary><div class="cheatsheet">
+      <strong>Inspect calls</strong><p>Click a call to inspect it. Shift-click selects a range; ⌘/Ctrl-click toggles individual calls. ↑/↓ moves the selection; Shift-↑/↓ extends it. The × removes a selection.</p>
+      <p>Chevrons open nested calls. Drag the divider to resize the list and inspectors. Click a source location to filter.</p>
+      <p><b>Run</b> groups calls from one execution of a dbg! block. <b>Source location</b> groups repeated calls from the same place.</p>
       <strong>Filter syntax</strong><p>Terms narrow the selection together. Quote text containing spaces.</p>
-      <dl><dt><code>file::scratch.ll</code></dt><dd>File path contains this text</dd><dt><code>file::scratch.ll:7:3</code></dt><dd>Exact line and optional column</dd><dt><code>expr::"(+ x x)"</code></dt><dd>Source contains this expression</dd><dt><code>status::running</code></dt><dd>running, returned, error, cancelled</dd><dt><code>time::&gt;100ms</code></dt><dd>Elapsed wall time; also &lt;1s</dd><dt><code>run::ID / call::ID</code></dt><dd>Evaluation / call and descendants</dd></dl>
+      <dl><dt><code>file:scratch.ll</code></dt><dd>File path contains this text</dd><dt><code>file:scratch.ll:7:3</code></dt><dd>Exact line and optional column</dd><dt><code>expr:"(+ x x)"</code></dt><dd>Source contains this expression</dd><dt><code>status:running</code></dt><dd>running, returned, error, cancelled</dd><dt><code>time:&gt;100ms</code></dt><dd>Elapsed wall time; also &lt;1s</dd><dt><code>run:ID / call:ID</code></dt><dd>Evaluation / call and descendants</dd></dl>
       <p>Plain words search expressions. Click a file, location, status, or evaluation to add a filter.</p>
+      <p>New observations appear after the viewer connects. Recent calls stay in bounded memory; older calls eventually disappear.</p>
     </div></details>
   </form>
-  <nav><label>View <select id="group"><option value="run">Evaluations</option><option value="source">Source history</option></select></label><label>Order <select id="order"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="slowest">Slowest calls</option></select></label><span class="spacer"></span><button id="new" hidden>New calls</button><span id="count"></span></nav>
+  <nav><label>Group by <select id="group"><option value="run">Run</option><option value="source">Source location</option></select></label><label>Order <select id="order"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="slowest">Slowest calls</option></select></label><span class="spacer"></span><button id="new" hidden>New calls</button><span id="count"></span></nav>
   <p id="query-error" role="alert"></p><p id="notice" role="status"></p>
 </header>
 <div id="workspace">
-  <section id="calls" aria-label="Observed calls"><div class="column-head"><span>Source</span><span>Result</span><span>Elapsed</span></div><div id="recording"></div></section>
-  <aside id="inspectors" aria-label="Call inspectors"><div class="inspector-empty">Select a call to inspect its inputs and result.<br>Pin calls to compare them side by side.</div></aside>
+  <section id="calls" aria-label="Observed calls"><div class="column-head"><span aria-hidden="true"></span><span>Source</span><span>Result</span><span>Elapsed</span></div><div id="recording" tabindex="0" role="tree" aria-label="Calls" aria-multiselectable="true"></div></section>
+  <div id="divider" role="separator" aria-label="Resize call list" aria-orientation="vertical" aria-valuemin="25" aria-valuemax="75" aria-valuenow="58" tabindex="0"></div>
+  <aside id="inspectors" aria-label="Call inspectors"><div class="inspector-empty">Select a call to inspect its inputs and result.</div></aside>
 </div>
-<footer>Chevrons open nested calls. Source selects an inspector. Locations add filters. Shift-click a call to pin a comparison.<code id="cli"></code></footer>
+
 </main></body></html>
