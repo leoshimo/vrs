@@ -48,6 +48,12 @@
   (if (empty? args) false
     (eq? (get (get args 0) :type) (get entity 0))))
 
+(defn! entity_functions (entity)
+  "Return bound function names whose first interactive argument matches this entity's tag. Does not run functions or completion providers."
+  (if (or! (not? (list? entity)) (not? (keyword? (get entity 0))))
+    (error "Expected a tagged entity"))
+  (filter (interactive_commands) (fn (name) (accepts_context? name entity))))
+
 (defn! entity_title (entity)
   (if (get entity :title)
     (if (get entity :app) (format "{} — {}" (get entity :app) (get entity :title))

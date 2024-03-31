@@ -1,7 +1,7 @@
 // `callback` is reserved by Tauri's IPC envelope. Page data calls it get_items;
 // use renderer at the bridge so it cannot overwrite the response callback ID.
 export const createTransport = invoke => ({
-    begin: () => invoke("begin_interaction"),
+    begin: () => invoke("root_page"),
     query: (page, query) => invoke("set_query", { renderer: page.get_items, args: page.args, query }),
     dispatch: form => invoke("dispatch", { form }),
     close: () => invoke("hide").catch(console.error),

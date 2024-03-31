@@ -40,6 +40,43 @@ async fn bind_imports_metadata_and_completions_without_running_provider() {
 }
 
 #[tokio::test]
+async fn entity_functions_discovers_current_bindings_without_executing_them() {
+    let value = eval(
+        r#"
+        (defn! objects () (error "provider must not run"))
+        (defn! copy_id (object) (interactive :example/object) (error "must not run"))
+        (defn! move_object (object destination)
+          (interactive :example/object :example/place) (error "must not run"))
+        (defn! plain (object) object)
+        (defn! reversed (place object)
+          (interactive :example/place :example/object) (error "must not run"))
+        (set_entity_completions :example/object 'objects)
+        (spawn_srv! :example :interface '(objects copy_id move_object plain reversed))
+        (bind_srv :example)
+        (def object '(:example/object :id 7))
+        (def found (entity_functions object))
+        (def checks (list (eq? (len found) 2)
+                          (contains? found 'copy_id) (contains? found 'move_object)
+                          (empty? (entity_functions '(:unknown/type :id 7)))))
+        (defn! copy_id (place) (interactive :example/place) place)
+        (list checks
+              (entity_functions object)
+              (map (vrs/editor_actions object) (fn (entry) (get entry 0)))
+              (map '(nil 42 "text" () (untagged 7))
+                   (fn (value) (err? (try (entity_functions value))))))
+    "#,
+    )
+    .await;
+    assert_eq!(
+        value,
+        Val::from_expr(
+            "((true true true true) (move_object) (\"move_object\") (true true true true true))"
+        )
+        .unwrap()
+    );
+}
+
+#[tokio::test]
 async fn defaults_compose_and_local_override_survives_rebinding() {
     let value = eval(
         r#"
