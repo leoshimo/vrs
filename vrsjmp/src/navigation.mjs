@@ -1,5 +1,5 @@
 // The GUI owns history, not page behavior. Callbacks/arguments stay opaque here.
-export const rootPage = () => ({ get_items: "root_items", args: "(())", title: "Home", prompt: "Search commands…", debounce_ms: 0 });
+export const rootPage = () => ({ get_items: "root_items", args: "()", title: "Home", prompt: "Search commands…", debounce_ms: 0 });
 export const retentionMs = 8 * 60 * 1000;
 
 export class Navigation {
@@ -61,7 +61,7 @@ export class Navigation {
             const opening = {};
             this.opening = opening;
             const request = { frame: root, obsolete: false, bootstrap: true };
-            // Keep navigation, but don't offer Save against yesterday's tab.
+            // Keep navigation while checking for a pending input request.
             if (this.current === root) { this.action = request; root.loading = true; }
             this.changed();
             try {
@@ -79,7 +79,7 @@ export class Navigation {
             } catch (error) {
                 if (this.opening !== opening || this.frames !== frames || !this.visible) return;
                 root.error = String(error);
-                // Invalidate the old context on capture failure.
+                // Clear the old page if the initial-page request fails.
                 root.page = rootPage();
                 root.loaded = false;
                 root.items = [];
@@ -123,8 +123,8 @@ export class Navigation {
     }
     search(text, immediate = false) {
         if (!this.visible || !this.current) return;
-        // Keep fast typing while context is captured, without rendering a root
-        // page that is missing its server-supplied arguments.
+        // Keep fast typing while the service chooses the initial page, without
+        // rendering a page that is missing its server-supplied arguments.
         if (this.action?.bootstrap) {
             this.current.query = text;
             this.changed();

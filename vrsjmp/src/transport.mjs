@@ -7,8 +7,8 @@ export const createTransport = invoke => ({
     close: () => invoke("hide").catch(console.error),
 });
 
-// Capture through the service before taking focus. A cancelled or superseded
-// opening must not show the window when its delayed response finally arrives.
+// Resolve the initial page before showing. A cancelled or superseded opening
+// must not show the window when its delayed response finally arrives.
 export function createOpening(navigation, show) {
     let latest;
     return async options => {

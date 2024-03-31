@@ -22,7 +22,7 @@ test("Tauri transport never overwrites reserved IPC envelope keys", async () => 
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
-test("context hook completes before showing; cancelled openings stay hidden", async () => {
+test("initial page resolves before showing; cancelled openings stay hidden", async () => {
     const starts = [], shown = [];
     const nav = { visible: false, begin() {
         this.visible = true;
@@ -77,12 +77,12 @@ test("activating a row selects it and Back restores query, results, and selectio
     assert.equal(t.nav.current.items[0].title, "Read Later");
 });
 
-test("opening captures context once and preserves fast typing before it arrives", async () => {
+test("opening requests its page once and preserves fast typing before it arrives", async () => {
     const t = setup(); t.nav.begin();
     t.nav.search("Focus"); t.nav.search("Focus Window");
     assert.equal(t.starts.length, 1);
     assert.equal(t.queries.length, 0);
-    const page = {...rootPage(), args: "(((:os/window :id 7)))"};
+    const page = {...rootPage(), get_items: "request_items", args: '("request-7")'};
     t.starts[0].resolve({type: "push_page", page}); await tick();
     assert.equal(t.queries.length, 1);
     assert.equal(t.queries[0].text, "Focus Window");
@@ -91,7 +91,7 @@ test("opening captures context once and preserves fast typing before it arrives"
     assert.equal(t.nav.snapshot().loading, false);
 });
 
-test("Escape during context capture never opens a late page; a new session recovers", async () => {
+test("Escape while choosing the initial page never opens a late page; a new session recovers", async () => {
     const t = setup(); t.nav.begin(); t.nav.back();
     t.starts[0].resolve({type: "push_page", page: rootPage()}); await tick();
     assert.equal(t.queries.length, 0);
@@ -227,7 +227,7 @@ test("stale same-text response after reopening cannot overwrite current frame", 
     assert.equal(t.nav.current.items[0].title, "new session");
 });
 
-test("reopen retains the page for eight minutes while refreshing root context", async () => {
+test("reopen retains the page for eight minutes while refreshing the initial page", async () => {
     const t = setup(); t.nav.open();
     t.queries[0].resolve([item("Read Later")]); await tick();
     t.nav.push({...rootPage(), get_items: "read_later_items"}, "emacs");
@@ -235,23 +235,23 @@ test("reopen retains the page for eight minutes while refreshing root context", 
     t.nav.select(1); t.nav.close(); t.nav.begin();
     assert.equal(t.nav.current.query, "emacs");
     assert.equal(t.nav.current.selected, 1);
-    t.starts[0].resolve({type: "push_page", page: {...rootPage(), args: "(((:os/window :id 8)))"}}); await tick();
+    t.starts[0].resolve({type: "push_page", page: {...rootPage(), args: '("request-8")'}}); await tick();
     assert.equal(t.queries.length, 2, "cached subpage isn't reloaded on reopen");
-    assert.equal(t.nav.frames[0].page.args, "(((:os/window :id 8)))");
+    assert.equal(t.nav.frames[0].page.args, '("request-8")');
     t.nav.close(); t.nav.hiddenAt -= retentionMs; t.nav.begin();
     assert.equal(t.nav.frames.length, 1);
     assert.equal(t.nav.current.query, "");
 });
 
-test("reopening a root page never dispatches stale context while refreshing", async () => {
+test("reopening a root page never dispatches stale items while refreshing", async () => {
     const t = setup(); t.nav.open();
-    t.queries[0].resolve([item("Save old page")]); await tick();
+    t.queries[0].resolve([item("Old request")]); await tick();
     t.nav.close(); t.nav.begin(); t.nav.search("Save"); t.nav.activate();
     assert.equal(t.actions.length, 0);
     assert.equal(t.queries.length, 1);
-    t.starts[0].resolve({type: "push_page", page: {...rootPage(), args: "(((:web/page :url new)))"}}); await tick();
+    t.starts[0].resolve({type: "push_page", page: {...rootPage(), args: '("request-new")'}}); await tick();
     assert.equal(t.queries[1].text, "Save");
-    assert.equal(t.queries[1].page.args, "(((:web/page :url new)))");
+    assert.equal(t.queries[1].page.args, '("request-new")');
 });
 
 const inputPage = id => ({...rootPage(), get_items: "function_items", args: `("${id}")`,
