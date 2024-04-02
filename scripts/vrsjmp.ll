@@ -55,7 +55,10 @@
        (make_item "Window - Top Left" '(window_top_left))
        (make_item "Window - Top Right" '(window_top_right))
        (make_item "Window - Bottom Left" '(window_bottom_left))
-       (make_item "Window - Bottom Right" '(window_bottom_right)))))
+       (make_item "Window - Bottom Right" '(window_bottom_right))
+       (make_item "Window - Main Display" '(window_to_main))
+       (make_item "Window - Aux Display" '(window_to_aux))
+    )))
 
 (defn todo_items ()
   "(todo_items) - Retrieve todo items and create markup for it"

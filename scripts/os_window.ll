@@ -36,9 +36,20 @@
   "(window_bottom_right) - Move window to bottom right corner"
   (yabai_grid "2:2:1:1:1:1"))
 
+(defn window_to_main ()
+  "(window_to_main) - Move window to main display"
+  (try (exec "yabai" "--message" "window" "--display" "1"))
+  (try (exec "yabai" "--message" "display" "--focus" "1")))
+
+(defn window_to_aux ()
+  "(window_to_aux) - Move window to aux display"
+  (try (exec "yabai" "--message" "window" "--display" "2"))
+  (try (exec "yabai" "--message" "display" "--focus" "2")))
+
 (spawn_srv :os_window
    :interface '(window_fullscreen window_center
                 window_left window_right
                 window_top_left window_top_right
-                window_bottom_left window_bottom_right))
+                window_bottom_left window_bottom_right
+                window_to_main window_to_aux))
 
