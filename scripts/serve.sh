@@ -56,6 +56,8 @@ while true; do
                  cargo run --bin vrsctl $CARGO_ARGS ./scripts/nl_shell.ll >/dev/null
              fi
 
+             cargo run --bin vrsctl $CARGO_ARGS ./scripts/nl_scheduler.ll >/dev/null
+
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/vrs_shell_refresh.ll >/dev/null
 
              if [ "$MODE" = "demo" ]; then
