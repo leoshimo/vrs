@@ -9,6 +9,7 @@
 (bind_srv :system_appearance)
 (bind_srv :rlist)
 (bind_srv :nl_shell)
+(bind_srv :nl_scheduler)
 (bind_srv :os_screencap)
 (bind_srv :todos)
 (bind_srv :os_window)
@@ -18,6 +19,7 @@
   (+ (favorite_items)
      (todo_items)
      (window_items query)
+     (scheduler_items query)
      (rlist_items)
      (query_items query)))
 
@@ -59,6 +61,16 @@
        (make_item "Window - Main Display" '(window_to_main))
        (make_item "Window - Aux Display" '(window_to_aux))
     )))
+
+(defn scheduler_items (query)
+  "Return item for scheduler commands"
+  # Only match if query contains win
+  (if (not? (contains? query "schedule"))
+        '()
+      (list
+       (make_item "Schedule - Tomorrow" '(schedule_the_day "tomorrow"))
+       (make_item "Schedule - Today" '(schedule_the_day "today")))))
+
 
 (defn todo_items ()
   "(todo_items) - Retrieve todo items and create markup for it"
