@@ -1,11 +1,11 @@
 #!/usr/bin/env vrsctl
 # os_cal.ll - OS Specific Calendarr
 
-(defn add_event (title start_date end_date)
-  "(add_event TITLE START_DATE END_DATE) - Add an event to calendar named TITLE.
+(defn create_event (title start_date end_date)
+  "(create_event TITLE START_DATE END_DATE) - Creates a new calendar event named TITLE.
    START_DATE and END_DATE are both quoted strings that specify start and end date.
    Valid date formats are \"1/1\", \"1/1/2024\", \"now\", \"today at 8am\", \"in one hour\", and other standard date formats."
-  (exec "eventkitcli" "add-event"
+  (exec "eventkitcli" "events" "create"
         "--title" (str title)
         "--start-date" (str start_date)
         "--end-date" (str end_date)))
@@ -14,8 +14,8 @@
   "(get_events START_DATE END_DATE) - Search for calendar events that occur between START_DATE and END_DATE
    START_DATE and END_DATE are both quoted strings that specify start and end date.
    Valid date formats are \"1/1\", \"1/1/2024\", \"now\", \"today at 8am\", \"in one hour\", and other standard date formats."
-  (exec "eventkitcli" "get-events"
+  (exec "eventkitcli" "events"
         "--start-date" (str start_date)
         "--end-date" (str end_date)))
 
-(spawn_srv :os_cal :interface '(add_event get_events))
+(spawn_srv :os_cal :interface '(create_event get_events))

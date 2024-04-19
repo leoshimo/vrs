@@ -26,7 +26,7 @@ The result should be a single S-expression wrapped within a (begin ...) form"
                  # (help notify)
                  # (help sleep)
                  # (help add_rlist_active_tab)
-                 # (help add_event)
+                 # (help create_event)
 )))
 
 (spawn_chat :nl_shell_chat system_prompt)
