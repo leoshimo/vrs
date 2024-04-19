@@ -3,6 +3,7 @@
 #
 
 (bind_srv :os_cal)
+(bind_srv :os_notify)
 (bind_srv :nl_shell)
 
 (defn scheduler_codegen (day)
