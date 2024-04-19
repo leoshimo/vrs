@@ -27,6 +27,9 @@ Do work as quick as possible.
 
 If task cannot be completed show a notification saying why.
 
+Do not use conditional forms
+Comment lines are marked by #
+
 The result should be a single S-expression wrapped within a (begin ...) form"
            (join "
 "                (help add_todo)
@@ -53,3 +56,4 @@ The result should be a single S-expression wrapped within a (begin ...) form"
   :ok)
 
 (spawn_srv :nl_shell :interface '(codegen_exec codegen))
+
