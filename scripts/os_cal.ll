@@ -10,6 +10,12 @@
         "--start-date" start_date
         "--end-date" end_date))
 
-(spawn_srv :os_cal :interface '(add_event))
+(defn get_events (start_date end_date)
+  "(get_events START_DATE END_DATE) - Search for calendar events that occur between START_DATE and END_DATE
+   START_DATE and END_DATE are both strings that specify start and end date.
+   Valid date formats are \"1/1\", \"1/1/2024\", \"now\", \"today at 8am\", \"in one hour\", and other standard date formats."
+  (exec "eventkitcli" "get-events"
+        "--start-date" start_date
+        "--end-date" end_date))
 
-# DEMO: Run + Test in Editor
+(spawn_srv :os_cal :interface '(add_event get_events))
