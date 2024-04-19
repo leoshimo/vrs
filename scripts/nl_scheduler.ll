@@ -11,6 +11,8 @@
 
   (def day_schedule (get (get_events (format "{} at 0h" day)
                                      (format "{} at 24h" day)) 1))
+  (if (eq? day_schedule "")
+    (set day_schedule "NO EVENTS"))
 
   (codegen (format "The following events are my calendar events {}:
 {}
@@ -22,6 +24,8 @@ Do not schedule over existing events.
 Schedule my commute to and from the office.
 I want to be at the office before 9:45 AM. My commute is roughly 20 minutes.
 I prefer to be home by 6 PM if possible.
+
+Before my morning commute, schedule around an hour of learning block. This is optional and flexible.
 
 Schedule one or more focus blocks on my calendar. The ideal length is 2 hours, although it can be flex-ed down to 1 hour if needed around other events.
 Do not schedule focus blocks shorter than 1 hour.
