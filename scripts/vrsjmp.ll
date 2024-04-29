@@ -104,7 +104,8 @@
 
    # directories
    (list (make_item "Downloads" '(open_file "~/Downloads"))
-         (make_item "Dropbox" '(open_file "~/Dropbox")))
+         (make_item "Dropbox" '(open_file "~/Dropbox"))
+         (make_item "Crash Reports" '(open_file "~/Library/Logs/DiagnosticReports/")))
 
    # links
    (list (make_item "GitHub - vrs" '(open_url "https://www.github.com/leoshimo/vrs"))
