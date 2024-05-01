@@ -124,6 +124,9 @@
    # machine-local
    (local_items)
 
+   # Shortcuts
+   (list (make_item "Clear Downloads" '(exec "clear_downloads")))
+
    # misc
    (list (make_item "Restart vrsd" '(exec "pkill" "-ax" "vrsd"))
          (make_item "Toggle Darkmode" '(toggle_darkmode)))
