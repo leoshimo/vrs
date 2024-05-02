@@ -1,3 +1,4 @@
+
 const { invoke } = window.__TAURI__.tauri;
 
 let rootEl;
@@ -87,7 +88,6 @@ window.addEventListener("DOMContentLoaded", () => {
             }
         }
     });
-
     outputListEl = document.querySelector("#output-list");
 });
 

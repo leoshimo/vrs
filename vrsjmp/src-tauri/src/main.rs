@@ -10,7 +10,9 @@ use nucleo_matcher::{
 };
 use serde_json::json;
 use std::sync::Mutex;
-use tauri::{async_runtime::JoinHandle, GlobalShortcutManager, Manager};
+use tauri::{
+    async_runtime::JoinHandle, AppHandle, GlobalShortcutManager, Manager, PhysicalPosition, Window,
+};
 use tokio::{
     net::UnixStream,
     sync::{mpsc, oneshot},
@@ -207,16 +209,7 @@ fn main() -> Result<()> {
 
             shortcuts
                 .register(binding, move || {
-                    let visible = window
-                        .is_visible()
-                        .expect("should retrieve window visibility");
-                    if visible {
-                        #[cfg(target_os = "macos")]
-                        let _ = handle.hide();
-                        let _ = window.hide();
-                    } else {
-                        let _ = window.set_focus();
-                    }
+                    toggle_window_visibility(&window, &handle);
                 })
                 .unwrap();
 
@@ -227,4 +220,48 @@ fn main() -> Result<()> {
         .expect("error while running tauri application");
 
     Ok(())
+}
+
+fn toggle_window_visibility(window: &Window, app_handle: &AppHandle) {
+    let visible = window
+        .is_visible()
+        .expect("should retrieve window visibility");
+    if visible {
+        #[cfg(target_os = "macos")]
+        let _ = app_handle.hide();
+        let _ = window.hide();
+    } else {
+        center_in_primary_monitor(&window);
+        let _ = window.set_focus();
+    }
+}
+
+fn center_in_primary_monitor(window: &Window) {
+    let primary_monitor = match window.primary_monitor() {
+        Ok(Some(m)) => m,
+        Err(e) => {
+            tracing::error!("Failed to get primary monitor - {e}");
+            return;
+        }
+        Ok(None) => {
+            tracing::warn!("No primary monitor found");
+            return;
+        }
+    };
+
+    let window_size = match window.inner_size() {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!("Failed to fetch inner size - {e}");
+            return;
+        }
+    };
+
+    let monitor_pos = primary_monitor.position();
+    let monitor_size = primary_monitor.size();
+    let x = monitor_pos.x + (monitor_size.width / 2 - window_size.width / 2) as i32;
+    let y = monitor_pos.y + (monitor_size.height / 2 - window_size.height / 2) as i32;
+    if let Err(e) = window.set_position(PhysicalPosition::new(x, y)) {
+        tracing::error!("Failed to set position - {e}");
+    }
 }
