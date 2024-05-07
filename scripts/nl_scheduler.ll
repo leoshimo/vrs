@@ -24,6 +24,7 @@ The following events are my calendar events {}:
 Schedule one or more events for {} in line with the preferences below:
 
 Do not schedule over existing events.
+Do not schedule events if it already exists on the calendar.
 
 Schedule my commute to and from the office.
 I want to be at the office before 9:45 AM. My commute is roughly 20 minutes.
@@ -40,6 +41,9 @@ Focus blocks can occur anytime after my commute to office, and before my commute
 Anytime after 1pm, add a 20 minute block to read emails.
 
 Avoid scheduling any events during 11:30 to 1PM, when lunch block often happens.
+
+If I have a one-on-one meeting, which may have titles like \"1:1\", \"PersonA / Leo\", set aside 10 minutes earlier in the day to prepare for it.
+
 " date day day_schedule day))
 
 (defn schedule_the_day (day)
