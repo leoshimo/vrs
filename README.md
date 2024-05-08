@@ -39,7 +39,9 @@ interactivity.
 
 vrs is a sandbox project, focused on play and experimentation in a pure-fun,
 pure-utility environment. While I live-on vrs everyday, the platform is very
-volatile in both concepts and implementation. Be warned!
+volatile in both concepts and implementation.
+
+[This software has rough edges](https://www.youtube.com/watch?v=sCZJblyT_XM&t=310s). Be warned!
 
 ## Structure
 
