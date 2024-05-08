@@ -27,7 +27,7 @@ Do not schedule over existing events.
 Do not schedule events if it already exists on the calendar.
 
 Schedule my commute to and from the office.
-I want to be at the office before 9:45 AM. My commute is roughly 20 minutes.
+I want to be at the office before 9:45 AM. My commute is roughly 30 minutes.
 I prefer to be home by 6 PM if possible.
 I do not commute on Fridays, so do not add them on Fridays.
 
@@ -42,7 +42,7 @@ Anytime after 1pm, add a 20 minute block to read emails.
 
 Avoid scheduling any events during 11:30 to 1PM, when lunch block often happens.
 
-If I have a one-on-one meeting, which may have titles like \"1:1\", \"PersonA / Leo\", set aside 10 minutes earlier in the day to prepare for it.
+If I have a one-on-one meeting, which may have titles like \"1:1\", \"PersonA / Leo\", \"PersonB & Leo\", \"1on1\", \"PersonC // Leo\", set aside 10 minutes earlier in the day to prepare for it.
 
 " date day day_schedule day))
 
