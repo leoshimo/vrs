@@ -35,7 +35,8 @@ interactivity.
 
 ## Status
 
-🚧 Under Heavy Construction
+🚧 Under heavy construction
+🐉 Here be dragons
 
 vrs is a sandbox project, focused on play and experimentation in a pure-fun,
 pure-utility environment. While I live-on vrs everyday, the platform is very
