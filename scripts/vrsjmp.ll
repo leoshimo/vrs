@@ -129,7 +129,8 @@
 
    # misc
    (list (make_item "Restart vrsd" '(exec "pkill" "-ax" "vrsd"))
-         (make_item "Toggle Darkmode" '(toggle_darkmode)))
+         (make_item "Toggle Darkmode" '(toggle_darkmode))
+         (make_item "Toggle Color Filter" '(toggle_color_filters)))
 
    # reading
    (list (make_item "Add to Reading List" '(add_rlist_active_tab))

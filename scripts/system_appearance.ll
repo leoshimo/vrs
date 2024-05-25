@@ -25,4 +25,8 @@
 (defn toggle_darkmode ()
   (set_darkmode (not? (is_darkmode))))
 
-(spawn_srv :system_appearance :interface '(toggle_darkmode))
+# Depends on shortcuts
+(defn toggle_color_filters ()
+  (exec "shortcuts" "run" "color-filters-toggle"))
+
+(spawn_srv :system_appearance :interface '(toggle_darkmode toggle_color_filters))
