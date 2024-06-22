@@ -113,7 +113,8 @@
          (make_item "X" '(open_url "https://www.x.com"))
          (make_item "Send to Kindle" '(open_url "https://www.amazon.com/gp/sendtokindle"))
          (make_item "ChatGPT" '(open_url "https://chat.openai.com"))
-         (make_item "Are.na" '(open_url "https://www.are.na/leo-shimo/moodboard-fiffzxstqdq")))
+         (make_item "Are.na" '(open_url "https://www.are.na/leo-shimo/moodboard-fiffzxstqdq"))
+         (make_item "Tiktokenizer" '(open_url "https://tiktokenizer.vercel.app")))
 
    # apps - personal
    (if (is_personal?)
