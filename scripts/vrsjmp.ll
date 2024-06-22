@@ -42,7 +42,10 @@
        (make_item "Open URL"
                   (list 'open_url query))
        (make_item "Do It"
-                  (list 'codegen_exec query)))))
+                  (list 'codegen_exec query))
+       (make_item "Force Quit"
+                  (list 'exec "pkill" query))
+       )))
 
 (defn window_items (query)
   "Return item for window commands"
