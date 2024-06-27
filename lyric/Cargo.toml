@@ -8,12 +8,12 @@ edition = "2021"
 [dependencies]
 dyn-fmt = "0.4.0"
 nanoid = "0.4.0"
-serde = { version = "1.0.197", features = ["derive"] }
-thiserror = "1.0.57"
+serde = { version = "1.0.203", features = ["derive"] }
+thiserror = "1.0.61"
 tracing = "0.1.40"
 
 [dev-dependencies]
 assert_matches = "1.5.0"
-tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
+tracing-test = { version = "0.2.5", features = ["no-env-filter"] }
 void = "1.0.2"
-tokio = "1.36.0" # for async / run.rs tests
+tokio = "1.38.0" # for async / run.rs tests
