@@ -13,6 +13,7 @@
 (bind_srv :os_screencap)
 (bind_srv :todos)
 (bind_srv :os_window)
+(bind_srv :os_maps)
 
 (defn get_items (query)
   "Retrieve items to display"
@@ -35,6 +36,8 @@
                   (list 'open_url (format "http://perplexity.ai/?q={}&copilot=true" query)))
        (make_item "Search Google"
                   (list 'open_url (format "http://google.com/search?q={}" query)))
+       (make_item "Search Maps"
+                  (list 'open_maps_search query))
        (make_item "Add Task"
                   (list 'add_todo query))
        (make_item "Open App"
