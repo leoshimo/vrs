@@ -159,6 +159,6 @@
   (spawn (fn ()
            (def res (try (eval cmd)))
            (if (err? res)
-             (notify "Encountered error" (format "{}" err))))))
+             (notify "Encountered error" (display res))))))
 
 (spawn_srv :vrsjmp :interface '(get_items on_click))
