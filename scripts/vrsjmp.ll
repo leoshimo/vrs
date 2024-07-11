@@ -99,6 +99,7 @@
          (make_item "Terminal" '(open_app "Alacritty"))
          (make_item "Messages" '(open_app "Messages"))
          (make_item "Notes" '(open_app "Notes"))
+         (make_item "Reminders" '(open_app "Reminders"))
          # (make_item "Mail" '(open_app "Spark"))
          (make_item "Mail" '(open_app "Mimestream"))
          (make_item "Cal" '(open_app "Notion Calendar"))
