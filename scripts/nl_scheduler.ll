@@ -34,10 +34,6 @@ I do not commute on Fridays, so do not add them on Fridays.
 Start the day with a \"Brainspace\" event, which can start anytime after 7:30am and last between one to two hours.
 This event is optional and flexible. It should end right before my morning commute time.
 
-Schedule one or more focus blocks on my calendar. The ideal length is 2 hours, although it can be flex-ed down to 1 hour if needed around other events.
-Do not schedule focus blocks shorter than 1 hour.
-Focus blocks can occur anytime after my commute to office, and before my commute back home
-
 Anytime after 1pm, add a 20 minute block to read emails.
 
 Avoid scheduling any events during 11:30 to 1PM, when lunch block often happens.
