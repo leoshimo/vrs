@@ -49,6 +49,22 @@ pub fn not_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     }
 }
 
+/// Language binding for `empty?`
+pub fn empty_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
+    NativeFn {
+        doc: "(empty? SEXP) - returns true if SEXP is empty".to_string(),
+        func: |_, args| match args {
+            [Val::List(l)] => Ok(NativeFnOp::Return(Val::Bool(l.is_empty()))),
+            [Val::String(s)] => Ok(NativeFnOp::Return(Val::Bool(s.is_empty()))),
+            _ => {
+                return Err(Error::UnexpectedArguments(
+                    "empty? expects one string or list argument".to_string(),
+                ))
+            }
+        },
+    }
+}
+
 /// Language binding for whether or not value is keyword
 pub fn is_keyword_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {

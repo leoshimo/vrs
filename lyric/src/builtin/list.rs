@@ -58,6 +58,19 @@ pub fn get_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     }
 }
 
+/// Language binding for `len`
+pub fn len_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
+    NativeFn {
+        doc: "(len LIST) - Returns number of elements in LIST".to_string(),
+        func: |_, x| match x {
+            [Val::List(l)] => Ok(NativeFnOp::Return(Val::Int(l.len().try_into().unwrap()))),
+            _ => Err(Error::UnexpectedArguments(
+                "list expects a list argument".to_string(),
+            )),
+        },
+    }
+}
+
 // TODO: Revisit this map impl.
 /// Language binding for `map`
 pub(crate) fn map_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
