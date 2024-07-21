@@ -4,14 +4,17 @@
 
 (bind_srv :os_browser)
 
-(def rlist_path "~/rlist.ll")
-(def rlist (begin
-  (def res (try (fread rlist_path)))
-  (if (ok? res) res '())))
+# TODO: Nice-to-have is defining CRUD resource service via macro
+
+(def rlist_path "~/Dropbox/rlist.ll")
+
+(def (:id id :rlist rlist) (begin
+    (def res (try (def (:id _ :rlist _) (fread rlist_path))))
+    (if (ok? res) res '(:id 0 :rlist ()))))
 
 (defn save_rlist ()
   "(save_rlist) - Save current rlist to filesystem"
-  (spawn (fn () (fdump rlist_path rlist))))
+  (spawn (fn () (fdump rlist_path (list :id id :rlist rlist)))))
 
 (defn get_rlist ()
   "(get_rlist) - Get all items in reading list"
@@ -19,10 +22,15 @@
 
 (defn add_rlist (title url)
   "(add_rlist TITLE URL) - Add item with TITLE and URL to reading list"
-  (set rlist (push rlist (list :rlist :title title :url url)))
+  (set rlist (push rlist (list :id id :rlist :title title :url url)))
+  (set id (+ id 1))
   (save_rlist)
   (publish :rlist_event :updated_rlist)
   :ok)
+
+(defn remove_rlist (id)
+  "(remove_rlist ID) - Remove item with ID from reading list"
+  (set rlist (filter rlist (fn (it) (not? (contains? it id))))))
 
 (defn clear_rlist ()
   "(clear_rlist) - Clear all reading list items"
@@ -37,4 +45,4 @@
     (add_rlist title url)))
 
 (spawn_srv :rlist
-   :interface '(get_rlist add_rlist clear_rlist add_rlist_active_tab))
+   :interface '(get_rlist add_rlist remove_rlist clear_rlist add_rlist_active_tab))

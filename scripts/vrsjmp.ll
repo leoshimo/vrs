@@ -21,7 +21,7 @@
      (todo_items)
      (window_items query)
      (scheduler_items query)
-     (rlist_items)
+     (rlist_items query)
      (query_items query)))
 
 (defn make_item (title command)
@@ -84,11 +84,17 @@
        (fn (t) (list :title (format "Mark Done - {}" (get t :title))
                      :on_click (list 'set_todos_done_by_id (get t :id))))))
 
-(defn rlist_items ()
-  "(rlist_items) - Retrieve item markup for reading list"
-  (map (get_rlist)
-       (fn (b) (list :title (format "Reading List - {}" (get b :title))
-                     :on_click (list 'open_url (get b :url))))))
+(defn rlist_items (query)
+  "(rlist_items QUERY) - Retrieve item markup for reading list"
+  (def items '())
+  (map (get_rlist) (lambda (it) (begin
+       (set items (push items (list :title (format "rl: Open {}" (get it :title))
+                                    :on_click (list 'open_url (get it :url)))))
+       # TODO: Plumb "modifiers" from clients?
+       (if (contains? query "rl:")
+         (set items (push items (list :title (format "rl: Remove {}" (get it :title))
+                                      :on_click (list 'remove_rlist (get it :id)))))))))
+  items)
 
 (defn favorite_items ()
   "Returns list of static vrsjmp items"
@@ -159,9 +165,11 @@
 (defn on_click (item)
   "Handle an on_click payload from item"
   (def cmd (get item :on_click))
+  (publish :cmd cmd)
   (spawn (fn ()
            (def res (try (eval cmd)))
            (if (err? res)
              (notify "Encountered error" (display res))))))
 
 (spawn_srv :vrsjmp :interface '(get_items on_click))
+
