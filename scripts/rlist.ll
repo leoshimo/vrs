@@ -30,7 +30,9 @@
 
 (defn remove_rlist (id)
   "(remove_rlist ID) - Remove item with ID from reading list"
-  (set rlist (filter rlist (fn (it) (not? (contains? it id))))))
+  (set rlist (filter rlist (fn (it) (not? (contains? it id)))))
+  (save_rlist)
+  (publish :rlist_event :updated_rlist))
 
 (defn clear_rlist ()
   "(clear_rlist) - Clear all reading list items"
