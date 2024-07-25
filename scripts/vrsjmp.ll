@@ -50,12 +50,14 @@
                   (list 'exec "pkill" query))
        )))
 
+# TODO: Idea: Window Selector w/ `yabai -m query --windows` -> List of Windows -> Change Focus?
 (defn window_items (query)
   "Return item for window commands"
   # Only match if query contains win
   (if (not? (contains? query "win"))
         '()
       (list
+       (make_item "Window - Split" '(window_split))
        (make_item "Window - Fullscreen" '(window_fullscreen))
        (make_item "Window - Center" '(window_center))
        (make_item "Window - Left" '(window_left))
