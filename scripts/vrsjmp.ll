@@ -101,10 +101,11 @@
 (defn favorite_items ()
   "Returns list of static vrsjmp items"
   (+
-   # apps
+   # app launcher
    (list (make_item "Browser" '(open_app "Safari"))
+         (make_item "Terminal" '(open_app "Ghostty")) # 👻
+         # (make_item "Terminal" '(open_app "Alacritty"))
          (make_item "Things" '(open_app "Things3"))
-         (make_item "Terminal" '(open_app "Alacritty"))
          (make_item "Messages" '(open_app "Messages"))
          (make_item "Notes" '(open_app "Notes"))
          (make_item "Reminders" '(open_app "Reminders"))
