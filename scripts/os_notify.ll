@@ -20,4 +20,8 @@
     (macos_ui_notify title subtitle)
     (linux_ui_notify title subtitle)))
 
-(spawn_srv :os_notify :interface '(notify))
+# Depends on shortcuts
+(defn toggle_do_not_disturb ()
+  (exec "shortcuts" "run" "do-not-disturb-toggle"))
+
+(spawn_srv :os_notify :interface '(notify toggle_do_not_disturb))

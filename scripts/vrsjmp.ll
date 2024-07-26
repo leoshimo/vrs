@@ -117,8 +117,8 @@
          (make_item "1Password" '(open_app "1Password"))
          (make_item "Excalidraw" '(open_url "https://excalidraw.com"))
          (make_item "XCode" '(exec "open_xcode")) # TODO: Built-in regex
-         (make_item "Chrome" '(open_app "Google Chrome"))
-         (make_item "Show Desktop" '(show_desktop)))
+         (make_item "Chrome" '(open_app "Google Chrome")))
+
 
    # directories
    (list (make_item "Downloads" '(open_file "~/Downloads"))
@@ -149,7 +149,9 @@
    (list (make_item "Restart vrsd" '(exec "pkill" "-ax" "vrsd"))
          (make_item "Toggle Darkmode" '(toggle_darkmode))
          (make_item "Toggle Color Filter" '(toggle_color_filters))
-         (make_item "Open in Wayback" '(active_tab_open_wayback)))
+         (make_item "Open in Wayback" '(active_tab_open_wayback))
+         (make_item "Show Desktop" '(show_desktop))
+         (make_item "Toggle DND" '(toggle_do_not_disturb)))
 
    # reading
    (list (make_item "Add to Reading List" '(add_rlist_active_tab))
