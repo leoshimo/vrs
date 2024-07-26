@@ -115,10 +115,9 @@
          (make_item "Slack" '(open_app "Slack"))
          (make_item "Soulver" '(open_app "Soulver 3"))
          (make_item "1Password" '(open_app "1Password"))
-         (make_item "Excalidraw" '(open_url "https://excalidraw.com"))
+         (make_item "TLDraw" '(open_url "https://www.tldraw.com"))
          (make_item "XCode" '(exec "open_xcode")) # TODO: Built-in regex
          (make_item "Chrome" '(open_app "Google Chrome")))
-
 
    # directories
    (list (make_item "Downloads" '(open_file "~/Downloads"))
