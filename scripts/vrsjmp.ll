@@ -117,7 +117,8 @@
          (make_item "1Password" '(open_app "1Password"))
          (make_item "Excalidraw" '(open_url "https://excalidraw.com"))
          (make_item "XCode" '(exec "open_xcode")) # TODO: Built-in regex
-         (make_item "Chrome" '(open_app "Google Chrome")))
+         (make_item "Chrome" '(open_app "Google Chrome"))
+         (make_item "Show Desktop" '(show_desktop)))
 
    # directories
    (list (make_item "Downloads" '(open_file "~/Downloads"))

@@ -51,11 +51,16 @@
   "(window_split) - Split currently focused window and last focused window horizontally in display"
   (try (exec "yabai_window_split")))
 
+(defn show_desktop ()
+  "(show_desktop) - Show the desktop"
+  (try (exec "yabai" "-m" "space" "--toggle" "show-desktop")))
+
 (spawn_srv :os_window
    :interface '(window_fullscreen window_center
                 window_left window_right
                 window_top_left window_top_right
                 window_bottom_left window_bottom_right
                 window_to_main window_to_aux
-                window_split))
+                window_split
+                show_desktop))
 
