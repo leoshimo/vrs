@@ -50,6 +50,8 @@
                   (list 'codegen_exec query))
        (make_item "Force Quit"
                   (list 'exec "pkill" query))
+       (make_item "Search Amazon"
+                  (list 'open_url (format "https://www.amazon.com/s?k={}" query)))
        )))
 
 # TODO: Idea: Window Selector w/ `yabai -m query --windows` -> List of Windows -> Change Focus?
