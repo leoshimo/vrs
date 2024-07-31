@@ -14,11 +14,13 @@
 (bind_srv :todos)
 (bind_srv :os_window)
 (bind_srv :os_maps)
+(bind_srv :os_notes)
 
 (defn get_items (query)
   "Retrieve items to display"
   (+ (favorite_items)
      (todo_items)
+     (notes_items query)
      (window_items query)
      (scheduler_items query)
      (rlist_items query)
@@ -85,6 +87,13 @@
   (map (get_todos)
        (fn (t) (list :title (format "Mark Done - {}" (get t :title))
                      :on_click (list 'set_todos_done_by_id (get t :id))))))
+
+(defn notes_items (query)
+  "(notes_items) - Returns markup for notes"
+  (if (not? (contains? query "n:"))
+    '()
+    (map (get_notes) (fn (n) (list :title (format "n: {}" (get n :title))
+                                   :on_click (list 'open_note (get n :id)))))))
 
 (defn rlist_items (query)
   "(rlist_items QUERY) - Retrieve item markup for reading list"
