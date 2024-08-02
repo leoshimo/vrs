@@ -36,6 +36,8 @@
       (list
        (make_item "Search Perplexity"
                   (list 'open_url (format "http://perplexity.ai/?q={}&copilot=true" query)))
+       (make_item "Send to Claude"
+                  (list 'open_url (format "http://claude.ai/new?q={}" query)))
        (make_item "Search Google"
                   (list 'open_url (format "http://google.com/search?q={}" query)))
        (make_item "Search Maps"
@@ -139,7 +141,6 @@
    (list (make_item "GitHub - vrs" '(open_url "https://www.github.com/leoshimo/vrs"))
          (make_item "X" '(open_url "https://www.x.com"))
          (make_item "Send to Kindle" '(open_url "https://www.amazon.com/gp/sendtokindle"))
-         (make_item "Claude.ai" '(open_url "https://claude.ai/new"))
          # (make_item "ChatGPT" '(open_url "https://chat.openai.com"))
          (make_item "Are.na" '(open_url "https://www.are.na/leo-shimo/moodboard-fiffzxstqdq"))
          (make_item "Tiktokenizer" '(open_url "https://tiktokenizer.vercel.app"))
