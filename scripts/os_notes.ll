@@ -46,5 +46,22 @@
         "-e" "activate"
         "-e" "end tell"))
 
+(defn create_note (title body)
+  "(create_note TITLE BODY OPEN) - Create note with TITLE and BODY"
+  (def contents (format "
+    <div>
+    <h1>{}</h1><br/>
+
+    {}
+    </div>" (if title title "") (if body body "")))
+
+  (exec "osascript" "-e" "tell application \"Notes\""
+        "-e" "activate"
+        "-e" "set newNote to make new note"
+        "-e" (format "set body of newNote to \"{}\"" contents)
+        "-e" "set selection to newNote"
+        "-e" "show newNote"
+        "-e" "end tell"))
+
 (refresh_notes)
-(spawn_srv :os_notes :interface '(open_note get_notes))
+(spawn_srv :os_notes :interface '(open_note get_notes create_note))
