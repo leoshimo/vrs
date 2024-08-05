@@ -25,7 +25,7 @@
             AND folder.zmarkedfordeletion != 1
         ORDER BY
             note.zmodificationdate1 DESC)
-        LIMIT 20") 1))
+        LIMIT 200") 1))
     (read (format "({})" output)))
 
 (defn refresh_notes ()
