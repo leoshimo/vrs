@@ -42,6 +42,8 @@
                   (list 'open_url (format "http://google.com/search?q={}" query)))
        (make_item "Search Maps"
                   (list 'open_maps_search query))
+       (make_item "Search YT Music"
+                  (list 'open_url (format "http://music.youtube.com/search?q={}" query)))
        (make_item "Add Task"
                   (list 'add_todo query))
        (make_item "Open App"
