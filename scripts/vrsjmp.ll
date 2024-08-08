@@ -30,6 +30,10 @@
   "Create an item with TITLE and COMMAND"
   (list :title title :on_click command))
 
+(defn make_item_ex (title command hints)
+  "Create an item with TITLE and COMMAND and HINTS"
+  (list :hints hints :title title :on_click command))
+
 (defn query_items (query)
   "Return a dynamic list of item for current query"
   (if (not? query) '()
@@ -117,8 +121,8 @@
   "Returns list of static vrsjmp items"
   (+
    # app launcher
-   (list (make_item "Browser" '(open_app "Safari"))
-         (make_item "Terminal" '(open_app "Ghostty")) # 👻
+   (list (make_item_ex "Browser" '(open_app "Safari") 'b)
+         (make_item_ex "Terminal" '(open_app "Ghostty") 't) # 👻
          # (make_item "Terminal" '(open_app "Alacritty"))
          (make_item "Things" '(open_app "Things3"))
          (make_item "Messages" '(open_app "Messages"))
