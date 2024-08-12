@@ -17,10 +17,9 @@
 [vrs](https://github.com/leoshimo/vrs) is a personal software runtime - an
 opinionated take on my own "endgame" software platform.
 
-Its goal is to turbocharge the development of my own software ecosystem. To this
-end, it considers every aspect of programming - language, execution,
-environment, and more - minimizing impedance over the end-to-end process of
-building software.
+It considers every aspect of programming - language, execution, environment,
+editing, tooling, and more - designing across the end-to-end process of building
+software.
 
 Its inspirations are Emacs, Erlang, Unix, Plan 9, and Hypermedia systems.  It
 hopes to combine powerful ideas from those projects into one cohesive whole for

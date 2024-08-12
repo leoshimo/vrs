@@ -8,9 +8,14 @@
 
 (def rlist_path "~/Dropbox/rlist.ll")
 
-(def (:id id :rlist rlist) (begin
-    (def res (try (def (:id _ :rlist _) (fread rlist_path))))
-    (if (ok? res) res '(:id 0 :rlist ()))))
+(def id 0)
+(def rlist '())
+
+(defn load_rlist ()
+  (def res (try (def (:id _ :rlist _) (fread rlist_path))))
+  (if (ok? res) (begin
+                 (set id (get res :id))
+                 (set rlist (get res :rlist)))))
 
 (defn save_rlist ()
   "(save_rlist) - Save current rlist to filesystem"
@@ -18,6 +23,7 @@
 
 (defn get_rlist ()
   "(get_rlist) - Get all items in reading list"
+  (load_rlist)
   rlist)
 
 (defn add_rlist (title url)
