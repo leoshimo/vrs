@@ -40,7 +40,7 @@
       (list
        (make_item "Search Perplexity"
                   (list 'open_url (format "http://perplexity.ai/?q={}&copilot=true" query)))
-       (make_item "Send to Claude"
+       (make_item "Ask Claude"
                   (list 'open_url (format "http://claude.ai/new?q={}" query)))
        (make_item "Search Google"
                   (list 'open_url (format "http://google.com/search?q={}" query)))
@@ -136,7 +136,8 @@
          (make_item "1Password" '(open_app "1Password"))
          (make_item "TLDraw" '(open_url "https://www.tldraw.com"))
          (make_item "XCode" '(exec "open_xcode")) # TODO: Built-in regex
-         (make_item "Chrome" '(open_app "Google Chrome")))
+         (make_item "Chrome" '(open_app "Google Chrome"))
+         (make_item "Claude" '(open_url "http://claude.ai")))
 
    # directories
    (list (make_item "Downloads" '(open_file "~/Downloads"))
