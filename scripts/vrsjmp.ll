@@ -15,6 +15,7 @@
 (bind_srv :os_window)
 (bind_srv :os_maps)
 (bind_srv :os_notes)
+(bind_srv :youtube)
 
 (defn get_items (query)
   "Retrieve items to display"
@@ -24,6 +25,7 @@
      (window_items query)
      (scheduler_items query)
      (rlist_items query)
+     (youtube_items query)
      (query_items query)))
 
 (defn make_item (title command)
@@ -104,6 +106,14 @@
     '()
     (map (get_notes) (fn (n) (list :title (format "n: {}" (get n :title))
                                    :on_click (list 'open_note (get n :id)))))))
+
+(defn youtube_items (query)
+  "(youtube_items) - Returns markup for youtuve"
+  (if (not? (contains? query "yt:"))
+    (list
+     (make_item "Download YT Video" '(download_video_active_tab)))
+    (map (list_videos) (fn (n) (list :title (format "yt: {}" (get n :title))
+                                     :on_click (list 'open_file (get n :path)))))))
 
 (defn rlist_items (query)
   "(rlist_items QUERY) - Retrieve item markup for reading list"
