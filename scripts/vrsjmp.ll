@@ -20,7 +20,7 @@
 (defn get_items (query)
   "Retrieve items to display"
   (+ (favorite_items)
-     (todo_items)
+     (todo_items query)
      (notes_items query)
      (window_items query)
      (scheduler_items query)
@@ -50,7 +50,7 @@
                   (list 'open_maps_search query))
        (make_item "Search YT Music"
                   (list 'open_url (format "http://music.youtube.com/search?q={}" query)))
-       (make_item "Add Task"
+       (make_item "Add Todo"
                   (list 'add_todo query))
        (make_item "Open App"
                   (list 'open_app query))
@@ -94,11 +94,13 @@
        (make_item "Schedule - Today" '(schedule_the_day "today")))))
 
 
-(defn todo_items ()
+(defn todo_items (query)
   "(todo_items) - Retrieve todo items and create markup for it"
-  (map (get_todos)
-       (fn (t) (list :title (format "Mark Done - {}" (get t :title))
-                     :on_click (list 'set_todos_done_by_id (get t :id))))))
+  (if (not? (contains? query "t: "))
+    '()
+      (map (get_todos)
+           (fn (t) (list :title (format "t: Mark Done - {}" (get t :title))
+                         :on_click (list 'set_todos_done_by_id (get t :id)))))))
 
 (defn notes_items (query)
   "(notes_items) - Returns markup for notes"
@@ -197,11 +199,9 @@
 (defn on_click (item)
   "Handle an on_click payload from item"
   (def cmd (get item :on_click))
-  (publish :cmd cmd)
   (spawn (fn ()
            (def res (try (eval cmd)))
            (if (err? res)
              (notify "Encountered error" (display res))))))
 
 (spawn_srv :vrsjmp :interface '(get_items on_click))
-
