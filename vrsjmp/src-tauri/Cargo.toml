@@ -13,7 +13,7 @@ edition = "2021"
 tauri-build = { version = "1.5", features = [] }
 
 [dependencies]
-tauri = { version = "1.6", features = ["macos-private-api", "global-shortcut"] }
+tauri = { version = "1.8", features = ["macos-private-api", "global-shortcut"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 window-vibrancy = "0.4"
@@ -21,8 +21,8 @@ tracing = "0.1.40"
 nucleo-matcher = "0.3.1"
 vrs = { path = "../../libvrs" }
 lyric = { path = "../../lyric" }
-anyhow = "1.0.86"
-tokio = "1.38.0"
+anyhow = "1.0.89"
+tokio = "1.40.0"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem
