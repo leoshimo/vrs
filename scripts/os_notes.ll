@@ -10,7 +10,7 @@
   (def output (get (exec "sqlite3" (shell_expand "~/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite")
         "SELECT '(:id \"' || id || '\" :title \"' || title || '\")'
        FROM (
-        SELECT 'x-coredata://' || zmd.z_uuid || '/ICNote/p' || note.z_pk AS id,
+        SELECT note.zidentifier as id,
             note.ztitle1 AS title,
             datetime (note.zmodificationdate1 + 978307200, 'unixepoch') AS modifiedAt
         FROM
@@ -38,13 +38,8 @@
 
 (defn open_note (id)
   "(open_note) - Open note with given ID"
-  (exec "osascript" "-e" "tell application \"Notes\""
-        "-e" (format "set theNote to note id \"{}\"" id)
-        "-e" "set theFolder to container of theNote"
-        "-e" "show theFolder"
-        "-e" "show theNote"
-        "-e" "activate"
-        "-e" "end tell"))
+  (def url (format "applenotes:/note/{}" id))
+  (exec "open" url))
 
 (defn create_note (title body)
   "(create_note TITLE BODY OPEN) - Create note with TITLE and BODY"
