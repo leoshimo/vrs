@@ -34,6 +34,7 @@ while true; do
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/chat.ll >/dev/null
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/system_appearance.ll >/dev/null
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/todos.ll >/dev/null
+             cargo run --bin vrsctl $CARGO_ARGS ./scripts/cmd_macro.ll >/dev/null
 
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/interfacegen.ll >/dev/null
 

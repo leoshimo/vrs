@@ -16,6 +16,7 @@
 (bind_srv :os_maps)
 (bind_srv :os_notes)
 (bind_srv :youtube)
+(bind_srv :cmd_macro)
 
 (defn get_items (query)
   "Retrieve items to display"
@@ -26,6 +27,7 @@
      (scheduler_items query)
      (rlist_items query)
      (youtube_items query)
+     (macro_items query)
      (query_items query)))
 
 (defn make_item (title command)
@@ -110,12 +112,27 @@
                                    :on_click (list 'open_note (get n :id)))))))
 
 (defn youtube_items (query)
-  "(youtube_items) - Returns markup for youtuve"
+  "(youtube_items QUERY) - Returns markup for youtube items"
   (if (not? (contains? query "yt:"))
     (list
      (make_item "Download YT Video" '(download_video_active_tab)))
     (map (list_videos) (fn (n) (list :title (format "yt: {}" (get n :title))
                                      :on_click (list 'open_file (get n :path)))))))
+
+# TODO: Nice to have "prefix-drop" for these prefixed names
+(defn macro_items (query)
+  "(macro_items QUERY) - Returns markup for macro items"
+  (if (not? (contains? query "macro:"))
+    '()
+    (+
+     (map (get_macros) (fn (m) (list :title (get m :name)
+                                     :on_click (list 'eval (get m :cmds)))))
+     (list
+      (if (macro_is_recording)
+        (make_item "macro: Stop Recording" '(end_macro_record))
+        (make_item (format "macro: Start Recording - {}" query) (list 'start_macro_record query)))
+      (make_item "macro: Clear Macros" '(clear_macros))
+      ))))
 
 (defn rlist_items (query)
   "(rlist_items QUERY) - Retrieve item markup for reading list"
@@ -200,6 +217,7 @@
 (defn on_click (item)
   "Handle an on_click payload from item"
   (def cmd (get item :on_click))
+  (publish :cmd cmd)
   (spawn (fn ()
            (def res (try (eval cmd)))
            (if (err? res)
