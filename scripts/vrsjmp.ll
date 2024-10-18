@@ -167,7 +167,7 @@
          (make_item "XCode" '(exec "open_xcode")) # TODO: Built-in regex
          (make_item "Chrome" '(open_app "Google Chrome"))
          (make_item "Claude" '(open_url "http://claude.ai"))
-         (make_item "Zig - langref" '(open_file "~/.zig/doc/langref.html")))
+         (make_item "Zig - langref" '(open_file "~/.zigup/doc/langref.html")))
 
    # directories
    (list (make_item "Downloads" '(open_file "~/Downloads"))
