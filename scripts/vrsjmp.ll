@@ -44,6 +44,8 @@
       (list
        (make_item "Search Perplexity"
                   (list 'open_url (format "http://perplexity.ai/?q={}&copilot=true" query)))
+       (make_item "Ask ChatGPT"
+                  (list 'open_url (format "http://chatgpt.com/?q={}" query)))
        (make_item "Ask Claude"
                   (list 'open_url (format "http://claude.ai/new?q={}" query)))
        (make_item "Search Google"
