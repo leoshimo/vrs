@@ -106,16 +106,20 @@ impl Client {
 fn set_query(query: &str, state: tauri::State<State>) -> Vec<serde_json::Value> {
     let mut matcher = state.matcher.lock().unwrap();
 
-    let response = state
-        .client
-        .request(
-            Form::from_expr(&format!(
-                "(begin (bind_srv :vrsjmp) (get_items \"{}\"))",
-                query
-            ))
-            .unwrap(),
-        )
-        .unwrap();
+    // TODO: Contents of `query` should be escaped
+    let request = match Form::from_expr(&format!(
+        "(begin (bind_srv :vrsjmp) (get_items \"{}\"))",
+        query
+    )) {
+        Ok(f) => f,
+        Err(lyric::Error::IncompleteExpression(_)) => return vec![],
+        Err(e) => {
+            error!("Invalid form for user query - {e}");
+            return vec![];
+        }
+    };
+
+    let response = state.client.request(request).unwrap();
 
     let items = match response.contents.unwrap() {
         Form::List(items) => items.iter().map(|i| i.to_string()).collect(),
