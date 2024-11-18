@@ -4,6 +4,7 @@
 # personal calendar
 (def default_calendar "E8053BAF-FE5D-40FC-8F2A-FB53BA82B8BE")
 
+# TODO: Allow specifying calendars
 (defn create_event (title start_date end_date)
   "(create_event TITLE START_DATE END_DATE) - Creates a new calendar event named TITLE.
    START_DATE and END_DATE are both quoted strings that specify start and end date.
