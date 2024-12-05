@@ -162,6 +162,7 @@
          # (make_item "Mail" '(open_app "Spark"))
          (make_item "Mail" '(open_app "Mimestream"))
          (make_item "Cal" '(open_app "Notion Calendar"))
+         (make_item "Find My" '(open_app "FindMy"))
          (make_item "Slack" '(open_app "Slack"))
          (make_item "Soulver" '(open_app "Soulver 3"))
          (make_item "1Password" '(open_app "1Password"))
