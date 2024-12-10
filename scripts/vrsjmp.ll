@@ -38,16 +38,20 @@
   "Create an item with TITLE and COMMAND and HINTS"
   (list :hints hints :title title :on_click command))
 
+(defn open_claude ()
+  "Open Claude.app from correct directory"
+  (if (err? (try (exec "pgrep" "-x" "Claude")))
+    (begin
+     (spawn (lambda () (exec "/Applications/Claude.app/Contents/MacOS/Claude")))
+     (sleep 1)))
+  (open_app "Claude"))
+
 (defn query_items (query)
   "Return a dynamic list of item for current query"
   (if (not? query) '()
       (list
        (make_item "Search Perplexity"
                   (list 'open_url (format "http://perplexity.ai/?q={}&copilot=true" query)))
-       (make_item "Ask ChatGPT"
-                  (list 'open_url (format "http://chatgpt.com/?q={}" query)))
-       (make_item "Ask Claude"
-                  (list 'open_url (format "http://claude.ai/new?q={}" query)))
        (make_item "Search Google"
                   (list 'open_url (format "http://google.com/search?q={}" query)))
        (make_item "Search Maps"
@@ -169,7 +173,13 @@
          (make_item "TLDraw" '(open_url "https://www.tldraw.com"))
          (make_item "XCode" '(exec "open_xcode")) # TODO: Built-in regex
          (make_item "Chrome" '(open_app "Google Chrome"))
-         (make_item "Claude" '(open_url "http://claude.ai"))
+         (make_item "Charles" '(open_app "Charles"))
+
+         # Assistants
+         (make_item "Claude" '(open_claude))
+         (make_item "ChatGPT" '(open_app "ChatGPT"))
+         (make_item "HuggingChat" '(open_app "HuggingChat"))
+
          (make_item "Zig - langref" '(open_file "~/.zigup/doc/langref.html")))
 
    # directories
@@ -181,7 +191,6 @@
    (list (make_item "GitHub - vrs" '(open_url "https://www.github.com/leoshimo/vrs"))
          (make_item "X" '(open_url "https://www.x.com"))
          (make_item "Send to Kindle" '(open_url "https://www.amazon.com/gp/sendtokindle"))
-         # (make_item "ChatGPT" '(open_url "https://chat.openai.com"))
          (make_item "Are.na" '(open_url "https://www.are.na/leo-shimo/moodboard-fiffzxstqdq"))
          (make_item "Tiktokenizer" '(open_url "https://tiktokenizer.vercel.app"))
          (make_item "CyberChef" '(open_url "https://gchq.github.io/CyberChef/")))
