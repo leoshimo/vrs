@@ -17,6 +17,7 @@
 (bind_srv :os_notes)
 (bind_srv :youtube)
 (bind_srv :cmd_macro)
+(bind_srv :safari_history)
 
 (defn get_items (query)
   "Retrieve items to display"
@@ -27,6 +28,7 @@
      (scheduler_items query)
      (rlist_items query)
      (youtube_items query)
+     (safari_history_items query)
      (macro_items query)
      (query_items query)))
 
@@ -124,6 +126,18 @@
      (make_item "Download YT Video" '(download_video_active_tab)))
     (map (list_videos) (fn (n) (list :title (format "yt: {}" (get n :title))
                                      :on_click (list 'open_file (get n :path)))))))
+
+# TODO: Nice-to-have - "subtitle" UI to show url / domain
+(defn safari_history_items (query)
+  "(safari_history_items QUERY) - Returns markup for safari history items"
+  (if (not? (contains? query "h:"))
+      '()
+      (begin
+       (if (eq? query "h:") (refresh_safari_history)) # refresh on "appear"
+       (map (get_safari_history) (fn (h) (make_item_ex (format "h: {}" (get h :title))
+                                                       (list 'open_url (get h :url))
+                                                       (get h :domain_expansion)))))))
+
 
 # TODO: Nice to have "prefix-drop" for these prefixed names
 (defn macro_items (query)

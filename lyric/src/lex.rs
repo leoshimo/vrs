@@ -451,3 +451,7 @@ mod tests {
         );
     }
 }
+
+// TODO(bug): Cannot parse non-number "-" prefix:
+//     vrs> (- (read (get (exec "date" "+%s") 1)) 10)
+//     Incomplete expression - Unable to parse integer - -

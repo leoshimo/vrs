@@ -48,6 +48,7 @@ while true; do
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/os_cal.ll >/dev/null
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/os_clipboard.ll >/dev/null
 
+             cargo run --bin vrsctl $CARGO_ARGS ./scripts/safari_history.ll >/dev/null
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/youtube.ll >/dev/null
 
              if [ "$MODE" = "demo" ]; then
