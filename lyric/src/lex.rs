@@ -1,5 +1,6 @@
 //! Lexer for Lyric
 use std::iter::Peekable;
+use tracing::error;
 
 use crate::{Error, Result};
 
@@ -35,7 +36,15 @@ impl std::fmt::Display for Token {
 
 /// Tokenize entire expression as vector
 pub(crate) fn lex(expr: &str) -> Result<Vec<Token>> {
-    let tokens = Tokens::new(expr).collect::<Result<Vec<_>>>()?;
+    let mut tokens = vec![];
+    for token in Tokens::new(expr) {
+        match token {
+            Ok(token) => tokens.push(token),
+            Err(err) => {
+                error!("lexing failed - {}, tokens={:?}", err, tokens);
+            }
+        }
+    }
     Ok(tokens)
 }
 
