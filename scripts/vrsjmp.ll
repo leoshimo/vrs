@@ -174,6 +174,7 @@
          (make_item "TLDraw" '(open_url "https://www.tldraw.com"))
          (make_item "XCode" '(exec "open_xcode")) # TODO: Built-in regex
          (make_item "Chrome" '(open_app "Google Chrome"))
+         (make_item "Script Debugger" '(open_app "Script Debugger"))
          (make_item "Charles" '(open_app "Charles"))
 
          # Assistants
