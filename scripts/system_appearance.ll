@@ -29,4 +29,7 @@
 (defn toggle_color_filters ()
   (exec "shortcuts" "run" "color-filters-toggle"))
 
-(spawn_srv :system_appearance :interface '(toggle_darkmode toggle_color_filters))
+(defn toggle_quick_shade ()
+  (exec "shortcuts" "run" "toggle-quickshade"))
+
+(spawn_srv :system_appearance :interface '(toggle_darkmode toggle_color_filters toggle_quick_shade))
