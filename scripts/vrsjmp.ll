@@ -48,16 +48,17 @@
      (sleep 1)))
   (open_app "Claude"))
 
+# TODO: Query should be rule-based? I.e. "Search DWIM" - if URL, if App Name, if Bundle ID, if location (?), if long, etc
 (defn query_items (query)
   "Return a dynamic list of item for current query"
   (if (not? query) '()
       (list
-       (make_item "Search Perplexity"
-                  (list 'open_url (format "http://perplexity.ai/?q={}&copilot=true" query)))
        (make_item "Search Google"
                   (list 'open_url (format "http://google.com/search?q={}" query)))
        (make_item "Search Maps"
                   (list 'open_maps_search query))
+       (make_item "Search Perplexity"
+                  (list 'open_url (format "http://perplexity.ai/?q={}&copilot=true" query)))
        (make_item "Search YT Music"
                   (list 'open_url (format "http://music.youtube.com/search?q={}" query)))
        (make_item "Add Todo"
