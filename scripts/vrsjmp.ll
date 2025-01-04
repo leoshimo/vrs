@@ -18,6 +18,7 @@
 (bind_srv :youtube)
 (bind_srv :cmd_macro)
 (bind_srv :safari_history)
+(bind_srv :github)
 
 (defn get_items (query)
   "Retrieve items to display"
@@ -29,6 +30,7 @@
      (rlist_items query)
      (youtube_items query)
      (safari_history_items query)
+     (github_items query)
      (macro_items query)
      (query_items query)))
 
@@ -139,6 +141,13 @@
                                                        (list 'open_url (get h :url))
                                                        (get h :domain_expansion)))))))
 
+(defn github_items (query)
+  "(github_items QUERY) - Returns markup for github items"
+  (if (not? (contains? query "gh:"))
+      '()
+      (begin
+       (if (eq? query "gh:") (refresh_pull_requests))
+       (map (get_pull_requests) (fn (pr) (make_item (format "gh: {}" (get pr :title)) (list 'open_url (get pr :url))))))))
 
 # TODO: Nice to have "prefix-drop" for these prefixed names
 (defn macro_items (query)
