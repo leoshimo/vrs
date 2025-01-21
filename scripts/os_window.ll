@@ -2,6 +2,16 @@
 # os_window.ll - OS Window Controls
 #
 
+(defn get_windows ()
+  "(get_windows) - Get all windows"
+  (def (:ok res) (exec "./scripts/yabai_window_shim.sh"))
+  (read res))
+
+# TODO: Consider dynamic type check - e.g. `islist?` / `isstring?` to accept flexible window selector
+(defn focus_window (window_id)
+  "(focus_window WINDOW_ID) - Focus window with given ID"
+  (exec "yabai" "-m" "window" (str window_id) "--focus"))
+
 (defn yabai_grid (grid_str)
   (try (exec "yabai" "--message" "window" "--grid" grid_str)))
 
@@ -62,5 +72,7 @@
                 window_bottom_left window_bottom_right
                 window_to_main window_to_aux
                 window_split
-                show_desktop))
+                show_desktop
+                get_windows
+                focus_window))
 

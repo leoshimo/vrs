@@ -77,25 +77,27 @@
                   (list 'open_url (format "https://www.amazon.com/s?k={}" query)))
        )))
 
-# TODO: Idea: Window Selector w/ `yabai -m query --windows` -> List of Windows -> Change Focus?
 (defn window_items (query)
   "Return item for window commands"
-  # Only match if query contains win
-  (if (not? (contains? query "win"))
-        '()
-      (list
-       (make_item "Window - Split" '(window_split))
-       (make_item "Window - Fullscreen" '(window_fullscreen))
-       (make_item "Window - Center" '(window_center))
-       (make_item "Window - Left" '(window_left))
-       (make_item "Window - Right" '(window_right))
-       (make_item "Window - Top Left" '(window_top_left))
-       (make_item "Window - Top Right" '(window_top_right))
-       (make_item "Window - Bottom Left" '(window_bottom_left))
-       (make_item "Window - Bottom Right" '(window_bottom_right))
-       (make_item "Window - Main Display" '(window_to_main))
-       (make_item "Window - Aux Display" '(window_to_aux))
-    )))
+  (if (not? (contains? query "w:"))
+    '()
+      (+
+       (map (get_windows)
+            (fn (w) (make_item (format "w: {} - {}" (get w :app) (get w :title))
+                               (list 'focus_window (get w :id)))))
+       (list
+        (make_item "w: Split" '(window_split))
+        (make_item "w: Fullscreen" '(window_fullscreen))
+        (make_item "w: Center" '(window_center))
+        (make_item "w: Left" '(window_left))
+        (make_item "w: Right" '(window_right))
+        (make_item "w: Top Left" '(window_top_left))
+        (make_item "w: Top Right" '(window_top_right))
+        (make_item "w: Bottom Left" '(window_bottom_left))
+        (make_item "w: Bottom Right" '(window_bottom_right))
+        (make_item "w: Main Display" '(window_to_main))
+        (make_item "w: Aux Display" '(window_to_aux)))
+       )))
 
 (defn scheduler_items (query)
   "Return item for scheduler commands"
