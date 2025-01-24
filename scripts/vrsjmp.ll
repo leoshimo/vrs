@@ -12,6 +12,7 @@
 (bind_srv :nl_scheduler)
 (bind_srv :os_screencap)
 (bind_srv :todos)
+(bind_srv :os_display)
 (bind_srv :os_window)
 (bind_srv :os_maps)
 (bind_srv :os_notes)
@@ -25,6 +26,7 @@
   (+ (favorite_items)
      (todo_items query)
      (notes_items query)
+     (display_items query)
      (window_items query)
      (scheduler_items query)
      (rlist_items query)
@@ -76,6 +78,12 @@
        (make_item "Search Amazon"
                   (list 'open_url (format "https://www.amazon.com/s?k={}" query)))
        )))
+
+(defn display_items (query)
+  "Return item for display commands"
+  (if (not? (contains? query "d:"))
+    '()
+    (map (list_alternative_resolutions) (fn (r) (make_item (format "d: {}" r) (list 'select_resolution r))))))
 
 (defn window_items (query)
   "Return item for window commands"
