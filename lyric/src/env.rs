@@ -39,6 +39,7 @@ impl<T: Extern, L: Locals> Env<T, L> {
             .bind_native(SymbolId::from("err?"), builtin::err_fn())
             .bind_native(SymbolId::from("str"), builtin::str_fn())
             .bind_native(SymbolId::from("join"), builtin::join_fn())
+            .bind_native(SymbolId::from("split"), builtin::split_fn())
             .bind_native(SymbolId::from("format"), builtin::format_fn())
             .bind_native(SymbolId::from("display"), builtin::display_fn())
             .bind_native(SymbolId::from("dbg"), builtin::dbg_fn())

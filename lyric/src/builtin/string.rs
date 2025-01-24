@@ -45,9 +45,26 @@ pub(crate) fn join_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
                 .map(|v| v.as_string_coerce())
                 .collect::<Result<Vec<_>>>()?;
 
-            println!("{}", separator);
             let result = str_args.join(separator);
             Ok(NativeFnOp::Return(Val::String(result)))
+        },
+    }
+}
+
+pub(crate) fn split_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
+    NativeFn {
+        doc: "(split SEP STR) - Returns a list separating string STR by SEP.".to_string(),
+        func: |_, args| {
+            let substrings = match args {
+                [Val::String(sep), Val::String(string)] => string.split(sep),
+                _ => {
+                    return Err(Error::UnexpectedArguments(
+                        "(split SEP STR) expects SEP and STR as arguments".to_string(),
+                    ))
+                }
+            };
+            let result = substrings.map(|s| Val::string(s)).collect::<Vec<_>>();
+            Ok(NativeFnOp::Return(Val::List(result)))
         },
     }
 }
