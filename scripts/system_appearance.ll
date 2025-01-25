@@ -30,6 +30,15 @@
   (exec "shortcuts" "run" "color-filters-toggle"))
 
 (defn toggle_quick_shade ()
-  (exec "shortcuts" "run" "toggle-quickshade"))
+  (def (:ok result) (exec "osascript"
+                          "-e" "tell application \"System Events\""
+                          "-e" "set isRunning to (exists (processes where name is \"QuickShade\"))"
+                          "-e" "end tell"
+                          "-e" "if isRunning then"
+                          "-e" "tell application \"QuickShade\" to quit"
+                          "-e" "else"
+                          "-e" "tell application \"QuickShade\" to activate"
+                          "-e" "end if"))
+  :ok)
 
 (spawn_srv :system_appearance :interface '(toggle_darkmode toggle_color_filters toggle_quick_shade))
