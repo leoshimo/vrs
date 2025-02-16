@@ -212,7 +212,7 @@
          (make_item "Chrome" '(open_app "Google Chrome"))
          (make_item "Obsidian" '(open_app "Obsidian"))
          (make_item "Script Debugger" '(open_app "Script Debugger"))
-         (make_item "Charles" '(open_app "Charles"))
+         (make_item "ProxyMan" '(open_app "ProxyMan"))
 
          # Assistants
          (make_item "Claude" '(open_claude))
