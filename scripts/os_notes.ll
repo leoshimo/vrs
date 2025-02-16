@@ -23,6 +23,7 @@
             AND note.zmodificationdate1 IS NOT NULL
             AND note.zmarkedfordeletion != 1
             AND folder.zmarkedfordeletion != 1
+            AND folder.ztitle2 IS NOT \"Recently Deleted\"
         ORDER BY
             note.zmodificationdate1 DESC)
         LIMIT 200") 1))
