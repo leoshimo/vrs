@@ -16,6 +16,7 @@
 (bind_srv :os_window)
 (bind_srv :os_maps)
 (bind_srv :os_notes)
+(bind_srv :obsidian)
 (bind_srv :youtube)
 (bind_srv :cmd_macro)
 (bind_srv :safari_history)
@@ -26,6 +27,7 @@
   (+ (favorite_items)
      (todo_items query)
      (notes_items query)
+     (obsidian_items query)
      (display_items query)
      (window_items query)
      (scheduler_items query)
@@ -132,6 +134,13 @@
     (map (get_notes) (fn (n) (list :title (format "n: {}" (get n :title))
                                    :on_click (list 'open_note (get n :id)))))))
 
+(defn obsidian_items (query)
+  "(obsidian_items) - Returns markup for obsidian notes"
+  (if (not? (contains? query "o:"))
+    '()
+    (map (get_obsidian_files) (fn (n) (list :title (format "o: {}" (get n :title))
+                                            :on_click (list 'open_obsidian_file (get n :file)))))))
+
 (defn youtube_items (query)
   "(youtube_items QUERY) - Returns markup for youtube items"
   (if (not? (contains? query "yt:"))
@@ -191,6 +200,7 @@
   (+
    # app launcher
    (list
+
          (make_item_ex "Browser" '(open_app "Safari") 'b)
          (make_item_ex "Deta Surf" '(open_app "Surf") 'b)
          (make_item_ex "Terminal" '(open_app "Ghostty") 't) # 👻
