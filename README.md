@@ -1,4 +1,3 @@
-[![Rust](https://github.com/leoshimo/vrs/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/leoshimo/vrs/actions/workflows/rust.yml)
 
 <p align="center">
     <img width="360" src="https://raw.github.com/leoshimo/vrs/main/assets/vrs.png">
