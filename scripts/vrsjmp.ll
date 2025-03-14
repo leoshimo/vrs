@@ -218,7 +218,7 @@
          (make_item "Soulver" '(open_app "Soulver 3"))
          (make_item "1Password" '(open_app "1Password"))
          (make_item "TLDraw" '(open_url "https://www.tldraw.com"))
-         (make_item "XCode" '(exec "open_xcode")) # TODO: Built-in regex
+         (make_item "Xcode" '(exec "open_xcode")) # TODO: Built-in regex
          (make_item "Chrome" '(open_app "Google Chrome"))
          (make_item "Obsidian" '(open_app "Obsidian"))
          (make_item "Script Debugger" '(open_app "Script Debugger"))
