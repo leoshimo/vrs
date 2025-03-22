@@ -223,6 +223,7 @@
          (make_item "Obsidian" '(open_app "Obsidian"))
          (make_item "Script Debugger" '(open_app "Script Debugger"))
          (make_item "ProxyMan" '(open_app "ProxyMan"))
+         (make_item "Reeder" '(open_app "Reeder"))
 
          # Assistants
          (make_item "Claude" '(open_claude))
