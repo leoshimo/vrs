@@ -21,6 +21,7 @@
 (bind_srv :cmd_macro)
 (bind_srv :safari_history)
 (bind_srv :github)
+(bind_srv :reeder)
 
 (defn get_items (query)
   "Retrieve items to display"
@@ -31,6 +32,7 @@
      (display_items query)
      (window_items query)
      (scheduler_items query)
+     (reeder_items query)
      (rlist_items query)
      (youtube_items query)
      (safari_history_items query)
@@ -126,6 +128,14 @@
       (map (get_todos)
            (fn (t) (list :title (format "t: Mark Done - {}" (get t :title))
                          :on_click (list 'set_todos_done_by_id (get t :id)))))))
+
+(defn reeder_items (query)
+  "(reeder_items QUERY) - Returns markup for reeder items"
+  (if (not? (contains? query "rd:"))
+      '()
+      (begin
+       (if (eq? query "rd:") (reeder_refresh_items))
+       (map (reeder_get_items) (fn (it) (make_item (format "rd: {}" (get it :title)) (list 'open_url (get it :url))))))))
 
 (defn notes_items (query)
   "(notes_items) - Returns markup for notes"
@@ -223,7 +233,7 @@
          (make_item "Obsidian" '(open_app "Obsidian"))
          (make_item "Script Debugger" '(open_app "Script Debugger"))
          (make_item "ProxyMan" '(open_app "ProxyMan"))
-         (make_item "Reeder" '(open_app "Reeder"))
+         (make_item_ex "Reeder" '(open_app "Reeder") 'reeder)
 
          # Assistants
          (make_item "Claude" '(open_claude))
@@ -265,9 +275,12 @@
          (make_item "Show Desktop" '(show_desktop))
          (make_item "Toggle DND" '(toggle_do_not_disturb)))
 
-   # reading
-   (list (make_item "Add to Reading List" '(add_rlist_active_tab))
-         (make_item "Clear Reading List" '(clear_rlist)))
+   # reeder
+   (list (make_item "Add to Reeder" '(reeder_add_active_tab)))
+
+   # jump list
+   (list (make_item "Add to Jump List" '(add_rlist_active_tab))
+         (make_item "Clear Jump List" '(clear_rlist)))
 
    # recording
    (list (make_item "Screen Capture" '(start_screencap)))

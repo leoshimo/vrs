@@ -54,6 +54,8 @@ while true; do
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/safari_history.ll >/dev/null
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/youtube.ll >/dev/null
 
+             cargo run --bin vrsctl $CARGO_ARGS ./scripts/reeder.ll >/dev/null
+
              if [ "$MODE" = "demo" ]; then
                  cargo run --bin vrsctl $CARGO_ARGS ./scripts/rlist_demo.ll >/dev/null
                  cargo run --bin vrsctl $CARGO_ARGS ./scripts/nl_shell_demo.ll >/dev/null
