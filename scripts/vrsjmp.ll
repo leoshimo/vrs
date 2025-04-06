@@ -32,7 +32,7 @@
      (display_items query)
      (window_items query)
      (scheduler_items query)
-     (reeder_items query)
+     # (reeder_items query)
      (rlist_items query)
      (youtube_items query)
      (safari_history_items query)
@@ -129,13 +129,13 @@
            (fn (t) (list :title (format "t: Mark Done - {}" (get t :title))
                          :on_click (list 'set_todos_done_by_id (get t :id)))))))
 
-(defn reeder_items (query)
-  "(reeder_items QUERY) - Returns markup for reeder items"
-  (if (not? (contains? query "rd:"))
-      '()
-      (begin
-       (if (eq? query "rd:") (reeder_refresh_items))
-       (map (reeder_get_items) (fn (it) (make_item (format "rd: {}" (get it :title)) (list 'open_url (get it :url))))))))
+# (defn reeder_items (query)
+#   "(reeder_items QUERY) - Returns markup for reeder items"
+#   (if (not? (contains? query "rd:"))
+#       '()
+#       (begin
+#        (if (eq? query "rd:") (reeder_refresh_items))
+#        (map (reeder_get_items) (fn (it) (make_item (format "rd: {}" (get it :title)) (list 'open_url (get it :url))))))))
 
 (defn notes_items (query)
   "(notes_items) - Returns markup for notes"
