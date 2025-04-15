@@ -244,7 +244,9 @@
          (make_item "Zig - langref" '(open_file "~/.zigup/doc/langref.html")))
 
    # directories
-   (list (make_item "Downloads" '(open_file "~/Downloads"))
+   (list
+         (make_item_ex "Desktop" '(open_file "~/Desktop") 'desktop)
+         (make_item_ex "Downloads" '(open_file "~/Downloads") 'download)
          (make_item "iCloud Drive" '(open_file "~/Library/Mobile Documents/com~apple~CloudDocs"))
          (make_item "Dropbox" '(open_file "~/Dropbox"))
          (make_item "Crash Reports" '(open_file "~/Library/Logs/DiagnosticReports/")))
@@ -271,6 +273,7 @@
    (list (make_item "Restart vrsd" '(exec "pkill" "-ax" "vrsd"))
          (make_item "Toggle Darkmode" '(toggle_darkmode))
          (make_item "Toggle Color Filter" '(toggle_color_filters))
+         (make_item "Toggle Desktop" '(exec "desktop_toggle"))
          (make_item "Toggle QuickShade" '(toggle_quick_shade))
          (make_item "Open in Wayback" '(active_tab_open_wayback))
          (make_item "Show Desktop" '(show_desktop))
