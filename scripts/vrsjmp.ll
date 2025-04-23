@@ -236,6 +236,8 @@
          (make_item "ProxyMan" '(open_app "ProxyMan"))
          (make_item_ex "Reeder" '(open_app "Reeder") 'reeder)
 
+         (make_item "UI Browser" '(open_app "UI Browser"))
+
          # Assistants
          (make_item "Claude" '(open_claude))
          (make_item "ChatGPT" '(open_app "ChatGPT"))
