@@ -235,6 +235,7 @@
          (make_item "Script Debugger" '(open_app "Script Debugger"))
          (make_item "ProxyMan" '(open_app "ProxyMan"))
          (make_item_ex "Reeder" '(open_app "Reeder") 'reeder)
+         (make_item "Feedbin" '(open_url "https://feedbin.com/"))
 
          (make_item "UI Browser" '(open_app "UI Browser"))
 
