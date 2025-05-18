@@ -238,6 +238,7 @@
          (make_item_ex "Reeder" '(open_app "Reeder") 'reeder)
          (make_item_ex "Feedbin" '(open_url "https://feedbin.com/") 'feedbin)
          (make_item "Copy Feedbin Email" '(set_clipboard "leo.001@feedb.in"))
+         (make_item_ex "Habitica" '(open_url "https://habitica.com/") 'habitica)
 
          (make_item "UI Browser" '(open_app "UI Browser"))
 
