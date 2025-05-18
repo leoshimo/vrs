@@ -22,6 +22,7 @@
 (bind_srv :safari_history)
 (bind_srv :github)
 (bind_srv :reeder)
+(bind_srv :os_clipboard)
 
 (defn get_items (query)
   "Retrieve items to display"
@@ -235,7 +236,8 @@
          (make_item "Script Debugger" '(open_app "Script Debugger"))
          (make_item "ProxyMan" '(open_app "ProxyMan"))
          (make_item_ex "Reeder" '(open_app "Reeder") 'reeder)
-         (make_item "Feedbin" '(open_url "https://feedbin.com/"))
+         (make_item_ex "Feedbin" '(open_url "https://feedbin.com/") 'feedbin)
+         (make_item "Copy Feedbin Email" '(set_clipboard "leo.001@feedb.in"))
 
          (make_item "UI Browser" '(open_app "UI Browser"))
 
