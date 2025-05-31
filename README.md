@@ -1,6 +1,5 @@
-
 <p align="center">
-    <img width="360" src="https://raw.github.com/leoshimo/vrs/main/assets/vrs.png">
+    <img width="450" src="https://raw.github.com/leoshimo/vrs/main/assets/vrs-venn.png">
 </p>
 
 > In the multiverse, you can live up to your ultimate potential. We discovered a
@@ -13,34 +12,31 @@
 
 ## What is this?
 
-[vrs](https://github.com/leoshimo/vrs) is a personal software runtime - an
-opinionated take on my own "endgame" software platform.
+[vrs](https://github.com/leoshimo/vrs) is a personal programming runtime - a sandbox for building my “endgame” software platform.
 
-It considers every aspect of programming - language, execution, environment,
-editing, tooling, and more - designing across the end-to-end process of building
-software.
+The goal is to create a computing environment that brings me joy.
 
-Its inspirations are Emacs, Erlang, Unix, Plan 9, and Hypermedia systems.  It
-hopes to combine powerful ideas from those projects into one cohesive whole for
-an empowering, joyful, holistic programming experience.
+Each piece - the language, runtime, tools, and more - is designed as part of one holistic experience.
 
-The key principles are: joy, uniformity, simplicity, practicality, and
-interactivity.
+I live on a collection of personal software running on vrs every day, evolving the runtime as I go.
 
-<p align="center">
-    <img width="450" src="https://raw.github.com/leoshimo/vrs/main/assets/vrs-venn.png">
-</p>
+Inspired by systems I love - Emacs, Erlang, Unix, Plan 9, and Hypermedia - combining their powerful ideas into something that feels just right for me.
+
+Built at the [Recurse Center](https://www.recurse.com/).
 
 ## Status
 
-🚧 Under heavy construction
-🐉 Here be dragons
+🚧 Under heavy construction, in perpetuity 🚧
 
-vrs is a sandbox project, focused on play and experimentation in a pure-fun,
-pure-utility environment. While I live-on vrs everyday, the platform is very
-volatile in both concepts and implementation.
+🐉 Here be dragons 🐉
 
-[This software has rough edges](https://www.youtube.com/watch?v=sCZJblyT_XM&t=310s). Be warned!
+vrs is a *personal* passion project, focused on play + experimentation.
+
+To this end:
+
+- There are no stability guarantees. The implementation + concepts are volatile.
+- Contributions of the intellectual kind are welcome ([reach me here](https://x.com/leoshimo)), but contributions of code are not accepted.
+- [This software has sharp edges](https://www.youtube.com/watch?v=sCZJblyT_XM&t=310s). Be warned!
 
 ## Structure
 
