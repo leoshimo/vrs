@@ -2,8 +2,7 @@
 # vrsjmp.ll - vrsjmp commandbar
 #
 
-(defn is_personal? ()
-  (eq? (exec "uname" "-n") "shinjuku.local"))
+(defn is_personal? () (eq? (exec "uname" "-n") "shinjuku.local"))
 
 # TODO: Move to init.ll w/ supervision tree
 (bind_srv :system_appearance)
@@ -213,7 +212,7 @@
    (list
 
          (make_item_ex "Browser" '(open_app "Safari") 'b)
-         (make_item_ex "Deta Surf" '(open_app "Surf") 'b)
+         # (make_item_ex "Deta Surf" '(open_app "Surf") 'b)
          (make_item_ex "Terminal" '(open_app "Ghostty") 't) # 👻
          (make_item_ex "TextEdit" '(open_app "TextEdit") 'te)
          # (make_item "Terminal" '(open_app "Alacritty"))
