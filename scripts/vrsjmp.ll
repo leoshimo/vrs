@@ -48,14 +48,6 @@
   "Create an item with TITLE and COMMAND and HINTS"
   (list :hints hints :title title :on_click command))
 
-(defn open_claude ()
-  "Open Claude.app from correct directory"
-  (if (err? (try (exec "pgrep" "-x" "Claude")))
-    (begin
-     (spawn (lambda () (exec "/Applications/Claude.app/Contents/MacOS/Claude")))
-     (sleep 1)))
-  (open_app "Claude"))
-
 # TODO: Query should be rule-based? I.e. "Search DWIM" - if URL, if App Name, if Bundle ID, if location (?), if long, etc
 (defn query_items (query)
   "Return a dynamic list of item for current query"
@@ -245,7 +237,7 @@
          (make_item "UI Browser" '(open_app "UI Browser"))
 
          # Assistants
-         (make_item "Claude" '(open_claude))
+         (make_item "Claude" '(open_app "Claude"))
          (make_item "ChatGPT" '(open_app "ChatGPT"))
          (make_item "HuggingChat" '(open_app "HuggingChat"))
 
