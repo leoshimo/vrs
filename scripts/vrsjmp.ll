@@ -22,12 +22,14 @@
 (bind_srv :github)
 (bind_srv :reeder)
 (bind_srv :os_clipboard)
+(bind_srv :stickies)
 
 (defn get_items (query)
   "Retrieve items to display"
   (+ (favorite_items)
      (todo_items query)
      (notes_items query)
+     (stickies_items query)
      (obsidian_items query)
      (display_items query)
      (window_items query)
@@ -136,6 +138,16 @@
     (map (get_notes) (fn (n) (list :title (format "n: {}" (get n :title))
                                    :on_click (list 'open_note (get n :id)))))))
 
+(def stickies_get_cache '())
+(defn stickies_items (query)
+  "(stickies_items) - Returns markup for Stickies"
+  (if (not? (contains? query "s:"))
+    '()
+      (begin
+       (if (eq? query "s:") (set stickies_get_cache (stickies_get)))
+       (map stickies_get_cache (fn (n) (list :title (format "s: {}" (get n :title))
+                                               :on_click (list 'stickies_open (get n :title))))))))
+
 (defn obsidian_items (query)
   "(obsidian_items) - Returns markup for obsidian notes"
   (if (not? (contains? query "o:"))
@@ -232,7 +244,7 @@
          (make_item "Copy Feedbin Email" '(set_clipboard "leo.001@feedb.in"))
          (make_item_ex "Habitica" '(open_url "https://habitica.com/") 'habitica)
          (make_item_ex "Codex" '(open_url "https://chatgpt.com/codex") 'codex)
-
+         (make_item "Stickies" '(open_app "Stickies"))
 
          (make_item "UI Browser" '(open_app "UI Browser"))
 
