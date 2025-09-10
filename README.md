@@ -223,6 +223,8 @@ Each process has a dedicated mailbox that it can poll to receive messages:
     (send parent_pid :hello_from_child)))
 ```
 
+VRS / Lyric's approach to concurrent systems is [CSP](https://en.wikipedia.org/wiki/Communicating_sequential_processes).
+
 ### Services - Registry, Discovery, Binding
 
 Services are long-running processes that:

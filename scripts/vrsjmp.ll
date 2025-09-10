@@ -214,7 +214,6 @@
   (+
    # app launcher
    (list
-
          (make_item_ex "Browser" '(open_app "Safari") 'b)
          # (make_item_ex "Deta Surf" '(open_app "Surf") 'b)
          (make_item_ex "Terminal" '(open_app "Ghostty") 't) # 👻
@@ -246,6 +245,7 @@
          (make_item_ex "Habitica" '(open_url "https://habitica.com/") 'habitica)
          (make_item_ex "Codex" '(open_url "https://chatgpt.com/codex") 'codex)
          (make_item "VirtualBuddy" '(open_app "VirtualBuddy"))
+         (make_item "VirtualBuddy - Shared" '(open_file "~/VirtualBuddy-Shared"))
          (make_item "Stickies" '(open_app "Stickies"))
 
          (make_item "UI Browser" '(open_app "UI Browser"))
