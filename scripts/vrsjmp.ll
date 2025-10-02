@@ -289,6 +289,7 @@
          (make_item "Toggle Darkmode" '(toggle_darkmode))
          (make_item "Toggle Color Filter" '(toggle_color_filters))
          (make_item "Toggle Desktop" '(exec "desktop_toggle"))
+         (make_item "Toggle Dock" '(exec "dock_autohide_toggle"))
          (make_item "Toggle QuickShade" '(toggle_quick_shade))
          (make_item "Open in Wayback" '(active_tab_open_wayback))
          (make_item "Show Desktop" '(show_desktop))
