@@ -30,6 +30,6 @@
   "(active_tab_open_wayback) - Open current active tab in Wayback Machine"
   (def url (get (active_tab) :url))
   # (open_url (format "https://web.archive.org/web/*/{}" url))
-  (open_url (format "https://archive.is/search/?q={}" url)))
+  (open_url (format "https://archive.is/{}" url)))
 
 (spawn_srv :os_browser :interface '(active_tab active_tab_open_wayback))
