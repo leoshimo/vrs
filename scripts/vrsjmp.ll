@@ -247,6 +247,7 @@
          (make_item "VirtualBuddy" '(open_app "VirtualBuddy"))
          (make_item "VirtualBuddy - Shared" '(open_file "~/VirtualBuddy-Shared"))
          (make_item "Stickies" '(open_app "Stickies"))
+         (make_item "Distill" '(open_app "Distill"))
 
          (make_item "UI Browser" '(open_app "UI Browser"))
 
