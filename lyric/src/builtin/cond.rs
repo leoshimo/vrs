@@ -57,7 +57,7 @@ pub fn empty_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
             [Val::List(l)] => Ok(NativeFnOp::Return(Val::Bool(l.is_empty()))),
             [Val::String(s)] => Ok(NativeFnOp::Return(Val::Bool(s.is_empty()))),
             _ => {
-                return Err(Error::UnexpectedArguments(
+                Err(Error::UnexpectedArguments(
                     "empty? expects one string or list argument".to_string(),
                 ))
             }

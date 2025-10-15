@@ -235,7 +235,7 @@ fn toggle_window_visibility(window: &Window, app_handle: &AppHandle) {
         let _ = app_handle.hide();
         let _ = window.hide();
     } else {
-        center_in_primary_monitor(&window);
+        center_in_primary_monitor(window);
         let _ = window.set_focus();
     }
 }
