@@ -253,7 +253,9 @@
 
          # Assistants
          (make_item "Claude" '(open_app "Claude"))
-         (make_item "ChatGPT" '(open_app "ChatGPT"))
+         # (make_item "ChatGPT" '(open_app "ChatGPT"))
+         (make_item "ChatGPT" '(open_url "https://chatgpt.com"))
+         (make_item "ChatGPT Desktop" '(open_app "ChatGPT"))
          (make_item "HuggingChat" '(open_app "HuggingChat"))
 
          (make_item "Zig - langref" '(open_file "~/.zigup/doc/langref.html")))

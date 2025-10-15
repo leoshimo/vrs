@@ -10,9 +10,8 @@ use nucleo_matcher::{
 };
 use serde_json::json;
 use std::sync::Mutex;
-use tauri::{
-    async_runtime::JoinHandle, AppHandle, GlobalShortcutManager, Manager, PhysicalPosition, Window,
-};
+use tauri::{async_runtime::JoinHandle, AppHandle, Manager, PhysicalPosition, WebviewWindow};
+use tauri_plugin_global_shortcut::GlobalShortcutExt;
 use tokio::{
     net::UnixStream,
     sync::{mpsc, oneshot},
@@ -161,7 +160,7 @@ fn dispatch(form: &str, state: tauri::State<State>, app: tauri::AppHandle) {
         error!("Error dispatching request - {e}");
     }
 
-    let window = app.get_window("main").unwrap();
+    let window = app.get_webview_window("main").unwrap();
     let _ = window.hide();
 
     #[cfg(target_os = "macos")]
@@ -173,7 +172,7 @@ fn on_blur(app: tauri::AppHandle) {
     if cfg!(debug_assertions) {
         return; // skip hiding on debug
     }
-    let window = app.get_window("main").unwrap();
+    let window = app.get_webview_window("main").unwrap();
     let _ = window.hide();
     #[cfg(target_os = "macos")]
     let _ = app.hide();
@@ -186,9 +185,10 @@ fn main() -> Result<()> {
         .with_context(|| "Failed to start vrs client")?;
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(State::new(client))
         .setup(|app| {
-            let window = app.get_window("main").unwrap();
+            let window = app.get_webview_window("main").unwrap();
 
             #[cfg(target_os = "macos")]
             app.set_activation_policy(ActivationPolicy::Accessory);
@@ -202,20 +202,20 @@ fn main() -> Result<()> {
             )
             .expect("Unsupported platform! 'apply_vibrancy' is only supported on macOS");
 
-            let handle = app.handle();
-            let mut shortcuts = app.global_shortcut_manager();
-
             let binding = if cfg!(debug_assertions) {
                 "CMD+CTRL+SHIFT+SPACE" // debug
             } else {
                 "CMD+SPACE" // release
             };
 
-            shortcuts
-                .register(binding, move || {
-                    toggle_window_visibility(&window, &handle);
-                })
-                .unwrap();
+            let window_clone = window.clone();
+            let app_handle = app.handle();
+            let app_handle_clone = app_handle.clone();
+            app_handle
+                .global_shortcut()
+                .on_shortcut(binding, move |_app, _, _| {
+                    toggle_window_visibility(&window_clone, &app_handle_clone);
+                })?;
 
             Ok(())
         })
@@ -226,7 +226,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn toggle_window_visibility(window: &Window, app_handle: &AppHandle) {
+fn toggle_window_visibility(window: &WebviewWindow, app_handle: &AppHandle) {
     let visible = window
         .is_visible()
         .expect("should retrieve window visibility");
@@ -240,7 +240,7 @@ fn toggle_window_visibility(window: &Window, app_handle: &AppHandle) {
     }
 }
 
-fn center_in_primary_monitor(window: &Window) {
+fn center_in_primary_monitor(window: &WebviewWindow) {
     let primary_monitor = match window.primary_monitor() {
         Ok(Some(m)) => m,
         Err(e) => {

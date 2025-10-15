@@ -104,3 +104,4 @@ Cargo.lock
 /vrsd.log
 *.log
 scratch.ll
+vrsjmp/src-tauri/gen/

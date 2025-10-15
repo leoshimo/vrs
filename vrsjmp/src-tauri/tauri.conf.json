@@ -1,51 +1,44 @@
 {
-    "build": {
-        "beforeDevCommand": "",
-        "beforeBuildCommand": "",
-        "devPath": "../src",
-        "distDir": "../src",
-        "withGlobalTauri": true
+  "productName": "vrsjmp",
+  "version": "0.0.1",
+  "identifier": "com.vrs.vrsjmp",
+  "build": {
+    "frontendDist": "../src"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "macOSPrivateApi": true,
+    "security": {
+      "csp": null
     },
-    "package": {
-        "productName": "vrsjmp",
-        "version": "0.0.1"
-    },
-    "tauri": {
-        "macOSPrivateApi": true,
-        "allowlist": {
-            "all": false
-        },
-        "bundle": {
-            "active": true,
-            "targets": "all",
-            "identifier": "com.vrs.vrsjmp",
-            "icon": [
-                "icons/32x32.png",
-                "icons/128x128.png",
-                "icons/128x128@2x.png",
-                "icons/icon.icns",
-                "icons/icon.ico"
-            ]
-        },
-        "security": {
-            "csp": null
-        },
-        "windows": [
-            {
-                "fullscreen": false,
-                "resizable": false,
-                "alwaysOnTop": false,
-                "maximizable": false,
-                "minimizable": false,
-                "closable": false,
-                "transparent": true,
-                "title": "vrsjmp",
-                "decorations": false,
-                "width": 800,
-                "height": 530,
-                "center": true,
-                "acceptFirstMouse": true
-            }
-        ]
-    }
+    "windows": [
+      {
+        "label": "main",
+        "fullscreen": false,
+        "resizable": false,
+        "alwaysOnTop": false,
+        "maximizable": false,
+        "minimizable": false,
+        "closable": false,
+        "transparent": true,
+        "title": "vrsjmp",
+        "decorations": false,
+        "width": 800,
+        "height": 530,
+        "center": true,
+        "acceptFirstMouse": true
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
 }
