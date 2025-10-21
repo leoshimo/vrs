@@ -16,6 +16,7 @@
 (bind_srv :os_maps)
 (bind_srv :os_notes)
 (bind_srv :obsidian)
+(bind_srv :eden)
 (bind_srv :youtube)
 (bind_srv :cmd_macro)
 (bind_srv :safari_history)
@@ -35,6 +36,7 @@
      (window_items query)
      (scheduler_items query)
      # (reeder_items query)
+     (eden_items query)
      (rlist_items query)
      (youtube_items query)
      (safari_history_items query)
@@ -163,7 +165,17 @@
     (map (list_videos) (fn (n) (list :title (format "yt: {}" (get n :title))
                                      :on_click (list 'open_file (get n :path)))))))
 
-# TODO: Nice-to-have - "subtitle" UI to show url / domain
+(defn eden_items (query)
+  "(eden_items QUERY) - Returns markup for eden tabs"
+  (if (not? (contains? query "eden:"))
+    '()
+      (+
+       (list (make_item "eden: Ask AI" (list 'eden_ai query)))
+       (map (eden_list) (fn (e)
+           (list :title (format "eden: {}" (get e :title))
+                 :on_click (list 'eden_open (get e :id))))))))
+
+# TODO: Nice-to-have - subtitle UI to show url / domain
 (defn safari_history_items (query)
   "(safari_history_items QUERY) - Returns markup for safari history items"
   (if (not? (contains? query "h:"))

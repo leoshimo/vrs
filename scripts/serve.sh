@@ -56,6 +56,7 @@ while true; do
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/stickies.ll >/dev/null
 
              cargo run --bin vrsctl $CARGO_ARGS ./scripts/reeder.ll >/dev/null
+             cargo run --bin vrsctl $CARGO_ARGS ./scripts/eden.ll >/dev/null
 
              if [ "$MODE" = "demo" ]; then
                  cargo run --bin vrsctl $CARGO_ARGS ./scripts/rlist_demo.ll >/dev/null
