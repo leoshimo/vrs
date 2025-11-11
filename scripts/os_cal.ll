@@ -2,7 +2,7 @@
 # os_cal.ll - OS Specific Calendarr
 
 # personal calendar
-(def default_calendar "E8053BAF-FE5D-40FC-8F2A-FB53BA82B8BE")
+(def default_calendar "610425FC-858D-412F-81AA-1E5235A3C964")
 
 # TODO: Allow specifying calendars
 (defn create_event (title start_date end_date)
