@@ -1,0 +1,41 @@
+{
+  "name": "avatar-lab",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint",
+    "format": "oxfmt",
+    "test": "node --experimental-strip-types --test lib/avatar/*.test.mjs",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "@base-ui/react": "npm:@base-ui-components/react@1.0.0-rc.0",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "lucide-react": "0.556.0",
+    "motion": "12.23.25",
+    "react": "19.2.1",
+    "react-dom": "19.2.1",
+    "tailwind-merge": "3.4.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.1.17",
+    "@types/node": "22.19.1",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "5.1.1",
+    "oxfmt": "0.16.0",
+    "oxlint": "1.31.0",
+    "tailwindcss": "4.1.17",
+    "typescript": "5.9.3",
+    "vite": "7.2.6"
+  },
+  "type": "module",
+  "description": "Local avatar expression and shader exploration tools."
+}

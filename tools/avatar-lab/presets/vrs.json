@@ -1,0 +1,772 @@
+{
+  "version": 1,
+  "initialized": true,
+  "appearance": {
+    "shape": "pearl",
+    "placement": "leading",
+    "breathe": true,
+    "selection": "fill",
+    "texture": "bayer",
+    "effects": {
+      "indicator": true,
+      "selection": false,
+      "input": false,
+      "container": false,
+      "placeholder": false
+    },
+    "edge": "wave",
+    "amount": 0.22,
+    "pitch": 2,
+    "expression": 1.25,
+    "color": "mono",
+    "colorTiming": "reactive",
+    "loadingMotion": "left-right",
+    "edgeSignal": "off",
+    "edgeMotion": "wave",
+    "typingMotion": "pressure",
+    "interior": "light",
+    "idleAmount": 1.6,
+    "typingEnergy": 0.35,
+    "dispatchEnergy": 0.65,
+    "settle": 1.5,
+    "coupling": 1,
+    "boundary": "none",
+    "shapeNoise": 0,
+    "toneSteps": 3,
+    "colorStrength": 0.5,
+    "rippleAccent": false,
+    "sparkCount": 10,
+    "surfaceAmplitude": 0.8,
+    "surfaceDuration": 3,
+    "surfaceWidth": 0.32,
+    "surfaceWavelength": 0.5235987755982988,
+    "surfaceDamping": 0,
+    "surfaceOriginX": -0.3,
+    "surfaceOriginY": -0.45,
+    "surfaceSilhouette": 1,
+    "surfaceDisplacement": 1,
+    "surfaceShading": 1,
+    "appearanceTarget": "avatar",
+    "fill": 0.5,
+    "contrast": 1.65,
+    "matrix": 8,
+    "saturation": 0.5,
+    "activitySaturation": 0.5,
+    "gravity": 1,
+    "volume": 1,
+    "lightStrength": 1,
+    "lightAngle": 0,
+    "loadingStrength": 1,
+    "loadingRate": 1,
+    "driftAngle": 0,
+    "waveOffset": 0,
+    "appearanceMode": "fill",
+    "uiFont": "system",
+    "uiSurface": "porcelain",
+    "placeholderMode": "plain",
+    "selectionMotion": "crossfade",
+    "selectionTint": 0.1,
+    "dispatchTarget": "selection",
+    "avatarDispatch": "gather",
+    "selectionRelease": "press",
+    "inputTreatment": "bottom",
+    "language": "porcelain"
+  },
+  "expressions": [
+    {
+      "id": "rest",
+      "name": "Lava",
+      "motions": [
+        {
+          "preset": "rest",
+          "action": "idle",
+          "settings": {
+            "idleAmount": 1.6
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "field-nudge",
+      "name": "Nudge",
+      "motions": [
+        {
+          "preset": "field-nudge",
+          "action": "typing",
+          "settings": {
+            "typingMotion": "nudge",
+            "typingEnergy": 0.6
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "surface-react",
+      "name": "Quick ripple",
+      "motions": [
+        {
+          "preset": "surface-react",
+          "action": "dispatch",
+          "settings": {
+            "avatarDispatch": "surface",
+            "dispatchEnergy": 0.3,
+            "sparkCount": 10,
+            "settle": 0.7,
+            "surfaceAmplitude": 1,
+            "surfaceDuration": 2.5,
+            "surfaceWidth": 0.32,
+            "surfaceWavelength": 0.5235987755982988,
+            "surfaceDamping": 0,
+            "surfaceOriginX": -0.4,
+            "surfaceOriginY": -0.45,
+            "surfaceSilhouette": 1,
+            "surfaceDisplacement": 1,
+            "surfaceShading": 1
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "light",
+      "name": "Tilt",
+      "motions": [
+        {
+          "preset": "light",
+          "action": "typing",
+          "settings": {
+            "typingMotion": "light",
+            "typingEnergy": 1.15
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "agitation-kick",
+      "name": "Ruffle",
+      "motions": [
+        {
+          "preset": "agitation-kick",
+          "action": "typing",
+          "settings": {
+            "typingMotion": "agitation",
+            "typingEnergy": 1
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "pressure",
+      "name": "Soft pressure",
+      "motions": [
+        {
+          "preset": "pressure",
+          "action": "typing",
+          "settings": {
+            "typingMotion": "pressure",
+            "typingEnergy": 1.2
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "drift",
+      "name": "Oblique drift",
+      "motions": [
+        {
+          "preset": "drift",
+          "action": "loading",
+          "settings": {
+            "loadingMotion": "drift",
+            "loadingStrength": 1,
+            "loadingRate": 1,
+            "driftAngle": 20,
+            "waveOffset": 0,
+            "coupling": 1,
+            "rippleAccent": false,
+            "surfaceAmplitude": 0.8,
+            "surfaceDuration": 3,
+            "surfaceWidth": 0.32,
+            "surfaceWavelength": 0.5235987755982988,
+            "surfaceDamping": 0,
+            "surfaceOriginX": -0.3,
+            "surfaceOriginY": -0.45,
+            "surfaceSilhouette": 1,
+            "surfaceDisplacement": 1,
+            "surfaceShading": 1
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "eddies",
+      "name": "Eddies",
+      "motions": [
+        {
+          "preset": "eddies",
+          "action": "loading",
+          "settings": {
+            "loadingMotion": "eddy",
+            "loadingStrength": 1.85,
+            "loadingRate": 2.4,
+            "driftAngle": 0,
+            "waveOffset": 0,
+            "coupling": 1.7,
+            "rippleAccent": false,
+            "surfaceAmplitude": 0.8,
+            "surfaceDuration": 3,
+            "surfaceWidth": 0.32,
+            "surfaceWavelength": 0.5235987755982988,
+            "surfaceDamping": 0,
+            "surfaceOriginX": -0.3,
+            "surfaceOriginY": -0.45,
+            "surfaceSilhouette": 1,
+            "surfaceDisplacement": 1,
+            "surfaceShading": 1
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "gentle-agitation",
+      "name": "Gentle stir",
+      "motions": [
+        {
+          "preset": "gentle-agitation",
+          "action": "loading",
+          "settings": {
+            "loadingMotion": "agitated",
+            "loadingStrength": 1.15,
+            "loadingRate": 0.3,
+            "driftAngle": 0,
+            "waveOffset": 0,
+            "coupling": 2.2,
+            "rippleAccent": false,
+            "surfaceAmplitude": 0.8,
+            "surfaceDuration": 3,
+            "surfaceWidth": 0.32,
+            "surfaceWavelength": 0.5235987755982988,
+            "surfaceDamping": 0,
+            "surfaceOriginX": -0.3,
+            "surfaceOriginY": -0.45,
+            "surfaceSilhouette": 1,
+            "surfaceDisplacement": 1,
+            "surfaceShading": 1
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "restless",
+      "name": "Restless stir",
+      "motions": [
+        {
+          "preset": "restless",
+          "action": "loading",
+          "settings": {
+            "loadingMotion": "agitated",
+            "loadingStrength": 0.55,
+            "loadingRate": 2.45,
+            "driftAngle": 0,
+            "waveOffset": 0,
+            "coupling": 1,
+            "rippleAccent": false,
+            "surfaceAmplitude": 0.8,
+            "surfaceDuration": 3,
+            "surfaceWidth": 0.32,
+            "surfaceWavelength": 0.5235987755982988,
+            "surfaceDamping": 0,
+            "surfaceOriginX": -0.3,
+            "surfaceOriginY": -0.45,
+            "surfaceSilhouette": 1,
+            "surfaceDisplacement": 1,
+            "surfaceShading": 1
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "fast",
+      "name": "Fast idle",
+      "motions": [
+        {
+          "preset": "fast",
+          "action": "loading",
+          "settings": {
+            "loadingMotion": "quicker",
+            "loadingStrength": 1,
+            "loadingRate": 1,
+            "driftAngle": 0,
+            "waveOffset": 0,
+            "coupling": 1,
+            "rippleAccent": false,
+            "surfaceAmplitude": 0.8,
+            "surfaceDuration": 3,
+            "surfaceWidth": 0.32,
+            "surfaceWavelength": 0.5235987755982988,
+            "surfaceDamping": 0,
+            "surfaceOriginX": -0.3,
+            "surfaceOriginY": -0.45,
+            "surfaceSilhouette": 1,
+            "surfaceDisplacement": 1,
+            "surfaceShading": 1
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "alternating",
+      "name": "Alternating sweep",
+      "motions": [
+        {
+          "preset": "alternating",
+          "action": "loading",
+          "settings": {
+            "loadingMotion": "alternating",
+            "loadingStrength": 1,
+            "loadingRate": 1,
+            "driftAngle": 0,
+            "waveOffset": 0,
+            "coupling": 1,
+            "rippleAccent": false,
+            "surfaceAmplitude": 0.8,
+            "surfaceDuration": 3,
+            "surfaceWidth": 0.32,
+            "surfaceWavelength": 0.5235987755982988,
+            "surfaceDamping": 0,
+            "surfaceOriginX": -0.3,
+            "surfaceOriginY": -0.45,
+            "surfaceSilhouette": 1,
+            "surfaceDisplacement": 1,
+            "surfaceShading": 1
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "right-left",
+      "name": "From the right",
+      "motions": [
+        {
+          "preset": "right-left",
+          "action": "loading",
+          "settings": {
+            "loadingMotion": "right-left",
+            "loadingStrength": 1.05,
+            "loadingRate": 1,
+            "driftAngle": 0,
+            "waveOffset": 0,
+            "coupling": 1,
+            "rippleAccent": false,
+            "surfaceAmplitude": 0.8,
+            "surfaceDuration": 3,
+            "surfaceWidth": 0.32,
+            "surfaceWavelength": 0.5235987755982988,
+            "surfaceDamping": 0,
+            "surfaceOriginX": -0.3,
+            "surfaceOriginY": -0.45,
+            "surfaceSilhouette": 1,
+            "surfaceDisplacement": 1,
+            "surfaceShading": 1
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "left-right",
+      "name": "From the left",
+      "motions": [
+        {
+          "preset": "left-right",
+          "action": "loading",
+          "settings": {
+            "loadingMotion": "left-right",
+            "loadingStrength": 1,
+            "loadingRate": 1,
+            "driftAngle": 0,
+            "waveOffset": 0,
+            "coupling": 1,
+            "rippleAccent": false,
+            "surfaceAmplitude": 0.8,
+            "surfaceDuration": 3,
+            "surfaceWidth": 0.32,
+            "surfaceWavelength": 0.5235987755982988,
+            "surfaceDamping": 0,
+            "surfaceOriginX": -0.3,
+            "surfaceOriginY": -0.45,
+            "surfaceSilhouette": 1,
+            "surfaceDisplacement": 1,
+            "surfaceShading": 1
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "top-bottom",
+      "name": "Downpour",
+      "motions": [
+        {
+          "preset": "top-bottom",
+          "action": "loading",
+          "settings": {
+            "loadingMotion": "top-bottom",
+            "loadingStrength": 1,
+            "loadingRate": 1,
+            "driftAngle": 0,
+            "waveOffset": 0,
+            "coupling": 1,
+            "rippleAccent": false,
+            "surfaceAmplitude": 0.8,
+            "surfaceDuration": 3,
+            "surfaceWidth": 0.32,
+            "surfaceWavelength": 0.5235987755982988,
+            "surfaceDamping": 0,
+            "surfaceOriginX": -0.3,
+            "surfaceOriginY": -0.45,
+            "surfaceSilhouette": 1,
+            "surfaceDisplacement": 1,
+            "surfaceShading": 1
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "bottom-top",
+      "name": "Updraft",
+      "motions": [
+        {
+          "preset": "bottom-top",
+          "action": "loading",
+          "settings": {
+            "loadingMotion": "bottom-top",
+            "loadingStrength": 1,
+            "loadingRate": 1,
+            "driftAngle": 0,
+            "waveOffset": 0,
+            "coupling": 1,
+            "rippleAccent": false,
+            "surfaceAmplitude": 0.8,
+            "surfaceDuration": 3,
+            "surfaceWidth": 0.32,
+            "surfaceWavelength": 0.5235987755982988,
+            "surfaceDamping": 0,
+            "surfaceOriginX": -0.3,
+            "surfaceOriginY": -0.45,
+            "surfaceSilhouette": 1,
+            "surfaceDisplacement": 1,
+            "surfaceShading": 1
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "random",
+      "name": "Wandering wave",
+      "motions": [
+        {
+          "preset": "random",
+          "action": "loading",
+          "settings": {
+            "loadingMotion": "random",
+            "loadingStrength": 1,
+            "loadingRate": 1,
+            "driftAngle": 0,
+            "waveOffset": 0,
+            "coupling": 1,
+            "rippleAccent": false,
+            "surfaceAmplitude": 0.8,
+            "surfaceDuration": 3,
+            "surfaceWidth": 0.32,
+            "surfaceWavelength": 0.5235987755982988,
+            "surfaceDamping": 0,
+            "surfaceOriginX": -0.3,
+            "surfaceOriginY": -0.45,
+            "surfaceSilhouette": 1,
+            "surfaceDisplacement": 1,
+            "surfaceShading": 1
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "surface-working",
+      "name": "Repeating ripple",
+      "motions": [
+        {
+          "preset": "surface-working",
+          "action": "loading",
+          "settings": {
+            "loadingMotion": "surface",
+            "loadingStrength": 1,
+            "loadingRate": 1,
+            "driftAngle": 0,
+            "waveOffset": 0,
+            "coupling": 1,
+            "rippleAccent": false,
+            "surfaceAmplitude": 1,
+            "surfaceDuration": 2.4,
+            "surfaceWidth": 0.32,
+            "surfaceWavelength": 0.5235987755982988,
+            "surfaceDamping": 0,
+            "surfaceOriginX": -0.3,
+            "surfaceOriginY": -0.45,
+            "surfaceSilhouette": 1,
+            "surfaceDisplacement": 1,
+            "surfaceShading": 1
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "surface-submit",
+      "name": "Ripple",
+      "motions": [
+        {
+          "preset": "surface-submit",
+          "action": "dispatch",
+          "settings": {
+            "avatarDispatch": "surface",
+            "dispatchEnergy": 1.65,
+            "sparkCount": 10,
+            "settle": 1.5,
+            "surfaceAmplitude": 0.8,
+            "surfaceDuration": 3.4,
+            "surfaceWidth": 0.22,
+            "surfaceWavelength": 0.84,
+            "surfaceDamping": 0,
+            "surfaceOriginX": -0.9,
+            "surfaceOriginY": -0.25,
+            "surfaceSilhouette": 1,
+            "surfaceDisplacement": 1,
+            "surfaceShading": 1
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "gather",
+      "name": "Gather",
+      "motions": [
+        {
+          "preset": "gather",
+          "action": "dispatch",
+          "settings": {
+            "avatarDispatch": "gather",
+            "dispatchEnergy": 1.2,
+            "sparkCount": 10,
+            "settle": 1.5,
+            "surfaceAmplitude": 0.8,
+            "surfaceDuration": 3,
+            "surfaceWidth": 0.32,
+            "surfaceWavelength": 0.5235987755982988,
+            "surfaceDamping": 0,
+            "surfaceOriginX": -0.3,
+            "surfaceOriginY": -0.45,
+            "surfaceSilhouette": 1,
+            "surfaceDisplacement": 1,
+            "surfaceShading": 1
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "bloom",
+      "name": "Bloom",
+      "motions": [
+        {
+          "preset": "bloom",
+          "action": "dispatch",
+          "settings": {
+            "avatarDispatch": "bloom",
+            "dispatchEnergy": 1.2,
+            "sparkCount": 10,
+            "settle": 1.5,
+            "surfaceAmplitude": 0.8,
+            "surfaceDuration": 3,
+            "surfaceWidth": 0.32,
+            "surfaceWavelength": 0.5235987755982988,
+            "surfaceDamping": 0,
+            "surfaceOriginX": -0.3,
+            "surfaceOriginY": -0.45,
+            "surfaceSilhouette": 1,
+            "surfaceDisplacement": 1,
+            "surfaceShading": 1
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "sparks",
+      "name": "Sparks",
+      "motions": [
+        {
+          "preset": "sparks",
+          "action": "dispatch",
+          "settings": {
+            "avatarDispatch": "sparks",
+            "dispatchEnergy": 0.8,
+            "sparkCount": 11,
+            "settle": 1.5,
+            "surfaceAmplitude": 0.8,
+            "surfaceDuration": 3,
+            "surfaceWidth": 0.32,
+            "surfaceWavelength": 0.5235987755982988,
+            "surfaceDamping": 0,
+            "surfaceOriginX": -0.3,
+            "surfaceOriginY": -0.45,
+            "surfaceSilhouette": 1,
+            "surfaceDisplacement": 1,
+            "surfaceShading": 1
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "echo",
+      "name": "Echo",
+      "motions": [
+        {
+          "preset": "echo",
+          "action": "dispatch",
+          "settings": {
+            "avatarDispatch": "ripple",
+            "dispatchEnergy": 1,
+            "sparkCount": 10,
+            "settle": 1.5,
+            "surfaceAmplitude": 0.8,
+            "surfaceDuration": 3,
+            "surfaceWidth": 0.32,
+            "surfaceWavelength": 0.5235987755982988,
+            "surfaceDamping": 0,
+            "surfaceOriginX": -0.3,
+            "surfaceOriginY": -0.45,
+            "surfaceSilhouette": 1,
+            "surfaceDisplacement": 1,
+            "surfaceShading": 1
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "fill-wake",
+      "name": "Fill wake",
+      "motions": [
+        {
+          "preset": "fill-wake",
+          "action": "wake",
+          "settings": {
+            "appearanceMode": "fill",
+            "settle": 2,
+            "appearanceTarget": "bar"
+          },
+          "duration": 0.3
+        }
+      ]
+    },
+    {
+      "id": "print-wake",
+      "name": "Printed reveal",
+      "motions": [
+        {
+          "preset": "print-wake",
+          "action": "wake",
+          "settings": {
+            "appearanceMode": "print",
+            "settle": 1.5,
+            "appearanceTarget": "bar"
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "working",
+      "name": "Restless ripple",
+      "motions": [
+        {
+          "preset": "restless",
+          "action": "loading",
+          "settings": {
+            "loadingMotion": "agitated",
+            "loadingStrength": 0.55,
+            "loadingRate": 2.45,
+            "driftAngle": 0,
+            "waveOffset": 0,
+            "coupling": 1,
+            "rippleAccent": false,
+            "surfaceAmplitude": 0.8,
+            "surfaceDuration": 3,
+            "surfaceWidth": 0.32,
+            "surfaceWavelength": 0.5235987755982988,
+            "surfaceDamping": 0,
+            "surfaceOriginX": -0.3,
+            "surfaceOriginY": -0.45,
+            "surfaceSilhouette": 1,
+            "surfaceDisplacement": 1,
+            "surfaceShading": 1
+          },
+          "duration": 1.4
+        },
+        {
+          "preset": "surface-working",
+          "action": "loading",
+          "settings": {
+            "loadingMotion": "surface",
+            "loadingStrength": 1,
+            "loadingRate": 1,
+            "driftAngle": 0,
+            "waveOffset": 0,
+            "coupling": 1,
+            "rippleAccent": false,
+            "surfaceAmplitude": 0.28,
+            "surfaceDuration": 5,
+            "surfaceWidth": 0.32,
+            "surfaceWavelength": 0.5235987755982988,
+            "surfaceDamping": 0,
+            "surfaceOriginX": -0.3,
+            "surfaceOriginY": -0.45,
+            "surfaceSilhouette": 1,
+            "surfaceDisplacement": 1,
+            "surfaceShading": 1
+          },
+          "duration": 1.4
+        }
+      ]
+    },
+    {
+      "id": "quick-open",
+      "name": "Quick entrance",
+      "motions": []
+    }
+  ],
+  "events": {
+    "idle": "rest",
+    "typing": "field-nudge",
+    "working": "working",
+    "open": "quick-open",
+    "flourish": "surface-submit",
+    "submit": "sparks"
+  }
+}
