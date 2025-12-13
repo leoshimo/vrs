@@ -1,5 +1,5 @@
 // The GUI owns history, not page behavior. Callbacks/arguments stay opaque here.
-export const rootPage = () => ({ get_items: "root_items", args: "()", title: "Home", prompt: "Search commands…", debounce_ms: 0 });
+export const rootPage = () => ({ get_items: "root_items", args: "()", title: "Home", prompt: "Search…", debounce_ms: 0 });
 export const retentionMs = 8 * 60 * 1000;
 
 export class Navigation {
@@ -15,6 +15,12 @@ export class Navigation {
         this.visible = false;
         this.hiddenAt = null;
         this.opening = null;
+    }
+    dispose() {
+        this.invalidate();
+        this.opening = null;
+        this.visible = false;
+        this.render = () => {};
     }
     get current() { return this.frames.at(-1); }
     snapshot() {

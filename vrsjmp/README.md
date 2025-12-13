@@ -1,9 +1,12 @@
 # vrsjmp
 
-A launch bar GUI client for [vrs](https://github.com/leoshimo/vrs/).
+vrsjmp is a desktop client for VRS.
 
-## Development
-
-```shell
-$ cargo tauri dev
+```sh
+cd vrsjmp
+pnpm install
+pnpm tauri dev
 ```
+
+Use macOS 14+, Node 22.13+, and Rust. The debug shortcut is ⌃⌘⇧Space; release uses ⌘Space.
+`pnpm tauri build` creates the native app.

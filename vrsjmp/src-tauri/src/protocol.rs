@@ -3,7 +3,35 @@ use lyric::Form;
 use serde::Serialize;
 
 #[derive(Debug, Serialize, PartialEq)]
+pub struct UiConfig {
+    pub theme: String,
+    pub appearance: String,
+}
+
+pub fn ui_config(value: Form) -> Result<UiConfig> {
+    let Form::List(values) = value else {
+        bail!("Expected UI configuration");
+    };
+    let setting = |name, allowed: &[&str], default: &str| -> Result<String> {
+        let value = match field(&values, name) {
+            Some(Form::Keyword(value)) => value.as_str(),
+            None => default,
+            _ => bail!("{name} must be a keyword"),
+        };
+        if !allowed.contains(&value) {
+            bail!("Invalid {name}");
+        }
+        Ok(value.to_string())
+    };
+    Ok(UiConfig {
+        theme: setting("theme", &["neutral", "warm", "cool"], "neutral")?,
+        appearance: setting("appearance", &["system", "light", "dark"], "system")?,
+    })
+}
+
+#[derive(Debug, Serialize, PartialEq)]
 pub struct Item {
+    pub id: String,
     pub title: String,
     pub subtitle: Option<String>,
     pub subtitle_spans: Vec<TextSpan>,
@@ -39,6 +67,7 @@ pub struct Page {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Action {
     Close,
+    Refresh,
     PushPage { page: Page },
 }
 
@@ -111,6 +140,8 @@ pub fn items(value: Form) -> Result<Vec<Item>> {
             };
             let (subtitle, subtitle_spans) = subtitle(values)?;
             Ok(Item {
+                // Labels can change when an action refreshes the current page.
+                id: field(values, "on_click").unwrap().to_string(),
                 title: command.title,
                 subtitle,
                 subtitle_spans,
@@ -175,6 +206,9 @@ pub fn action(value: Form) -> Result<Action> {
     if value == Form::keyword("close") {
         return Ok(Action::Close);
     }
+    if value == Form::keyword("refresh") {
+        return Ok(Action::Refresh);
+    }
     let Form::List(ref values) = value else {
         bail!("Unexpected action response: {value}");
     };
@@ -216,6 +250,26 @@ pub fn action(value: Form) -> Result<Action> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn ui_configuration_is_validated_at_the_bridge() {
+        assert_eq!(
+            ui_config(Form::from_expr("(:theme :warm :appearance :dark)").unwrap()).unwrap(),
+            UiConfig {
+                theme: "warm".into(),
+                appearance: "dark".into()
+            }
+        );
+        assert_eq!(
+            ui_config(Form::from_expr("()").unwrap()).unwrap(),
+            UiConfig {
+                theme: "neutral".into(),
+                appearance: "system".into()
+            }
+        );
+        assert!(ui_config(Form::from_expr("(:theme :unknown)").unwrap()).is_err());
+        assert!(ui_config(Form::from_expr("(:appearance 42)").unwrap()).is_err());
+        assert!(ui_config(Form::keyword("config")).is_err());
+    }
     #[test]
     fn primary_actions_match_commands_not_labels_or_positions() {
         let rows = items(
@@ -266,6 +320,17 @@ mod tests {
         )
         .is_err());
         assert_eq!(action(Form::keyword("close")).unwrap(), Action::Close);
+        assert_eq!(action(Form::keyword("refresh")).unwrap(), Action::Refresh);
+        let resolutions = items(
+            Form::from_expr(
+                r#"((:title "1470x956 (current)" :on_click (select_resolution "1470x956"))
+                (:title "1470x956" :on_click (select_resolution "1470x956")))"#,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(resolutions[0].id, resolutions[1].id);
+        assert_ne!(resolutions[0].on_click, resolutions[1].on_click);
         assert!(items(Form::from_expr("((:title 42))").unwrap()).is_err());
         assert!(action(Form::keyword("unexpected")).is_err());
         let rows = items(
