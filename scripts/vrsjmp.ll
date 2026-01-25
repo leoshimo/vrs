@@ -232,6 +232,7 @@
          (make_item_ex "TextEdit" '(open_app "TextEdit") 'te)
          # (make_item "Terminal" '(open_app "Alacritty"))
          (make_item "Things" '(open_app "Things3"))
+         (make_item "Screen Sharing" '(open_app "Screen Sharing"))
          (make_item "Messages" '(open_app "Messages"))
          (make_item "YouTube Music" '(open_app "YouTube Music"))
          (make_item "Notes" '(open_app "Notes"))
