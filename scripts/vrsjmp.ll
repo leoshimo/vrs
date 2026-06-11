@@ -245,7 +245,6 @@
          (make_item "Cal" '(open_app "Calendar"))
          # (make_item "Cal" '(open_app "Notion Calendar"))
          (make_item "Find My" '(open_app "FindMy"))
-         (make_item "Slack" '(open_app "Slack"))
          (make_item "Soulver" '(open_app "Soulver 3"))
          (make_item "1Password" '(open_app "1Password"))
          (make_item "TLDraw" '(open_url "https://www.tldraw.com"))
@@ -262,7 +261,12 @@
          (make_item "VirtualBuddy" '(open_app "VirtualBuddy"))
          (make_item "VirtualBuddy - Shared" '(open_file "~/VirtualBuddy-Shared"))
          (make_item "Stickies" '(open_app "Stickies"))
+         (make_item "Photos" '(open_app "Photos"))
+
          (make_item "Distill" '(open_app "Distill"))
+         (make_item "Antinote" '(open_app "Antinote"))
+
+         (make_item "Marketplace" '(open_url "https://www.facebook.com/marketplace"))
 
          (make_item "UI Browser" '(open_app "UI Browser"))
 
