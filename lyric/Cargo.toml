@@ -6,16 +6,16 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dyn-fmt = "0.4.0"
+dyn-fmt = "0.4.3"
 nanoid = "0.4.0"
-serde = { version = "1.0.197", features = ["derive"] }
-thiserror = "1.0.57"
+serde = { version = "1.0.210", features = ["derive"] }
+thiserror = "1.0.64"
 tracing = "0.1.40"
-unicode-width = "0.1.11"
+unicode-width = "0.1.14"
 
 [dev-dependencies]
-serde_json = "1.0.114"
+serde_json = "1.0"
 assert_matches = "1.5.0"
-tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
+tracing-test = { version = "0.2.5", features = ["no-env-filter"] }
 void = "1.0.2"
-tokio = { version = "1.36.0", features = ["macros", "rt"] } # for async / run.rs tests
+tokio = { version = "1.40.0", features = ["macros", "rt"] } # for async / run.rs tests

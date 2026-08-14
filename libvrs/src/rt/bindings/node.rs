@@ -50,7 +50,7 @@ pub(crate) fn wait_srv_fn() -> NativeAsyncFn {
             if timeout == Some(std::time::Duration::ZERO) {
                 let entry = registry.lookup(name.clone()).await.map_err(|e| Error::Runtime(e.to_string()))?;
                 return match entry {
-                    Some(entry) if pid.as_ref().map_or(true, |pid| *pid == entry.pid()) => Ok(Val::Extern(Extern::ProcessId(entry.pid()))),
+                    Some(entry) if pid.as_ref().is_none_or(|pid| *pid == entry.pid()) => Ok(Val::Extern(Extern::ProcessId(entry.pid()))),
                     _ => Err(Error::Runtime(format!("timed out waiting for {name}"))),
                 };
             }

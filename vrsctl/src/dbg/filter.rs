@@ -110,7 +110,7 @@ impl Filter {
                     Some((line, column)) => {
                         (e.site.file == *file || e.site.file.ends_with(&format!("/{file}")))
                             && e.site.line == *line
-                            && column.map_or(true, |c| c == e.site.column)
+                            && column.is_none_or(|c| c == e.site.column)
                     }
                 },
                 Term::Time(greater, threshold) => {

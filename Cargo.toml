@@ -1,3 +1,9 @@
 [workspace]
 resolver = "2"
 members = ["libvrs", "vrsd", "vrsctl", "lyric", "vrsjmp/src-tauri"]
+
+[patch.crates-io]
+# Tauri 1's macOS dependencies still use block 0.1.6, whose extern static is
+# future-incompatible with Rust. Pin the minimal upstream fork fix until those
+# dependencies migrate to block2.
+block = { git = "https://github.com/Dicklesworthstone/rust-block", rev = "b39ae859d1ee8e8cb5eef6a516471f1578d26b96" }

@@ -10,22 +10,22 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
-tauri-build = { version = "1.5.1", features = [] }
+tauri-build = { version = "1.5", features = [] }
 
 [dependencies]
-tauri = { version = "1.6.1", features = ["macos-private-api", "global-shortcut"] }
-serde = { version = "1.0.197", features = ["derive"] }
-serde_json = "1.0.114"
+tauri = { version = "1.8", features = ["macos-private-api", "global-shortcut"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 tracing = "0.1.40"
 vrs = { path = "../../libvrs" }
 lyric = { path = "../../lyric" }
-anyhow = "1.0.80"
-clap = { version = "4.5.1", features = ["derive"] }
-tokio = "1.36.0"
+anyhow = "1.0.89"
+clap = { version = "4", features = ["derive"] }
+tokio = "1.40.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-cocoa = "0.24.1"
-objc = "0.2.7"
+cocoa = "0.24"
+objc = "0.2"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

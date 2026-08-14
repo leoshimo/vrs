@@ -230,7 +230,7 @@ impl Doc {
                         } else {
                             out.push('\n');
                             current = column + indent;
-                            out.extend(std::iter::repeat(' ').take(current));
+                            out.extend(std::iter::repeat_n(' ', current));
                         }
                     }
                     current = item.render(out, width, current, tail);

@@ -69,7 +69,7 @@ impl Transcript {
                 .parent
                 .as_deref()
                 .and_then(|id| by_id.get(id))
-                .map_or(true, |p| p.event.kind == "scope");
+                .is_none_or(|p| p.event.kind == "scope");
             let visible = scope
                 || self.pending.contains_key(&e.id)
                 || (matches.contains(&e.id) && (opts.all || immediate || filter.focused()));

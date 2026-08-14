@@ -21,7 +21,7 @@ const SYNC_TIMEOUT: Duration = Duration::from_secs(5);
 pub struct Registry {
     tx: mpsc::Sender<Cmd>,
     events: broadcast::Sender<RegistryEvent>,
-    changed: std::sync::Arc<watch::Sender<()>>,
+    changed: watch::Sender<()>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -108,7 +108,6 @@ impl Registry {
         let (tx, rx) = mpsc::channel(1);
         let (events, _) = broadcast::channel(1);
         let (changed, _) = watch::channel(());
-        let changed = std::sync::Arc::new(changed);
         (
             Self {
                 tx,
@@ -123,7 +122,6 @@ impl Registry {
         let (tx, mut rx) = mpsc::channel(32);
         let (events, _) = broadcast::channel(64);
         let (changed, _) = watch::channel(());
-        let changed = std::sync::Arc::new(changed);
         let task_changed = changed.clone();
         let weak_tx = tx.downgrade();
         let task_events = events.clone();
@@ -188,7 +186,7 @@ impl Registry {
         let mut changed = self.changed.subscribe();
         loop {
             if let Some(entry) = self.lookup(name.clone()).await? {
-                if pid.as_ref().map_or(true, |pid| *pid == entry.pid()) {
+                if pid.as_ref().is_none_or(|pid| *pid == entry.pid()) {
                     return Ok(entry.pid());
                 }
             }
@@ -748,7 +746,6 @@ mod tests {
         let (tx, mut rx) = mpsc::channel(1);
         let (events, _) = broadcast::channel(1);
         let (changed, _) = watch::channel(());
-        let changed = std::sync::Arc::new(changed);
         let registry = Registry {
             tx: tx.clone(),
             events: events.clone(),
