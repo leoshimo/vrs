@@ -59,6 +59,7 @@ pub type Bytecode<T, L> = Vec<Inst<T, L>>;
 /// A function object that closes over environment it was created in
 #[derive(Clone)]
 pub struct Lambda<T: Extern, L: Locals> {
+    pub metadata: Vec<Form>,
     pub doc: Option<String>,
     pub params: Vec<SymbolId>,
     pub code: Bytecode<T, L>,
@@ -68,13 +69,16 @@ pub struct Lambda<T: Extern, L: Locals> {
 /// A native founction bound to given symbol
 #[derive(Debug, Clone)]
 pub struct NativeFn<T: Extern, L: Locals> {
+    pub metadata: Vec<Form>,
     pub doc: String,
     pub func: NativeFnSig<T, L>,
 }
 
 impl<T: Extern, L: Locals> PartialEq for NativeFn<T, L> {
     fn eq(&self, other: &Self) -> bool {
-        self.doc == other.doc && (self.func as usize == other.func as usize)
+        self.metadata == other.metadata
+            && self.doc == other.doc
+            && (self.func as usize == other.func as usize)
     }
 }
 
@@ -90,18 +94,23 @@ pub enum NativeFnOp<T: Extern, L: Locals> {
     Yield(Val<T, L>),
     /// Execute bytecode-level instructions
     Exec(Bytecode<T, L>),
+    /// Evaluate source at the process root (explicit runtime metaprogramming).
+    EvalGlobal(Val<T, L>),
 }
 
 /// A native async function
 #[derive(Debug, Clone)]
 pub struct NativeAsyncFn<T: Extern, L: Locals> {
+    pub metadata: Vec<Form>,
     pub doc: String,
     pub func: NativeAsyncFnSig<T, L>,
 }
 
 impl<T: Extern, L: Locals> PartialEq for NativeAsyncFn<T, L> {
     fn eq(&self, other: &Self) -> bool {
-        self.doc == other.doc && (self.func as usize == other.func as usize)
+        self.metadata == other.metadata
+            && self.doc == other.doc
+            && (self.func as usize == other.func as usize)
     }
 }
 
@@ -126,8 +135,32 @@ type NativeAsyncFnSig<T, L> =
 type ValFuture<'a, T, L> = Box<dyn Future<Output = Result<Val<T, L>>> + 'a + Send>;
 
 /// Identifier for Symbol
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct SymbolId(String);
+#[derive(Debug, Clone)]
+pub struct SymbolId {
+    name: String,
+    pub(crate) sources: Vec<Arc<crate::source::SourceSite>>,
+}
+impl PartialEq for SymbolId {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+impl Eq for SymbolId {}
+impl std::hash::Hash for SymbolId {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.name.hash(h);
+    }
+}
+impl Serialize for SymbolId {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> std::result::Result<S::Ok, S::Error> {
+        self.name.serialize(s)
+    }
+}
+impl<'de> Deserialize<'de> for SymbolId {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
+        Ok(String::deserialize(d)?.into())
+    }
+}
 
 /// Identifier for Keywords
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -224,6 +257,12 @@ where
 }
 
 impl Form {
+    /// Format for reading at a target column width. Atoms are never split.
+    /// RawString remains verbatim; it need not be readable Lyric syntax.
+    pub fn to_pretty_string(&self, width: usize) -> String {
+        crate::pretty::format(self, width)
+    }
+
     /// From expr
     pub fn from_expr(expr: &str) -> Result<Self> {
         parse(expr)
@@ -246,6 +285,12 @@ impl Form {
 }
 
 impl<T: Extern, L: Locals> Val<T, L> {
+    /// Format for reading at a target column width. Atoms are never split.
+    /// Opaque runtime values retain their existing display notation.
+    pub fn to_pretty_string(&self, width: usize) -> String {
+        crate::pretty::format(self, width)
+    }
+
     /// Shorhand for constructing [Val::String]
     pub fn string(s: &str) -> Self {
         Self::String(String::from(s))
@@ -270,12 +315,12 @@ impl<T: Extern, L: Locals> Val<T, L> {
 impl SymbolId {
     /// Returns inner ID as string slice
     pub fn as_str(&self) -> &str {
-        &self.0
+        &self.name
     }
 
     /// Returns symbol as keyword
     pub fn to_keyword(self) -> KeywordId {
-        KeywordId::from(self.0)
+        KeywordId::from(self.name)
     }
 }
 
@@ -308,14 +353,30 @@ impl<T: Extern, L: Locals> NativeAsyncCall<T, L> {
 
 impl<T: Extern, L: Locals> PartialEq for Lambda<T, L> {
     fn eq(&self, other: &Self) -> bool {
-        self.params == other.params
+        self.metadata == other.metadata
+            && self.params == other.params
             && self.code == other.code
-            && ((self.parent.is_none() && other.parent.is_none())
-                || Arc::ptr_eq(
-                    self.parent.as_ref().unwrap(),
-                    other.parent.as_ref().unwrap(),
-                ))
+            && match (&self.parent, &other.parent) {
+                (None, None) => true,
+                (Some(left), Some(right)) => Arc::ptr_eq(left, right),
+                _ => false,
+            }
     }
+}
+
+pub(crate) fn escape_string(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '\\' => escaped.push_str("\\\\"),
+            '"' => escaped.push_str("\\\""),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            ch => escaped.push(ch),
+        }
+    }
+    escaped
 }
 
 impl<T: Extern, L: Locals> std::fmt::Display for Val<T, L>
@@ -327,14 +388,12 @@ where
             Val::Nil => write!(f, "nil"),
             Val::Bool(b) => write!(f, "{}", if *b { "true" } else { "false" }),
             Val::Int(i) => write!(f, "{}", i),
-            Val::String(s) => write!(f, "\"{}\"", s),
+            Val::String(s) => write!(f, "\"{}\"", escape_string(s)),
             Val::Keyword(k) => write!(f, "{}", k),
             Val::Symbol(s) => write!(f, "{}", s),
-            Val::List(l) => match &l[..] {
-                [quote, form] if quote == &Val::symbol("quote") => {
-                    write!(f, "'{}", form)
-                }
-                _ => write!(
+            Val::List(l) => match crate::pretty::abbreviation(l) {
+                Some((prefix, form)) => write!(f, "{prefix}{form}"),
+                None => write!(
                     f,
                     "({})",
                     l.iter()
@@ -368,14 +427,12 @@ impl std::fmt::Display for Form {
             Form::Nil => write!(f, "nil"),
             Form::Bool(b) => write!(f, "{}", if *b { "true" } else { "false" }),
             Form::Int(i) => write!(f, "{}", i),
-            Form::String(s) => write!(f, "\"{}\"", s),
+            Form::String(s) => write!(f, "\"{}\"", escape_string(s)),
             Form::Keyword(k) => write!(f, "{}", k),
             Form::Symbol(s) => write!(f, "{}", s),
-            Form::List(l) => match &l[..] {
-                [quote, form] if quote == &Form::Symbol(SymbolId::from("quote")) => {
-                    write!(f, "'{}", form)
-                }
-                _ => write!(
+            Form::List(l) => match crate::pretty::abbreviation(l) {
+                Some((prefix, form)) => write!(f, "{prefix}{form}"),
+                None => write!(
                     f,
                     "({})",
                     l.iter()
@@ -391,7 +448,7 @@ impl std::fmt::Display for Form {
 
 impl std::fmt::Display for SymbolId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.name)
     }
 }
 
@@ -466,13 +523,16 @@ impl<T: Extern, L: Locals> TryFrom<Val<T, L>> for Form {
 
 impl From<String> for SymbolId {
     fn from(value: String) -> Self {
-        Self(value)
+        Self {
+            name: value,
+            sources: vec![],
+        }
     }
 }
 
 impl From<&str> for SymbolId {
     fn from(value: &str) -> Self {
-        Self(value.to_string())
+        value.to_string().into()
     }
 }
 
@@ -519,6 +579,16 @@ mod tests {
             Val::string("  hello  world  ").to_string(),
             "\"  hello  world  \"",
         );
+        assert_eq!(
+            Val::string("line one\n\"line two\"\\end\r\t").to_string(),
+            "\"line one\\n\\\"line two\\\"\\\\end\\r\\t\""
+        );
+    }
+
+    #[test]
+    fn displayed_string_round_trips() {
+        let value = Val::string("line one\n\"line two\"\\end\r\t");
+        assert_eq!(Val::try_from(value.to_string().as_str()).unwrap(), value);
     }
 
     #[test]

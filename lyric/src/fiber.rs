@@ -3,8 +3,8 @@
 use super::{Env, Inst};
 use crate::types::NativeAsyncCall;
 use crate::{
-    builtin::cond::is_true, compile, parse, Bytecode, Error, Extern, Lambda, Locals, NativeFnOp,
-    Pattern, Result, Val,
+    builtin::cond::is_true, parse, Bytecode, Error, Extern, Lambda, Locals, NativeFnOp, Pattern,
+    Result, Val,
 };
 use std::sync::{Arc, Mutex};
 use tracing::warn;
@@ -22,6 +22,7 @@ pub struct Fiber<T: Extern, L: Locals> {
     stack: Vec<Val<T, L>>,
     global: Arc<Mutex<Env<T, L>>>,
     locals: L,
+    observer: Option<Arc<dyn crate::debug::Observer>>,
 }
 
 /// The status of fiber
@@ -72,6 +73,17 @@ struct CallFrame<T: Extern, L: Locals> {
     stack_len: usize,
     /// Length of callframe of fiber to unwind to on error, if any
     unwind_cf_len: Option<usize>,
+    expansion_budget: Option<crate::macros::BudgetRef>,
+    transformer: Option<Expansion<T, L>>,
+    trace: Option<crate::debug::Trace>,
+}
+
+/// Kept on the transformer frame, including across yields and async suspension.
+#[derive(Debug)]
+struct Expansion<T: Extern, L: Locals> {
+    caller: Arc<Mutex<Env<T, L>>>,
+    budget: crate::macros::BudgetRef,
+    origin: Option<crate::source::SourceSite>,
 }
 
 impl<T: Extern, L: Locals> Fiber<T, L> {
@@ -89,12 +101,13 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
             )],
             global,
             locals,
+            observer: None,
         }
     }
 
     /// Create a new fiber from value
     pub fn from_val(val: &Val<T, L>, env: Env<T, L>, locals: L) -> Result<Self> {
-        let bytecode = compile(val)?;
+        let bytecode = vec![Inst::Prepare(val.clone())];
         Ok(Fiber::from_bytecode(bytecode, env, locals))
     }
 
@@ -102,6 +115,33 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
     pub fn from_expr(expr: &str, env: Env<T, L>, locals: L) -> Result<Self> {
         let val: Val<T, L> = parse(expr)?.into();
         Fiber::from_val(&val, env, locals)
+    }
+
+    /// Attach a host-owned observation sink. Recording is active only in dbg! scopes.
+    pub fn set_observer(&mut self, observer: Arc<dyn crate::debug::Observer>) {
+        self.observer = Some(observer);
+    }
+
+    /// A host can reject a VM signal (for example a top-level yield) without
+    /// resuming the fiber. End its observations with that actual error.
+    pub(crate) fn fail_observations(&mut self, error: &Error) {
+        let text = error.to_string();
+        let result = crate::debug::Preview {
+            text: crate::debug::clipped(&text, 1024),
+            truncated: text.len() > 1024,
+        };
+        for frame in self.cframes.iter_mut().rev() {
+            if let Some(trace) = frame.trace.as_mut() {
+                trace.finish("error", Some(result.clone()));
+            }
+        }
+    }
+
+    fn trace(&self) -> Option<&crate::debug::Trace> {
+        self.cframes
+            .iter()
+            .rev()
+            .find_map(|frame| frame.trace.as_ref())
     }
 
     // TODO: Safeguard start / resume via typestate pat?
@@ -124,6 +164,12 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
             ));
         }
 
+        let val_result = val_result.and_then(|val| {
+            if self.is_expanding() {
+                crate::macros::check_expansion_value(&val)?;
+            }
+            Ok(val)
+        });
         let val = match val_result {
             Ok(val) => val,
             Err(e) => self.maybe_catch_err(e)?,
@@ -156,6 +202,24 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
     /// Mutable Local storage
     pub fn locals_mut(&mut self) -> &mut L {
         &mut self.locals
+    }
+
+    fn active_expansion(&self) -> Option<&Expansion<T, L>> {
+        self.cframes
+            .iter()
+            .rev()
+            .find_map(|frame| frame.transformer.as_ref())
+    }
+
+    fn expansion_budget(&self) -> crate::macros::BudgetRef {
+        self.active_expansion()
+            .map(|context| context.budget.clone())
+            .or_else(|| self.cf().expansion_budget.clone())
+            .unwrap_or_else(crate::macros::budget)
+    }
+
+    pub(crate) fn is_expanding(&self) -> bool {
+        self.active_expansion().is_some()
     }
 }
 
@@ -213,6 +277,20 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
     /// Catch the error as a `Val::Error` or propagate as `Result::Err` depending on state of callframe
     /// after encounting an error during `Fiber::step` result or `Fiber::resume` resume value
     fn maybe_catch_err(&mut self, e: Error) -> Result<Val<T, L>> {
+        // Finish every observation being unwound, including async calls. A
+        // protected error inside a scope leaves the enclosing scope active.
+        let boundary = self.cf().unwind_cf_len.unwrap_or(0);
+        for frame in self.cframes[boundary..].iter_mut().rev() {
+            if let Some(trace) = frame.trace.as_mut() {
+                trace.finish(
+                    "error",
+                    Some(crate::debug::Preview {
+                        text: crate::debug::clipped(&e.to_string(), 1024),
+                        truncated: e.to_string().len() > 1024,
+                    }),
+                );
+            }
+        }
         // Catch unwind or exit w/ error
         let unwind_len = match self.cf().unwind_cf_len {
             None => {
@@ -229,13 +307,27 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
 
     /// Run a single fetch-decode-execute cycle
     fn step(&mut self) -> Result<()> {
+        if let Some(expansion) = self.active_expansion() {
+            crate::macros::tick(&expansion.budget)?;
+            if self.cframes.len() > 256 {
+                return Err(Error::Macro("expansion call depth exceeded".into()));
+            }
+        }
         while self.cframes.len() > 1 && self.cf().at_return() {
             let cf = self.cframes.last().unwrap();
             if self.stack.len() != cf.stack_len + 1 {
                 // tracing::debug!("panic {:?}", self);
                 panic!("Unexpected state during execution - all function are expected to have stack effect of 1. Was {}", cf.stack_len + 1);
             }
-            let _ = self.cframes.pop();
+            let mut frame = self.cframes.pop().unwrap();
+            if let Some(trace) = frame.trace.as_mut() {
+                trace.finish("returned", self.stack.last().map(crate::debug::preview));
+            }
+            if let Some(origin) = frame.transformer.and_then(|t| t.origin) {
+                if let Some(value) = self.stack.last_mut() {
+                    crate::source::expansion_origin(value, &origin);
+                }
+            }
         }
 
         let inst = match self.inst() {
@@ -255,14 +347,215 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
 
         self.cf_mut().ip += 1;
 
+        // A tiny continuation frame owns the complete call lifetime, including
+        // native Exec, yields and async suspension. Internal VM calls are plain
+        // CallFunc instructions and do not create extra observations.
+        let observation = match &inst {
+            Inst::CallAt(n, site) if self.trace().is_some() => Some((*n, site.clone(), "call")),
+            Inst::CallCallback(n) if self.trace().is_some() => {
+                let function = self.stack.get(self.stack.len().saturating_sub(n + 1));
+                let site = function
+                    .and_then(|f| match f {
+                        Val::Lambda(l) => l.code.first().and_then(|i| match i {
+                            Inst::FunctionSource(s) => Some(s.clone()),
+                            _ => None,
+                        }),
+                        _ => None,
+                    })
+                    .unwrap_or_else(|| {
+                        crate::source::SourceSite::synthetic(
+                            function
+                                .map(crate::debug::preview)
+                                .map(|p| p.text)
+                                .unwrap_or_else(|| "<callback>".into()),
+                        )
+                    });
+                Some((*n, site, "callback"))
+            }
+            _ => None,
+        };
+        if let Some((n, site, kind)) = observation.filter(|_| !self.is_expanding()) {
+            if let Some(observer) = self.observer.clone() {
+                let base = self
+                    .stack
+                    .len()
+                    .checked_sub(n + 1)
+                    .ok_or_else(|| Error::UnexpectedStack("missing call arguments".into()))?;
+                let trace = crate::debug::Trace::start(
+                    observer,
+                    self.trace(),
+                    kind,
+                    site,
+                    &self.stack[base + 1..],
+                );
+                let mut frame = CallFrame::from_bytecode(
+                    self.cur_env().clone(),
+                    vec![Inst::CallFunc(n)],
+                    base,
+                    self.cf().unwind_cf_len,
+                );
+                frame.trace = Some(trace);
+                self.cframes.push(frame);
+                return Ok(());
+            }
+        }
         match inst {
+            Inst::DebugScope(code, site) => {
+                let mut frame = CallFrame::from_bytecode(
+                    self.cur_env().clone(),
+                    code,
+                    self.stack.len(),
+                    self.cf().unwind_cf_len,
+                );
+                if !self.is_expanding() {
+                    if let Some(observer) = self.observer.clone() {
+                        frame.trace = Some(crate::debug::Trace::start(
+                            observer,
+                            self.trace(),
+                            "scope",
+                            site,
+                            &[] as &[Val<T, L>],
+                        ));
+                    }
+                }
+                self.cframes.push(frame);
+            }
+            Inst::Prepare(value) => {
+                let code = crate::compile(&value)?;
+                self.cframes.push(CallFrame::from_bytecode(
+                    self.cur_env().clone(),
+                    code,
+                    self.stack.len(),
+                    self.cf().unwind_cf_len,
+                ));
+            }
+            Inst::DefineMacro(source) => {
+                let mut macros = self.global.lock().unwrap().macro_env();
+                let name = macros.define(&source, Some(self.cur_env().clone()))?;
+                self.global.lock().unwrap().set_macro_env(macros);
+                self.stack.push(Val::Symbol(name));
+            }
+            Inst::Expand(once) => {
+                let source = self
+                    .stack
+                    .last()
+                    .ok_or_else(|| Error::UnexpectedStack("missing macro source".into()))?;
+                if let Some(name) = crate::macros::head(source).filter(|name| name.ends_with('!')) {
+                    // Bounds apply to recursive expansion, not to the generated service loop.
+                    if self.cframes.len() > 256
+                        || self
+                            .cframes
+                            .iter()
+                            .filter(|f| f.transformer.is_some())
+                            .count()
+                            >= 64
+                    {
+                        return Err(Error::Macro("macro expansion depth exceeded".into()));
+                    }
+                    crate::macros::validate_source(source)?;
+                    let definition = self.global.lock().unwrap().macro_definition(name)?;
+                    let function = definition.function;
+                    let required = function.params.len() - usize::from(definition.rest);
+                    let args = &source.as_list()?[1..];
+                    if args.len() < required || (!definition.rest && args.len() != required) {
+                        return Err(Error::Macro(format!(
+                            "{name} expects {required}{} arguments, got {}",
+                            if definition.rest { " or more" } else { "" },
+                            args.len()
+                        )));
+                    }
+                    let mut values = args[..required].to_vec();
+                    if definition.rest {
+                        values.push(Val::List(args[required..].to_vec()));
+                    }
+                    let budget = self.expansion_budget();
+                    crate::macros::invocation(&budget)?;
+                    let origin = crate::source::site(source);
+                    self.stack.pop();
+                    let caller = self.cur_env().clone();
+                    let mut code = vec![Inst::ValidateExpansion];
+                    if !once {
+                        code.push(Inst::Expand(false));
+                    }
+                    let mut continuation = CallFrame::from_bytecode(
+                        caller.clone(),
+                        code,
+                        self.stack.len(),
+                        self.cf().unwind_cf_len,
+                    );
+                    continuation.expansion_budget = Some(budget.clone());
+                    let mut transformer = self.lambda_frame(function, values);
+                    transformer.transformer = Some(Expansion {
+                        caller,
+                        budget,
+                        origin,
+                    });
+                    self.cframes.push(continuation);
+                    self.cframes.push(transformer);
+                }
+            }
+            Inst::ValidateExpansion => {
+                let value = self
+                    .stack
+                    .last()
+                    .ok_or_else(|| Error::UnexpectedStack("missing macro result".into()))?;
+                crate::macros::validate_result(value, &self.expansion_budget())?;
+            }
+            Inst::EvalCaller => {
+                let caller = self
+                    .active_expansion()
+                    .ok_or_else(|| {
+                        Error::Macro("eval_caller is only available during macro expansion".into())
+                    })?
+                    .caller
+                    .clone();
+                let value = self
+                    .stack
+                    .pop()
+                    .ok_or_else(|| Error::UnexpectedStack("missing caller expression".into()))?;
+                self.cframes.push(CallFrame::from_bytecode(
+                    caller,
+                    vec![Inst::Prepare(value)],
+                    self.stack.len(),
+                    self.cf().unwind_cf_len,
+                ));
+            }
             Inst::PushConst(form) => {
                 self.stack.push(form);
+            }
+            Inst::ListPush | Inst::ListExtend => {
+                let value = self.stack.pop().ok_or_else(|| {
+                    Error::UnexpectedStack("Missing list construction value".into())
+                })?;
+                let Some(Val::List(list)) = self.stack.last_mut() else {
+                    return Err(Error::UnexpectedStack(
+                        "Missing list construction destination".into(),
+                    ));
+                };
+                if matches!(inst, Inst::ListExtend) {
+                    let Val::List(values) = value else {
+                        return Err(Error::UnexpectedArguments(format!(
+                            "unquote-splicing expects a list, got {}",
+                            value
+                        )));
+                    };
+                    list.extend(values);
+                } else {
+                    list.push(value);
+                }
+                if self.is_expanding() {
+                    crate::macros::check_expansion_value(self.stack.last().unwrap())?;
+                }
             }
             Inst::DefSym(s) => {
                 let value = self.stack.last().ok_or(Error::UnexpectedStack(
                     "Stack should contain value to bind".to_string(),
                 ))?;
+                if reserved_callable(&s, value) {
+                    return Err(Error::Macro(
+                        "callable names ending in ! are reserved for macros".into(),
+                    ));
+                }
                 self.cur_env()
                     .lock()
                     .unwrap()
@@ -282,6 +575,11 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
 
                 let mut env = self.cur_env().lock().unwrap();
                 for (s, v) in m.into_iter() {
+                    if reserved_callable(&s, &v) {
+                        return Err(Error::Macro(
+                            "callable names ending in ! are reserved for macros".into(),
+                        ));
+                    }
                     env.define(s, v.clone());
                 }
             }
@@ -289,6 +587,11 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                 let value = self.stack.last().ok_or(Error::UnexpectedStack(
                     "Stack should contain value to bind".to_string(),
                 ))?;
+                if reserved_callable(&s, value) {
+                    return Err(Error::Macro(
+                        "callable names ending in ! are reserved for macros".into(),
+                    ));
+                }
                 self.cur_env().lock().unwrap().set(&s, value.clone())?
             }
             Inst::GetSym(s) => {
@@ -331,13 +634,15 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                     .collect::<Result<Vec<_>>>()?;
 
                 self.stack.push(Val::Lambda(Lambda {
+                    metadata: vec![],
                     doc,
                     params,
                     code,
                     parent: Some(Arc::clone(&self.cf().env)),
                 }));
             }
-            Inst::CallFunc(nargs) => {
+            Inst::FunctionSource(_) => (),
+            Inst::CallFunc(nargs) | Inst::CallAt(nargs, _) | Inst::CallCallback(nargs) => {
                 let mut args = vec![];
                 for _ in 0..nargs {
                     let v = self.stack.pop().ok_or(Error::UnexpectedStack(
@@ -349,22 +654,27 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
 
                 match self.stack.pop() {
                     Some(Val::Lambda(l)) => {
-                        let parent_env = l.parent.unwrap_or_else(|| Arc::clone(&self.global));
-                        let mut fn_env = Env::extend(&parent_env);
-                        for (s, arg) in l.params.into_iter().zip(args) {
-                            fn_env.define(s, arg);
+                        if l.params.len() != nargs {
+                            return Err(Error::UnexpectedArguments(format!(
+                                "function expects {} arguments, got {nargs}",
+                                l.params.len()
+                            )));
                         }
-                        self.cframes.push(CallFrame::from_bytecode(
-                            Arc::new(Mutex::new(fn_env)),
-                            l.code,
-                            self.stack.len(),
-                            self.cf().unwind_cf_len,
-                        ))
+                        self.cframes.push(self.lambda_frame(l, args));
                     }
                     Some(Val::NativeFn(n)) => {
-                        let v = (n.func)(self, &args.collect::<Vec<_>>())?;
+                        let args = args.collect::<Vec<_>>();
+                        if self.is_expanding() {
+                            crate::macros::check_expansion_values(&args)?;
+                        }
+                        let v = (n.func)(self, &args)?;
                         match v {
-                            NativeFnOp::Return(v) => self.stack.push(v),
+                            NativeFnOp::Return(v) => {
+                                if self.is_expanding() {
+                                    crate::macros::check_expansion_value(&v)?;
+                                }
+                                self.stack.push(v);
+                            }
                             NativeFnOp::Yield(v) => {
                                 self.stack.push(v);
                                 self.status = Status::Paused;
@@ -375,6 +685,14 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                                 self.stack.len(),
                                 self.cf().unwind_cf_len,
                             )),
+                            NativeFnOp::EvalGlobal(value) => {
+                                self.cframes.push(CallFrame::from_bytecode(
+                                    self.global.clone(),
+                                    vec![Inst::Prepare(value)],
+                                    self.stack.len(),
+                                    self.cf().unwind_cf_len,
+                                ))
+                            }
                         }
                     }
                     Some(Val::NativeAsyncFn(fun)) => {
@@ -403,7 +721,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                 let val = self.stack.pop().ok_or(Error::UnexpectedStack(
                     "Did not find form to eval on stack".to_string(),
                 ))?;
-                let bc = compile(&val)?;
+                let bc = vec![Inst::Prepare(val)];
                 self.cframes.push(CallFrame::from_bytecode(
                     Arc::clone(self.cur_env()),
                     bc,
@@ -428,10 +746,29 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                     self.cf_mut().ip += offset;
                 }
             }
-            Inst::YieldTop => self.status = Status::Paused,
+            Inst::YieldTop => {
+                self.status = Status::Paused;
+            }
         };
 
         Ok(())
+    }
+
+    fn lambda_frame(
+        &self,
+        function: Lambda<T, L>,
+        args: impl IntoIterator<Item = Val<T, L>>,
+    ) -> CallFrame<T, L> {
+        let mut env = Env::extend(&function.parent.unwrap_or_else(|| self.global.clone()));
+        for (name, value) in function.params.into_iter().zip(args) {
+            env.define(name, value);
+        }
+        CallFrame::from_bytecode(
+            Arc::new(Mutex::new(env)),
+            function.code,
+            self.stack.len(),
+            self.cf().unwind_cf_len,
+        )
     }
 
     /// Next instruction in fiber, or None if fiber is complete
@@ -451,6 +788,14 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
     }
 }
 
+fn reserved_callable<T: Extern, L: Locals>(name: &crate::SymbolId, value: &Val<T, L>) -> bool {
+    name.as_str().ends_with('!')
+        && matches!(
+            value,
+            Val::Lambda(_) | Val::NativeFn(_) | Val::NativeAsyncFn(_)
+        )
+}
+
 impl<T: Extern, L: Locals> CallFrame<T, L> {
     /// Create a new callframe for executing given bytecode from start
     fn from_bytecode(
@@ -465,6 +810,9 @@ impl<T: Extern, L: Locals> CallFrame<T, L> {
             code,
             stack_len,
             unwind_cf_len,
+            expansion_budget: None,
+            transformer: None,
+            trace: None,
         }
     }
 
@@ -655,6 +1003,7 @@ mod tests {
         let mut f = Fiber::from_bytecode(
             vec![
                 PushConst(Val::Lambda(Lambda {
+                    metadata: vec![],
                     doc: None,
                     params: vec![SymbolId::from("x")],
                     code: vec![GetSym(SymbolId::from("x"))],

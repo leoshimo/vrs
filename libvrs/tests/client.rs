@@ -5,7 +5,7 @@ use vrs::{Client, Connection, Response, Runtime};
 
 #[tokio::test]
 async fn request_response() {
-    let runtime = Runtime::new();
+    let runtime = Runtime::new("test");
     let (local, remote) = Connection::pair().unwrap();
     let remote = Client::new(remote);
 
@@ -30,7 +30,7 @@ async fn request_response() {
 async fn request_response_multi() {
     use lyric::parse as p;
 
-    let runtime = Runtime::new();
+    let runtime = Runtime::new("test");
     let (local, remote) = Connection::pair().unwrap();
     let client = Client::new(remote);
 
@@ -62,7 +62,7 @@ async fn request_response_multi() {
 async fn request_response_parallel() {
     let (local, remote) = Connection::pair().unwrap();
 
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
     let _ = rt.handle_conn(remote).await.unwrap();
 
     let client = Client::new(local);
@@ -88,4 +88,35 @@ async fn request_response_parallel() {
             },
         )
     );
+}
+
+#[tokio::test]
+async fn disconnect_cancels_a_mailbox_wait_in_the_connection_process() {
+    let runtime = Runtime::new("test");
+    let (local, remote) = Connection::pair().unwrap();
+    let process = runtime.handle_conn(remote).await.unwrap();
+    let client = Client::new(local);
+    let mut ready = client
+        .subscribe(vrs::KeywordId::from("ready"))
+        .await
+        .unwrap();
+    client.request(Form::Nil).await.unwrap();
+    let waiting =
+        client.request(Form::from_expr("(begin (publish :ready :waiting) (recv))").unwrap());
+    let (response, _) = tokio::join!(waiting, async {
+        assert_eq!(
+            tokio::time::timeout(std::time::Duration::from_secs(3), ready.recv())
+                .await
+                .unwrap()
+                .unwrap(),
+            Form::keyword("waiting")
+        );
+        client.shutdown().await;
+    });
+    assert!(response.is_err());
+    let exit = tokio::time::timeout(std::time::Duration::from_secs(3), process.join())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(exit.status.unwrap(), vrs::ProcessResult::Cancelled);
 }

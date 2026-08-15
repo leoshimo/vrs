@@ -9,6 +9,16 @@ where
     T: Extern,
     L: Locals,
 {
+    /// Prepare and run one source unit in the current process macro namespace.
+    Prepare(Val<T, L>),
+    /// Expand source on the stack; true stops after one outer invocation.
+    Expand(bool),
+    /// Check that a transformer returned bounded, readable source.
+    ValidateExpansion,
+    /// Register a lexical transformer in the process's macro namespace.
+    DefineMacro(Val<T, L>),
+    /// Evaluate source on the stack in the active macro invocation's caller scope.
+    EvalCaller,
     /// Push constant form onto stack
     PushConst(Val<T, L>),
     /// Push value bound to given symbol onto stack
@@ -23,6 +33,18 @@ where
     MakeFunc,
     /// Call func by popping N forms and function object off stack, and pushing result
     CallFunc(usize),
+    /// A source-level call, with compile-time provenance.
+    CallAt(usize, crate::source::SourceSite),
+    /// A callback invoked by a native higher-order function.
+    CallCallback(usize),
+    /// Execute in the same lexical scope, with an observation boundary.
+    DebugScope(Bytecode<T, L>, crate::source::SourceSite),
+    /// Definition provenance at the start of a function's bytecode.
+    FunctionSource(crate::source::SourceSite),
+    /// Append TOS to the list immediately below it, leaving the list on stack.
+    ListPush,
+    /// Splice the elements of TOS into the list below it; TOS must be a list.
+    ListExtend,
     /// Pop the top of the stack
     PopTop,
     /// Jump forward N inst
@@ -39,6 +61,65 @@ where
 
 /// Compile a value to bytecode representation
 pub fn compile<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Bytecode<T, L>> {
+    let mut code = compile_inner(v)?;
+    if let Some(site) = crate::source::site(v)
+        .or_else(|| is_call(v).then(|| crate::source::SourceSite::synthetic(v.to_string())))
+    {
+        if is_call(v) {
+            if let Some(Inst::CallFunc(n)) = code.last() {
+                let n = *n;
+                *code.last_mut().unwrap() = Inst::CallAt(n, site.clone());
+            }
+        }
+        if matches!(crate::macros::head(v), Some("fn" | "lambda")) {
+            for inst in &mut code {
+                if let Inst::PushConst(Val::Bytecode(body)) = inst {
+                    if matches!(body.first(), Some(Inst::FunctionSource(_))) {
+                        body.remove(0);
+                    }
+                    body.insert(0, Inst::FunctionSource(site.clone()));
+                }
+            }
+        }
+    }
+    Ok(code)
+}
+
+fn is_call<T: Extern, L: Locals>(v: &Val<T, L>) -> bool {
+    if !matches!(v, Val::List(_)) {
+        return false;
+    }
+    match crate::macros::head(v) {
+        Some(name) => {
+            !name.ends_with('!')
+                && !matches!(
+                    name,
+                    "begin"
+                        | "def"
+                        | "fn"
+                        | "if"
+                        | "cond"
+                        | "lambda"
+                        | "let"
+                        | "quote"
+                        | "quasiquote"
+                        | "unquote"
+                        | "unquote-splicing"
+                        | "set"
+                        | "try"
+                        | "eval"
+                        | "yield"
+                        | "loop"
+                        | "match"
+                        | "defmacro"
+                        | "for_syntax"
+                )
+        }
+        None => true,
+    }
+}
+
+fn compile_inner<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Bytecode<T, L>> {
     match v {
         Val::List(l) => {
             let (first, args) = l.split_first().ok_or(Error::InvalidExpression(
@@ -48,21 +129,51 @@ pub fn compile<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Bytecode<T, L>> {
             // special forms
             if let Val::Symbol(s) = first {
                 match s.as_str() {
+                    "__debug_scope" => {
+                        let mut site =
+                            s.sources.first().map(|s| (**s).clone()).unwrap_or_else(|| {
+                                let source = Val::List(
+                                    std::iter::once(Val::symbol("dbg!"))
+                                        .chain(args.iter().cloned())
+                                        .collect(),
+                                );
+                                crate::source::SourceSite::synthetic(source.to_string())
+                            });
+                        // The primitive is generated, but its wrapper has an
+                        // exact source location at the dbg! invocation.
+                        if site.line > 0 && site.expression.starts_with("(dbg!") {
+                            site.generated = false;
+                        }
+                        return Ok(vec![Inst::DebugScope(compile_begin(args)?, site)]);
+                    }
                     "begin" => return compile_begin(args),
                     "def" => return compile_def(args),
                     "fn" => return compile_fn(args),
-                    "defn" => return compile_defn(args),
                     "if" => return compile_if(args),
                     "cond" => return compile_cond(args),
                     "lambda" => return compile_lambda(args),
                     "let" => return compile_let(args),
                     "quote" => return compile_quote(args),
+                    "quasiquote" => return crate::quasiquote::compile(args),
+                    "unquote" | "unquote-splicing" => {
+                        return Err(Error::InvalidExpression(format!("{s} outside quasiquote")))
+                    }
                     "set" => return compile_set(args),
                     "try" => return compile_try(args),
                     "eval" => return compile_eval(args),
                     "yield" => return compile_yield(args),
                     "loop" => return compile_loop(args),
                     "match" => return compile_match(args),
+                    name if name.ends_with('!') => {
+                        return Ok(vec![
+                            Inst::PushConst(v.clone()),
+                            Inst::Expand(false),
+                            Inst::Eval(false),
+                        ])
+                    }
+                    "defmacro" => return Ok(vec![Inst::DefineMacro(v.clone())]),
+                    // Compatibility spelling; helpers are ordinary runtime definitions now.
+                    "for_syntax" => return compile_begin(args),
                     _ => (),
                 }
             }
@@ -117,11 +228,13 @@ fn compile_fn<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>
         [params, body @ ..] if !body.is_empty() => (params, None, body),
         _ => {
             return Err(Error::InvalidExpression(
-                "defn expects at least three arguments with nonempty body".to_string(),
+                "fn expects a parameter list and nonempty body".to_string(),
             ))
         }
     };
 
+    let metadata = interactive_metadata(params, body)?;
+    let body = if metadata.is_some() { &body[1..] } else { body };
     let mut lambda = vec![Val::symbol("lambda"), params.clone()];
     if let Some(docs) = docs {
         lambda.push(Val::String(docs.clone()));
@@ -131,42 +244,53 @@ fn compile_fn<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>
             .chain(body.iter().cloned())
             .collect(),
     ));
-    let inst = compile(&Val::List(lambda))?;
+    let inst = if let Some(metadata) = metadata {
+        compile_func_call(
+            &Val::NativeFn(crate::builtin::metadata::annotate_fn()),
+            &[
+                Val::List(lambda),
+                Val::List(vec![Val::symbol("quote"), metadata]),
+            ],
+        )?
+    } else {
+        compile(&Val::List(lambda))?
+    };
 
     Ok(inst)
 }
-// TODO: Replace `defn` with a macro
-/// Compile defn
-fn compile_defn<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
-    let (name, params, docs, body) = match args {
-        [name, params, Val::String(doc), body @ ..] if !body.is_empty() => {
-            (name, params, Some(doc), body)
-        }
-        [name, params, body @ ..] if !body.is_empty() => (name, params, None, body),
-        _ => {
-            return Err(Error::InvalidExpression(
-                "defn expects at least three arguments with nonempty body".to_string(),
-            ))
-        }
-    };
 
-    let mut lambda = vec![Val::symbol("lambda"), params.clone()];
-    if let Some(docs) = docs {
-        lambda.push(Val::String(docs.clone()));
+fn interactive_metadata<T: Extern, L: Locals>(
+    params: &Val<T, L>,
+    body: &[Val<T, L>],
+) -> Result<Option<Val<T, L>>> {
+    if let Some(Val::List(declaration)) = body.first() {
+        if declaration.first() == Some(&Val::symbol("interactive")) {
+            let types = &declaration[1..];
+            if types.len() != params.as_list()?.len()
+                || types.iter().any(|t| !matches!(t, Val::Keyword(_)))
+            {
+                return Err(Error::InvalidExpression(
+                    "interactive expects one entity-type keyword per parameter".into(),
+                ));
+            }
+            if body.len() < 2 {
+                return Err(Error::InvalidExpression(
+                    "interactive declaration requires a function body".into(),
+                ));
+            }
+            let args = types
+                .iter()
+                .map(|ty| Val::List(vec![Val::keyword("type"), ty.clone()]))
+                .collect();
+            return Ok(Some(Val::List(vec![
+                Val::keyword("interactive"),
+                Val::Bool(true),
+                Val::keyword("args"),
+                Val::List(args),
+            ])));
+        }
     }
-    lambda.push(Val::List(
-        std::iter::once(Val::symbol("begin"))
-            .chain(body.iter().cloned())
-            .collect(),
-    ));
-
-    let inst = compile(&Val::List(vec![
-        Val::symbol("def"),
-        name.clone(),
-        Val::List(lambda),
-    ]))?;
-
-    Ok(inst)
+    Ok(None)
 }
 
 /// Compile special form lambda
@@ -185,8 +309,8 @@ fn compile_lambda<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T
 
     Ok(vec![
         Inst::PushConst(param.clone()),
-        Inst::PushConst(if docs.is_some() {
-            Val::String(docs.unwrap().clone())
+        Inst::PushConst(if let Some(docs) = docs {
+            Val::String(docs.clone())
         } else {
             Val::Nil
         }),
@@ -291,7 +415,7 @@ fn compile_let<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L
     ])];
     lambda.extend(args);
 
-    compile(&Val::List(lambda))
+    compile_inner(&Val::List(lambda))
 }
 
 /// Compile builtin begin
@@ -407,7 +531,6 @@ fn compile_loop<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, 
     Ok(inst)
 }
 
-// TODO: Implement `gensym`?
 // TODO: Replace `match` with macro
 /// Compile `match` expr
 fn compile_match<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T, L>> {
@@ -422,6 +545,7 @@ fn compile_match<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T,
         "match expects at least one argument".to_string(),
     ))?;
 
+    let temporary = Val::symbol(&format!("match__{}", nanoid::nanoid!(16)));
     let cond_clauses: Vec<Val<T, L>> = clauses
         .iter()
         .map(|c| {
@@ -444,7 +568,7 @@ fn compile_match<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T,
                     Val::symbol("ok?"),
                     Val::List(vec![
                         Val::symbol("try"),
-                        Val::List(vec![Val::symbol("def"), pat, Val::symbol("_expr")]),
+                        Val::List(vec![Val::symbol("def"), pat, temporary.clone()]),
                     ]),
                 ]),
                 body,
@@ -454,7 +578,7 @@ fn compile_match<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T,
 
     let ast = Val::List(vec![
         Val::symbol("let"),
-        Val::List(vec![Val::List(vec![Val::symbol("_expr"), expr.clone()])]),
+        Val::List(vec![Val::List(vec![temporary.clone(), expr.clone()])]),
         Val::List(
             std::iter::once(Val::symbol("cond"))
                 .chain(cond_clauses.into_iter())
@@ -468,6 +592,11 @@ fn compile_match<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T,
 impl<T: Extern, L: Locals> std::fmt::Display for Inst<T, L> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Inst::Prepare(form) => write!(f, "prepare {form}"),
+            Inst::DefineMacro(form) => write!(f, "defmacro {form}"),
+            Inst::Expand(once) => write!(f, "expand once={once}"),
+            Inst::ValidateExpansion => write!(f, "validate_expansion"),
+            Inst::EvalCaller => write!(f, "eval_caller"),
             Inst::PushConst(c) => write!(f, "pushco {c}"),
             Inst::GetSym(s) => write!(f, "getsym {s}"),
             Inst::DefSym(s) => write!(f, "defsym {s}"),
@@ -475,6 +604,18 @@ impl<T: Extern, L: Locals> std::fmt::Display for Inst<T, L> {
             Inst::SetSym(s) => write!(f, "setsym {s}"),
             Inst::MakeFunc => write!(f, "makefn"),
             Inst::CallFunc(nargs) => write!(f, "callfn {nargs}"),
+            Inst::CallAt(nargs, site) => write!(
+                f,
+                "callfn {nargs} at {}:{}:{}",
+                site.file, site.line, site.column
+            ),
+            Inst::CallCallback(nargs) => write!(f, "callback {nargs}"),
+            Inst::DebugScope(_, site) => write!(f, "debug_scope {}:{}", site.file, site.line),
+            Inst::FunctionSource(site) => {
+                write!(f, "source {}:{}:{}", site.file, site.line, site.column)
+            }
+            Inst::ListPush => write!(f, "listpush"),
+            Inst::ListExtend => write!(f, "listextend"),
             Inst::PopTop => write!(f, "poptop"),
             Inst::JumpFwd(o) => write!(f, "jmpfwd {o}"),
             Inst::JumpBck(o) => write!(f, "jmpbck {o}"),
@@ -499,6 +640,21 @@ mod tests {
     use void::Void;
 
     type Val = super::Val<Void, Void>;
+    fn compile(v: &Val) -> Result<Bytecode<Void, Void>> {
+        fn strip(code: Bytecode<Void, Void>) -> Bytecode<Void, Void> {
+            code.into_iter()
+                .map(|inst| match inst {
+                    Inst::CallAt(n, _) => Inst::CallFunc(n),
+                    Inst::PushConst(Val::Bytecode(code)) => {
+                        Inst::PushConst(Val::Bytecode(strip(code)))
+                    }
+                    inst => inst,
+                })
+                .collect()
+        }
+        super::compile(v).map(strip)
+    }
+
     #[test]
     fn compile_self_evaluating() {
         assert_eq!(compile(&Val::Int(10)), Ok(vec![PushConst(Val::Int(10)),]));

@@ -2,11 +2,13 @@
 //! Program that specifies a process
 
 use lyric::{Error, Result, SymbolId};
+use std::time::Duration;
 
 use crate::ProcessHandle;
 
 use super::bindings;
 use super::kernel::WeakKernelHandle;
+use super::peer::PeerHandle;
 use super::proc::ProcessId;
 use super::pubsub::PubSubHandle;
 use super::registry::Registry;
@@ -52,6 +54,8 @@ pub type NativeAsyncFn = lyric::NativeAsyncFn<Extern, Locals>;
 /// Bytecode
 pub type Bytecode = lyric::Bytecode<Extern, Locals>;
 
+pub(crate) const DEFAULT_CALL_TIMEOUT: Duration = Duration::from_secs(5);
+
 /// Extern type between Fiber and hosting program
 #[derive(Debug, Clone, PartialEq)]
 pub enum Extern {
@@ -64,16 +68,23 @@ pub enum Extern {
 pub struct Locals {
     /// Id of process owning fiber
     pub(crate) pid: ProcessId,
+    pub(crate) debug: Option<crate::debug::Store>,
+    /// Stable name of the runtime node hosting this process.
+    pub(crate) node_name: String,
     /// Handle to kernel process
     pub(crate) kernel: Option<WeakKernelHandle>,
     /// Handle to process registry
     pub(crate) registry: Option<Registry>,
+    /// Handle to persistent node links
+    pub(crate) peers: Option<PeerHandle>,
     /// Handle to pubsub
     pub(crate) pubsub: Option<PubSubHandle>,
     /// Handle to current process
     pub(crate) self_handle: Option<ProcessHandle>,
     /// Handle to controlling terminal, if any
     pub(crate) term: Option<TermHandle>,
+    /// Maximum time this process waits for a call response by default.
+    pub(crate) call_timeout: Duration,
 }
 
 impl Program {
@@ -85,13 +96,27 @@ impl Program {
     }
 
     pub fn from_val(val: Val) -> Result<Self> {
-        let code = lyric::compile(&val)?;
+        let code = vec![lyric::Inst::Prepare(val)];
         Ok(Self::from_bytecode(code))
     }
 
     pub fn from_expr(expr: &str) -> Result<Self> {
-        let val: Val = lyric::parse(expr)?.into();
-        Self::from_val(val)
+        lyric::parse(expr)?; // preserve the single-expression contract
+        Self::from_source(expr, "<eval>")
+    }
+
+    /// Create a program from a script containing multiple top-level forms.
+    pub fn from_script(script: &str) -> Result<Self> {
+        Self::from_source(script, "<script>")
+    }
+
+    /// Compile a script with a file or buffer identity for source observations.
+    pub fn from_source(script: &str, file: &str) -> Result<Self> {
+        let forms = lyric::parse_source(script, file, 1, 1)?;
+        let body = std::iter::once(Val::symbol("begin"))
+            .chain(forms.into_iter().map(Val::from))
+            .collect();
+        Self::from_val(Val::List(body))
     }
 
     pub fn from_lambda(lambda: Lambda) -> Result<Self> {
@@ -116,8 +141,24 @@ impl Program {
         self
     }
 
+    pub fn macro_env(
+        mut self,
+        macros: lyric::macros::MacroEnv<crate::Extern, crate::Locals>,
+    ) -> Self {
+        self.env.set_macro_env(macros);
+        self
+    }
+
     pub fn into_fiber(self, locals: Locals) -> Fiber {
-        Fiber::from_bytecode(self.code, self.env, locals)
+        let observer = locals
+            .debug
+            .as_ref()
+            .map(|store| store.observer(locals.pid.to_string()));
+        let mut fiber = Fiber::from_bytecode(self.code, self.env, locals);
+        if let Some(observer) = observer {
+            fiber.set_observer(observer);
+        }
+        fiber
     }
 }
 
@@ -138,12 +179,21 @@ impl Locals {
     pub(crate) fn new(pid: ProcessId) -> Self {
         Self {
             pid,
+            debug: None,
+            node_name: "local".to_string(),
             kernel: None,
             registry: None,
+            peers: None,
             pubsub: None,
             self_handle: None,
             term: None,
+            call_timeout: DEFAULT_CALL_TIMEOUT,
         }
+    }
+
+    pub(crate) fn node_name(&mut self, node_name: String) -> &mut Self {
+        self.node_name = node_name;
+        self
     }
 
     pub(crate) fn kernel(&mut self, kernel: WeakKernelHandle) -> &mut Self {
@@ -153,6 +203,11 @@ impl Locals {
 
     pub(crate) fn registry(&mut self, registry: Registry) -> &mut Self {
         self.registry = Some(registry);
+        self
+    }
+
+    pub(crate) fn peers(&mut self, peers: PeerHandle) -> &mut Self {
+        self.peers = Some(peers);
         self
     }
 
@@ -181,48 +236,60 @@ impl PartialEq for Program {
 /// Create new environment for process programs
 pub fn proc_env() -> Env {
     let mut e = Env::standard();
+    e.bind_native(SymbolId::from("dbg_history"), crate::debug::history_fn());
+    e.bind_native(SymbolId::from("fuzzy_match"), bindings::fuzzy_match_fn());
+    e.bind_native(
+        SymbolId::from("match_excerpt"),
+        bindings::match_excerpt_fn(),
+    );
 
     {
         e.bind_native_async(SymbolId::from("recv"), bindings::recv_fn())
             .bind_native_async(SymbolId::from("ls_msgs"), bindings::ls_msgs_fn())
             .bind_native_async(SymbolId::from("send"), bindings::send_fn())
-            .bind_lambda(SymbolId::from("call"), bindings::call_fn());
+            .bind_native_async(SymbolId::from("call"), bindings::call_fn());
     }
 
     {
-        e.bind_native(SymbolId::from("srv"), bindings::srv_fn())
-            .bind_lambda(SymbolId::from("bind_srv"), bindings::bind_srv_fn())
-            .bind_native(
-                SymbolId::from("def_bind_interface"),
-                bindings::def_bind_interface(),
-            )
-            .bind_native_async(SymbolId::from("info_srv"), bindings::info_srv_fn())
-            .bind_native(SymbolId::from("spawn_srv"), bindings::spawn_srv_fn());
+        e.bind_native(
+            SymbolId::from("import_entity_completions"),
+            bindings::import_entity_completions_fn(),
+        )
+        .bind_native_async(SymbolId::from("info_srv"), bindings::info_srv_fn());
     }
 
     {
         e.bind_native_async(SymbolId::from("kill"), bindings::kill_fn())
             .bind_native(SymbolId::from("pid"), bindings::pid_fn())
+            .bind_native(SymbolId::from("node_name"), bindings::node_name_fn())
+            .bind_native(SymbolId::from("call_timeout"), bindings::call_timeout_fn())
             .bind_native_async(SymbolId::from("ps"), bindings::ps_fn())
             .bind_native(SymbolId::from("self"), bindings::self_fn())
             .bind_native_async(SymbolId::from("sleep"), bindings::sleep_fn())
             .bind_native_async(SymbolId::from("spawn"), bindings::spawn_fn());
+        e.bind_native_async(
+            SymbolId::from("vrs/spawn_service"),
+            bindings::spawn_service_fn(),
+        );
+    }
+
+    {
+        e.bind_native_async(SymbolId::from("configure"), bindings::configure_fn());
+        e.bind_native_async(SymbolId::from("eval_remote"), bindings::eval_remote_fn());
+        e.bind_native_async(SymbolId::from("wait_srv"), bindings::wait_srv_fn());
     }
 
     {
         e.bind_native_async(SymbolId::from("fread"), bindings::fread_fn())
-            .bind_native_async(SymbolId::from("fdump"), bindings::fdump_fn());
+            .bind_native_async(SymbolId::from("read_script"), bindings::read_script_fn())
+            .bind_native_async(SymbolId::from("fdump"), bindings::fdump_fn())
+            .bind_native_async(SymbolId::from("run"), bindings::run_script_fn());
     }
 
     {
         e.bind_native_async(SymbolId::from("exec"), bindings::exec_fn())
+            .bind_native(SymbolId::from("decode"), bindings::decode_fn())
             .bind_native(SymbolId::from("shell_expand"), bindings::shell_expand_fn());
-    }
-
-    {
-        e.bind_lambda(SymbolId::from("open_app"), bindings::open_app_fn())
-            .bind_lambda(SymbolId::from("open_file"), bindings::open_file_fn())
-            .bind_lambda(SymbolId::from("open_url"), bindings::open_url_fn());
     }
 
     {
@@ -236,6 +303,7 @@ pub fn proc_env() -> Env {
             .bind_native_async(SymbolId::from("publish"), bindings::publish_fn());
     }
 
+    bindings::install_service_library(&mut e);
     e
 }
 

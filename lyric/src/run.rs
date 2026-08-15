@@ -21,11 +21,14 @@ where
     loop {
         match res {
             Signal::Done(v) => return Ok(v),
-            Signal::Yield(_) => return Err(Error::UnexpectedTopLevelYield),
+            Signal::Yield(_) => {
+                let error = Error::UnexpectedTopLevelYield;
+                f.fail_observations(&error);
+                return Err(error);
+            }
             Signal::Await(call) => {
                 // TODO: Should errors in fut properly update `Fiber::state`?
                 // TODO: Jiggle code between fiber::run and run::run
-                // TODO(bug): NativeAsyncFn do not respect error catching scope, e.g. `(try (exec "jibberish"))` terminates proc
                 let poll_res = call.apply(f).await;
                 res = f.resume(poll_res)?;
             }
@@ -48,7 +51,7 @@ mod tests {
     #[tokio::test]
     async fn run_returns_fiber_result() {
         let prog = r#"(begin
-            (defn inc (x)
+            (defn! inc (x)
                 (+ x 1))
             (def x 39)
             (set x (inc x))
@@ -69,7 +72,7 @@ mod tests {
     #[tokio::test]
     async fn run_hits_error() {
         let prog = r#"(begin
-            (defn inc (x)
+            (defn! inc (x)
                 (undefined_function)
                 (+ x 1))
             (def x 39)
@@ -87,6 +90,7 @@ mod tests {
         env.bind_native_async(
             SymbolId::from("async_call"),
             NativeAsyncFn {
+                metadata: vec![],
                 doc: "".to_string(),
                 func: |_, _| {
                     Box::new(async {
@@ -109,6 +113,7 @@ mod tests {
         env.bind_native_async(
             SymbolId::from("async_inc"),
             NativeAsyncFn {
+                metadata: vec![],
                 doc: "".to_string(),
                 func: |_, args| {
                     let num = match args[..] {
@@ -135,6 +140,7 @@ mod tests {
         env.bind_native_async(
             SymbolId::from("async_err"),
             NativeAsyncFn {
+                metadata: vec![],
                 doc: "".to_string(),
                 func: |_, args| {
                     Box::new(async move {
@@ -153,6 +159,27 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn try_catches_error_during_await() {
+        let mut env = Env::standard();
+        env.bind_native_async(
+            SymbolId::from("async_err"),
+            NativeAsyncFn {
+                metadata: vec![],
+                doc: "".to_string(),
+                func: |_, _| {
+                    Box::new(async { Err(Error::Runtime("async call failed".to_string())) })
+                },
+            },
+        );
+
+        let mut f = Fiber::from_expr("(try (async_err))", env, ()).unwrap();
+        assert_eq!(
+            run(&mut f).await,
+            Ok(Val::Error(Error::Runtime("async call failed".to_string())))
+        );
+    }
+
+    #[tokio::test]
     async fn error_during_nested_await() {
         let prog = r#"(async_inc (async_inc (async_inc (async_inc (async_inc (async_inc 0))))))"#;
 
@@ -160,6 +187,7 @@ mod tests {
         env.bind_native_async(
             SymbolId::from("async_inc"),
             NativeAsyncFn {
+                metadata: vec![],
                 doc: "".to_string(),
                 func: |_, args| {
                     let num = match args[..] {

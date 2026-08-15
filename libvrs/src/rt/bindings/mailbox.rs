@@ -1,12 +1,13 @@
 //! Bindings for Process Mailbox
 use crate::rt::{
     mailbox::Message,
-    program::{Extern, Fiber, Lambda, NativeAsyncFn, Pattern, Val},
+    program::{Extern, Fiber, NativeAsyncFn, Pattern, Val},
 };
-use lyric::{compile, parse, Error, Result, SymbolId};
+use lyric::{Error, Result, SymbolId};
 
 pub(crate) fn send_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(send PID MSG) - Send process PID the message MSG".to_string(),
         func: |f, args| Box::new(send_impl(f, args)),
     }
@@ -15,6 +16,7 @@ pub(crate) fn send_fn() -> NativeAsyncFn {
 /// Binding to recv messages
 pub(crate) fn recv_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(recv [PATTERN]) - Poll mailbox for a message. \
               Optional PATTERN argument can match for messages matching specific patterns."
             .to_string(),
@@ -25,38 +27,79 @@ pub(crate) fn recv_fn() -> NativeAsyncFn {
 /// Binding to list messages
 pub(crate) fn ls_msgs_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(ls_msgs) - Returns contents of mailbox without consuming messages or blocking when mailbox is empty.".to_string(),
         func: |f, args| Box::new(ls_msgs_impl(f, args)),
     }
 }
 
 /// Binding for call
-pub(crate) fn call_fn() -> Lambda {
-    Lambda {
-        doc: Some("(call PID MSG) - Send process PID a message MSG and block until receiving a response for the message".to_string()),
-        params: vec![SymbolId::from("pid"), SymbolId::from("msg")],
-        code: compile(
-            &parse(
-                r#"
-            (begin
-                (def r (ref))
-                (send pid (list r (self) msg))
-                (get (recv (list r 'any)) 1))
-        "#,
-            )
-            .unwrap()
-            .into(),
-        )
-        .unwrap(),
-        parent: None,
+pub(crate) fn call_fn() -> NativeAsyncFn {
+    NativeAsyncFn {
+        metadata: vec![],
+        doc: "(call PID MSG) - Send a request and wait for its response, up to the calling process's timeout".to_string(),
+        func: |fiber, args| Box::new(call_impl(fiber, args)),
     }
+}
+
+async fn call_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
+    let (pid, msg, timeout) = match args.as_slice() {
+        [Val::Extern(Extern::ProcessId(pid)), msg] => {
+            (pid.clone(), msg.clone(), fiber.locals().call_timeout)
+        }
+        _ => {
+            return Err(Error::UnexpectedArguments(
+                "call expects a process id and message".to_string(),
+            ))
+        }
+    };
+
+    let request_ref = lyric::Ref::unique();
+    let request = Val::List(vec![
+        Val::Ref(request_ref.clone()),
+        Val::Extern(Extern::ProcessId(fiber.locals().pid.clone())),
+        msg,
+    ]);
+    send_impl(
+        fiber,
+        vec![Val::Extern(Extern::ProcessId(pid.clone())), request],
+    )
+    .await?;
+
+    let pattern = Pattern::from_val(Val::List(vec![
+        Val::Ref(request_ref),
+        Val::Symbol(SymbolId::from("response")),
+    ]));
+    let mailbox = fiber
+        .locals()
+        .self_handle
+        .as_ref()
+        .expect("process should have self handle")
+        .mailbox()
+        .clone();
+    let response = mailbox
+        .poll_timeout(Some(pattern), timeout)
+        .await
+        .map_err(|e| Error::Runtime(format!("{e}")))?
+        .ok_or_else(|| {
+            Error::Runtime(format!(
+                "call to {pid} timed out after {} seconds",
+                timeout.as_secs()
+            ))
+        })?;
+    response
+        .contents
+        .as_list()?
+        .get(1)
+        .cloned()
+        .ok_or_else(|| Error::Runtime("call received a malformed response".to_string()))
 }
 
 /// Implementation for (send PID MSG)
 async fn send_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
-    let src = fiber.locals().pid;
+    let src = fiber.locals().pid.clone();
     let (dst, msg) = match &args[..] {
-        [Val::Extern(Extern::ProcessId(dst)), msg] => (dst, msg),
+        [Val::Extern(Extern::ProcessId(dst)), msg] => (dst.clone(), msg),
         _ => {
             return Err(Error::UnexpectedArguments(
                 "Unexpected send call - (send DEST_PID DATA)".to_string(),
@@ -64,15 +107,15 @@ async fn send_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
         }
     };
 
-    if src == *dst {
+    if dst == src {
         fiber
             .locals()
             .self_handle
             .as_ref()
             .expect("process should have self handle")
-            .notify_message(Message::new(src, msg.clone()))
+            .notify_message(Message::new(msg.clone()))
             .await;
-    } else {
+    } else if dst.node() == fiber.locals().node_name {
         let kernel = fiber
             .locals()
             .kernel
@@ -80,7 +123,17 @@ async fn send_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
             .and_then(|k| k.upgrade())
             .ok_or(Error::Runtime("Kernel is missing for process".to_string()))?;
         kernel
-            .send_message(src, *dst, msg.clone())
+            .send_message(dst, msg.clone())
+            .await
+            .map_err(|e| Error::Runtime(format!("{e}")))?;
+    } else {
+        let peers = fiber
+            .locals()
+            .peers
+            .as_ref()
+            .ok_or_else(|| Error::Runtime("Node links are not available".to_string()))?;
+        peers
+            .route(dst, msg.clone())
             .await
             .map_err(|e| Error::Runtime(format!("{e}")))?;
     }
@@ -142,7 +195,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_recv_one() {
-        let k = kernel::start();
+        let k = kernel::start_test();
 
         let hdl = k
             .spawn_prog(
@@ -165,7 +218,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_recv_two() {
-        let k = kernel::start();
+        let k = kernel::start_test();
 
         let recv = k
             .spawn_prog(Program::from_expr("(recv)").unwrap())
@@ -188,7 +241,7 @@ mod tests {
             ProcessResult::Done(Val::List(vec![
                 Val::keyword("hi"),
                 Val::keyword("from"),
-                Val::Extern(Extern::ProcessId(send_pid))
+                Val::Extern(Extern::ProcessId(send_pid.clone()))
             ])),
             "send should return sent message"
         );
@@ -205,8 +258,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn call_timeout_does_not_prevent_the_caller_from_continuing() {
+        let k = kernel::start_test();
+        let hdl = k
+            .spawn_prog(
+                Program::from_expr(
+                    r#"(begin
+                        (call_timeout 0)
+                        (def target (spawn (lambda () (recv))))
+                        (def timeout_error (try (call target :hello)))
+                        (send (self) :continued)
+                        (list timeout_error (recv)))"#,
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let result = hdl.join().await.unwrap().status.unwrap();
+        let ProcessResult::Done(Val::List(values)) = result else {
+            panic!("call should time out and let the process continue");
+        };
+        assert!(matches!(
+            &values[..],
+            [Val::Error(lyric::Error::Runtime(message)), Val::Keyword(continued)]
+                if message.contains("timed out after 0 seconds") && continued.as_str() == "continued"
+        ));
+    }
+
+    #[tokio::test]
     async fn ls_msgs_empty() {
-        let k = kernel::start();
+        let k = kernel::start_test();
 
         let hdl = k
             .spawn_prog(Program::from_expr("(ls_msgs)").unwrap())
@@ -220,7 +302,7 @@ mod tests {
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn ls_msgs_nonempty() {
-        let k = kernel::start();
+        let k = kernel::start_test();
 
         let hdl = k
             .spawn_prog(
@@ -246,7 +328,7 @@ mod tests {
 
     #[tokio::test]
     async fn recv_with_pattern() {
-        let k = kernel::start();
+        let k = kernel::start_test();
 
         let recv = k
             .spawn_prog(
@@ -293,7 +375,7 @@ mod tests {
 
     #[tokio::test]
     async fn recv_with_pattern_nested() {
-        let k = kernel::start();
+        let k = kernel::start_test();
 
         let recv = k
             .spawn_prog(
@@ -340,7 +422,7 @@ mod tests {
 
     #[tokio::test]
     async fn recv_with_multipattern() {
-        let k = kernel::start();
+        let k = kernel::start_test();
 
         let prog = r#"(begin
             (send (self) :one)

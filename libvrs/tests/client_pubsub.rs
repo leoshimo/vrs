@@ -5,16 +5,16 @@ use vrs::{Client, Connection, Form, KeywordId, Program, Runtime};
 /// Test Client::subscribe between client and runtime service process
 #[tokio::test]
 async fn client_pubsub_from_service() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     // counter service
     let prog = Program::from_expr(
         r#"(begin
         (def count 0)
-        (defn increment (n)
+        (defn! increment (n)
             (set count (+ count n))
             (publish :count count))
-        (srv :counter :interface '(increment)))
+        (srv! :counter :interface '(increment)))
         "#,
     )
     .unwrap();
@@ -61,7 +61,7 @@ async fn client_pubsub_from_service() {
 /// Test Client::subscribe between two clients
 #[tokio::test]
 async fn client_pubsub_from_another_client() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let client1 = {
         let (local, remote) = Connection::pair().unwrap();
@@ -95,16 +95,16 @@ async fn client_pubsub_from_another_client() {
 /// Test Client::subscribe between two clients and a service
 #[tokio::test]
 async fn client_pubsub_from_another_client_via_service() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     // counter service
     let prog = Program::from_expr(
         r#"(begin
         (def count 0)
-        (defn increment (n)
+        (defn! increment (n)
             (set count (+ count n))
             (publish :count count))
-        (srv :counter :interface '(increment)))
+        (srv! :counter :interface '(increment)))
         "#,
     )
     .unwrap();

@@ -1,8 +1,6 @@
 //! Lexer for Lyric
-use std::iter::Peekable;
-use tracing::error;
 
-use crate::{Error, Result};
+use crate::{types::escape_string, Error, Result};
 
 /// Parsed Tokens from String
 #[derive(Debug, PartialEq)]
@@ -16,6 +14,9 @@ pub enum Token {
     ParenLeft,
     ParenRight,
     Quote,
+    Quasiquote,
+    Unquote,
+    UnquoteSplicing,
 }
 
 impl std::fmt::Display for Token {
@@ -24,40 +25,78 @@ impl std::fmt::Display for Token {
             Token::Nil => write!(f, "nil"),
             Token::Bool(b) => write!(f, "{}", if *b { "true" } else { "false" }),
             Token::Int(i) => write!(f, "{}", i),
-            Token::String(s) => write!(f, "\"{}\"", s),
+            Token::String(s) => write!(f, "\"{}\"", escape_string(s)),
             Token::Symbol(s) => write!(f, "{}", s),
             Token::Keyword(s) => write!(f, ":{}", s),
             Token::ParenLeft => write!(f, "("),
             Token::ParenRight => write!(f, ")"),
             Token::Quote => write!(f, "'"),
+            Token::Quasiquote => write!(f, "`"),
+            Token::Unquote => write!(f, ","),
+            Token::UnquoteSplicing => write!(f, ",@"),
         }
     }
 }
 
 /// Tokenize entire expression as vector
 pub(crate) fn lex(expr: &str) -> Result<Vec<Token>> {
-    let mut tokens = vec![];
-    for token in Tokens::new(expr) {
-        match token {
-            Ok(token) => tokens.push(token),
-            Err(err) => {
-                error!("lexing failed - {}, tokens={:?}", err, tokens);
-            }
+    Tokens::new(expr).collect()
+}
+
+/// The next character can be inspected without moving the byte offset.
+#[derive(Clone)]
+struct Cursor<'a> {
+    chars: std::str::Chars<'a>,
+    offset: usize,
+}
+impl Iterator for Cursor<'_> {
+    type Item = char;
+    fn next(&mut self) -> Option<char> {
+        let ch = self.chars.next()?;
+        self.offset += ch.len_utf8();
+        Some(ch)
+    }
+}
+impl Cursor<'_> {
+    fn peek(&self) -> Option<char> {
+        self.chars.clone().next()
+    }
+    fn next_if(&mut self, f: impl FnOnce(&char) -> bool) -> Option<char> {
+        if self.peek().is_some_and(|ch| f(&ch)) {
+            self.next()
+        } else {
+            None
         }
     }
-    Ok(tokens)
+    fn next_if_eq(&mut self, ch: &char) -> Option<char> {
+        self.next_if(|next| next == ch)
+    }
+}
+
+pub(crate) fn lex_spanned(expr: &str) -> Result<Vec<(Token, usize, usize)>> {
+    let mut tokens = Tokens::new(expr);
+    let mut result = vec![];
+    while let Some(token) = tokens.next() {
+        result.push((token?, tokens.start, tokens.inner.offset));
+    }
+    Ok(result)
 }
 
 /// An iterator over Tokens
 struct Tokens<'a> {
-    inner: Peekable<std::str::Chars<'a>>,
+    inner: Cursor<'a>,
+    start: usize,
 }
 
 impl Tokens<'_> {
     /// Create Tokens iterator from &str
     fn new(expr: &str) -> Tokens<'_> {
         Tokens {
-            inner: expr.chars().peekable(),
+            inner: Cursor {
+                chars: expr.chars(),
+                offset: 0,
+            },
+            start: 0,
         }
     }
 
@@ -92,14 +131,21 @@ impl Tokens<'_> {
             '(' => Ok(Token::ParenLeft),
             ')' => Ok(Token::ParenRight),
             '\'' => Ok(Token::Quote),
+            '`' => Ok(Token::Quasiquote),
+            ',' if self.inner.next_if_eq(&'@').is_some() => Ok(Token::UnquoteSplicing),
+            ',' => Ok(Token::Unquote),
             _ => Err(Error::IncompleteExpression(format!(
                 "Unexpected punctuation - {ch}"
             ))),
         }
     }
 
-    /// Parse next string
+    /// Parse the next regular or raw block string.
     fn next_string(&mut self) -> Result<Token> {
+        if self.inner.clone().take(3).collect::<String>() == "\"\"\"" {
+            return self.next_block_string();
+        }
+
         let ch = self.inner.next().ok_or(Error::IncompleteExpression(
             "Expected opening string quotation".to_string(),
         ))?;
@@ -109,36 +155,81 @@ impl Tokens<'_> {
             )));
         }
 
-        // TODO: Revisit iterators in lexer
-        let mut escaped = false;
-        let expr: String = std::iter::from_fn(|| {
-            while let Some(ch) = self.inner.next_if(|ch| *ch != '\"' || escaped) {
-                if !escaped && ch == '\\' {
-                    escaped = true;
-                } else {
-                    let actual_ch = match ch {
-                        'n' if escaped => '\n',
-                        '"' if escaped => '\"',
-                        _ => ch,
+        let mut value = String::new();
+        loop {
+            match self.inner.next() {
+                Some('"') => return Ok(Token::String(value)),
+                Some('\\') => {
+                    let escaped = self.inner.next().ok_or_else(|| {
+                        Error::IncompleteExpression(
+                            "Expected character after string escape".to_string(),
+                        )
+                    })?;
+                    let ch = match escaped {
+                        'n' => '\n',
+                        'r' => '\r',
+                        't' => '\t',
+                        '\\' => '\\',
+                        '"' => '"',
+                        '\'' => '\'',
+                        _ => {
+                            return Err(Error::InvalidExpression(format!(
+                                "Unsupported string escape - \\{escaped}"
+                            )))
+                        }
                     };
-                    escaped = false;
-                    return Some(actual_ch);
+                    value.push(ch);
+                }
+                Some(ch) => value.push(ch),
+                None => {
+                    return Err(Error::IncompleteExpression(
+                        "Expected closing string quotation".to_string(),
+                    ))
                 }
             }
-            None
-        })
-        .collect();
+        }
+    }
 
-        let ch = self.inner.next().ok_or(Error::IncompleteExpression(
-            "Expected closing string quotation".to_string(),
-        ))?;
-        if ch != '\"' {
-            return Err(Error::IncompleteExpression(format!(
-                "Expected closing string quotation - found {ch}"
-            )));
+    /// Parse a raw block string delimited by three double quotes.
+    ///
+    /// A newline immediately after the opening delimiter enables layout mode:
+    /// the leading newline, closing-delimiter indentation, and common content
+    /// indentation are removed. Otherwise the contents are preserved exactly.
+    fn next_block_string(&mut self) -> Result<Token> {
+        for _ in 0..3 {
+            match self.inner.next() {
+                Some('"') => {}
+                _ => {
+                    return Err(Error::IncompleteExpression(
+                        "Expected opening block string delimiter".to_string(),
+                    ))
+                }
+            }
         }
 
-        Ok(Token::String(expr))
+        let mut value = String::new();
+        loop {
+            let quote_count = self.inner.clone().take_while(|ch| *ch == '"').count();
+            if quote_count >= 3 {
+                for _ in 0..quote_count - 3 {
+                    self.inner.next();
+                    value.push('"');
+                }
+                for _ in 0..3 {
+                    self.inner.next();
+                }
+                return Ok(Token::String(normalize_block_string(value)));
+            }
+
+            match self.inner.next() {
+                Some(ch) => value.push(ch),
+                None => {
+                    return Err(Error::IncompleteExpression(
+                        "Expected closing block string delimiter".to_string(),
+                    ))
+                }
+            }
+        }
     }
 
     /// Parse keyword
@@ -160,6 +251,66 @@ impl Tokens<'_> {
     }
 }
 
+/// Normalize an indented multiline block while preserving inline blocks exactly.
+fn normalize_block_string(mut value: String) -> String {
+    if let Some(stripped) = value.strip_prefix("\r\n") {
+        value = stripped.to_string();
+    } else if let Some(stripped) = value.strip_prefix('\n') {
+        value = stripped.to_string();
+    } else {
+        return value;
+    }
+
+    if value
+        .chars()
+        .all(|ch| matches!(ch, ' ' | '\t' | '\r' | '\n'))
+    {
+        return String::new();
+    }
+
+    if let Some(last_newline) = value.rfind('\n') {
+        let closing_indent = &value[last_newline + 1..];
+        if closing_indent
+            .chars()
+            .all(|ch| matches!(ch, ' ' | '\t' | '\r'))
+        {
+            value.truncate(last_newline + 1);
+        }
+    }
+
+    let common_indent = value
+        .split('\n')
+        .filter(|line| !line.trim_matches([' ', '\t', '\r']).is_empty())
+        .map(|line| {
+            line.as_bytes()
+                .iter()
+                .take_while(|byte| matches!(byte, b' ' | b'\t'))
+                .count()
+        })
+        .min()
+        .unwrap_or(0);
+
+    if common_indent == 0 {
+        return value;
+    }
+
+    let mut normalized = String::with_capacity(value.len());
+    for line in value.split_inclusive('\n') {
+        let (content, newline) = line
+            .strip_suffix('\n')
+            .map(|content| (content, "\n"))
+            .unwrap_or((line, ""));
+
+        if content.trim_matches([' ', '\t', '\r']).is_empty() {
+            normalized.push_str(content.trim_start_matches([' ', '\t']));
+        } else {
+            normalized.push_str(&content[common_indent..]);
+        }
+        normalized.push_str(newline);
+    }
+    normalized
+}
+
 impl<'a> Iterator for Tokens<'a> {
     type Item = Result<Token>;
 
@@ -167,21 +318,27 @@ impl<'a> Iterator for Tokens<'a> {
         let mut is_comment = false;
 
         while let Some(ch) = self.inner.peek() {
-            if *ch == '\n' && is_comment {
+            if ch == '\n' && is_comment {
                 is_comment = false;
             }
-            if *ch == '#' {
+            if ch == '#' {
                 is_comment = true;
             }
             if ch.is_whitespace() || is_comment {
                 let _ = self.inner.next();
                 continue;
             }
+            self.start = self.inner.offset;
             let token = match ch {
                 '\"' => self.next_string(),
                 ':' => self.next_keyword(),
-                _ if is_punct(ch) => self.next_punct(),
-                _ if ch.is_numeric() || ch == &'-' => self.next_int(),
+                _ if is_punct(&ch) => self.next_punct(),
+                _ if ch.is_numeric()
+                    || (ch == '-'
+                        && matches!(self.inner.clone().nth(1), Some(ch) if ch.is_numeric())) =>
+                {
+                    self.next_int()
+                }
                 _ => self.next_symbol(),
             };
             return Some(token);
@@ -197,7 +354,7 @@ fn is_symbol_delimiter(ch: &char) -> bool {
 
 /// Return whether or not token is an interesting punctuation
 fn is_punct(ch: &char) -> bool {
-    *ch == '(' || *ch == ')' || *ch == '\''
+    matches!(ch, '(' | ')' | '\'' | '`' | ',')
 }
 
 #[cfg(test)]
@@ -220,6 +377,21 @@ mod tests {
         assert_eq!(lex("1"), Ok(vec![Token::Int(1)]));
         assert_eq!(lex("     1     "), Ok(vec![Token::Int(1)]));
         assert_eq!(lex("-99"), Ok(vec![Token::Int(-99)]));
+    }
+
+    #[test]
+    fn lex_minus_symbol() {
+        assert_eq!(lex("-"), Ok(vec![Token::Symbol("-".to_string())]));
+        assert_eq!(
+            lex("(- 10 -3)"),
+            Ok(vec![
+                Token::ParenLeft,
+                Token::Symbol("-".to_string()),
+                Token::Int(10),
+                Token::Int(-3),
+                Token::ParenRight,
+            ])
+        );
     }
 
     #[test]
@@ -276,17 +448,113 @@ mod tests {
                 "Escaped quotes should be part of strings"
             );
             assert_eq!(
-                lex(r#"(exec "osascript" "-e" "tell application \"System Events\"")"#),
+                lex(r#""line one\nline two\r\t\\end\'""#),
+                Ok(vec![Token::String(
+                    "line one\nline two\r\t\\end'".to_string()
+                )]),
+                "Supported escapes should decode to their characters"
+            );
+            assert_eq!(
+                lex(r#"(invoke "program" "--text" "nested \"quotes\"")"#),
                 Ok(vec![
                     Token::ParenLeft,
-                    Token::Symbol("exec".to_string()),
-                    Token::String("osascript".to_string()),
-                    Token::String("-e".to_string()),
-                    Token::String(r#"tell application "System Events""#.to_string()),
+                    Token::Symbol("invoke".to_string()),
+                    Token::String("program".to_string()),
+                    Token::String("--text".to_string()),
+                    Token::String(r#"nested "quotes""#.to_string()),
                     Token::ParenRight,
                 ])
             );
         }
+    }
+
+    #[test]
+    fn lex_raw_block_string() {
+        let source = concat!(
+            "\"\"\"\n",
+            "    printf \"%s\\\\n\" \"$1\"\n",
+            "    # Quotes, parens, and backslashes are literal: (\"hello\")\n",
+            "    path='C:\\tmp'\n",
+            "    \"\"\"",
+        );
+
+        assert_eq!(
+            lex(source),
+            Ok(vec![Token::String(
+                "printf \"%s\\\\n\" \"$1\"\n# Quotes, parens, and backslashes are literal: (\"hello\")\npath='C:\\tmp'\n"
+                    .to_string()
+            )])
+        );
+    }
+
+    #[test]
+    fn block_string_layout_is_predictable() {
+        assert_eq!(
+            lex("\"\"\"inline \\\\ \"quoted\"\"\"\""),
+            Ok(vec![Token::String("inline \\\\ \"quoted\"".to_string())])
+        );
+        assert_eq!(
+            lex("\"\"\"\n    one\n      two\n    \"\"\""),
+            Ok(vec![Token::String("one\n  two\n".to_string())])
+        );
+        assert_eq!(
+            lex("\"\"\"\r\n\tline\r\n\t\"\"\""),
+            Ok(vec![Token::String("line\r\n".to_string())])
+        );
+        assert_eq!(
+            lex("\"\"\"\n    \"\"\""),
+            Ok(vec![Token::String(String::new())])
+        );
+    }
+
+    #[test]
+    fn unterminated_block_string_is_incomplete() {
+        assert_eq!(
+            lex("\"\"\"never closed"),
+            Err(Error::IncompleteExpression(
+                "Expected closing block string delimiter".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn block_string_token_display_round_trips_as_a_regular_string() {
+        let [token] = lex("\"\"\"\n  line one\n  \\\\ \"line two\"\n  \"\"\"")
+            .unwrap()
+            .try_into()
+            .unwrap();
+        assert_eq!(lex(&token.to_string()), Ok(vec![token]));
+    }
+
+    #[test]
+    fn lex_string_rejects_invalid_or_incomplete_escapes() {
+        assert_eq!(
+            lex(r#""bad \q escape""#),
+            Err(Error::InvalidExpression(
+                "Unsupported string escape - \\q".to_string()
+            ))
+        );
+        assert_eq!(
+            lex("\"trailing\\"),
+            Err(Error::IncompleteExpression(
+                "Expected character after string escape".to_string()
+            ))
+        );
+        assert_eq!(
+            lex("\"unterminated"),
+            Err(Error::IncompleteExpression(
+                "Expected closing string quotation".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn string_token_display_is_valid_source() {
+        let token = Token::String("line one\n\"line two\"\\end\r\t".to_string());
+        assert_eq!(
+            token.to_string(),
+            "\"line one\\n\\\"line two\\\"\\\\end\\r\\t\""
+        );
     }
 
     #[test]
@@ -451,7 +719,3 @@ mod tests {
         );
     }
 }
-
-// TODO(bug): Cannot parse non-number "-" prefix:
-//     vrs> (- (read (get (exec "date" "+%s") 1)) 10)
-//     Incomplete expression - Unable to parse integer - -

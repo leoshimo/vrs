@@ -21,7 +21,7 @@ pub struct Connection {
 }
 
 /// Messages between client and runtime
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub enum Message {
     Request(Request),
     Response(Response),
@@ -31,7 +31,7 @@ pub enum Message {
 }
 
 /// Outgoing Requests
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct Request {
     /// Unique ID assigned to request
     pub id: u32,
@@ -40,20 +40,20 @@ pub struct Request {
 }
 
 /// Client request for new subscriptions
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct SubscriptionRequest {
     pub(crate) topic: KeywordId,
 }
 
 /// Runtime response for subscription topic changes
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct SubscriptionUpdate {
     pub(crate) topic: KeywordId,
     pub(crate) contents: Form,
 }
 
 /// Incoming response
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct Response {
     /// Unique ID of request this response is for
     pub req_id: u32,
@@ -62,7 +62,7 @@ pub struct Response {
 }
 
 /// Error Type
-#[derive(thiserror::Error, Debug, Deserialize, Serialize, PartialEq)]
+#[derive(thiserror::Error, Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub enum Error {
     #[error("Error evaluating expression - {0}")]
     EvaluationError(#[from] lyric::Error),

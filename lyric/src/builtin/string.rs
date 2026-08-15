@@ -3,6 +3,7 @@ use dyn_fmt::AsStrFormatExt;
 
 pub(crate) fn str_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        metadata: vec![],
         doc: "(str ARG1 ARG2 ... ARGN) - Returns a new string by concatenating each argument coerced into string.\
               Arguments are optional.".to_string(),
         func: |_, args| {
@@ -17,6 +18,7 @@ pub(crate) fn str_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 
 pub(crate) fn display_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        metadata: vec![],
         doc: "(display ARG1 ARG2 ... ARGN) - Returns a new string by concatenating each argument as a display string.".to_string(),
         func: |_, args| {
             let mut result = String::new();
@@ -28,16 +30,38 @@ pub(crate) fn display_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     }
 }
 
+pub(crate) fn pretty_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
+    NativeFn {
+        metadata: vec![],
+        doc: "(pretty VALUE [WIDTH]) - Returns readable Lyric text as a string. WIDTH is a positive integer (default 90). Lists wrap and small keyword/value pairs stay together; oversized nested values start below their keyword. Atoms are never split. Serializable values round-trip through read; opaque runtime values keep their display notation. Use vrsctl --raw to display the returned text.".to_string(),
+        func: |_, args| {
+            let (value, width) = match args {
+                [value] => (value, crate::DEFAULT_PRINT_WIDTH),
+                [value, Val::Int(width)] if *width > 0 => (value, *width as usize),
+                _ => return Err(Error::UnexpectedArguments(
+                    "pretty expects a value and optional positive integer width".to_string(),
+                )),
+            };
+            Ok(NativeFnOp::Return(Val::String(value.to_pretty_string(width))))
+        },
+    }
+}
+
 pub(crate) fn join_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        metadata: vec![],
         doc: "(join SEP ARG1 ARG2 ... ARGN) - Returns a new string by concatenating each argument separated by SEP.".to_string(),
-        func: |_, args| {
+        func: |fiber, args| {
             let separator = args
                 .first()
                 .ok_or(Error::UnexpectedArguments(
                     "First argument should be string separator".to_string(),
                 ))?
                 .as_string()?;
+
+            if fiber.is_expanding() && separator.len().saturating_mul(args.len()) > 1_000_000 {
+                return Err(Error::Macro("expansion join size limit exceeded".into()));
+            }
 
             let str_args = args
                 .iter()
@@ -53,6 +77,7 @@ pub(crate) fn join_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 
 pub(crate) fn split_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        metadata: vec![],
         doc: "(split SEP STR) - Returns a list separating string STR by SEP.".to_string(),
         func: |_, args| {
             let substrings = match args {
@@ -71,6 +96,7 @@ pub(crate) fn split_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 
 pub(crate) fn format_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        metadata: vec![],
         doc: "(format FORMAT ARG1 ARG2 ... ARGN) - Returns a new string by templating FORMAT with arguments coerced into strings.".to_string(),
         func: |_, args| {
             let format = args
@@ -94,6 +120,7 @@ pub(crate) fn format_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 
 pub(crate) fn read_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        metadata: vec![],
         doc: "(read STRING) - Returns a symbolic expression by parsing STRING.".to_string(),
         func: |_, args| {
             let expr = match args {

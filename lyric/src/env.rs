@@ -1,4 +1,6 @@
-use crate::{builtin, Error, Extern, Lambda, Locals, NativeAsyncFn, NativeFn, SymbolId, Val};
+use crate::{
+    builtin, Error, Extern, KeywordId, Lambda, Locals, NativeAsyncFn, NativeFn, SymbolId, Val,
+};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -9,6 +11,16 @@ use std::{
 pub struct Env<T: Extern, L: Locals> {
     bindings: HashMap<SymbolId, Val<T, L>>,
     parent: Option<EnvRef<T, L>>,
+    completions: CompletionConfig,
+    pub(crate) macros: Option<crate::macros::MacroEnv<T, L>>,
+}
+
+pub type EntityCompletions = HashMap<KeywordId, Vec<SymbolId>>;
+
+#[derive(Debug, Clone, Default)]
+struct CompletionConfig {
+    local: EntityCompletions,
+    imported: HashMap<KeywordId, EntityCompletions>,
 }
 
 // TODO: EnvRef as NewType? For ergonomic clone
@@ -21,15 +33,21 @@ impl<T: Extern, L: Locals> Env<T, L> {
         let mut e = Env {
             bindings: HashMap::default(),
             parent: None,
+            completions: CompletionConfig::default(),
+            macros: Some(crate::macros::MacroEnv::default()),
         };
         e.bind_native(SymbolId::from("contains?"), builtin::contains_fn())
             .bind_native(SymbolId::from("eq?"), builtin::eq_fn())
             .bind_native(SymbolId::from("+"), builtin::plus_fn())
+            .bind_native(SymbolId::from("-"), builtin::minus_fn())
             .bind_native(SymbolId::from("ref"), builtin::ref_fn())
             .bind_native(SymbolId::from("list"), builtin::list_fn())
+            .bind_native(SymbolId::from("list?"), builtin::types::list_predicate_fn())
+            .bind_native(SymbolId::from("error"), builtin::types::error_fn())
             .bind_native(SymbolId::from("push"), builtin::push_fn())
             .bind_native(SymbolId::from("get"), builtin::get_fn())
             .bind_native(SymbolId::from("map"), builtin::map_fn())
+            .bind_native(SymbolId::from("apply"), builtin::list::apply_fn())
             .bind_native(SymbolId::from("len"), builtin::len_fn())
             .bind_lambda(SymbolId::from("filter"), builtin::filter_fn())
             .bind_native(SymbolId::from("not?"), builtin::not_fn())
@@ -42,10 +60,26 @@ impl<T: Extern, L: Locals> Env<T, L> {
             .bind_native(SymbolId::from("split"), builtin::split_fn())
             .bind_native(SymbolId::from("format"), builtin::format_fn())
             .bind_native(SymbolId::from("display"), builtin::display_fn())
+            .bind_native(SymbolId::from("pretty"), builtin::pretty_fn())
             .bind_native(SymbolId::from("dbg"), builtin::dbg_fn())
+            .bind_native(
+                SymbolId::from("eval_source"),
+                crate::source::eval_source_fn(),
+            )
             .bind_native(SymbolId::from("read"), builtin::read_fn())
             .bind_native(SymbolId::from("help"), builtin::help_fn())
+            .bind_native(SymbolId::from("meta"), builtin::metadata::meta_fn())
+            .bind_native(
+                SymbolId::from("set_entity_completions"),
+                builtin::env::set_entity_completions_fn(),
+            )
+            .bind_native(
+                SymbolId::from("get_entity_completions"),
+                builtin::env::get_entity_completions_fn(),
+            )
             .bind_native(SymbolId::from("ls_env"), builtin::ls_env_fn());
+
+        crate::macros::bind_builtins(&mut e);
 
         e
     }
@@ -55,6 +89,8 @@ impl<T: Extern, L: Locals> Env<T, L> {
         Self {
             bindings: HashMap::new(),
             parent: Some(Arc::clone(parent)),
+            completions: CompletionConfig::default(),
+            macros: None,
         }
     }
 
@@ -67,6 +103,8 @@ impl<T: Extern, L: Locals> Env<T, L> {
         Self {
             bindings: self.bindings.clone(),
             parent,
+            completions: self.completions.clone(),
+            macros: self.macros.clone(),
         }
     }
 
@@ -127,6 +165,87 @@ impl<T: Extern, L: Locals> Env<T, L> {
     pub fn iter(&self) -> EnvIter<'_, T, L> {
         EnvIter(self.bindings.iter())
     }
+
+    /// Visible names, including parents, with ordinary lexical shadowing.
+    pub fn symbols(&self) -> Vec<SymbolId> {
+        let mut symbols = self
+            .parent
+            .as_ref()
+            .map(|p| p.lock().unwrap().symbols())
+            .unwrap_or_default();
+        symbols.extend(self.bindings.keys().cloned());
+        symbols.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+        symbols.dedup();
+        symbols
+    }
+
+    pub(crate) fn macro_definition(
+        &self,
+        name: &str,
+    ) -> crate::Result<crate::macros::Definition<T, L>> {
+        match (&self.macros, &self.parent) {
+            (Some(macros), _) => macros.get(name),
+            (None, Some(parent)) => parent.lock().unwrap().macro_definition(name),
+            (None, None) => crate::macros::MacroEnv::default().get(name),
+        }
+    }
+
+    /// Snapshot the macro namespace when creating a process or installing a library.
+    pub fn macro_env(&self) -> crate::macros::MacroEnv<T, L> {
+        self.macros
+            .clone()
+            .or_else(|| self.parent.as_ref().map(|p| p.lock().unwrap().macro_env()))
+            .unwrap_or_default()
+    }
+
+    pub fn set_macro_env(&mut self, macros: crate::macros::MacroEnv<T, L>) {
+        self.macros = Some(macros);
+    }
+
+    pub fn set_entity_completions(&mut self, ty: KeywordId, providers: Option<Vec<SymbolId>>) {
+        match providers {
+            Some(providers) => {
+                self.completions.local.insert(ty, providers);
+            }
+            None => {
+                self.completions.local.remove(&ty);
+            }
+        }
+    }
+
+    pub fn import_entity_completions(&mut self, service: KeywordId, providers: EntityCompletions) {
+        self.completions.imported.insert(service, providers);
+    }
+
+    fn completion_config(&self) -> CompletionConfig {
+        let mut config = self
+            .parent
+            .as_ref()
+            .map(|p| p.lock().unwrap().completion_config())
+            .unwrap_or_default();
+        config.local.extend(self.completions.local.clone());
+        config.imported.extend(self.completions.imported.clone());
+        config
+    }
+
+    pub fn entity_completions(&self) -> EntityCompletions {
+        let config = self.completion_config();
+        let mut result = EntityCompletions::new();
+        let mut defaults = config.imported.into_iter().collect::<Vec<_>>();
+        defaults.sort_by(|(a, _), (b, _)| a.as_str().cmp(b.as_str()));
+        for (_, types) in defaults {
+            for (ty, providers) in types {
+                let values = result.entry(ty).or_default();
+                for provider in providers {
+                    if !values.contains(&provider) {
+                        values.push(provider);
+                    }
+                }
+            }
+        }
+        result.extend(config.local);
+        result
+    }
 }
 
 impl<T: Extern, L: Locals> std::clone::Clone for Env<T, L> {
@@ -139,6 +258,8 @@ impl<T: Extern, L: Locals> std::clone::Clone for Env<T, L> {
         Self {
             bindings: self.bindings.clone(),
             parent,
+            completions: self.completions.clone(),
+            macros: self.macros.clone(),
         }
     }
 }

@@ -6,7 +6,7 @@ use vrs::{Extern, ProcessResult, Program, Runtime, Val};
 
 #[tokio::test]
 async fn spawn_pid_is_different() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let prog = r#"(begin
         (def origin_pid (self))
@@ -29,14 +29,14 @@ async fn spawn_pid_is_different() {
     };
 
     assert_matches!(
-        pids[..],
+        &pids[..],
         [Val::Extern(Extern::ProcessId(origin)), Val::Extern(Extern::ProcessId(spawn))] if origin.inner() != spawn.inner()
     )
 }
 
 #[tokio::test]
 async fn spawn_env_isolated() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let prog = r#" (begin
         (def origin_pid (self))
@@ -72,13 +72,13 @@ async fn spawn_env_isolated() {
 #[tokio::test]
 #[ignore] // TODO: Decide Isolation Policy / Fix
 async fn spawn_env_lambda_isolated() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let prog = r#"(begin
         (def parent_pid (self))
 
         (def a_var :parent)
-        (defn set_var (val)
+        (defn! set_var (val)
             (set a_var val))
 
         (spawn (fn ()
@@ -103,12 +103,12 @@ async fn spawn_env_lambda_isolated() {
 #[ignore] // TODO: Decide Isolation Policy / Fix
 #[tokio::test]
 async fn spawn_env_lambda_nested_isolated() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let prog = r#"(begin
         (def parent_pid (self))
 
-        (defn make_adder ()
+        (defn! make_adder ()
             (def val 0)
             (lambda (x) (set val (+ val x))))
 

@@ -18,11 +18,102 @@ pub fn parse(expr: &str) -> Result<Form> {
     Ok(form)
 }
 
+/// Parse a script containing zero or more top-level forms.
+pub fn parse_script(expr: &str) -> Result<Vec<Form>> {
+    let mut tokens = lex(expr)?.into_iter().peekable();
+    let mut forms = Vec::new();
+    while tokens.peek().is_some() {
+        forms.push(parse_form(&mut tokens)?);
+    }
+    Ok(forms)
+}
+
+/// Parse a source unit while retaining exact call locations. Symbol identity,
+/// quotation, and Form serialization remain unchanged.
+pub fn parse_source(text: &str, file: &str, line: usize, column: usize) -> Result<Vec<Form>> {
+    let mut forms = parse_script(text)?;
+    let tokens = crate::lex::lex_spanned(text)?;
+    let mut starts = vec![0];
+    starts.extend(text.match_indices('\n').map(|(i, _)| i + 1));
+    struct Locator<'a> {
+        tokens: &'a [(Token, usize, usize)],
+        index: usize,
+        text: &'a str,
+        file: &'a str,
+        line: usize,
+        column: usize,
+        starts: Vec<usize>,
+    }
+    impl Locator<'_> {
+        fn locate(&mut self, form: &mut Form) {
+            let start = self.tokens[self.index].1;
+            match &self.tokens[self.index].0 {
+                Token::ParenLeft => {
+                    self.index += 1;
+                    if let Form::List(items) = form {
+                        for item in items {
+                            self.locate(item);
+                        }
+                    }
+                    self.index += 1;
+                }
+                Token::Quote | Token::Quasiquote | Token::Unquote | Token::UnquoteSplicing => {
+                    self.index += 1;
+                    if let Form::List(items) = form {
+                        self.locate(&mut items[1]);
+                    }
+                }
+                _ => self.index += 1,
+            }
+            let end = self.tokens[self.index - 1].2;
+            if matches!(form, Form::List(_)) {
+                let row = self.starts.partition_point(|offset| *offset <= start) - 1;
+                let col = self.text[self.starts[row]..start].chars().count()
+                    + if row == 0 { self.column } else { 1 };
+                let site = crate::source::SourceSite {
+                    file: self.file.into(),
+                    line: self.line + row,
+                    column: col,
+                    expression: self.text[start..end].into(),
+                    form: form.to_string(),
+                    generated: false,
+                };
+                crate::source::attach(form, site);
+            }
+        }
+    }
+    let mut locator = Locator {
+        tokens: &tokens,
+        index: 0,
+        text,
+        file,
+        line,
+        column,
+        starts,
+    };
+    for form in &mut forms {
+        locator.locate(form);
+    }
+    Ok(forms)
+}
+
 /// Parse single expression into a form. Returns result of tuple of parsed form and remaining tokens
 fn parse_form<I>(tokens: &mut Peekable<I>) -> Result<Form>
 where
     I: Iterator<Item = Token>,
 {
+    parse_form_at_depth(tokens, 0)
+}
+
+fn parse_form_at_depth<I>(tokens: &mut Peekable<I>, depth: usize) -> Result<Form>
+where
+    I: Iterator<Item = Token>,
+{
+    if depth > 256 {
+        return Err(Error::InvalidExpression(
+            "source nesting exceeds 256 levels".into(),
+        ));
+    }
     let next = tokens
         .next()
         .ok_or(Error::IncompleteExpression("Expected a form".to_string()))?;
@@ -39,7 +130,7 @@ where
                 if next == &Token::ParenRight {
                     break;
                 }
-                items.push(parse_form(tokens)?);
+                items.push(parse_form_at_depth(tokens, depth + 1)?);
             }
             if tokens.peek() != Some(&Token::ParenRight) {
                 return Err(Error::IncompleteExpression(
@@ -54,9 +145,29 @@ where
                 "Unexpected closing parenthesis while parsing expression".to_string(),
             ))
         }
-        Token::Quote => {
-            let quoted = parse_form(tokens)?;
-            Form::List(vec![Form::symbol("quote"), quoted])
+        prefix @ (Token::Quote | Token::Quasiquote | Token::Unquote | Token::UnquoteSplicing) => {
+            let name = match prefix {
+                Token::Quote => "quote",
+                Token::Quasiquote => "quasiquote",
+                Token::Unquote => "unquote",
+                Token::UnquoteSplicing => "unquote-splicing",
+                _ => unreachable!(),
+            };
+            match tokens.peek() {
+                None => {
+                    return Err(Error::IncompleteExpression(format!(
+                        "Expected a form after {prefix}"
+                    )))
+                }
+                Some(Token::ParenRight) => {
+                    return Err(Error::InvalidExpression(format!(
+                        "Expected a form after {prefix}, found )"
+                    )))
+                }
+                _ => (),
+            }
+            let quoted = parse_form_at_depth(tokens, depth + 1)?;
+            Form::List(vec![Form::symbol(name), quoted])
         }
     };
     Ok(form)
@@ -73,6 +184,18 @@ mod tests {
             parse("            "),
             Err(Error::IncompleteExpression(_))
         ));
+    }
+
+    #[test]
+    fn parse_script_top_level_forms() {
+        assert_eq!(
+            parse_script("(def x 1)\n(+ x 2)"),
+            Ok(vec![
+                Form::List(vec![Form::symbol("def"), Form::symbol("x"), Form::Int(1)]),
+                Form::List(vec![Form::symbol("+"), Form::symbol("x"), Form::Int(2)]),
+            ])
+        );
+        assert_eq!(parse_script("# only a comment\n"), Ok(vec![]));
     }
 
     #[test]
@@ -120,6 +243,11 @@ mod tests {
         assert_eq!(
             parse("\"hello :not_a_keyword\""),
             Ok(Form::string("hello :not_a_keyword"))
+        );
+
+        assert_eq!(
+            parse("\"\"\"\n  line one\n  \"line two\" \\\\end\n  \"\"\""),
+            Ok(Form::string("line one\n\"line two\" \\\\end\n"))
         );
     }
 

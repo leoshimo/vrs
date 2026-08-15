@@ -14,6 +14,7 @@ fn eval_expr(e: &str) -> Result<Val> {
     env.bind_native(
         SymbolId::from("echo_args"),
         NativeFn {
+            metadata: vec![],
             doc: "".to_string(),
             func: |_, x| Ok(NativeFnOp::Return(Val::List(x.to_vec()))),
         },
@@ -31,6 +32,92 @@ fn eval_expr(e: &str) -> Result<Val> {
 }
 
 #[test]
+fn pretty_is_a_composable_string_formatter() {
+    assert_eq!(
+        eval_expr("(pretty '((1 2) (3 4)) 10)").unwrap(),
+        Val::string("((1 2)\n (3 4))")
+    );
+    assert_eq!(
+        eval_expr("(pretty '(1 2 3))").unwrap(),
+        Val::string("(1 2 3)")
+    );
+    assert_eq!(
+        eval_expr("(display '((1 2) (3 4)))").unwrap(),
+        Val::string("((1 2) (3 4))")
+    );
+    assert_eq!(
+        eval_expr(
+            r#"(begin
+        (def value '(:name "日本語\n\"quoted\"" :items ((1 2) (3 4))))
+        (eq? (read (pretty value 10)) value))"#
+        )
+        .unwrap(),
+        Val::Bool(true)
+    );
+    assert!(eval_expr("(help pretty)")
+        .unwrap()
+        .as_string()
+        .unwrap()
+        .contains("WIDTH"));
+    assert_eq!(
+        eval_expr("(pretty (lambda (x) x))").unwrap(),
+        Val::string("<lambda (x)>")
+    );
+}
+
+#[test]
+fn pretty_rejects_invalid_arity_and_width() {
+    for source in [
+        "(pretty)",
+        "(pretty 1 0)",
+        "(pretty 1 -1)",
+        "(pretty 1 \"80\")",
+        "(pretty 1 nil)",
+        "(pretty 1 80 90)",
+    ] {
+        assert_matches!(eval_expr(source), Err(Error::UnexpectedArguments(_)));
+    }
+}
+
+#[test]
+fn interactive_is_metadata_not_executed_function_body() {
+    let value = eval_expr(
+        r#"(begin
+        (defn! focus (window) "Focus Window" (interactive :os/window) window)
+        (list (focus '(:os/window :id 7)) (get (meta focus) :interactive)
+              (get (get (get (meta focus) :args) 0) :name)
+              (get (get (get (meta focus) :args) 0) :type)))"#,
+    )
+    .unwrap();
+    assert_eq!(
+        value,
+        Val::from_expr("((:os/window :id 7) true window :os/window)").unwrap()
+    );
+    assert!(eval_expr("(fn (x y) (interactive :os/window) x)").is_err());
+    assert!(eval_expr("(fn (x) (interactive \"window\") x)").is_err());
+}
+
+#[test]
+fn environment_discovery_and_completion_overrides_are_process_local() {
+    assert_eq!(
+        eval_expr(
+            r#"(begin
+        (defn! source () '())
+        (set_entity_completions :example/object 'source)
+        (defn! nested () (list (contains? (ls_env) 'source)
+                             (get_entity_completions :example/object)))
+        (nested))"#
+        )
+        .unwrap(),
+        Val::from_expr("(true (source))").unwrap()
+    );
+    assert_eq!(
+        eval_expr("(get_entity_completions :example/object)").unwrap(),
+        Val::List(vec![])
+    );
+}
+
+#[test]
 fn booleans() {
     assert_eq!(eval_expr("true").unwrap(), Val::Bool(true));
     assert_eq!(eval_expr("false").unwrap(), Val::Bool(false));
@@ -42,8 +129,41 @@ fn int() {
 }
 
 #[test]
+fn subtraction() {
+    assert_eq!(eval_expr("(- 10 3)"), Ok(Val::Int(7)));
+    assert_eq!(eval_expr("(- 10 3 2)"), Ok(Val::Int(5)));
+    assert_eq!(eval_expr("(- 5)"), Ok(Val::Int(-5)));
+    assert_eq!(eval_expr("(- -5)"), Ok(Val::Int(5)));
+    assert_matches!(eval_expr("(-)"), Err(Error::UnexpectedArguments(_)));
+    assert_matches!(eval_expr("(- 5 :two)"), Err(Error::UnexpectedType(_)));
+    assert_matches!(eval_expr("(- -2147483648)"), Err(Error::Runtime(_)));
+}
+
+#[test]
 fn string() {
     assert_eq!(eval_expr("\"hello\"").unwrap(), Val::string("hello"));
+
+    let block = concat!("\"\"\"\n", "    printf \"%s\\\\n\" \"$1\"\n", "    \"\"\"",);
+    assert_eq!(
+        eval_expr(block).unwrap(),
+        Val::string("printf \"%s\\\\n\" \"$1\"\n")
+    );
+}
+
+#[test]
+fn get_handles_positive_and_negative_indexes() {
+    assert_eq!(
+        eval_expr("(get '(one two three) 0)"),
+        Ok(Val::symbol("one"))
+    );
+    assert_eq!(
+        eval_expr("(get '(one two three) -1)"),
+        Ok(Val::symbol("three"))
+    );
+    assert_eq!(eval_expr("(get '(one two three) 3)"), Ok(Val::Nil));
+    assert_eq!(eval_expr("(get '(one two three) -4)"), Ok(Val::Nil));
+    assert_eq!(eval_expr("(get '() -1)"), Ok(Val::Nil));
+    assert_eq!(eval_expr("(get '(one) -2147483648)"), Ok(Val::Nil));
 }
 
 #[test]
@@ -236,7 +356,7 @@ fn eval_quote() {
 fn eval_defn() {
     let prog = r#"(begin
         (def count 0)
-        (defn inc (x)
+        (defn! inc (x)
             (set count (+ count x))
             count)
         (inc 1)
@@ -362,7 +482,7 @@ fn cond_simple() {
 fn cond_multi() {
     {
         let prog = r#"(begin
-            (defn categorize (x)
+            (defn! categorize (x)
                 (cond
                     ((eq? x 10) "is int ten")
                     ((eq? x "ten") "is string ten")
@@ -386,7 +506,7 @@ fn cond_multi() {
 
     {
         let prog = r#"(begin
-            (defn categorize (x)
+            (defn! categorize (x)
                 (cond
                     ((eq? x 10) "is int ten")
                     ((eq? x "ten") "is string ten")
@@ -711,7 +831,7 @@ fn eval_not() {
     assert_eq!(
         eval_expr(
             r#"(begin
-            (defn is_true () true)
+            (defn! is_true () true)
             (not? (is_true)))"#
         )
         .unwrap(),
@@ -720,7 +840,7 @@ fn eval_not() {
     assert_eq!(
         eval_expr(
             r#"(begin
-            (defn is_false () false)
+            (defn! is_false () false)
             (not? (is_false)))"#
         )
         .unwrap(),
@@ -736,7 +856,7 @@ fn eval_match() {
     }
     {
         let prog = r#"(begin
-            (defn matcher (x)
+            (defn! matcher (x)
                 (match x
                     (10 "got ten")
                     (20 "got twenty")
@@ -757,7 +877,7 @@ fn eval_match() {
     }
     {
         let prog = r#"(begin
-            (defn matcher (x)
+            (defn! matcher (x)
                 (match x
                     ((:ok val) val)
                     ((:err val) val)))
@@ -776,7 +896,7 @@ fn eval_match() {
     }
     {
         let prog = r#"(begin
-            (defn weird_add (x)
+            (defn! weird_add (x)
                 (match x
                     ((:add x y) (+ x y))
                     (("add" x y) (+ x y))))
@@ -792,7 +912,7 @@ fn eval_match() {
 
     {
         let prog = r#"(begin
-            (defn extract (x)
+            (defn! extract (x)
                 (match x
                     ((:first (a b c)) a)
                     ((:second (a b c)) b)
@@ -814,7 +934,7 @@ fn eval_match() {
     {
         // match w/ nesting
         let prog = r#"(begin
-            (defn matcher (x)
+            (defn! matcher (x)
                 (match x
                     ((a (a (a))) :one)
                     ((a (b (c))) :two)

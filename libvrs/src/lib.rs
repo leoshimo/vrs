@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 mod client;
 mod connection;
+pub mod debug;
 mod rt;
 
 pub use connection::{Connection, Request, Response};
@@ -13,7 +14,8 @@ pub use rt::program::{
     NativeFnOp, Pattern, Program, Val,
 };
 pub use rt::{
-    Error, Process, ProcessExit, ProcessHandle, ProcessResult, ProcessSet, Result, Runtime,
+    Error, Process, ProcessExit, ProcessHandle, ProcessId, ProcessResult, ProcessSet, Result,
+    Runtime, DEFAULT_NODE_PORT,
 }; // TODO: Should rt reexport from lib?
 
 /// The path to runtime socket

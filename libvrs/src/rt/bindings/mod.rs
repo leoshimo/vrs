@@ -1,6 +1,7 @@
 mod fs;
+mod fuzzy;
 mod mailbox;
-mod open;
+mod node;
 mod proc;
 mod pubsub;
 mod service;
@@ -14,32 +15,36 @@ pub(crate) use mailbox::call_fn;
 pub(crate) use mailbox::ls_msgs_fn;
 pub(crate) use mailbox::recv_fn;
 pub(crate) use mailbox::send_fn;
+pub(crate) use node::configure_fn;
+pub(crate) use node::{eval_remote_fn, wait_srv_fn};
 
+pub(crate) use proc::call_timeout_fn;
 pub(crate) use proc::kill_fn;
+pub(crate) use proc::node_name_fn;
 pub(crate) use proc::pid_fn;
 pub(crate) use proc::ps_fn;
 pub(crate) use proc::self_fn;
 pub(crate) use proc::sleep_fn;
 pub(crate) use proc::spawn_fn;
+pub(crate) use proc::spawn_service_fn;
 
+pub(crate) use system::decode_fn;
 pub(crate) use system::exec_fn;
 pub(crate) use system::shell_expand_fn;
 
-pub(crate) use open::open_app_fn;
-pub(crate) use open::open_file_fn;
-pub(crate) use open::open_url_fn;
-
-pub(crate) use service::bind_srv_fn;
-pub(crate) use service::def_bind_interface;
 pub(crate) use service::find_srv_fn;
+pub(crate) use service::import_entity_completions_fn;
 pub(crate) use service::info_srv_fn;
+pub(crate) use service::install_service_library;
 pub(crate) use service::ls_srv_fn;
 pub(crate) use service::register_fn;
-pub(crate) use service::spawn_srv_fn;
-pub(crate) use service::srv_fn;
 
 pub(crate) use pubsub::publish_fn;
 pub(crate) use pubsub::subscribe_fn;
 
 pub(crate) use fs::fdump_fn;
 pub(crate) use fs::fread_fn;
+pub(crate) use fs::read_script_fn;
+pub(crate) use fs::run_script_fn;
+pub(crate) use fuzzy::fuzzy_match_fn;
+pub(crate) use fuzzy::match_excerpt_fn;

@@ -2,6 +2,7 @@ use crate::{Error, Extern, Locals, NativeFn, NativeFnOp, Val};
 
 pub(crate) fn help_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        metadata: vec![],
         doc: "(help SYMBOL) - Returns docstring for SYMBOL if any".to_string(),
         func: |_, args| {
             let docstring = match args {

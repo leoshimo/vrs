@@ -9,9 +9,10 @@ use tracing::debug;
 /// binding to get current process's pid
 pub(crate) fn self_fn() -> NativeFn {
     NativeFn {
+        metadata: vec![],
         doc: "(self) - Returns process id of caller".to_string(),
         func: |f, _| {
-            let pid = f.locals().pid;
+            let pid = f.locals().pid.clone();
             Ok(NativeFnOp::Return(Val::Extern(Extern::ProcessId(pid))))
         },
     }
@@ -20,8 +21,9 @@ pub(crate) fn self_fn() -> NativeFn {
 /// binding to create a new PID
 pub(crate) fn pid_fn() -> NativeFn {
     NativeFn {
+        metadata: vec![],
         doc: "(pid NUMBER) - Creates a new process id type for given NUMBER".to_string(),
-        func: |_, args| {
+        func: |f, args| {
             let pid = match args {
                 [Val::Int(pid)] => pid,
                 _ => {
@@ -31,8 +33,47 @@ pub(crate) fn pid_fn() -> NativeFn {
                 }
             };
             Ok(NativeFnOp::Return(Val::Extern(Extern::ProcessId(
-                ProcessId::from(*pid as usize),
+                ProcessId::new(f.locals().node_name.clone(), *pid as usize),
             ))))
+        },
+    }
+}
+
+/// Binding to get the immutable name of the current runtime node.
+pub(crate) fn node_name_fn() -> NativeFn {
+    NativeFn {
+        metadata: vec![],
+        doc: "(node_name) - Returns the name of the runtime node hosting this process.".to_string(),
+        func: |f, args| {
+            if !args.is_empty() {
+                return Err(Error::UnexpectedArguments(
+                    "node_name expects no arguments".to_string(),
+                ));
+            }
+            Ok(NativeFnOp::Return(Val::String(
+                f.locals().node_name.clone(),
+            )))
+        },
+    }
+}
+
+/// Binding to configure the default timeout for calls made by this process.
+pub(crate) fn call_timeout_fn() -> NativeFn {
+    NativeFn {
+        metadata: vec![],
+        doc: "(call_timeout SECS) - Configure the timeout for calls made by this process."
+            .to_string(),
+        func: |f, args| {
+            let seconds = match args {
+                [Val::Int(seconds)] if *seconds >= 0 => *seconds as u64,
+                _ => {
+                    return Err(Error::UnexpectedArguments(
+                        "call_timeout expects one non-negative integer".to_string(),
+                    ))
+                }
+            };
+            f.locals_mut().call_timeout = Duration::from_secs(seconds);
+            Ok(NativeFnOp::Return(Val::keyword("ok")))
         },
     }
 }
@@ -40,6 +81,7 @@ pub(crate) fn pid_fn() -> NativeFn {
 /// Binding to list processes
 pub(crate) fn ps_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(ps) - Returns a list of running process by process id".to_string(),
         func: |f, _| Box::new(ps_impl(f)),
     }
@@ -48,6 +90,7 @@ pub(crate) fn ps_fn() -> NativeAsyncFn {
 /// Binding to kill process
 pub(crate) fn kill_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(kill PID) - Kill process with process id PID".to_string(),
         func: |f, args| Box::new(kill_impl(f, args)),
     }
@@ -56,6 +99,7 @@ pub(crate) fn kill_fn() -> NativeAsyncFn {
 /// Binding for sleep
 pub(crate) fn sleep_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(sleep SECS) - Sleep current process for SECS seconds, blocking execution."
             .to_string(),
         func: |_, args| {
@@ -81,6 +125,7 @@ pub(crate) fn sleep_fn() -> NativeAsyncFn {
 /// Binding for spawn
 pub(crate) fn spawn_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(spawn LAMBDA) - Spawn a new child process that runs LAMBDA in new process space."
             .to_string(),
         func: |f, args| Box::new(spawn_impl(f, args)),
@@ -108,8 +153,8 @@ async fn ps_impl(fiber: &mut Fiber) -> Result<Val> {
 /// Implementation for (kill PID)
 async fn kill_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
     let pid = match args[..] {
-        [Val::Extern(Extern::ProcessId(pid))] => pid,
-        [Val::Int(pid)] => ProcessId::from(pid as usize),
+        [Val::Extern(Extern::ProcessId(ref pid))] => pid.clone(),
+        [Val::Int(pid)] => ProcessId::new(fiber.locals().node_name.clone(), pid as usize),
         _ => {
             return Err(Error::UnexpectedArguments(
                 "kill should have one integer argument".to_string(),
@@ -131,6 +176,53 @@ async fn kill_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
 
 /// Implementation for (spawn PROG)
 async fn spawn_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
+    let hdl = spawn_process(fiber, args).await?;
+    Ok(Val::Extern(Extern::ProcessId(hdl.id())))
+}
+
+/// Private stdlib helper: retain the new child's exit notification from the
+/// moment it is spawned, so even an immediate startup failure cannot be missed.
+pub(crate) fn spawn_service_fn() -> NativeAsyncFn {
+    NativeAsyncFn {
+        metadata: vec![],
+        doc: "Internal: spawn a service body and wait for its readiness or exit.".into(),
+        func: |fiber, args| {
+            Box::new(async move {
+                let child = spawn_process(fiber, args).await?;
+                let pid = Val::Extern(Extern::ProcessId(child.id()));
+                let mailbox = fiber
+                    .locals()
+                    .self_handle
+                    .as_ref()
+                    .expect("process should have self handle")
+                    .mailbox();
+                let pattern = crate::rt::program::Pattern::from_val(Val::List(vec![
+                    Val::keyword("service_ready"),
+                    pid.clone(),
+                ]));
+                tokio::select! {
+                    biased;
+                    ready = mailbox.poll(Some(pattern)) => {
+                        ready.map_err(|e| Error::Runtime(e.to_string()))?;
+                        Ok(pid)
+                    }
+                    exit = child.join() => {
+                        // Dropping poll alone leaves a pending mailbox receive.
+                        // Clear it before Lyric can catch this error and recv again.
+                        mailbox.cancel_poll().await.map_err(|e| Error::Runtime(e.to_string()))?;
+                        match exit.map_err(|e| Error::Runtime(e.to_string()))?.status {
+                            Err(crate::Error::EvaluationError(error)) => Err(error),
+                            Err(error) => Err(Error::Runtime(error.to_string())),
+                            Ok(_) => Err(Error::Runtime(format!("service child {pid} exited before readiness"))),
+                        }
+                    }
+                }
+            })
+        },
+    }
+}
+
+async fn spawn_process(fiber: &mut Fiber, args: Vec<Val>) -> Result<crate::ProcessHandle> {
     let lambda = match args.as_slice() {
         [Val::Lambda(l)] => l.clone(),
         _ => {
@@ -139,18 +231,18 @@ async fn spawn_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
             ))
         }
     };
-    let prog = Program::from_lambda(lambda)?;
+    let macros = fiber.global_env().lock().unwrap().macro_env();
+    let prog = Program::from_lambda(lambda)?.macro_env(macros);
     let kernel = fiber
         .locals()
         .kernel
         .as_ref()
         .and_then(|k| k.upgrade())
         .ok_or(Error::Runtime("Kernel is missing for process".to_string()))?;
-    let hdl = kernel
+    kernel
         .spawn_prog(prog)
         .await
-        .map_err(|e| Error::Runtime(format!("{e}")))?;
-    Ok(Val::Extern(Extern::ProcessId(hdl.id())))
+        .map_err(|e| Error::Runtime(format!("{e}")))
 }
 
 #[cfg(test)]
@@ -161,7 +253,7 @@ mod tests {
 
     #[tokio::test]
     async fn binding_self() {
-        let k = kernel::start();
+        let k = kernel::start_test();
         let hdl = k
             .spawn_prog(Program::from_expr("(self)").unwrap())
             .await
@@ -177,7 +269,7 @@ mod tests {
 
     #[tokio::test]
     async fn sleep() {
-        let k = kernel::start();
+        let k = kernel::start_test();
         let hdl = k
             .spawn_prog(Program::from_expr("(sleep 0)").unwrap())
             .await
@@ -193,8 +285,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn call_timeout() {
+        let k = kernel::start_test();
+        let hdl = k
+            .spawn_prog(Program::from_expr("(call_timeout 30)").unwrap())
+            .await
+            .expect("Kernel should spawn new process");
+
+        assert_eq!(
+            hdl.join().await.unwrap().status.unwrap(),
+            ProcessResult::Done(Val::keyword("ok"))
+        );
+    }
+
+    #[tokio::test]
     async fn ps() {
-        let k = kernel::start();
+        let k = kernel::start_test();
         let hdl = k
             .spawn_prog(Program::from_expr("(ps)").unwrap())
             .await
@@ -213,7 +319,7 @@ mod tests {
     async fn kill() {
         use tokio::time;
 
-        let k = kernel::start();
+        let k = kernel::start_test();
 
         let kill_target = k
             .spawn_prog(Program::from_expr("(loop (sleep 0))").unwrap())
@@ -238,7 +344,7 @@ mod tests {
 
     #[tokio::test]
     async fn binding_spawn() {
-        let k = kernel::start();
+        let k = kernel::start_test();
 
         let prog = r#"(begin
             (spawn (lambda () (loop (sleep 0)))) # spawn infinite loop

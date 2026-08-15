@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(thiserror::Error, Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Error {
+    #[error("Macro expansion - {0}")]
+    Macro(String),
     #[error("Incomplete expression - {0}")]
     IncompleteExpression(String),
 

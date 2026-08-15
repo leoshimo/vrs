@@ -119,6 +119,17 @@ impl Client {
         Self { hdl_tx, cancel }
     }
 
+    /// Select a named node through this connection's runtime. Must be the first
+    /// request; subsequent requests and subscriptions use one remote session.
+    /// Check the response contents for an unavailable-node error.
+    pub async fn select_node(&self, node: &str) -> Result<Response> {
+        self.request(Form::List(vec![
+            Form::keyword("vrs/node"),
+            Form::string(node),
+        ]))
+        .await
+    }
+
     /// Dispatch a request
     pub async fn request(&self, req: lyric::Form) -> Result<Response> {
         debug!("request req = {}", req);
