@@ -178,7 +178,7 @@
       '()
       (begin
        (if (eq? query "rd:")
-         (set saved_pages_cache (feedbin_call '(:feedbin_saved_pages))))
+         (set saved_pages_cache (feedbin_call '(:feedbin_saved_pages 20))))
        (map saved_pages_cache
             (fn (it)
               (make_item (format "rd: {}" (get it :title))
