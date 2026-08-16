@@ -52,6 +52,29 @@ Convenience APIs to see running services and some level of introspection
 - [X] =ls-srv=
 - [X] =find-srv=
 
+** TODO System-wide Job Configuration and Node Affinity
+
+Goal: Manage processes and services more like =launchd=: declare the desired
+configuration for the whole VRS system, then keep it running across available
+nodes.
+
+- Use one job model for long-running services, one-shot processes, and scheduled
+  or periodic jobs (cron-like work).
+- Treat service names as stable system-wide identities so callers do not need to
+  know where a service is running.
+- Allow jobs to have strict node affinity when they depend on that node's
+  hardware, GUI session, credentials, or local data.
+- Reconcile the configuration as nodes connect, disconnect, and restart: start
+  missing jobs on permitted nodes and remove stale service registrations.
+- Never move or fail over a strict-affinity job to another node.
+- Keep placement and scheduling policy separate from the Lyric service
+  implementation and calling semantics.
+
+Examples: =:os_browser= is tied to an interactive Mac, while Feedbin and Oura
+indexing are periodic jobs assigned to the always-on node. The conditional
+startup currently written by hand in =init.ll= should eventually be expressed
+through this model.
+
 ** DONE IPC - =srv= and =bind_srv=
 
 Goal: Provide better wrappers over =call=
