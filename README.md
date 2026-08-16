@@ -89,8 +89,9 @@ cargo run --bin vrsd -- --node beta  --node-port 8774 --socket /tmp/beta.socket
 
 This is deliberately only service discovery and message routing. It does not
 restart services or guarantee singletons. Sending to a disconnected node fails
-immediately; as with a local service that never responds, `call` itself does not
-yet impose a timeout.
+immediately. Every `call`, whether local or remote, fails after five seconds if
+the service has not replied; calls are never retried automatically. A process
+can change its default with `(call_timeout 30)`.
 
 <p align="center">
     <img src="https://raw.github.com/leoshimo/vrs/main/assets/vrs-arch-stack.png">
