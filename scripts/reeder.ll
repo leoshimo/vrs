@@ -22,13 +22,12 @@
 
 (defn reeder_add (url title)
   "(reeder_add URL TITLE) - Save a URL to Feedbin Pages"
-  (bind_srv :feedbin)
-  (feedbin_save url title))
+  (call (find_srv :feedbin) (list :feedbin_save url title)))
 
 (defn reeder_saved_pages ()
   "(reeder_saved_pages) - Return the 10 most recently saved Feedbin Pages"
-  (let ((bound (try (bind_srv :feedbin))))
-    (if (err? bound) '() (feedbin_saved_pages))))
+  (let ((pages (try (call (find_srv :feedbin) '(:feedbin_saved_pages)))))
+    (if (err? pages) '() pages)))
 
 (defn reeder_add_active_tab ()
   "(reeder_add_active_tab) - Add current active page of browser to reeder"
