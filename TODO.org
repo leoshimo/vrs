@@ -199,17 +199,6 @@ via references captured.
 
 Thought: Allow but discourage passing lambdas
 
-** TODO Better Escape Characters
-
-Currently, escaping backslash is hacked together - see lexer for strings
-
-Add proper support for:
-- \n
-- \'
-- \"
-
-And appropriate printing of those values
-
 ** TODO quasiquote, unquote, unquote-splice
 ** TODO Macros
 - [ ] [[https://www.youtube.com/watch?v=M4qj2ictRpg&t=22s][Gavin - Macros in ELisp]]
