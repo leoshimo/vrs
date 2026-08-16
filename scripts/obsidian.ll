@@ -6,7 +6,12 @@
 
 (defn get_obsidian_files ()
   "(get_obsidian_files) - Get list of files in Obsidian"
-  (def result (exec "bash" "-c" (format "cd {} && find . -iname '*.md'" vault_path)))
+  (def result
+    (exec "bash" "-seuo" "pipefail" "--" vault_path
+          :stdin """
+          cd "$1"
+          find . -iname '*.md'
+          """))
   # TODO: List unpacking? Can't use (join " - " (split "/" f)) b.c. join is (join args...)
   (if (eq? (get result :exit) 0)
     (map (decode :lines (get result :stdout))
