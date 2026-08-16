@@ -25,7 +25,6 @@
       (run "./scripts/safari_history.ll")
       (run "./scripts/youtube.ll")
       (run "./scripts/stickies.ll")
-      (run "./scripts/reeder.ll")
       (run "./scripts/eden.ll")
       (run "./scripts/rlist.ll")
       (run "./scripts/nl_shell.ll")
