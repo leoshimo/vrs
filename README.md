@@ -77,12 +77,12 @@ listener remains bound to localhost.
 
 VRS keeps each link open, exchanges service snapshots and registration
 changes, and caches them locally. `find_srv` and `ls_srv` only query that cache;
-they do not contact nodes per call. Local registrations win when a service name
-exists on several nodes, otherwise the last registration observed locally
-wins. Remote `ls_srv` entries include a `:node` string. Each side sends a
-heartbeat every five seconds. After fifteen seconds without a valid message,
-the link is closed and that node's cached services are removed. Configured
-outgoing links keep reconnecting every two seconds.
+they do not contact nodes per call. The last registration observed locally wins
+when a service name exists on several nodes. Remote `ls_srv` entries include a
+`:node` string. Each side sends a heartbeat every five seconds. After fifteen
+seconds without a valid message, the link is closed and that node's cached
+services are removed. Configured outgoing links keep reconnecting every two
+seconds.
 
 To run two nodes on one machine, give each daemon a distinct local socket,
 node name, and listener port:
