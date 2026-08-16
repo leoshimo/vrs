@@ -29,6 +29,7 @@ Example output:
 
 (defn interfacegen (request)
   "(interfacegen REQUEST) - Generates an interface for vrsjmp given request"
+  (call_timeout 60)
   (def interface_str (send_message request))
   (try (read interface_str)))
 
