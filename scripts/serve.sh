@@ -1,5 +1,11 @@
 #!/usr/bin/env sh
-# Start the runtime and GUI. Service configuration lives in ../init.ll.
+# Start the runtime and, unless running headless, the GUI. Service
+# configuration lives in ../init.ll.
+#
+# Usage:
+#   ./scripts/serve.sh          # release runtime and GUI
+#   ./scripts/serve.sh dev      # debug runtime and GUI
+#   ./scripts/serve.sh headless # release runtime only
 
 set -u
 
@@ -40,7 +46,10 @@ until cargo run $CARGO_ARGS --bin vrsctl -- --command ':healthcheck' >/dev/null 
     sleep 1
 done
 
-cargo run $CARGO_ARGS --bin vrsjmp &
-VRSJMP_PID=$!
-
-wait "$VRSD_PID" "$VRSJMP_PID"
+if [ "$MODE" != "headless" ]; then
+    cargo run $CARGO_ARGS --bin vrsjmp &
+    VRSJMP_PID=$!
+    wait "$VRSD_PID" "$VRSJMP_PID"
+else
+    wait "$VRSD_PID"
+fi

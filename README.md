@@ -63,9 +63,13 @@ cargo run --bin vrsd -- --node laptop --init ./init.ll
 `init.ll` can nonblockingly add nodes to the service registry:
 
 ```lisp
-(configure :nodes '("ssh://home-server"))
-(run "./scripts/feedbin.ll")
+(if (eq? (node_name) "home-server")
+    (run "./scripts/feedbin.ll")
+    (configure :nodes '("ssh://home-server")))
 ```
+
+Use `./scripts/serve.sh headless` on a node that should run the daemon and its
+services without launching the `vrsjmp` GUI.
 
 Endpoints name their transport explicitly. Release builds use VRS port `8773`;
 debug builds use `8774`, keeping a persistent `serve.sh` runtime isolated from
