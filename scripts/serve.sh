@@ -25,9 +25,21 @@ cleanup() {
 }
 trap cleanup INT TERM EXIT
 
-# vrsjmp already reports a useful connection error if daemon initialization
-# takes longer than this; keep orchestration here intentionally lightweight.
-sleep 1
+# vrsd binds its client socket only after init.ll completes. Do not launch the
+# GUI until the daemon is accepting requests, and stop if initialization fails.
+until cargo run $CARGO_ARGS --bin vrsctl -- --command ':healthcheck' >/dev/null 2>&1; do
+    if ! kill -0 "$VRSD_PID" 2>/dev/null; then
+        wait "$VRSD_PID"
+        VRSD_STATUS=$?
+        echo "vrsd exited before initialization completed (status $VRSD_STATUS); see vrsd-$MODE.log" >&2
+        if [ "$VRSD_STATUS" -eq 0 ]; then
+            VRSD_STATUS=1
+        fi
+        exit "$VRSD_STATUS"
+    fi
+    sleep 1
+done
+
 cargo run $CARGO_ARGS --bin vrsjmp &
 VRSJMP_PID=$!
 
