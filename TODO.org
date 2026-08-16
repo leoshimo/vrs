@@ -111,11 +111,20 @@ Purpose:
 Read / Write S-Expressions to File
 Goal: Replace hard-coded data in =launcher.ll=
 
-** TODO Command IO - Better =exec=
+** DONE Command IO - Better =exec=
 
 Goal: Better interface over =Command= to access:
-- Process output
+- Captured stdout and stderr
 - Exit code
+
+** TODO Streaming Command IO Handle
+
+Add a first-class process / IO handle for streaming commands:
+- Support lazy, incremental consumption instead of eagerly buffering all output
+- Incrementally read stdout and stderr
+- Write to and close stdin
+- Wait for completion, inspect status, and terminate the child process
+- Integrate lazy results with pagination and loading states in hypermedia UI code
 
 ** TODO Revisit Runtime / Client Boundary
 Goal: Revisit protocol b/t/ Runtime / Client w/ New Learnings

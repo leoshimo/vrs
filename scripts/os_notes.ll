@@ -7,27 +7,25 @@
 # Adapted from https://github.com/raycast/extensions/blob/main/extensions/apple-notes/src/useNotes.ts
 (defn load_notes ()
   "(refresh_notes) - Refreshes in-memory contents from notes DB"
-  (def output (get (exec "sqlite3" (shell_expand "~/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite")
-        "SELECT '(:id \"' || id || '\" :title \"' || title || '\")'
-       FROM (
-        SELECT note.zidentifier as id,
-            note.ztitle1 AS title,
-            datetime (note.zmodificationdate1 + 978307200, 'unixepoch') AS modifiedAt
-        FROM
-            ziccloudsyncingobject AS note
-            INNER JOIN ziccloudsyncingobject AS folder ON note.zfolder = folder.z_pk
-            LEFT JOIN ziccloudsyncingobject AS acc ON note.zaccount4 = acc.z_pk
-            LEFT JOIN z_metadata AS zmd ON 1 = 1
-        WHERE
-            note.ztitle1 IS NOT NULL
-            AND note.zmodificationdate1 IS NOT NULL
-            AND note.zmarkedfordeletion != 1
-            AND folder.zmarkedfordeletion != 1
-            AND folder.ztitle2 IS NOT \"Recently Deleted\"
-        ORDER BY
-            note.zmodificationdate1 DESC)
-        LIMIT 200") 1))
-    (read (format "({})" output)))
+  (def result
+    (exec "sqlite3" "-json"
+          (shell_expand "~/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite")
+          "SELECT note.zidentifier AS id,
+                  note.ztitle1 AS title
+             FROM ziccloudsyncingobject AS note
+             INNER JOIN ziccloudsyncingobject AS folder ON note.zfolder = folder.z_pk
+             LEFT JOIN ziccloudsyncingobject AS acc ON note.zaccount4 = acc.z_pk
+             LEFT JOIN z_metadata AS zmd ON 1 = 1
+            WHERE note.ztitle1 IS NOT NULL
+              AND note.zmodificationdate1 IS NOT NULL
+              AND note.zmarkedfordeletion != 1
+              AND folder.zmarkedfordeletion != 1
+              AND folder.ztitle2 IS NOT 'Recently Deleted'
+            ORDER BY note.zmodificationdate1 DESC
+            LIMIT 200"))
+  (if (eq? (get result :exit) 0)
+    (decode :json (get result :stdout))
+    '()))
 
 (defn refresh_notes ()
   (set notes (load_notes)))

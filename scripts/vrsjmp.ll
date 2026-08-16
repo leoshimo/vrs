@@ -2,7 +2,9 @@
 # vrsjmp.ll - vrsjmp commandbar
 #
 
-(defn is_personal? () (eq? (exec "uname" "-n") "shinjuku.local"))
+(defn is_personal? ()
+  (eq? (get (decode :lines (get (exec "uname" "-n") :stdout)) 0)
+       "shinjuku.local"))
 
 # TODO: Move to init.ll w/ supervision tree
 (bind_srv :system_appearance)

@@ -4,19 +4,21 @@
 
 (bind_srv :os_browser)
 
-# v hacky wiring via shortcuts over shell
-
 (def items '())
 
-# (defn reeder_refresh_items ()
-#   "(reeder_refresh_items) - Refresh items from Reeder"
-#   (def (:ok res) (exec "./scripts/reeder_refresh_shim.sh"))
-#   (set items (read res))
-#   :ok)
+(defn reeder_refresh_items ()
+  "(reeder_refresh_items) - Refresh items from Reeder"
+  (def result (exec "shortcuts" "run" "get-unread-reeder"))
+  (if (eq? (get result :exit) 0)
+    (if (empty? (decode :lines (get result :stdout)))
+      (set items '())
+      (set items (decode :json (get result :stdout))))
+    (error (get result :stderr)))
+  :ok)
 
-# (defn reeder_get_items ()
-#   "(reeder_get_items) - Return all unread items in reeder"
-#   items)
+(defn reeder_get_items ()
+  "(reeder_get_items) - Return all unread items in reeder"
+  items)
 
 (defn reeder_add (url title)
   "(reeder_add URL title) - Add item with URL to Reeder"
@@ -28,5 +30,4 @@
   (if (def (:title title :url url) (active_tab))
     (reeder_add url title)))
 
-# (spawn_srv :reeder :interface '(reeder_refresh_items reeder_get_items reeder_add reeder_add_active_tab))
-(spawn_srv :reeder :interface '(reeder_add reeder_add_active_tab))
+(spawn_srv :reeder :interface '(reeder_refresh_items reeder_get_items reeder_add reeder_add_active_tab))

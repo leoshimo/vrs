@@ -4,7 +4,7 @@
 
 (defn get_clipboard ()
   "(get_clipboard) - Get contents of clipboard"
-  (get (exec "pbpaste") 1))
+  (get (exec "pbpaste") :stdout))
 
 (defn set_clipboard (contents)
   "(set_clipboard CONTENTS) - Set contents of clipboard"

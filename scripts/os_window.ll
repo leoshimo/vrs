@@ -4,8 +4,14 @@
 
 (defn get_windows ()
   "(get_windows) - Get all windows"
-  (def (:ok res) (exec "./scripts/yabai_window_shim.sh"))
-  (read res))
+  (def result (exec "yabai" "-m" "query" "--windows"))
+  (if (eq? (get result :exit) 0)
+    (map (filter (decode :json (get result :stdout))
+                 (fn (window) (get window :is-visible)))
+         (fn (window) (list :id (get window :id)
+                            :app (get window :app)
+                            :title (get window :title))))
+    '()))
 
 # TODO: Consider dynamic type check - e.g. `islist?` / `isstring?` to accept flexible window selector
 (defn focus_window (window_id)
@@ -13,7 +19,7 @@
   (exec "yabai" "-m" "window" (str window_id) "--focus"))
 
 (defn yabai_grid (grid_str)
-  (try (exec "yabai" "--message" "window" "--grid" grid_str)))
+  (exec "yabai" "--message" "window" "--grid" grid_str))
 
 (defn window_fullscreen ()
   "(window_fullscreen) - Fullscreen window"
@@ -48,22 +54,22 @@
 
 (defn window_to_main ()
   "(window_to_main) - Move window to main display"
-  (try (exec "yabai" "--message" "window" "--display" "1"))
-  (try (exec "yabai" "--message" "display" "--focus" "1")))
+  (exec "yabai" "--message" "window" "--display" "1")
+  (exec "yabai" "--message" "display" "--focus" "1"))
 
 (defn window_to_aux ()
   "(window_to_aux) - Move window to aux display"
-  (try (exec "yabai" "--message" "window" "--display" "2"))
-  (try (exec "yabai" "--message" "display" "--focus" "2")))
+  (exec "yabai" "--message" "window" "--display" "2")
+  (exec "yabai" "--message" "display" "--focus" "2"))
 
 # TODO: Explore embedding shell scripts in Lyric? Macro? How will pipe work?
 (defn window_split ()
   "(window_split) - Split currently focused window and last focused window horizontally in display"
-  (try (exec "yabai_window_split")))
+  (exec "yabai_window_split"))
 
 (defn show_desktop ()
   "(show_desktop) - Show the desktop"
-  (try (exec "yabai" "-m" "space" "--toggle" "show-desktop")))
+  (exec "yabai" "-m" "space" "--toggle" "show-desktop"))
 
 (spawn_srv :os_window
    :interface '(window_fullscreen window_center
@@ -75,4 +81,3 @@
                 show_desktop
                 get_windows
                 focus_window))
-

@@ -9,12 +9,12 @@
 (defn scheduler_prompt (day)
   "(scheduler_prompt DAY) - Generate prompt for scheduler. DAY can be a date specifier like \"today\", \"tomorrow\", \"August 5th\""
 
-  (def day_schedule (get (get_events (format "{} at 0h" day)
-                                     (format "{} at 24h" day)) 1))
+  (def day_schedule (get_events (format "{} at 0h" day)
+                                (format "{} at 24h" day)))
   (if (eq? day_schedule "")
     (set day_schedule "NO EVENTS"))
 
-  (def date (get (exec "date") -1))
+  (def date (get (decode :lines (get (exec "date") :stdout)) 0))
 
   (format "Today is {}
 

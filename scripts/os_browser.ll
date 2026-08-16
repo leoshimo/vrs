@@ -6,17 +6,21 @@
 
 (defn active_tab_safari ()
   "Retrieve the active tab info for Safari"
-  (if (err? (try (exec "pgrep" "-ax" "Safari")))
+  (if (not? (eq? (get (exec "pgrep" "-ax" "Safari") :exit) 0))
     nil
     (begin
-     (def (:ok url) (exec "osascript" "-e" "tell application \"Safari\" to return URL of front document"))
-     (def (:ok title) (exec "osascript" "-e" "tell application \"Safari\" to return name of front document"))
+     (def url_result (exec "osascript" "-e" "tell application \"Safari\" to return URL of front document"))
+     (def title_result (exec "osascript" "-e" "tell application \"Safari\" to return name of front document"))
+     (def url (get (decode :lines (get url_result :stdout)) 0))
+     (def title (get (decode :lines (get title_result :stdout)) 0))
      (list :title title :url url))))
 
 (defn active_tab_chrome ()
   "Retrieve the active tab info for Chrome"
-  (def (:ok url) (exec "osascript" "-e" "tell application \"Google Chrome\" to return URL of active tab of front window"))
-  (def (:ok title) (exec "osascript" "-e" "tell application \"Google Chrome\" to return title of active tab of front window"))
+  (def url_result (exec "osascript" "-e" "tell application \"Google Chrome\" to return URL of active tab of front window"))
+  (def title_result (exec "osascript" "-e" "tell application \"Google Chrome\" to return title of active tab of front window"))
+  (def url (get (decode :lines (get url_result :stdout)) 0))
+  (def title (get (decode :lines (get title_result :stdout)) 0))
   (list :title title :url url))
 
 (defn active_tab ()
