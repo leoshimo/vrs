@@ -57,10 +57,11 @@ Every daemon has an immutable string node name. It defaults to the machine's
 short hostname and can be set explicitly:
 
 ```sh
-cargo run --bin vrsd -- --node laptop --init ./init.ll
+cargo run --bin vrsd -- --node laptop --init ./scripts/init.ll
 ```
 
-`init.ll` can nonblockingly add nodes to the service registry:
+The repository's `scripts/init.ll` can nonblockingly add nodes to the service
+registry:
 
 ```lisp
 (if (eq? (node_name) "home-server")

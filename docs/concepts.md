@@ -111,7 +111,7 @@ accepts clients; services spawned by that script continue running.
 ```
 
 ```sh
-cargo run --bin vrsd -- --init ./init.ll
+cargo run --bin vrsd -- --init ./scripts/init.ll
 ```
 
 ## Nodes and Peering
