@@ -171,7 +171,7 @@
     (if (err? result) '() result)))
 
 (defn feedbin_items (query)
-  "(feedbin_items QUERY) - Return the 10 most recently saved Feedbin Pages"
+  "(feedbin_items QUERY) - Return the 20 most recently saved Feedbin Pages"
   (if (not? (contains? query "rd:"))
       '()
       (begin
