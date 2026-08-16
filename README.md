@@ -46,6 +46,52 @@ To this end:
 - `vrsctl`: A thin CLI client over `libvrs`
 - `vrsjmp`: A GUI launch bar client
 
+## Init scripts and nodes
+
+`vrsd --init PATH` evaluates a script inside the runtime before accepting local
+clients. Unlike `load`/`fread`, `(run PATH)` evaluates all of a file's top-level
+forms with an implicit `begin`, in a fresh process, and waits for that process
+to finish. Services created by `spawn_srv` keep running.
+
+Every daemon has an immutable string node name. It defaults to the machine's
+short hostname and can be set explicitly:
+
+```sh
+cargo run --bin vrsd -- --node laptop --init ./init.ll
+```
+
+`init.ll` can nonblockingly add nodes to the service registry:
+
+```lisp
+(configure :nodes '("ssh://home-server"))
+(run "./scripts/feedbin.ll")
+```
+
+Endpoints name their transport explicitly. `tcp://HOST` and `ssh://HOST` use the
+default VRS port `8773`; append `:PORT` to either form to select another VRS
+port. The SSH transport runs `ssh -W 127.0.0.1:PORT HOST`, so SSH aliases,
+Bonjour names, and Tailscale MagicDNS names are resolved by OpenSSH without
+exposing the VRS listener. The listener remains bound to localhost.
+
+VRS keeps each link open, exchanges service snapshots and registration
+changes, and caches them locally. `find_srv` and `ls_srv` only query that cache;
+they do not contact nodes per call. Local registrations win when a service name
+exists on several nodes, otherwise the last registration observed locally
+wins. Remote `ls_srv` entries include a `:node` string.
+
+To run two nodes on one machine, give each daemon a distinct local socket,
+node name, and listener port:
+
+```sh
+cargo run --bin vrsd -- --node alpha --node-port 8773 --socket /tmp/alpha.socket
+cargo run --bin vrsd -- --node beta  --node-port 8774 --socket /tmp/beta.socket
+```
+
+This is deliberately only service discovery and message routing. It does not
+restart services or guarantee singletons. Sending to a disconnected node fails
+immediately; as with a local service that never responds, `call` itself does not
+yet impose a timeout.
+
 <p align="center">
     <img src="https://raw.github.com/leoshimo/vrs/main/assets/vrs-arch-stack.png">
 </p>
