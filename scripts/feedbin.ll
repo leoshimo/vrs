@@ -67,7 +67,7 @@
         (sleep 900)))))
 (recv (list :feedbin_indexer_ready indexer))
 
-(spawn_srv :feedbin
+(spawn_srv! :feedbin
   :interface '(feedbin_collections
                feedbin_entries
                feedbin_entries_from

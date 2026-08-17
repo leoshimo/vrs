@@ -94,4 +94,4 @@
     (if (eq? (get result 0) :push_page) result :close)
     :close))
 
-(spawn_srv :vrsjmp :interface '(get_items on_click))
+(spawn_srv! :vrsjmp :interface '(get_items on_click))

@@ -50,4 +50,4 @@
   (publish :todos_event (list :todos_cleared))
   (save_todos))
 
-(spawn_srv :todos :interface '(get_todos add_todo set_todos_done set_todos_done_by_id clear_todos))
+(spawn_srv! :todos :interface '(get_todos add_todo set_todos_done set_todos_done_by_id clear_todos))

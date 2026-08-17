@@ -24,4 +24,4 @@
   "(select_resolution DESC) - Select resolution for descriptor"
   (exec "hs" "-q" "-c" (format "display.select_resolution(\"{}\")" desc)))
 
-(spawn_srv :os_display :interface '(list_alternative_resolutions select_resolution get_displays))
+(spawn_srv! :os_display :interface '(list_alternative_resolutions select_resolution get_displays))

@@ -62,4 +62,4 @@
   (kill record_pid)
   (set record_pid nil))
 
-(spawn_srv :cmd_macro :interface '(get_macros clear_macros start_macro_record end_macro_record macro_is_recording))
+(spawn_srv! :cmd_macro :interface '(get_macros clear_macros start_macro_record end_macro_record macro_is_recording))

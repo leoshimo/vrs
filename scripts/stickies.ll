@@ -39,4 +39,4 @@
         end run
         """))
 
-(spawn_srv :stickies :interface '(stickies_get stickies_open))
+(spawn_srv! :stickies :interface '(stickies_get stickies_open))

@@ -24,4 +24,4 @@
              "--end-date" (str end_date))
        :stdout))
 
-(spawn_srv :os_cal :interface '(create_event get_events))
+(spawn_srv! :os_cal :interface '(create_event get_events))

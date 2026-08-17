@@ -94,7 +94,7 @@
   "(show_desktop) - Show the desktop"
   (exec "yabai" "-m" "space" "--toggle" "show-desktop"))
 
-(spawn_srv :os_window
+(spawn_srv! :os_window
    :interface '(window_fullscreen window_center
                 window_left window_right
                 window_top_left window_top_right

@@ -58,4 +58,4 @@
         "-e" "end tell"))
 
 (refresh_notes)
-(spawn_srv :os_notes :interface '(open_note get_notes create_note))
+(spawn_srv! :os_notes :interface '(open_note get_notes create_note))
