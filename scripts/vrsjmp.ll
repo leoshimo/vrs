@@ -97,7 +97,6 @@
   (def candidates (+ (favorite_items)
      (notes_items query)
      (stickies_items query)
-     (obsidian_items query)
      (display_items query)
      (scheduler_items query)
      (eden_items query)
@@ -396,12 +395,16 @@
        (map stickies_get_cache (fn (n) (list :title (format "s: {}" (get n :title))
                                                :on_click (list 'stickies_open (get n :title))))))))
 
+(def obsidian_cache '())
+
+(defn obsidian_page ()
+  (set obsidian_cache (get_obsidian_files))
+  (+ (push_page 'obsidian_items "Search Obsidian files…") '(:title "Obsidian")))
+
 (defn obsidian_items (query)
-  "(obsidian_items) - Returns markup for obsidian notes"
-  (if (not? (contains? query "o:"))
-    '()
-    (map (get_obsidian_files) (fn (n) (list :title (format "o: {}" (get n :title))
-                                            :on_click (list 'open_obsidian_file (get n :file)))))))
+  (map (fuzzy_match query obsidian_cache display) (fn (note)
+    (+ (make_item (get note :title) (list 'open_obsidian_file (get note :file)))
+       (list :subtitle (get note :file))))))
 
 (defn youtube_items (query)
   "(youtube_items QUERY) - Returns markup for youtube items"
@@ -521,6 +524,7 @@
          (make_item "Xcode" '(open_xcode)) # TODO: Built-in regex
          (make_item "Chrome" '(open_app "Google Chrome"))
          (make_item "Obsidian" '(open_app "Obsidian"))
+         (make_item "Browse Obsidian" '(obsidian_page))
          (make_item "Script Debugger" '(open_app "Script Debugger"))
          (make_item "ProxyMan" '(open_app "ProxyMan"))
          (make_item_ex "Reeder" '(open_app "Reeder") 'reeder)
