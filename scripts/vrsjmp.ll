@@ -103,10 +103,10 @@
      (eden_items query)
      (rlist_items query)
      (youtube_items query)
-     (safari_history_items query)
      (github_items query)
      (macro_items query)
      (list (make_item "Read Later" '(read_later_page))
+           (make_item "Browser History" '(browser_history_page))
            (make_item "Windows" '(call_interactively 'focus_window)))
      (interactive_items context)))
   # Rank all fields together: a weak title match must not outrank an app name.
@@ -421,16 +421,21 @@
            (list :title (format "eden: {}" (get e :title))
                  :on_click (list 'eden_open (get e :id))))))))
 
-# TODO: Nice-to-have - subtitle UI to show url / domain
-(defn safari_history_items (query)
-  "(safari_history_items QUERY) - Returns markup for safari history items"
-  (if (not? (contains? query "h:"))
-      '()
-      (begin
-       (if (eq? query "h:") (refresh_safari_history)) # refresh on "appear"
-       (map (get_safari_history) (fn (h) (make_item_ex (format "h: {}" (get h :title))
-                                                       (list 'open_url (get h :url))
-                                                       (get h :domain_expansion)))))))
+(def browser_history_cache '())
+
+(defn browser_history_page ()
+  (refresh_safari_history)
+  (set browser_history_cache (get_safari_history))
+  (+ (push_page 'browser_history_items "Search recent Safari history…")
+     '(:title "Browser History")))
+
+(defn browser_history_items (query)
+  (map (fuzzy_match query browser_history_cache display) (fn (entry)
+    (def url (get entry :url))
+    (def page (list :web/page :title (get entry :title) :url url))
+    (+ (make_item (get entry :title) (list 'open_url url))
+       (list :subtitle (get (split "/" url) 2) :aside (get entry :visited)
+             :actions (entity_actions page))))))
 
 (def antinote_cache '())
 
