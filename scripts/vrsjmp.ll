@@ -92,7 +92,6 @@
      (stickies_items query)
      (obsidian_items query)
      (display_items query)
-     (window_items query)
      (scheduler_items query)
      (eden_items query)
      (rlist_items query)
@@ -100,7 +99,8 @@
      (safari_history_items query)
      (github_items query)
      (macro_items query)
-     (list (make_item "Read Later" '(read_later_page)))
+     (list (make_item "Read Later" '(read_later_page))
+           (make_item "Windows" '(call_interactively 'focus_window)))
      (interactive_items context)))
   # Rank all fields together: a weak title match must not outrank an app name.
   (+ (fuzzy_match query candidates (fn (item)
@@ -126,9 +126,10 @@
   (if (get metadata :doc) (get metadata :doc) (display name)))
 
 (defn interactive_items (context)
-  # One row per command, with captured objects offered as secondary actions.
+  # One row per command, not one row per captured object. Window commands live
+  # on the Windows page; its secondary actions can fill additional arguments.
   (map (filter (interactive_commands) (fn (name)
-    (if (contains? '() name) false
+    (if (contains? '(focus_window move_window) name) false
       (let ((args (get (meta (eval name)) :args)))
         (if (empty? args) true
           (if (not? (empty? (filter context (fn (entity) (accepts_context? name entity))))) true
@@ -212,7 +213,8 @@
          (list 'continue_call (list 'quote name) (list 'quote (push values entity))))
        (list :subtitle (get entity :app)
              :aside (if (get entity :id) (str (get entity :id)) nil)
-             :actions (entity_actions entity))))))
+             :actions (+ (entity_actions entity)
+                         (if (eq? type :os/window) (window_actions entity) '())))))))
 
 (defn entity_actions (entity)
   "Secondary actions come from the commands imported into this service"
@@ -254,27 +256,15 @@
     '()
     (map (list_alternative_resolutions) (fn (r) (make_item (format "d: {}" r) (list 'select_resolution r))))))
 
-(defn window_items (query)
-  "Return item for window commands"
-  (if (not? (contains? query "w:"))
-    '()
-      (+
-       (map (get_windows)
-            (fn (w) (make_item (format "w: {} - {}" (get w :app) (get w :title))
-                               (list 'focus_window (list 'quote w)))))
-       (list
-        (make_item "w: Split" '(window_split))
-        (make_item "w: Fullscreen" '(window_fullscreen))
-        (make_item "w: Center" '(window_center))
-        (make_item "w: Left" '(window_left))
-        (make_item "w: Right" '(window_right))
-        (make_item "w: Top Left" '(window_top_left))
-        (make_item "w: Top Right" '(window_top_right))
-        (make_item "w: Bottom Left" '(window_bottom_left))
-        (make_item "w: Bottom Right" '(window_bottom_right))
-        (make_item "w: Main Display" '(window_to_main))
-        (make_item "w: Aux Display" '(window_to_aux)))
-       )))
+(defn window_actions (window)
+  "Apply existing layout commands to the chosen window, not the launcher"
+  (map '(("Split" window_split) ("Fullscreen" window_fullscreen)
+         ("Center" window_center) ("Left Half" window_left) ("Right Half" window_right)
+         ("Top Left" window_top_left) ("Top Right" window_top_right)
+         ("Bottom Left" window_bottom_left) ("Bottom Right" window_bottom_right))
+    (fn (action)
+      (make_item (get action 0)
+        (list 'begin (list 'focus_window (list 'quote window)) (list (get action 1)))))))
 
 (defn scheduler_items (query)
   "Return item for scheduler commands"
