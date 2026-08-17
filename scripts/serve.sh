@@ -9,10 +9,22 @@
 
 set -u
 
+# Resolve paths from the checkout even when invoked through ./serve elsewhere.
+SCRIPT_ROOT=$(CDPATH= cd "$(dirname "$0")/.." && pwd) || exit 1
+cd "$SCRIPT_ROOT" || exit 1
+
 MODE="${1:-live-on}"
 CARGO_ARGS=""
 if [ "$MODE" != "dev" ]; then
     CARGO_ARGS="--release"
+fi
+
+# Editor commands and script shebangs use the installed client. Match its
+# build profile to the daemon so they select the same default socket.
+if [ "$MODE" = "dev" ]; then
+    cargo install --path vrsctl --force --debug || exit $?
+else
+    cargo install --path vrsctl --force || exit $?
 fi
 
 if [ "${TMUX:-}" ]; then
