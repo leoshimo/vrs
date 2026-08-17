@@ -4,7 +4,6 @@
 
 # TODO: New builtin - throw / error
 # TODO: New builtin - "hashmap" type? Set value for key, instead of (list :name ... :cmds ...) rebuilding
-# TODO: New builtin - "or" to gracefully fallback nil values?
 
 (def macros '())
 (def record_pid nil)

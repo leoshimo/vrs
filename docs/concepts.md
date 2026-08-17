@@ -64,6 +64,17 @@ A macro receives unevaluated expressions and returns code. Define it with
 `& body` collects the remaining expressions. Unlike a function, a macro can
 choose which arguments get evaluated.
 
+`and!` stops at the first false value; `or!` stops at the first true value. Both
+return the last value evaluated and evaluate each expression at most once:
+
+```lyric
+(and! (list? window) (get window :id))
+(or! (get window :title) "Untitled")
+```
+
+Like `if`, they treat `nil`, `false`, `0`, `""`, and `'()` as false. With no
+arguments, `(and!)` returns `true` and `(or!)` returns `nil`.
+
 Expansion happens when execution reaches the call. Lyric runs the macro,
 compiles its result, and executes that code in the caller's scope. Calls inside
 functions expand on each invocation; redefining a macro affects the next call.
