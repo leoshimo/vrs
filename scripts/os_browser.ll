@@ -30,10 +30,26 @@
     ("Google Chrome" (active_tab_chrome))
     (_ (error "Unrecognized browser"))))
 
+(defn active_tab_for_app (app)
+  "Retrieve a tab from the originating browser, not the launcher's current app"
+  (match app
+    ("Safari" (active_tab_safari))
+    ("Google Chrome" (active_tab_chrome))
+    (_ nil)))
+
+(defn browser_pages ()
+  "Offer the active browser page as a completion candidate"
+  (def tab (try (active_tab)))
+  (if (list? tab)
+    (if (get tab :url) (list (+ '(:web/page) tab)) '())
+    '()))
+
+(set_entity_completions :web/page 'browser_pages)
+
 (defn active_tab_open_wayback ()
   "(active_tab_open_wayback) - Open current active tab in Wayback Machine"
   (def url (get (active_tab) :url))
   # (open_url (format "https://web.archive.org/web/*/{}" url))
   (open_url (format "https://archive.is/{}" url)))
 
-(spawn_srv :os_browser :interface '(active_tab active_tab_open_wayback))
+(spawn_srv :os_browser :interface '(active_tab active_tab_open_wayback active_tab_for_app browser_pages))

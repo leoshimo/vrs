@@ -7,10 +7,15 @@
 (bind_srv :os_screencap)
 (bind_srv :rlist)
 
-(defn get_items (query)
+(defn get_items (callback args query)
+  (apply (eval callback) (push args query)))
+
+(defn begin_interaction ()
+  '(:push_page :get_items root_items :prompt "Search"))
+
+(defn root_items (query)
   "Retrieve items to display"
-  (+ (favorite_items)
-     (rlist_items)
+  (+ (fuzzy_match query (+ (favorite_items) (rlist_items)) display)
      (query_items query)))
 
 (defn make_item (title command)
@@ -84,8 +89,9 @@
 (defn on_click (item)
   "Handle an on_click payload from item"
   (def cmd (get item :on_click))
-  (def res (try (eval cmd)))
-  (if (err? res)
-    (notify "Encountered error" (format "{}" err))))
+  (def result (eval cmd))
+  (if (list? result)
+    (if (eq? (get result 0) :push_page) result :close)
+    :close))
 
 (spawn_srv :vrsjmp :interface '(get_items on_click))
