@@ -10,7 +10,7 @@
       (configure :nodes '("ssh://minato"))
       (run "./scripts/chat.ll")
       (run "./scripts/system_appearance.ll")
-      (run "./scripts/todos.ll")
+      (run "./scripts/things.ll")
       (run "./scripts/cmd_macro.ll")
       (run "./scripts/interfacegen.ll")
       (run "./scripts/os_maps.ll")

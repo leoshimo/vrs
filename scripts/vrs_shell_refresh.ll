@@ -6,7 +6,7 @@
     (register :vrs_shell_refresher :overwrite)
 
     (subscribe :rlist_event)
-    (subscribe :todos_event)
+    (subscribe :things_event)
 
     (loop (recv)
     (exec "osascript" "-e"
