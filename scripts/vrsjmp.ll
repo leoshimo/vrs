@@ -97,7 +97,6 @@
   (def candidates (+ (favorite_items)
      (notes_items query)
      (stickies_items query)
-     (display_items query)
      (scheduler_items query)
      (eden_items query)
      (rlist_items query)
@@ -106,6 +105,7 @@
      (list (make_item "Read Later" '(read_later_page))
            (make_item "Browser History" '(browser_history_page))
            (make_item "Windows" '(call_interactively 'focus_window))
+           (make_item_ex "Configure Display Resolution" '(display_page) 'd)
            (make_item_ex "Browse GitHub PRs" '(github_page) 'gh))
      (interactive_items context)))
   # Rank all fields together: a weak title match must not outrank an app name.
@@ -255,11 +255,15 @@
                   (list 'open_url (format "https://www.amazon.com/s?k={}" query)))
        )))
 
+(def resolutions_cache '())
+
+(defn display_page ()
+  (set resolutions_cache (list_alternative_resolutions))
+  (+ (push_page 'display_items "Search resolutions…") '(:title "Configure Display Resolution")))
+
 (defn display_items (query)
-  "Return item for display commands"
-  (if (not? (contains? query "d:"))
-    '()
-    (map (list_alternative_resolutions) (fn (r) (make_item (format "d: {}" r) (list 'select_resolution r))))))
+  (map (fuzzy_match query resolutions_cache str) (fn (resolution)
+    (make_item resolution (list 'select_resolution resolution)))))
 
 (defn window_actions (window)
   "Apply existing layout commands to the chosen window, not the launcher"
