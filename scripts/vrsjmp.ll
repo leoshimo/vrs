@@ -81,7 +81,8 @@
 (defn begin_interaction ()
   "Capture context once and return the root page; ordinary on_click protocol"
   (def context (try (get_context)))
-  (+ (push_page 'root_items "Search")
+  (+ (push_page 'root_items "Search commands…")
+     '(:title "Home")
      (list :args (list (if (list? context) context '())))))
 
 (defn root_items (context query)
@@ -103,10 +104,12 @@
      (macro_items query)
      (list (make_item "Read Later" '(read_later_page)))
      (interactive_items context)))
-  # Prefer label matches, while also finding URLs, paths, IDs and other fields.
-  (def titles (fuzzy_match query candidates (fn (item) (get item :title))))
-  (+ titles
-     (filter (fuzzy_match query candidates display) (fn (item) (not? (contains? titles item))))
+  # Rank all fields together: a weak title match must not outrank an app name.
+  (+ (fuzzy_match query candidates (fn (item)
+       (list (get item :title)
+             (if (get item :subtitle) (get item :subtitle) "")
+             (if (get item :aside) (get item :aside) "")
+             (display item))))
      (query_items query)))
 
 (defn make_item (title command)
@@ -179,6 +182,7 @@
         (error (format "No entity type for {}" (display (get arg :name)))))
       (list :push_page :get_items 'call_items
             :args (list name values)
+            :title (command_title name)
             :prompt (format "{} · {}" (command_title name) (display (get arg :name)))))))
 
 (defn entity_title (entity)
@@ -202,8 +206,18 @@
             (if (not? (contains? entities entity))
               (set entities (push entities entity))))))))))
   (map (fuzzy_match query entities display) (fn (entity)
-    (make_item (entity_title entity)
-      (list 'continue_call (list 'quote name) (list 'quote (push values entity)))))))
+    (+ (make_item (if (get entity :title) (get entity :title) (entity_title entity))
+         (list 'continue_call (list 'quote name) (list 'quote (push values entity))))
+       (list :subtitle (get entity :app)
+             :aside (if (get entity :id) (str (get entity :id)) nil)
+             :actions (entity_actions entity))))))
+
+(defn entity_actions (entity)
+  "Secondary actions come from the commands imported into this service"
+  (map (filter (interactive_commands) (fn (name) (accepts_context? name entity)))
+    (fn (name)
+      (make_item (command_title name)
+        (list 'continue_call (list 'quote name) (list 'quote (list entity)))))))
 
 # TODO: Query should be rule-based? I.e. "Search DWIM" - if URL, if App Name, if Bundle ID, if location (?), if long, etc
 (defn query_items (query)
@@ -283,7 +297,7 @@
   (call (find_srv :feedbin) message))
 
 (defn read_later_page ()
-  (+ (push_page 'read_later_items "Read Later") '(:debounce_ms 200)))
+  (+ (push_page 'read_later_items "Search saved pages…") '(:title "Read Later" :debounce_ms 200)))
 
 (def pages_collection_cache nil)
 (defn pages_collection ()
@@ -311,8 +325,17 @@
           (feedbin_call (list :feedbin_search_in collection query 20))
           '()))))
   (map (filter entries (fn (entry) (if (list? entry) (get entry :url) false))) (fn (entry)
-    (make_item (if (get entry :title) (get entry :title) (get entry :url))
-               (list 'open_url (get entry :url))))))
+    (def url (get entry :url))
+    (def title (if (get entry :title) (get entry :title) url))
+    (def host (get (split "/" url) 2))
+    (def saved (get entry :created_at))
+    (+ (make_item title (list 'open_url url))
+       (list :subtitle (str (if host host url)
+                           (if saved (str " · Saved " (get (split "T" saved) 0)) ""))
+             :actions (list
+               (make_item "Open in Browser" (list 'open_url url))
+               (make_item "Copy URL" (list 'set_clipboard url))
+               (make_item "Copy Title and URL" (list 'set_clipboard (str title "\n" url)))))))))
 
 (defn notes_items (query)
   "(notes_items) - Returns markup for notes"
@@ -407,12 +430,12 @@
   (+
    # app launcher
    (list
-         (make_item_ex "Browser" '(open_app "Safari") 'b)
+         (+ (make_item_ex "Browser" '(open_app "Safari") 'b) '(:aside "Safari"))
          # (make_item_ex "Deta Surf" '(open_app "Surf") 'b)
-         (make_item_ex "Terminal" '(open_app "Ghostty") 't) # 👻
+         (+ (make_item_ex "Terminal" '(open_app "Ghostty") 't) '(:aside "Ghostty"))
          (make_item_ex "TextEdit" '(open_app "TextEdit") 'te)
          # (make_item "Terminal" '(open_app "Alacritty"))
-         (make_item "Things" '(open_app "Things3"))
+         (+ (make_item "Things" '(open_app "Things3")) '(:aside "Things3"))
          (make_item "Screen Sharing" '(open_app "Screen Sharing"))
          (make_item "Telegram" '(open_app "Telegram"))
          (make_item "Messages" '(open_app "Messages"))
@@ -422,7 +445,7 @@
          (make_item "Shortcuts" '(open_app "Shortcuts"))
          # (make_item "Mail" '(open_app "Spark"))
          # (make_item "Mail" '(open_app "Mimestream"))
-         (make_item "Mail" '(open_url "https://mail.google.com"))
+         (+ (make_item "Mail" '(open_url "https://mail.google.com")) '(:aside "mail.google.com"))
          (make_item "Cal" '(open_app "Calendar"))
          # (make_item "Cal" '(open_app "Notion Calendar"))
          (make_item "Find My" '(open_app "FindMy"))

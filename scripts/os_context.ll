@@ -1,5 +1,11 @@
 #!/usr/bin/env vrsctl
 # Local, best-effort context. No clipboard tricks, global entity store, or polling.
+# TODO: Add a dedicated macOS context CLI, called here rather than by the GUI.
+# Use native window/Accessibility APIs with a short deadline and partial results;
+# accept an explicit window ID/PID, or resolve the last non-launcher window.
+# Yabai `recent` is best-effort; window stacking order is not focus history.
+# Selected text may need capture before focus changes. Keep this enrichment off
+# the palette-opening path; vrsjmp.ll should turn its entities into candidates.
 (bind_srv :os_browser)
 
 (defn context_window_query (arguments)
