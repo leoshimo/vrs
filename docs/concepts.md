@@ -72,8 +72,10 @@ string.
 
 ## Macros
 
-A macro receives source forms and generates code that becomes part of the
-calling program. Define one with `defmacro` and invoke it with `!`:
+A macro receives source forms and generates code. When execution reaches a
+macro call, Lyric runs the macro, compiles its result, and executes that code
+in the call's scope. This is runtime code generation. Define a macro with
+`defmacro` and invoke it with `!`:
 
 ```lyric
 (defmacro unless (condition & body)
@@ -99,15 +101,51 @@ Inspect the generated code with `macroexpand_1` or `macroexpand`:
 
 `macroexpand_1` performs one outer expansion. `macroexpand` keeps expanding while
 the result's outer expression is another macro call; it does not recursively
-expand every nested expression. Both return source data without running it.
-The quote is necessary because these inspection functions evaluate their
-arguments normally.
+expand every nested expression. Both run the macro body and return the generated
+source without executing that generated program. The macro body can still
+perform effects, including calling services or changing variables. The quote
+is necessary because these inspection functions evaluate their arguments normally.
 
-For example, inspect the service macro with:
+For example, evaluate this region to inspect the service macro:
 
 ```lyric
-(macroexpand_1 '(srv! :test :interface '()))
+(defn echo (x) x)
+(macroexpand_1 '(srv! :test :interface '(echo)))
 ```
+
+The result contains a receive loop and a direct dispatch expression:
+
+```lyric
+(match message
+  ((:echo x) (echo x))
+  (_ '(:err "Unrecognized message")))
+```
+
+Here `message` abbreviates a generated temporary name. There is no shared
+runtime dispatcher or `resolve` callback. The clause calls the `echo` visible
+where `srv!` runs. Its pattern uses the handler's parameters at startup; later
+calls look up the handler again, so replacing its implementation still works.
+
+`srv!` evaluates `:interface` once during expansion, before the generated code
+evaluates the service name and optional readiness expression. It inspects the
+named functions with `meta` to generate the clauses. It does not call the
+handlers during expansion. Inspection can therefore run an effectful interface
+expression, but does not register the service or enter the receive loop.
+
+The interface can be an ordinary function argument:
+
+```lyric
+(defn start (exports)
+  (defn echo (x) x)
+  (spawn_srv! :test :interface exports))
+
+(start '(echo))
+```
+
+When execution reaches the macro, `exports` already contains `'(echo)` and the
+local `echo` function already exists. No separate setup stage or declaration
+inspection is needed. Expansion happens on each executed macro call, rather
+than once when `start` is defined. An invalid interface fails at that point.
 
 Without the outer quote, `srv!` runs first and enters its service loop. In
 Emacs, put point on or just after the closing parenthesis of
@@ -118,21 +156,42 @@ effects already performed. For custom macros, evaluate their definitions and
 an explicit expansion call together in a region: each editor command uses a
 fresh connection.
 
-Macros generate code in a separate environment. `for_syntax` defines helpers
-for that environment, rather than ordinary runtime functions:
+Macro bodies use ordinary functions and lexical scope, just like other code:
 
 ```lyric
-(for_syntax
-  (defn add_one_form (expression) `(+ ,expression 1)))
-
+(defn add_one_form (expression) `(+ ,expression 1))
 (defmacro increment (expression) (add_one_form expression))
 (increment! 41) # => 42
 ```
 
-`add_one_form` runs while generating the `(+ 41 1)` form. It cannot read the
-program's runtime variables or call running services; the code it generates
-can use them later. Macros capture the helpers present when defined. If you
-change a helper, reevaluate the macro definition too.
+`add_one_form` runs while generating `(+ 41 1)`. It can read existing variables,
+inspect functions, call services, and perform I/O. There is no separate
+`for_syntax` environment anymore. The old `(for_syntax ...)` spelling remains
+an alias for `begin`, for compatibility; use ordinary definitions in new code.
+Changing a helper or redefining a macro affects the next invocation, including
+calls inside functions that have already been defined.
+
+A macro's own variables and helpers use its definition scope. To evaluate an
+argument's source in the macro **call's** scope, use `eval_caller`:
+
+```lyric
+(defmacro remember (expression)
+  (def value (eval_caller expression))
+  `(quote ,value))
+
+(defn example (x)
+  (remember! (+ x 1)))
+(example 41) # => 42
+```
+
+`expression` initially contains `(+ x 1)` as data. `eval_caller` evaluates it
+where `remember!` was called, where `x` is 41. Ordinary `eval` still uses its
+own lexical scope. `eval_caller` is available only during expansion, including
+in helpers called by a macro. Use it when a macro needs an argument's value
+while generating code; most macros can simply put the argument's source into
+their result. Returned expansions must be source data, so this `remember!`
+example supports values such as numbers and lists, not opaque function or
+process objects.
 
 `gensym` creates a fresh symbol for a variable introduced by generated code:
 
@@ -154,14 +213,16 @@ not automatically protect all generated names this way.
 Names put the hint first, for example `value__p7Fq2mR8tK4vW9xB`. The 16-character
 random suffix keeps independently generated names distinct, including when an
 expansion is printed and read back. `(gensym)` uses `tmp` as the hint. Give
-temporaries meaningful hints, and use ordinary helper functions for code that
-doesn't need access to the caller's variables. For example, `srv!` delegates its
-message loop to `vrs/service_loop`, so the loop's locals need no generated IDs.
+temporaries meaningful hints. `srv!` uses fresh names for the receive loop's
+locals while retaining readable handler argument names such as `x`. It only
+renames a handler argument if necessary to avoid capture or handle a wildcard.
 
-Macro definitions belong to a process. Functions retain the expansions they
-were compiled with, so reevaluate a function after changing a macro it uses.
-VRS's `srv!` and `spawn_srv!` use macros to generate service control flow;
-`bind_srv` is an ordinary runtime function that discovers the live interface.
+Macro definitions belong to a process. A spawned process receives its own
+snapshot of the macro definitions; redefining a macro there does not change the
+parent's definition. Quoted source does not carry macro definitions with it.
+`bind_srv` remains an ordinary runtime function that discovers the live interface.
+Expansion has instruction, nesting, and value-size limits to catch runaway
+transformers; normal generated service loops run outside those limits.
 
 ## Function Metadata
 
