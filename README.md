@@ -189,12 +189,23 @@ true                              # booleans are `true` or `false`
 # As a Lisp, Lyric has `eval` and `read`:
 (eval (read "(+ 40 2)")) # => 42
 
+# Quasiquote constructs code, evaluating only comma-marked holes:
+(def url "https://example.com")
+`(open_url ,url)                 # => (open_url "https://example.com")
+(def window '(:os/window :id 42))
+`(focus_window ',window)         # => (focus_window '(:os/window :id 42))
+(def commands '((notify "first") (notify "second")))
+`(begin ,@commands)              # splice a list of forms without running them
+
 # and there are more builtins and symbols in environment, introspectable via `ls_env` and `help`
 (ls_env)           # see all symbols defined in environment
 (help recv)        # see documentation via `help`
 ```
 
 TODO: Examples for fibers, coroutines, yielding, infinite iterators, macros
+
+See [Lyric quotation and code templates](lyric/README.md#quotation-and-code-templates)
+for nesting, literal arguments, and the distinction between insertion and splicing.
 
 ### Process
 

@@ -18,7 +18,7 @@
   "Return interface items"
   (map (fuzzy_match query items display) (fn (item)
     (list :title (get item :title)
-          :on_click (list 'run_in_background (list 'quote (get item :on_click)))))))
+          :on_click `(run_in_background ',(get item :on_click))))))
 
 (defn run_in_background (command)
   "Timers and generated commands can outlive the palette"
