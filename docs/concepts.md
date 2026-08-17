@@ -79,6 +79,13 @@ Expansion happens when execution reaches the call. Lyric runs the macro,
 compiles its result, and executes that code in the caller's scope. Calls inside
 functions expand on each invocation; redefining a macro affects the next call.
 
+`defn` is a standard macro that keeps its spelling without `!`:
+
+```lyric
+(macroexpand_1 '(defn echo (x) x))
+# => (def echo (fn (x) x))
+```
+
 ### Inspecting an Expansion
 
 ```lyric

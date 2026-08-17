@@ -217,6 +217,8 @@ true                              # booleans are `true` or `false`
 ```
 
 The marker belongs to the macro name inside the list: `(unless! ...)`.
+`defn` is a standard macro whose `!` is optional; inspect it with
+`(macroexpand_1 '(defn echo (x) x))`.
 `macroexpand_1` expands one outer call; `macroexpand` repeats outer expansion
 until the head is ordinary code. Both accept source data and return source data;
 quote the call to avoid running its arguments. `pretty` formats the returned
