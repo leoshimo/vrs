@@ -21,7 +21,7 @@ jobs:
     - name: install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
+        sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf sqlite3 jq
 
     - name: Format
       run: cargo fmt --check
@@ -31,3 +31,11 @@ jobs:
 
     - name: Test
       run: cargo test --verbose
+
+    - name: Test optimized runtime
+      run: cargo test --release -p lyric -p vrs -p vrsd
+
+    - name: Test release CLI startup and output
+      run: |
+        cargo build --release --bin vrsd --bin vrsctl
+        VRS_TEST_PROFILE=release python3 vrsctl/tests/terminal.py
