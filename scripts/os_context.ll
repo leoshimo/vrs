@@ -8,7 +8,7 @@
 # the palette-opening path; vrsjmp.ll should turn its entities into candidates.
 (bind_srv :os_browser)
 
-(defn context_window_query (arguments)
+(defn! context_window_query (arguments)
   (def result (try (apply exec arguments)))
   (if (list? result)
     (if (eq? (get result :exit) 0)
@@ -17,11 +17,11 @@
       nil)
     nil))
 
-(defn launcher_window? (window)
+(defn! launcher_window? (window)
   (if (eq? (get window :app) "vrsjmp") true
     (eq? (get window :title) "vrsjmp")))
 
-(defn context_window ()
+(defn! context_window ()
   (def window (context_window_query '("yabai" "-m" "query" "--windows" "--window")))
   (if (list? window)
     (if (launcher_window? window)
@@ -30,7 +30,7 @@
       window)
     nil))
 
-(defn selected_text (app)
+(defn! selected_text (app)
   "Best-effort AX selection; an unfocused app may no longer expose it"
   (def result (try (exec "osascript" "-e" """
     on run argv
@@ -60,7 +60,7 @@
       "")
     ""))
 
-(defn get_context_for_window (window_id)
+(defn! get_context_for_window (window_id)
   "Snapshot the originating window, browser page, and accessible selected text"
   (def window (if window_id
     (context_window_query (list "yabai" "-m" "query" "--windows" "--window" (str window_id)))
@@ -77,7 +77,7 @@
         (set objects (push objects (list :text :title "Selected Text" :value selection))))
       objects)))
 
-(defn get_context ()
+(defn! get_context ()
   (get_context_for_window nil))
 
 (set_entity_completions :text 'get_context)

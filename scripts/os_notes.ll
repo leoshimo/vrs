@@ -5,7 +5,7 @@
 (def notes '())
 
 # Adapted from https://github.com/raycast/extensions/blob/main/extensions/apple-notes/src/useNotes.ts
-(defn load_notes ()
+(defn! load_notes ()
   "(refresh_notes) - Refreshes in-memory contents from notes DB"
   (def result
     (exec "sqlite3" "-json"
@@ -27,20 +27,20 @@
     (decode :json (get result :stdout))
     '()))
 
-(defn refresh_notes ()
+(defn! refresh_notes ()
   (set notes (load_notes)))
 
-(defn get_notes ()
+(defn! get_notes ()
   "(get_notes) - Returns notes"
   (refresh_notes)
   notes)
 
-(defn open_note (id)
+(defn! open_note (id)
   "(open_note) - Open note with given ID"
   (def url (format "applenotes:/note/{}" id))
   (exec "open" url))
 
-(defn create_note (title body)
+(defn! create_note (title body)
   "(create_note TITLE BODY OPEN) - Create note with TITLE and BODY"
   (def contents (format "
     <div>

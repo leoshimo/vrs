@@ -246,7 +246,7 @@ Thought: Allow but discourage passing lambdas
 (Streaming?)
 https://clojure.org/guides/threading_macros
 - Thread first, thread last, etc
-** TODO Colocated Docstring for =defn=
+** TODO Colocated Docstring for =defn!=
 ** TODO Conditional Operators =not=, =and=, and =or=
 =and EXPR...= - left-to-right, and stop if one expr evaluates to =#f=. Otherwise =#t=
 =or= - left-to-right, stop if one expr evaluates to NOT =#f=
@@ -296,8 +296,8 @@ Lots of noise for fiber execution.
 // E.g. below fails in =call= BUT the real error is at ping_pong :interface '(echo) - echo is not defined for this program
 let echo_prog = r#" (begin 
     (spawn (lambda () (begin
-        (defn ping (msg) (list "pong" msg))
-        (defn pong (msg) (list "ping" msg))
+        (defn! ping (msg) (list "pong" msg))
+        (defn! pong (msg) (list "ping" msg))
         (srv! :ping_pong :interface '(echo)))))
     (list
         (call (find-srv :ping_pong) '(:ping "hi"))
@@ -421,10 +421,10 @@ Extend to visual elements? UI:
 - Visually drag and adjust parameters, which get reflected in source
 
 #+begin_src lyric
-(defn my-fn (a b)
+(defn! my-fn (a b)
     (+ a b))
 
-(defn my-ui (title subtitle)
+(defn! my-ui (title subtitle)
     (list :title title
           :subtitle subtitle))
 
@@ -462,7 +462,7 @@ Extend to visual elements? UI:
 ** TODO bug? - Scope bug for Functions used to spawn child process
 
 #+begin_src lyric
-(defn child (parent_pid)
+(defn! child (parent_pid)
     (def results '())
     (subscribe :my_topic)
     (send parent :child_ready)     # ** BUG ** - parent was not defined here!

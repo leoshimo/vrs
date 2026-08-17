@@ -5,11 +5,11 @@
 (def safari_history '())
 (def safari_history_path (shell_expand "~/Library/Safari/History.db"))
 
-(defn get_safari_history ()
+(defn! get_safari_history ()
   "(get_safari_history) - Get the list of items from Safari History"
   safari_history)
 
-(defn refresh_safari_history ()
+(defn! refresh_safari_history ()
   "(refresh_safari_history) - Refresh in-memory Safari History"
   (def result
     (exec "sqlite3" "-readonly" "-json" "-cmd" ".timeout 1000" safari_history_path

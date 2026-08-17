@@ -140,9 +140,9 @@ true                              # booleans are `true` or `false`
 (list msg var_number var_keyword) # create new lists with `list` function
 '("a" "b" "c")                    # quote expression with '
 
-# Function declarationes use `defn`
+# Function declarations use `defn!`
 # Lyric is expression-oriented - last form is returned as value to caller
-(defn double (x)
+(defn! double (x)
     (+ x x))
     
 # Call functions by using bound symbol names within parens, followed by arguments
@@ -160,7 +160,7 @@ true                              # booleans are `true` or `false`
 (get item :subtitle)   # => "My Subtitle"
 
 # Functions (Lambdas) are first class
-(defn apply (x fn)
+(defn! apply (x fn)
     (fn x))
 (apply 41 (lambda (x) (+ x 1)))        # => 41
 (map '(1 2 3) (lambda (x) (+ x x))     # => '(2, 4, 6)
@@ -217,8 +217,8 @@ true                              # booleans are `true` or `false`
 ```
 
 The marker belongs to the macro name inside the list: `(unless! ...)`.
-`defn` is a standard macro whose `!` is optional; inspect it with
-`(macroexpand_1 '(defn echo (x) x))`.
+`defn!` is a standard macro; inspect it with
+`(macroexpand_1 '(defn! echo (x) x))`.
 `macroexpand_1` expands one outer call; `macroexpand` repeats outer expansion
 until the head is ordinary code. Both accept source data and return source data;
 quote the call to avoid running its arguments. `pretty` formats the returned
@@ -360,14 +360,14 @@ The `srv!` and `spawn_srv!` macros generate service control flow. `bind_srv` is 
 (find_srv :echo) # => <pid XX>
 
 # Register has options to overwrite and expose interfaces (as function names)
-(defn ping (x) x)
-(defn pong (y) y)
+(defn! ping (x) x)
+(defn! pong (y) y)
 (register :service_c :interface '(ping pong) :overwrite)
 
 # `srv!` is a macro to:
 # - Register process under a identifiable name in registry via `register`
 # - Start a service loop (covered under "message passing")
-(defn echo (msg) msg)
+(defn! echo (msg) msg)
 (srv! :echo :interface '(echo))
 
 # `srv!` is blocking - but often it is more convenient to fork into a new service
@@ -406,7 +406,7 @@ The runtime has built-in global pubsub mechanism.
 (def count 0)
 
 # Define an interface to increment count and publish over topic
-(defn increment (n)
+(defn! increment (n)
   (set count (+ count n))
   (publish :count count))
 
@@ -422,7 +422,7 @@ The runtime has built-in global pubsub mechanism.
 #
 
 # Get system appearance state
-(defn is_darkmode ()
+(defn! is_darkmode ()
   (def result (exec "osascript"
                     "-e" "tell application \"System Events\""
                     "-e" "tell appearance preferences"
@@ -432,7 +432,7 @@ The runtime has built-in global pubsub mechanism.
   (eq? (get (decode :lines (get result :stdout)) 0) "true"))
 
 # Set system appearance state
-(defn set_darkmode (dark)
+(defn! set_darkmode (dark)
   (exec "osascript"
         "-e" "on run argv"
         "-e" "tell application \"System Events\""
@@ -444,7 +444,7 @@ The runtime has built-in global pubsub mechanism.
   :ok)
 
 # Toggle current state
-(defn toggle_darkmode ()
+(defn! toggle_darkmode ()
   (set_darkmode (not? (is_darkmode))))
 
 # Fork into service exporting `toggle_darkmode` as service

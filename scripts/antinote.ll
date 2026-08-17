@@ -4,7 +4,7 @@
 (def antinote_path
   (shell_expand "~/Library/Containers/com.chabomakers.Antinote/Data/Library/Application Support/cd-v1-notes.sqlite"))
 
-(defn get_antinote_notes ()
+(defn! get_antinote_notes ()
   "Read recent Antinote notes, excluding private, locked, archived and deleted notes"
   (def result
     (exec "sqlite3" "-readonly" "-json" "-cmd" ".timeout 1000" antinote_path
@@ -27,11 +27,11 @@
   (map (if (eq? (get result :stdout) "") '() (decode :json (get result :stdout)))
     (fn (note) (+ '(:antinote/note) note))))
 
-(defn open_antinote ()
+(defn! open_antinote ()
   "Open Antinote without selecting or promoting a note"
   (exec "open" "-a" "Antinote"))
 
-(defn open_antinote_note (note)
+(defn! open_antinote_note (note)
   "Open Antinote Note"
   (interactive :antinote/note)
   # Antinote's supported selection URL also promotes the note to the front.

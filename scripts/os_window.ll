@@ -2,7 +2,7 @@
 # os_window.ll - OS Window Controls
 #
 
-(defn get_windows ()
+(defn! get_windows ()
   "(get_windows) - Get visible windows, excluding the launcher itself"
   (def result (exec "yabai" "-m" "query" "--windows"))
   (if (eq? (get result :exit) 0)
@@ -15,14 +15,14 @@
                             :title (get window :title))))
     '()))
 
-(defn focus_window (window)
+(defn! focus_window (window)
   "Focus Window"
   (interactive :os/window)
   (def result (exec "yabai" "-m" "window" (str (get window :id)) "--focus"))
   (if (eq? (get result :exit) 0) result
     (error (str "Could not focus window: " (get result :stderr)))))
 
-(defn move_window (window destination)
+(defn! move_window (window destination)
   "Move Window to Display"
   (interactive :os/window :os/display)
   (def result (exec "yabai" "-m" "window" (str (get window :id))
@@ -32,51 +32,51 @@
 
 (set_entity_completions :os/window 'get_windows)
 
-(defn yabai_grid (grid_str)
+(defn! yabai_grid (grid_str)
   (exec "yabai" "--message" "window" "--grid" grid_str))
 
-(defn window_fullscreen ()
+(defn! window_fullscreen ()
   "(window_fullscreen) - Fullscreen window"
   (yabai_grid "1:1:0:0:1:1"))
 
-(defn window_center ()
+(defn! window_center ()
   (yabai_grid "8:8:1:1:6:6"))
   
-(defn window_left ()
+(defn! window_left ()
   "(window_left) - Move window to left half"
   (yabai_grid "1:2:0:0:1:1"))
 
-(defn window_right ()
+(defn! window_right ()
   "(window_right) - Move window to right half"
   (yabai_grid "1:2:1:0:1:1"))
 
-(defn window_top_right ()
+(defn! window_top_right ()
   "(window_top_right) - Move window to top right corner"
   (yabai_grid "2:2:1:0:1:1"))
 
-(defn window_top_left ()
+(defn! window_top_left ()
   "(window_top_left) - Move window to top left corner"
   (yabai_grid "2:2:0:0:1:1"))
 
-(defn window_bottom_left ()
+(defn! window_bottom_left ()
   "(window_bottom_left) - Move window to bottom left corner"
   (yabai_grid "2:2:0:1:1:1"))
 
-(defn window_bottom_right ()
+(defn! window_bottom_right ()
   "(window_bottom_right) - Move window to bottom right corner"
   (yabai_grid "2:2:1:1:1:1"))
 
-(defn window_to_main ()
+(defn! window_to_main ()
   "(window_to_main) - Move window to main display"
   (exec "yabai" "--message" "window" "--display" "1")
   (exec "yabai" "--message" "display" "--focus" "1"))
 
-(defn window_to_aux ()
+(defn! window_to_aux ()
   "(window_to_aux) - Move window to aux display"
   (exec "yabai" "--message" "window" "--display" "2")
   (exec "yabai" "--message" "display" "--focus" "2"))
 
-(defn window_split ()
+(defn! window_split ()
   "(window_split) - Split currently focused window and last focused window horizontally in display"
   (exec "bash" "-seuo" "pipefail"
         :stdin """
@@ -90,7 +90,7 @@
         yabai --message window "$aux_win" --grid "1:2:1:0:1:1"
         """))
 
-(defn show_desktop ()
+(defn! show_desktop ()
   "(show_desktop) - Show the desktop"
   (exec "yabai" "-m" "space" "--toggle" "show-desktop"))
 

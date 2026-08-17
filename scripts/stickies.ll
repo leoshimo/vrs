@@ -2,7 +2,7 @@
 # stickies.ll - Bindings to macOS Stickies scripts
 #
 
-(defn stickies_get ()
+(defn! stickies_get ()
   "(stickies_open) - Returns open Stickies windows"
   (def result
     (exec "osascript"
@@ -21,7 +21,7 @@
          (fn (title) (list :title title)))
     '()))
 
-(defn stickies_open (name)
+(defn! stickies_open (name)
   "(stickies_open NAME) - Open Stickies with NAME"
   (exec "osascript" "-" "Stickies" name
         :stdin """

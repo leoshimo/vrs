@@ -6,7 +6,7 @@
 (bind_srv :os_notify)
 (bind_srv :nl_shell)
 
-(defn scheduler_prompt (day)
+(defn! scheduler_prompt (day)
   "(scheduler_prompt DAY) - Generate prompt for scheduler. DAY can be a date specifier like \"today\", \"tomorrow\", \"August 5th\""
 
   (def day_schedule (get_events (format "{} at 0h" day)
@@ -36,7 +36,7 @@ If I have a interview with candidate, which may have titles like \"Intro Chat\",
 
 " date day day_schedule day))
 
-(defn schedule_the_day (day)
+(defn! schedule_the_day (day)
   "(schedule_the_day DAY) - Schedules my day. DAY can be a date specifier like \"today\", \"tomorrow\", \"August 5th\""
   (notify (format "Scheduling your day for {}" day) "thinking...")
   (spawn (fn ()

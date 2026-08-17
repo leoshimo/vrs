@@ -27,7 +27,7 @@ Example output:
 (spawn_chat :interfacegen_chat system_prompt)
 (bind_srv :interfacegen_chat)
 
-(defn interfacegen (request)
+(defn! interfacegen (request)
   "(interfacegen REQUEST) - Generates an interface for vrsjmp given request"
   (call_timeout 60)
   (def interface_str (send_message request))

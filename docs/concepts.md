@@ -79,10 +79,10 @@ Expansion happens when execution reaches the call. Lyric runs the macro,
 compiles its result, and executes that code in the caller's scope. Calls inside
 functions expand on each invocation; redefining a macro affects the next call.
 
-`defn` is a standard macro that keeps its spelling without `!`:
+`defn!` is also a macro:
 
 ```lyric
-(macroexpand_1 '(defn echo (x) x))
+(macroexpand_1 '(defn! echo (x) x))
 # => (def echo (fn (x) x))
 ```
 
@@ -105,7 +105,7 @@ generated code unevaluated.
 
 Macros and their helpers use the scope where they were defined. They can call
 ordinary functions, inspect definitions, change variables, and perform I/O.
-`(for_syntax ...)` behaves like `(begin ...)`; define helpers with `defn`.
+`(for_syntax ...)` behaves like `(begin ...)`; define helpers with `defn!`.
 
 Use `eval_caller` to evaluate source in the macro call's scope:
 
@@ -114,7 +114,7 @@ Use `eval_caller` to evaluate source in the macro call's scope:
   (def value (eval_caller expression))
   `(quote ,value))
 
-(defn example (x)
+(defn! example (x)
   (remember! (+ x 1)))
 
 (example 41) # => 42
@@ -157,7 +157,7 @@ same evaluation:
 
 ```lyric
 (begin
-  (defn echo (x) x)
+  (defn! echo (x) x)
   (macroexpand_1 '(srv! :test :interface '(echo))))
 ```
 
@@ -174,7 +174,7 @@ annotations, argument names, and documentation. The annotations do not enforce
 types at runtime.
 
 ```lyric
-(defn focus_window (window)
+(defn! focus_window (window)
   "Focus Window"
   (interactive :os/window)
   (exec "yabai" "-m" "window" (str (get window :id)) "--focus"))
@@ -234,7 +234,7 @@ process and serves its exported functions. `spawn_srv!` starts a child service
 and waits for registration:
 
 ```lyric
-(defn echo (x) x)
+(defn! echo (x) x)
 (spawn_srv! :echo :interface '(echo))
 
 (find_srv :echo)
@@ -257,8 +257,8 @@ The interface is evaluated once during expansion. It can use variables already
 defined at the call:
 
 ```lyric
-(defn start (exports)
-  (defn echo (x) x)
+(defn! start (exports)
+  (defn! echo (x) x)
   (spawn_srv! :test :interface exports))
 
 (start '(echo))
@@ -333,7 +333,7 @@ evaluation.
 `push_page` names a function that supplies page items and a prompt:
 
 ```lyric
-(defn read_later_page ()
+(defn! read_later_page ()
   (+ (push_page 'read_later_items "Search saved pages…")
      '(:title "Read Later" :debounce_ms 200)))
 ```
