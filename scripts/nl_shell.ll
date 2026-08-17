@@ -5,7 +5,6 @@
 (bind_srv :os_notify)
 (bind_srv :chat)
 (bind_srv :things)
-(bind_srv :rlist)
 (bind_srv :os_cal)
 
 # nil-out high priv bindings
@@ -35,7 +34,6 @@ The result should be a single S-expression wrapped within a (begin ...) form"
 "                (help things_add)
                  (help notify)
                  (help sleep)
-                 (help add_rlist_active_tab)
                  (help create_event))))
 
 (spawn_chat :nl_shell_chat system_prompt)
@@ -56,4 +54,3 @@ The result should be a single S-expression wrapped within a (begin ...) form"
   :ok)
 
 (spawn_srv :nl_shell :interface '(codegen_exec codegen))
-

@@ -5,7 +5,7 @@
 (bind_srv :system_appearance)
 (bind_srv :nl_shell)
 (bind_srv :os_screencap)
-(bind_srv :rlist)
+(bind_srv :jump_list)
 
 (defn get_items (callback args query)
   (apply (eval callback) (push args query)))
@@ -15,7 +15,7 @@
 
 (defn root_items (query)
   "Retrieve items to display"
-  (+ (fuzzy_match query (+ (favorite_items) (rlist_items)) display)
+  (+ (fuzzy_match query (+ (favorite_items) (jump_list_items)) display)
      (query_items query)))
 
 (defn make_item (title command)
@@ -31,10 +31,10 @@
        (make_item "Search Google" (list 'open_url (format "http://google.com/search?q={}" query)))
     )))
 
-(defn rlist_items ()
-  "(rlist_items) - Retrieve item markup for reading list"
-  (map (get_rlist) (fn (b)
-    (make_item (format "Reading List - {}" (get b :title))
+(defn jump_list_items ()
+  "(jump_list_items) - Retrieve item markup for jump list"
+  (map (get_jump_list) (fn (b)
+    (make_item (format "Jump List - {}" (get b :title))
                (list 'open_url (get b :url))))))
 
 
@@ -75,13 +75,13 @@
    (make_item "GitHub - vrs" '(open_url "https://www.github.com/leoshimo/vrs"))
    (make_item "GitHub - eventkitcli" '(open_url "https://github.com/leoshimo/eventkitcli"))
 
-   # DEMO: Integrate Reading List
-   # (make_item "Add to Reading List" '(add_rlist_active_tab))
-   # (make_item "Clear Reading List" '(clear_rlist))
+   # DEMO: Integrate Jump List
+   # (make_item "Add to Jump List" '(add_jump_list_active_tab))
+   # (make_item "Clear Jump List" '(clear_jump_list))
 
    # DEMO: Reify Interaction
-   # (begin (bind_srv :rlist)
-   #        (get (get_rlist) -1))
+   # (begin (bind_srv :jump_list)
+   #        (get (get_jump_list) -1))
 
    (make_item "Screen Capture" '(start_screencap))
    ))
