@@ -102,15 +102,16 @@
      (eden_items query)
      (rlist_items query)
      (youtube_items query)
-     (github_items query)
      (macro_items query)
      (list (make_item "Read Later" '(read_later_page))
            (make_item "Browser History" '(browser_history_page))
-           (make_item "Windows" '(call_interactively 'focus_window)))
+           (make_item "Windows" '(call_interactively 'focus_window))
+           (make_item_ex "Browse GitHub PRs" '(github_page) 'gh))
      (interactive_items context)))
   # Rank all fields together: a weak title match must not outrank an app name.
   (+ (fuzzy_match query candidates (fn (item)
        (list (get item :title)
+             (if (eq? (get item :hints) nil) "" (display (get item :hints)))
              (if (get item :subtitle) (get item :subtitle) "")
              (if (get item :aside) (get item :aside) "")
              (display item))))
@@ -459,13 +460,17 @@
                (make_item "Copy Note" (list 'set_clipboard (get note :content)))
                (make_item "Open Antinote" '(open_antinote))))))))
 
+(def github_cache '())
+
+(defn github_page ()
+  (refresh_pull_requests)
+  (set github_cache (get_pull_requests))
+  (+ (push_page 'github_items "Search pull requests…") '(:title "GitHub PRs")))
+
 (defn github_items (query)
-  "(github_items QUERY) - Returns markup for github items"
-  (if (not? (contains? query "gh:"))
-      '()
-      (begin
-       (if (eq? query "gh:") (refresh_pull_requests))
-       (map (get_pull_requests) (fn (pr) (make_item (format "gh: {}" (get pr :title)) (list 'open_url (get pr :url))))))))
+  (map (fuzzy_match query github_cache display) (fn (pr)
+    (+ (make_item (get pr :title) (list 'open_url (get pr :url)))
+       (list :subtitle (get pr :url))))))
 
 # TODO: Nice to have "prefix-drop" for these prefixed names
 (defn macro_items (query)
