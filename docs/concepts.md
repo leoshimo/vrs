@@ -295,6 +295,10 @@ future publications; messages are not retained for later subscribers.
 (decode :lines (get result :stdout)) # => ("one" "two")
 ```
 
+macOS launch helpers are exported by scripts: `(bind_srv :os_browser)` provides
+`open_url`; `(bind_srv :os_apps)` provides `open_app` and `open_file`. They run on
+the node hosting those services.
+
 ## Scripts and Initialization
 
 `run` evaluates a file in a fresh process, with an implicit `begin` around its

@@ -47,5 +47,13 @@
     (error (str "Could not force quit app: " (get result :stderr))))
   result)
 
+(defn! open_app (app)
+  "Open a macOS application by name."
+  (exec "open" "-a" app))
+
+(defn! open_file (file)
+  "Open a file with its default macOS application."
+  (exec "open" (shell_expand file)))
+
 (set_entity_completions :os/app 'get_running_apps)
-(spawn_srv! :os_apps :interface '(get_running_apps force_quit_app))
+(spawn_srv! :os_apps :interface '(get_running_apps force_quit_app open_app open_file))

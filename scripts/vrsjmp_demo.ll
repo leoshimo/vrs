@@ -3,6 +3,8 @@
 #
 
 (bind_srv :system_appearance)
+(bind_srv :os_browser)
+(bind_srv :os_apps)
 (bind_srv :nl_shell)
 (bind_srv :os_screencap)
 (bind_srv :jump_list)
