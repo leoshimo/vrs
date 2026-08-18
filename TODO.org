@@ -419,6 +419,19 @@ Extend to visual elements? UI:
 
 ** TODO Voice Client Shell
 * integration
+** TODO Integrate deterministic UI scripting
+
+Expose repeatable UI operations through VRS services, with accessible element
+selectors, explicit state checks, bounded waits, and useful failure reporting.
+
+Concrete use case: select an iCloud tab returned by =cloud_tabs= in
+[[file:scripts/os_browser.ll][OS Browser]] and offer a close action in
+[[file:scripts/vrsjmp.ll][vrsjmp]]. Safari supports closing tabs on other devices through its
+iCloud Tabs UI, but its scripting dictionary does not expose those remote tabs.
+Drive that UI while keeping =CloudTabs.db= read-only. Identify the device and
+tab, handle duplicate URLs and stale entries without closing the wrong tab,
+and distinguish submitting a close request from confirming the remote closure.
+
 ** TODO Selected Text
 ** TODO Browser Page
 ** TODO Image
