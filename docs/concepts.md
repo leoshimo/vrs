@@ -149,7 +149,7 @@ automatically.
 
 ### In Emacs
 
-In `lyric-mode`, put point on or just after a call's closing parenthesis and press
+In `vrs-mode`, put point on or just after a call's closing parenthesis and press
 `C-c C-m` to show its expansion. `C-u C-c C-m` uses `macroexpand`.
 
 Each editor command opens a fresh connection. Include local definitions in the
