@@ -44,7 +44,8 @@ To this end:
 - `vrsd`: A runtime implementation as a system daemon
 - `libvrs`: The `vrs` library crate shared by runtime and client implementations
 - `vrsctl`: A thin CLI client over `libvrs`
-- `vrsjmp`: A GUI launch bar client
+- `emacs`: The editor workflow for evaluating expressions and building calls
+- `vrsjmp`: A GUI launch bar client that can also return choices to the editor
 
 [Core Concepts](docs/concepts.md) · [Demos](docs/demos.md) ·
 [Design Notes](DESIGN.org) · [AI and VRS](docs/ai.md)
@@ -465,14 +466,14 @@ Buffers using the same `vrs-vrsctl-command` share a session. Variables, function
 macros, and service bindings persist between evaluations, including after errors.
 Re-evaluate a changed definition to update it.
 
-Native minibuffer commands use ordinary Emacs completion, including your configured
-completion packages. They do not open or require vrsjmp:
+Choose values and build calls using ordinary Emacs completion, including your
+configured completion packages:
 
 | Command | Shortcut | Result |
 | --- | --- | --- |
 | `vrs-choose-value` | `C-c C-v` | Evaluate a list, choose an element, replace the source with its literal value. |
 | `vrs-choose-field` | `M-x` | Evaluate a record or tagged entity, choose a field, replace the source with its literal value. |
-| `vrs-browse-functions-minibuffer` | `C-c C-b` | Insert a service call with argument names as placeholders. With `C-u`, fill its arguments first. |
+| `vrs-browse-functions` | `C-c C-b` | Insert a service call with argument names as placeholders. With `C-u`, fill its arguments first. |
 | `vrs-act-on-value` | `C-c C-a` | Evaluate an entity, choose an action, fill its remaining arguments, and replace the source with the call. |
 | `vrs-execute-action` | `M-x` | Evaluate an entity, choose and execute an action, and display its result while keeping the source. |
 
@@ -514,17 +515,20 @@ execute command publishes the selected call to `:cmd` for command macro recordin
 then executes it once, using the same publication and failure handling as vrsjmp.
 
 `C-g`, evaluation errors, and edits to or closure of the source buffer cancel
-native construction without committing a partial replacement. Buffer changes
+construction without committing a partial replacement. Buffer changes
 detected before execution also prevent dispatch. Cancelling a pending runtime
 request resets its session; effects already performed cannot be undone.
 These helpers require a daemon built from this version of VRS; rebuild and restart
-your chosen runtime after updating.
+your chosen runtime after updating. The earlier
+`vrs-browse-functions-minibuffer` name remains an alias for `vrs-browse-functions`.
 
+A choice can also happen in another app and return to the waiting editor.
 Vrsjmp's **Browse Functions** opens the service-function list for execution.
 Enter calls the selected function after collecting its arguments. When no
 completion provider exists, enter a Lyric expression such as `"hello"` or `42`.
 
-The existing `M-x vrs-browse-functions` continues to open vrsjmp and insert a call at point. You can
+`M-x vrsjmp-browse-functions` makes the choice in vrsjmp and brings the call
+back into the editor. You can
 also evaluate `(vrsjmp_browse_functions)` with `C-u C-c C-e`. Search by function
 or service name; each row shows its service. Press Enter
 to insert its form with argument names as placeholders. In the Cmd-K actions menu,
