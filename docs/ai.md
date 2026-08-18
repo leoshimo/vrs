@@ -1,6 +1,6 @@
 # AI and VRS
 
-A vrsjmp button, a REPL command, an editor, and an agent can all run the same call:
+A button in a hypermedia client can run the same call as a REPL, editor, or agent:
 
 ```lyric
 (open_url "https://github.com/leoshimo/vrs")
@@ -40,8 +40,9 @@ An example result:
     (notify "Timer finished" "Five minutes are up"))))
 ```
 
-The [vrsjmp demo](../scripts/vrsjmp_interfacegen_demo.ll) displays these rows and
-runs each button's code in a background process. The menu is data you can edit.
+The generated hypermedia pairs labels with executable actions. The
+[timer demo](../scripts/vrsjmp_interfacegen_demo.ll) runs each button's code in
+a background process. The menu is data you can edit.
 
 ## Scheduling
 
@@ -67,10 +68,9 @@ A focus session ends. Offer actions for the page you started with:
        :on_click (save_page ',page))))))
 ```
 
-An agent can choose when to present an interface and compose its buttons from
-the functions available in the running environment. New functions become new
-building blocks. The calls behind the buttons remain readable and executable
-from other clients.
+An agent can generate hypermedia from the functions available in the runtime
+and choose when to present it. New functions become new building blocks. The
+calls behind its actions remain readable and executable from other clients.
 
 ## generated! (WIP)
 
