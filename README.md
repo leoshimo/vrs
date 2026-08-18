@@ -239,9 +239,9 @@ prefix argument repeats outer expansion. For example, use it on
 `(srv! :test :interface '())`, or evaluate
 `(macroexpand_1 '(srv! :test :interface '()))`. Without the quote, the service
 loop runs before the inspection function can be called. `C-g` cancels a waiting
-evaluation and terminates its client. Each evaluation command uses its own
-connection, so for custom macros evaluate their definitions and an explicit
-`macroexpand_1` call together in a region or file.
+evaluation and clears its session. Evaluation and macro expansion share a
+persistent editor session, so earlier evaluated definitions remain available.
+`M-x vrs-reset-session` explicitly starts a fresh connection.
 
 See [Lyric quotation and code templates](lyric/README.md#quotation-and-code-templates)
 for nesting, literal arguments, and the distinction between insertion and splicing.
@@ -454,8 +454,17 @@ or add options such as service bindings.
   add a quote if you want to evaluate the inserted list as literal data.
 - `C-u C-c C-c` displays source with commented results.
 - `C-c C-m` inspects one macro expansion; `C-u C-c C-m` repeats outer expansion.
-- `C-g` aborts a waiting evaluation, terminates its client, and preserves the
-  source. Effects already performed are not undone.
+- `M-x vrs-reset-session` starts a fresh connection and clears its definitions.
+- `C-g` aborts a waiting evaluation and clears its session, preserving source.
+  Effects already performed are not undone.
+
+Buffers using the same `vrs-vrsctl-command` share a session. Variables, functions,
+macros, and service bindings persist between evaluations, including after errors.
+Re-evaluate a changed definition to update it.
+
+Vrsjmp's **Browse Functions** opens the service-function list for execution.
+Enter calls the selected function after collecting its arguments. When no
+completion provider exists, enter a Lyric expression such as `"hello"` or `42`.
 
 Run `M-x vrs-browse-functions` to open vrsjmp and insert a call at point. You can
 also evaluate `(vrsjmp_browse_functions)` with `C-u C-c C-e`. Search by function

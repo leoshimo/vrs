@@ -17,14 +17,20 @@ In Emacs's `vrs-mode`, put point on or just after the closing parenthesis:
 | `C-u C-c C-e` | Replace it with the result. |
 | `C-c C-r` | Evaluate the selected region. |
 | `C-u C-c C-r` | Replace the region with its result. |
-| `C-g` | Cancel a waiting evaluation; keep the source. |
+| `C-g` | Cancel a waiting evaluation and reset its session; keep the source. |
 
 Results are formatted to 90 columns. Change `vrs-result-width` in Emacs or use
 `--width` in the terminal. `(pretty VALUE)` returns formatted text;
 `(pretty VALUE 60)` chooses a different width.
 
-Definitions from one editor evaluation are not kept for the next. Evaluate
-related definitions and calls together in a region or a `(begin ...)` block.
+Evaluations share state: define a variable, function, or macro once, then use
+it in later evaluations and macro expansions. Buffers using the same
+`vrs-vrsctl-command` share that session. Editing a definition takes effect when
+you evaluate it again.
+
+`M-x vrs-reset-session` starts fresh, clearing definitions and bindings added
+during evaluation. `C-g` also clears them when cancelling a blocked evaluation.
+Neither undoes actions already performed or stops services you spawned.
 
 ## Services
 
@@ -43,6 +49,11 @@ Bind a service to use its functions:
 (get_windows)
 (help focus_window)
 ```
+
+In vrsjmp, open **Browse Functions** to search bound service functions. Each
+row shows its service. Enter runs the function, asking for arguments first
+when needed. Choose from available completions, or enter a Lyric expression
+such as `"hello"`, `42`, or `'(:key "value")` when no provider is available.
 
 To create a service, define its functions and list the ones to expose:
 
@@ -166,8 +177,9 @@ Quote the call to see the code it produces:
 outer macro call; it does not expand calls nested inside that result. Neither
 executes the returned code, but both run the macro body.
 
-In Emacs, `C-c C-m` shows one expansion; `C-u C-c C-m` uses `macroexpand`.
-To inspect a service with local definitions, evaluate them together:
+In Emacs, `C-c C-m` (also `C-c RET`) shows one expansion; `C-u C-c C-m` uses
+`macroexpand`. Both can use definitions you evaluated earlier in the session.
+You can also evaluate definitions and an inspection together:
 
 ```lyric
 (begin
