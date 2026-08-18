@@ -82,6 +82,19 @@ registration and binding. An iPhone could handle =open_url= locally; a worker
 could prefer a particular browser service. Decide how handlers decline a call
 and how the chain composes with existing function lookup and service bindings.
 
+** TODO User prompts as function calls across devices
+
+Model asking for input as an ordinary function call, e.g. =(pick_photo)=:
+present an appropriate desktop or mobile UI and return the selected value.
+Explore REPL access from Emacs or =vrsctl= into a runtime on the mobile device,
+to inspect its services, evaluate code, and invoke its native interfaces live.
+For example, call =(pick_photo)= from the desktop REPL, choose on the phone,
+and receive the result back. Clarify which device handles the prompt and how
+cancellation works, using the existing process/service/message model.
+
+See [[*Device-local actions in hypermedia clients]] and
+[[*Per-process responder chains for function calls]].
+
 ** TODO Runtime hooks inspired by Ruby TracePoint
 
 Provide hooks for observing Lyric execution without editing the observed code.
@@ -350,17 +363,30 @@ Seamless flow from REPL / Past Interaction, into durable program
 E.g. See values
 E.g. See value of =watch=-ed topic
 
-** TODO Choose from an expression in Emacs
+** DONE Choose values and fields from an expression in Emacs
 
-Evaluate the region or expression at point once, open the vrsjmp value chooser,
-and replace the source with the selection. Preserve valid Lyric literals and
-leave the source intact on cancellation. Consider a separate action to insert
-an accessor, such as =(get (active_tab) :url)=, instead of the current value.
+=vrs-choose-value= and =vrs-choose-field= evaluate the expression or region once,
+retain the selected literal, and preserve source on cancellation. Lists and
+symbols are quoted so the retained values can be evaluated again.
 
-** TODO Minibuffer variant of the value chooser
+** TODO Insert an accessor for a chosen field or element
 
-Offer the same list and field selection in Emacs's minibuffer. Share selection
-and insertion behavior with the vrsjmp command; defer this until the GUI version.
+Offer a separate action to retain an accessor such as =(get (active_tab) :url)=
+instead of the current value. Keep the source expression and chosen key/index;
+the selected value alone does not carry that provenance.
+
+** DONE Emacs minibuffer choosers and noun–verb commands
+
+Offer list and field selection, Browse Functions, and a direct noun–verb command
+in Emacs's minibuffer. Start noun–verb from an entity returned by the expression
+at point or region, discover compatible actions from runtime metadata, and fill
+remaining arguments through entity completions where available. Support retaining
+the resulting call in source and an explicit action to execute it.
+
+The Emacs commands are integrated. =vrs-browse-functions= uses Emacs completion;
+=vrsjmp-browse-functions= returns a call chosen in the GUI to the editor.
+Both paths preserve values and quoting. The Emacs path works without the GUI.
+See [[file:emacs/chooser-manual-tests.md][manual checks]] for an isolated fixture.
 
 ** TODO Source locations for definitions and goto-definition
 
