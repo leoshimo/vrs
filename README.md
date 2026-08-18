@@ -70,7 +70,7 @@ registry:
 ```
 
 Use `./serve` (or `./scripts/serve.sh`) to start the runtime and GUI. It first
-installs the current `vrsctl` with `cargo install --path vrsctl --force`, so
+installs the current `vrsctl` with `cargo install --locked --path vrsctl --force`, so
 Emacs and script shebangs use the matching client. `./serve dev` installs a
 debug client for the debug runtime socket. Use `./serve headless` on a node
 that should run the daemon and its services without launching the GUI.
