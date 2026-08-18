@@ -15,6 +15,32 @@ events.
 Revisit delivery/acknowledgments, reconnection, multiple GUI clients, and whether
 pending input should become a more general work service after using this flow.
 
+*** TODO Choose a value from a list or record
+
+Let a program pass a list to vrsjmp and wait for the selected element. For a
+record, show keys with their values and return the value of the selected key.
+Reuse =request_input=; distinguish list selection from field selection explicitly.
+Keep the original values associated with rows, including duplicate labels.
+See [[file:DESIGN.org::*Choosing live values while editing][chooser examples]].
+
+*** TODO Service-driven loading, pagination, and partial results
+
+The client already loads pages asynchronously and shows a loading indicator.
+Extend the page protocol so services can report progress, return partial results,
+and supply a cursor for the next batch. Keep the UI responsive while work runs.
+Define what happens when the query changes, the user leaves, or the service ends;
+late updates must not change a different page. Start with a slow search returning
+its first results before the full search finishes.
+
+*** TODO Explore the GUI client hosting a service
+
+Could a GUI expose functions such as showing its window and updating a page,
+implemented by native GUI bindings, through ordinary VRS calls and messages?
+Prefer one client identity and connection. Work out how calls reach the UI
+thread, how requests are handled while another call waits, and what closing the
+client does to pending interactions. Distinguish this from embedding a whole
+runtime node. Revisit targeting when several GUI clients are connected.
+
 *** TODO Calendar / Agenda page
 
 Show upcoming events in vrsjmp, with filtering and actions to open an event,
@@ -56,6 +82,10 @@ Use cases:
 - Cancel a pending GUI interaction or service call and clean up outstanding work.
 - REPL =Ctrl-c=: leave a nested interaction and return to the prompt; see
   [[*Controlling Terminal Mechanics for Connection]].
+
+Related demo: [[file:DESIGN.org::*A running program asks for a decision][a running program asks for a decision]].
+An explicit input wait can use current messages; resuming an arbitrary failed
+call or editing a suspended frame needs separate runtime support.
 
 ** TODO Runtime hooks inspired by Ruby TracePoint
 
@@ -258,20 +288,18 @@ A chat interface for:
 * rnd
 ** TODO LLM Blocks
 
-Macro expansions, powered by LLM to generate UI
-Use bret-blocks to interactively tweak
-
-#+begin_src janet
-# Key idea: It's generated, and prompt is inline - but evaluation is NOT at runtime. Develop time expansion
-(prompt "An user interface for X"
-    ...)
-#+end_src
+Explore =generated!= / =generate!= blocks that retain the generator and accepted
+source together, with explicit regeneration and a reviewable diff.
+See [[file:docs/ai.md][AI and VRS]] for examples and open design questions.
 
 ** TODO Durable Execution
 Goal: Recovering from process or host failure
 ** TODO Program Migration
 Goal: Moving snapshot of running program from machine to machine
 ** TODO Agent Programs
+
+Explore agents using the ordinary runtime for discovery, execution, inspection,
+and asking for input. Collect the design notes in [[file:docs/ai.md][AI and VRS]].
 * debt  
 ** TODO Native Bindings that should be =Lambda=
 E.g. built-in lambda bindings - e.g. =call_fn=
@@ -317,6 +345,25 @@ Seamless flow from REPL / Past Interaction, into durable program
 
 E.g. See values
 E.g. See value of =watch=-ed topic
+
+** TODO Choose from an expression in Emacs
+
+Evaluate the region or expression at point once, open the vrsjmp value chooser,
+and replace the source with the selection. Preserve valid Lyric literals and
+leave the source intact on cancellation. Consider a separate action to insert
+an accessor, such as =(get (active_tab) :url)=, instead of the current value.
+
+** TODO Minibuffer variant of the value chooser
+
+Offer the same list and field selection in Emacs's minibuffer. Share selection
+and insertion behavior with the vrsjmp command; defer this until the GUI version.
+
+** TODO Source locations for definitions and goto-definition
+
+Retain file and line metadata on function definitions and expose it through
+introspection, so Emacs and the function browser can jump to source. Consider
+variable definitions too. Account for redefinitions, macro-generated functions,
+and source on another node. This is a later project.
 
 ** TODO Test Runner
 ** TODO Expect Testing
