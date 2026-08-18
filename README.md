@@ -465,11 +465,66 @@ Buffers using the same `vrs-vrsctl-command` share a session. Variables, function
 macros, and service bindings persist between evaluations, including after errors.
 Re-evaluate a changed definition to update it.
 
+Native minibuffer commands use ordinary Emacs completion, including your configured
+completion packages. They do not open or require vrsjmp:
+
+| Command | Shortcut | Result |
+| --- | --- | --- |
+| `vrs-choose-value` | `C-c C-v` | Evaluate a list, choose an element, replace the source with its literal value. |
+| `vrs-choose-field` | `M-x` | Evaluate a record or tagged entity, choose a field, replace the source with its literal value. |
+| `vrs-browse-functions-minibuffer` | `C-c C-b` | Insert a service call with argument names as placeholders. With `C-u`, fill its arguments first. |
+| `vrs-act-on-value` | `C-c C-a` | Evaluate an entity, choose an action, fill its remaining arguments, and replace the source with the call. |
+| `vrs-execute-action` | `M-x` | Evaluate an entity, choose and execute an action, and display its result while keeping the source. |
+
+Value, field, and action commands use the active region, or the expression at its
+closing parenthesis or before point. A region can contain several forms; the last
+value is used. The expression runs once. For example, choose from
+`'((:os/process :pid 10) (:os/process :pid 20))` with `C-c C-v`; selecting the second
+entry leaves `'(:os/process :pid 20)` in the buffer. `vrs-choose-field` can then
+retain `20`. Lists and symbols receive the quote needed to evaluate as literal
+data; strings retain their escaping. Repeated labels have distinct numbered
+choices with their source values shown alongside them. Opaque values such as
+runtime references and functions cannot be retained as source.
+
+The function browser searches names, signatures, services, and documentation of
+methods **bound in the Emacs session**. Evaluate `(bind_srv :SERVICE)` first, or
+add `--bind SERVICE` to `vrs-vrsctl-command`. It does not import every
+registered service automatically. Noun–verb discovery also includes session-local
+functions declared `interactive`; an action matches when its first argument's
+declared type equals the entity's leading tag. It uses the same metadata rules
+as vrsjmp. For example, evaluate this harmless definition:
+
+```lisp
+(defn! process_pid (process)
+  "Read PID"
+  (interactive :os/process)
+  (get process :pid))
+```
+
+On `'(:os/process :pid 20)`, `C-c C-a` offers **Read PID** and constructs
+`(process_pid '(:os/process :pid 20))`. On the same entity,
+`M-x vrs-execute-action` runs the selected action and displays `20`.
+
+Argument filling uses the session's `get_entity_completions` providers. If no
+choices are available, enter a Lyric expression such as `"hello"`, `42`, or
+`'(a b)`. Entered expressions are parsed without evaluation when constructing
+a call. Selecting functions or constructing calls never executes those calls.
+Entity expressions and requested completion providers do run. The explicit
+execute command publishes the selected call to `:cmd` for command macro recording,
+then executes it once, using the same publication and failure handling as vrsjmp.
+
+`C-g`, evaluation errors, and edits to or closure of the source buffer cancel
+native construction without committing a partial replacement. Buffer changes
+detected before execution also prevent dispatch. Cancelling a pending runtime
+request resets its session; effects already performed cannot be undone.
+These helpers require a daemon built from this version of VRS; rebuild and restart
+your chosen runtime after updating.
+
 Vrsjmp's **Browse Functions** opens the service-function list for execution.
 Enter calls the selected function after collecting its arguments. When no
 completion provider exists, enter a Lyric expression such as `"hello"` or `42`.
 
-Run `M-x vrs-browse-functions` to open vrsjmp and insert a call at point. You can
+The existing `M-x vrs-browse-functions` continues to open vrsjmp and insert a call at point. You can
 also evaluate `(vrsjmp_browse_functions)` with `C-u C-c C-e`. Search by function
 or service name; each row shows its service. Press Enter
 to insert its form with argument names as placeholders. In the Cmd-K actions menu,
