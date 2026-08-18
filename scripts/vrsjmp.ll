@@ -58,6 +58,7 @@
 (bind_srv :os_maps)
 (bind_srv :os_notes)
 (bind_srv :antinote)
+(bind_srv :tailscale)
 (bind_srv :obsidian)
 (bind_srv :youtube)
 (bind_srv :cmd_macro)
@@ -153,6 +154,7 @@
      (macro_items query)
      (list (make_item "Read Later" '(read_later_page))
            (make_item "Browser History" '(browser_history_page))
+           (make_item "Tailscale" '(tailscale_page))
            (make_item "Windows" '(call_interactively 'focus_window))
            (make_item_ex "Configure Display Resolution" '(display_page) 'd)
            (make_item_ex "Browse GitHub PRs" '(github_page) 'gh)
@@ -509,6 +511,55 @@
 (defn! stickies_items (query)
   (map (fuzzy_match query stickies_get_cache display) (fn (note)
     (make_item (get note :title) `(stickies_open ,(get note :title))))))
+
+(def tailscale_cache nil)
+(defn! tailscale_page ()
+  (set tailscale_cache (get_tailscale_snapshot))
+  (+ (push_page 'tailscale_items "Search devices and web endpoints…")
+     (list :title (str "Tailscale · " (get tailscale_cache :summary)))))
+
+(defn! tailscale_ping (device)
+  (def result (ping_tailscale_device device))
+  # Pass data as argv, not interpolated AppleScript source.
+  (exec "osascript" "-e" """
+    on run argv
+      display notification (item 2 of argv) with title (item 1 of argv)
+    end run
+    """ (str "Tailscale · " (get device :title)) result))
+
+(defn! tailscale_device_item (device)
+  (def address (or! (get device :ipv4) (get device :ipv6) (get device :dns)))
+  (def copies (filter '((:ipv4 "Copy IPv4 Address") (:dns "Copy DNS Name")
+                        (:ipv6 "Copy IPv6 Address"))
+                     (fn (field) (not? (eq? (get device (get field 0)) nil)))))
+  (+ (make_item (get device :title)
+       (if address `(set_clipboard ,address) '(error "This device has no address")))
+     (list :subtitle (str (or! (get device :dns) (get device :hostname))
+                         (if address (str " · " address) ""))
+           :aside (str (get device :os) " · "
+                       (if (get device :online) "Online" "Offline")
+                       (if (get device :self) " · This device" ""))
+           :actions (+ (map copies (fn (field)
+                         (make_item (get field 1) `(set_clipboard ,(get device (get field 0))))))
+                       (if (or! (get device :self)
+                                (not? (or! (get device :ipv4) (get device :ipv6)))) '()
+                         (list (make_item "Ping Device" `(tailscale_ping ',device))))))))
+
+(defn! tailscale_items (query)
+  # One snapshot per page visit; network I/O never runs on each keystroke.
+  (if (eq? tailscale_cache nil) (set tailscale_cache (get_tailscale_snapshot)))
+  (+ (map (fuzzy_match query (get tailscale_cache :pages) (fn (page)
+            (list (get page :title) (get page :device) (get page :url)
+                  (get page :description)))) (fn (page)
+       (+ (make_item (get page :title) `(open_url ,(get page :url)))
+          (list :subtitle (str (get page :device) " · " (get page :url))
+                :aside "Web"
+                :actions (entity_actions (+ '(:web/page) page))))))
+     (map (fuzzy_match query (get tailscale_cache :devices) (fn (device)
+            (list (get device :title) (get device :hostname) (get device :os)
+                  (or! (get device :dns) "") (or! (get device :ipv4) "")
+                  (or! (get device :ipv6) "")
+                  (if (get device :online) "Online" "Offline")))) tailscale_device_item)))
 
 (def obsidian_cache '())
 (defn! obsidian_page ()
