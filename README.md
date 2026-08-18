@@ -487,8 +487,9 @@ value is used. The expression runs once. For example, choose from
 `'((:os/process :pid 10) (:os/process :pid 20))` with `C-c C-v`; selecting the second
 entry leaves `'(:os/process :pid 20)` in the buffer. `vrs-choose-field` can then
 retain `20`. Lists and symbols receive the quote needed to evaluate as literal
-data; strings retain their escaping. Repeated labels have distinct numbered
-choices with their source values shown alongside them. Opaque values such as
+data; strings retain their escaping. Value and argument choices show the full
+Lyric value, with a row number to distinguish duplicates. Field choices show the
+key alongside its value. Opaque values such as
 runtime references and functions cannot be retained as source.
 
 The function browser searches names, signatures, services, and documentation of
@@ -536,7 +537,7 @@ and bring a GUI choice back into source.
 
 The clients share ordinary Lyric helpers in
 [`commands.ll`](libvrs/src/rt/stdlib/commands.ll): function discovery, call
-placeholders, labels, literal quoting, entity-type matching, argument completion,
+placeholders, literal quoting, entity-type matching, argument completion,
 and command execution. Record field extraction in
 [`gui.ll`](libvrs/src/rt/stdlib/gui.ll) is also used by both. The small
 [`editor.ll`](libvrs/src/rt/stdlib/editor.ll) adapter packages these results as
