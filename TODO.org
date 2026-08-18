@@ -2,13 +2,7 @@
 
 * roadmap
 
-Current: Hypermedia Client and VRSJMP Command Bar Client
-
 ** Hypermedia Client - vrsjmp
-
-- [X] Runtime Pubsub
-- [X] Hypermedia Client Design
-- [X] VRSJMP Command Bar Client
 
 *** TODO Revisit pub/sub wakeups for GUI input requests
 
@@ -16,7 +10,8 @@ For now, keep pending input requests in the existing =:vrsjmp= service and
 publish =:show= on its topic. The GUI receives notifications on its ordinary
 client connection, then asks =begin_interaction= and =get_items= what to show.
 The GUI continues to own navigation history. Repeated wakeups may be combined;
-pub/sub is not retained and slow or disconnected subscribers can miss events.
+pub/sub messages are not retained. Slow or disconnected subscribers can miss
+events.
 Revisit delivery/acknowledgments, reconnection, multiple GUI clients, and whether
 pending input should become a more general work service after using this flow.
 
@@ -32,13 +27,8 @@ and natural-language scheduling separate.
 
 Goal: Build Core Runtime Features
 
-- [ ] Init File
-- [ ] File IO for Simple Storage
-- [X] Command IO
 - [ ] Process Links and Supervisor
 - [ ] Rust Macros for Code Compression
-- [ ] Lyric Macros
-- [X] Parallel Development / Release Instances
 - [ ] Daemon Installation Hook
   
 ** VRS Cloud - Replace Things / Are.na
@@ -61,22 +51,6 @@ Explore call, return, and error events, with filters by function or process and
 hooks that can be enabled or disabled interactively. Use this for tracing,
 debugging, and live instrumentation; work out callback context, reentrancy,
 and overhead before choosing an API.
-
-** DONE Conn-less Process Spawning
-Goal: Non-connection-backed =spawn= from =kernel.rs=
-
-Purpose:
-- Spawn from Process / REPL
-- Spawn from Init File
-
-** DONE Service Discovery / Mgmt
-Goal: Replace existing =pid 0= hardcoding w/ service mgmt
-Skip interface / imports map for this one - see also "Runtime Linking"
-Convenience APIs to see running services and some level of introspection
-
-- [X] =register=
-- [X] =ls-srv=
-- [X] =find-srv=
 
 ** TODO System-wide Job Configuration and Node Affinity
 
@@ -101,38 +75,6 @@ indexing are periodic jobs assigned to the always-on node. The conditional
 startup currently written by hand in =scripts/init.ll= should eventually be
 expressed through this model.
 
-** DONE IPC - =srv= and =bind_srv=
-
-Goal: Provide better wrappers over =call=
-
-=callee= serves unique named-interface w/ a set of callable symbol IDs:
-- Runtime linker records: The PID of callee, and exported symbols
-
-=caller= calls =bind=, which:
-- Requests service information from runtime linker
-- Runtime linker returns a set of =SymbolId= and =Val= to add into =Env=
-- Newly added bindings use =send pid= =recv pid id= to send + wait for result
-
-
-Want =svc= for service and =bind= for callers
-See also - pattern matching / destructuring
-
-Maybe also cover imports / exported interface and discoverability
-
-#+begin_src lyric
-# *** service-side
-(srv! :launcher
-      :interface '(get_favs add_favs))
-
-# *** client side (gets imports!)
-(bind_srv :launcher)
-#+end_src
-
-** DONE PubSub API
-- Support pub/sub channels
-- Proof-of-Concept: Pub/Sub listening to "counter" variable on new task execution model
-- Reactivity of PubSub over PubSub
-- Method to access pubsub topic via =vrsctl=
 ** TODO Hypermedia Client
 Goal: Build CLI Hypermedia Client over VRS
 See also - "Revisit Client Connection"
@@ -153,18 +95,6 @@ Goal: Spawn Link to be notified of errors in spawn-ed processes
 Purpose:
 - Service Mgmt on Startup (?)
 - Restarting on error
-
-** TODO Dotfiles / Init Scripts
-** TODO File IO for S-Expressions
-
-Read / Write S-Expressions to File
-Goal: Replace hard-coded data in =launcher.ll=
-
-** DONE Command IO - Better =exec=
-
-Goal: Better interface over =Command= to access:
-- Captured stdout and stderr
-- Exit code
 
 ** TODO Streaming Command IO Handle
 
@@ -221,16 +151,6 @@ Give VRs capability to see (web pages, screen), Hear (user, text) and prompt for
 input (text, voice, selection)
 ** TODO Sqlite IO for S-Expressions
 * lyric lang
-** DONE Add =cond=
-Add =cond= macro to avoid pyramid of =if=.
-
-** DONE Destructuring =def=
-** DONE Pattern Matching / Destructuring
-Goal: Provide way to extract params from messages w/o indexing
-
-** DONE Add =match= 
-Add pattern matching conditional branching
-Test: Make sure that =(a b a)= only matches =(1 2 1)= but not =(1 2 3)=
 ** TODO [#A] BUG: Lambdas can be used to break process isolation
 
 A process can send a lambda (which captures its environment) to another process
@@ -248,30 +168,13 @@ via references captured.
 
 Thought: Allow but discourage passing lambdas
 
-** TODO quasiquote, unquote, unquote-splice
-** TODO Macros
-- [ ] [[https://www.youtube.com/watch?v=M4qj2ictRpg&t=22s][Gavin - Macros in ELisp]]
-- [ ] [[https://www.youtube.com/watch?v=_WLauBkO5rI][Emacs Elements - Macros]]
 ** TODO Pipeline Macros / Threading Operator
 (Streaming?)
 https://clojure.org/guides/threading_macros
 - Thread first, thread last, etc
-** TODO Colocated Docstring for =defn!=
-** TODO Conditional Operators =not=, =and=, and =or=
-=and EXPR...= - left-to-right, and stop if one expr evaluates to =#f=. Otherwise =#t=
-=or= - left-to-right, stop if one expr evaluates to NOT =#f=
-** TODO Function Calling Arguments - Lambda Lists
-Support richer lambda list
+** TODO Rest, optional, and keyword function arguments
+Macros support =& rest=; ordinary functions require an exact positional arity.
 
-Alternate Idea: Only support =rest= - but build convenience for:
-- Supplying value for optional arg from =rest= list
-- Extracting keyword argument from =rest= list
-
-- [ ] =optional=
-- [ ] =rest=
-- [ ] =keyword= arguments
-
-** DONE Math Operator =-=
 ** TODO Pinning Symbols in Pattern Matches
 
 Using the *value* of symbol instead of symbol
@@ -289,10 +192,9 @@ Local variable access is relative to base pointer
 Removes need for Env - Env is implicit (?)
 
 Wait... how do closures work?
-** TODO Pretty Printing Code and S-Expressions
 * live on
-** TODO Init File
-Goal: Replace =/scripts/serve.sh= hack w/ proper init rcfile load path
+** TODO Default init file discovery
+=vrsd --init PATH= loads an explicit script; choose a default config path.
 
 ** TODO Log File
 Goal: Introspect running runtime via logs
@@ -383,9 +285,6 @@ pub(crate) fn call_fn() -> Lambda {
     }
 }
 #+end_src
-
-** DONE Replace native service syntax builders
-=srv!= and =spawn_srv!= are defined in Lyric; the native adapters are removed.
 
 * tooling
 ** TODO Inferior VRS Mode in Emacs

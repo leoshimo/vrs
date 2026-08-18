@@ -1,6 +1,6 @@
 #+TITLE: Design Notes
 
-Scratch pad for high level design notes and ideas
+Design sketches and proposals. See [[file:docs/concepts.md][Core Concepts]] for the current implementation.
 
 * Mission and Approach
 
