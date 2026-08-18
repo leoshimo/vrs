@@ -530,7 +530,7 @@ request resets its session; effects already performed cannot be undone.
 These helpers require a daemon built from this version of VRS; rebuild and restart
 your chosen runtime after updating. The earlier
 `vrs-browse-functions-minibuffer` name remains an alias for `vrs-browse-functions`.
-The dedicated [Working in Emacs guide](emacs/guide.org) covers these interactions
+The dedicated [Working in Emacs guide](docs/guide-emacs.org) covers these interactions
 in Org format, with all example definitions inline. Paste its setup into
 `scratch.ll` to choose values and fields, build or execute actions from literals
 and calls, inspect a transcript, and bring a GUI choice back into source.

@@ -386,7 +386,7 @@ the resulting call in source and an explicit action to execute it.
 The Emacs commands are integrated. =vrs-browse-functions= uses Emacs completion;
 =vrsjmp-browse-functions= returns a call chosen in the GUI to the editor.
 Both paths preserve values and quoting. The Emacs path works without the GUI.
-See [[file:emacs/guide.org][Working in Emacs]] for a guide with pasteable examples.
+See [[file:docs/guide-emacs.org][Working in Emacs]] for a guide with pasteable examples.
 
 ** TODO Source locations for definitions and goto-definition
 
