@@ -300,6 +300,20 @@ For an action that asks for arguments and then runs a function, use:
 `call_interactively` shows one selection page per argument, using the registered
 completion providers. Selecting the last argument runs the function.
 
+## Choosing Values in Vrsjmp
+
+Choose one element of a list, or one field's value from a record:
+
+```lyric
+(vrsjmp_choose '("tea" "coffee" "water"))
+(vrsjmp_choose (get_windows))
+(vrsjmp_choose_field (active_tab))
+```
+
+The call waits for your selection. `vrsjmp_choose_field` shows keys and values;
+it accepts keyword/value records and tagged entities. Empty input is an error.
+Cancelling the picker raises an error in the waiting call.
+
 ## Processes and Messages
 
 `spawn` starts a process. `self` returns the current process's ID; `send` and
