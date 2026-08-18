@@ -10,6 +10,16 @@ Current: Hypermedia Client and VRSJMP Command Bar Client
 - [X] Hypermedia Client Design
 - [X] VRSJMP Command Bar Client
 
+*** TODO Revisit pub/sub wakeups for GUI input requests
+
+For now, keep pending input requests in the existing =:vrsjmp= service and
+publish =:show= on its topic. The GUI receives notifications on its ordinary
+client connection, then asks =begin_interaction= and =get_items= what to show.
+The GUI continues to own navigation history. Repeated wakeups may be combined;
+pub/sub is not retained and slow or disconnected subscribers can miss events.
+Revisit delivery/acknowledgments, reconnection, multiple GUI clients, and whether
+pending input should become a more general work service after using this flow.
+
 *** TODO Calendar / Agenda page
 
 Show upcoming events in vrsjmp, with filtering and actions to open an event,
