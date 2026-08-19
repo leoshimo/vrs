@@ -48,6 +48,7 @@ To this end:
 - `vrsjmp`: A GUI launch bar client that can also return choices to the editor
 
 [Source-embedded debug tools](docs/source-embedded-debug-tools.md) ·
+[Remote execution](docs/remote-execution.md) ·
 [Core Concepts](docs/concepts.md) · [Demos](docs/demos.md) ·
 [Design Notes](DESIGN.org) · [AI and VRS](docs/ai.md)
 
