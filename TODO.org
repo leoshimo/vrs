@@ -99,6 +99,13 @@ Goal: Replicate Emacs-like Development Workflow to build VRS software
 E.g. Emacs Eval, SLIME-like workflows for molding Software
 
 * runtime
+** TODO Revisit service call deadlines and cancellation
+
+Reconsider the default five-second =call= timeout and make cancellation of
+timed-out work explicit. Define how cancellation reaches local and remote
+callees, how handlers clean up, and what happens to late replies and effects
+already performed. A caller timing out currently leaves the callee running.
+
 ** TODO Add streaming interfaces
 
 Expose incremental I/O and API event streams to Lyric. Look at
