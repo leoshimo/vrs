@@ -45,8 +45,7 @@ results, and source locations with `vrsctl dbg` or `vrsctl dbg --web`. Both
 viewers can follow new observations or inspect previous invocations, including
 nested callbacks. `C-g` still cancels the whole editor evaluation.
 
-See [Source-embedded debug tools](source-embedded-debug-tools.md) for the execution
-contract, source-transcript filters, browser workflow, and pub/sub data interface.
+See [Debugging](guide-debug.org) for a pasteable example and the viewer controls.
 
 ## Services
 
