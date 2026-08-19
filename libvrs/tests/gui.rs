@@ -29,7 +29,11 @@ async fn fixture() -> (Runtime, Arc<Client>) {
         .filter(|form| matches!(form, Form::List(items)
             if items.first() == Some(&Form::symbol("defn!"))
                 && matches!(items.get(1), Some(Form::Symbol(name))
-                    if ["choose_items", "function_item", "function_items", "make_item", "on_click"].contains(&name.as_str()))))
+                    if ["choose_items", "function_item", "function_items", "make_item", "on_click",
+                        "get_items", "push_page", "command_items", "browse_services_page", "service_items",
+                        "browse_service_page", "interface_function_items", "service_call_metadata",
+                        "invoke_service_function", "continue_service_call", "service_call_expression",
+                        "service_call_items"].contains(&name.as_str()))))
         .map(|form| form.to_string())
         .collect::<Vec<_>>()
         .join("\n");
@@ -53,7 +57,14 @@ async fn fixture() -> (Runtime, Arc<Client>) {
           (def page (get pending 2))
           (apply (eval (get page :get_items))
                  (concat (list (get pending 0)) (get page :args) (list query))))
-        (spawn_srv! :vrsjmp :interface '(enqueue_input finish choice_rows on_click))
+        (defn! favorite_items () '())
+        (defn! scheduler_items (query) '())
+        (defn! macro_items (query) '())
+        (defn! interactive_items (context) '())
+        (defn! query_items (query) '())
+        (defn! make_item_ex (title command hints) (make_item title command))
+        (defn! palette_status () :ready)
+        (spawn_srv! :vrsjmp :interface '(enqueue_input finish choice_rows on_click get_items palette_status))
     "#,
             ))
             .unwrap(),
@@ -68,6 +79,126 @@ async fn fixture() -> (Runtime, Arc<Client>) {
     let (client, _) = connect(&runtime).await;
     evaluate(&client, "(bind_srv :vrsjmp)").await;
     (runtime, client)
+}
+
+#[tokio::test]
+async fn service_browser_navigates_unbound_interfaces_and_calls_without_shadowing_callbacks() {
+    let (runtime, palette) = fixture().await;
+    let (owner, _) = connect(&runtime).await;
+    evaluate(
+        &owner,
+        r#"(begin
+          (def hits '())
+          (def queries 0)
+          (defn! browser_objects ()
+            (set queries (+ queries 1))
+            '((:browser/item :title "First" :id 1) (:browser/item :title "Second" :id 2)
+              (:browser/item :title "Second" :id 2) (:wrong/item :id 3)))
+          (defn! get_items (object text)
+            "Record a browser selection" (interactive :browser/item :browser/text)
+            (set hits (push hits (list object text))) :recorded)
+          (defn! browser_status () (list hits queries))
+          (defn! browser_plain (value) value)
+          (set_entity_completions :browser/item 'browser_objects)
+          (spawn_srv! :browser_fixture :interface '(get_items browser_objects browser_status browser_plain))
+          (spawn_srv! :browser_empty :interface '()))"#,
+    )
+    .await;
+    for (source, expected) in [
+        (
+            r#"(begin
+              (def entry (get (get_items 'command_items '(()) "Browse Services") 0))
+              (def page (on_click entry))
+              (list (get entry :title) (get page :get_items) (get page :title)))"#,
+            r#"("Browse Services" service_items "Browse Services")"#,
+        ),
+        (
+            r#"(begin
+              (def entry (get (get_items 'service_items '() "browser_fixture") 0))
+              (def page (on_click entry))
+              (list (get entry :title) (get page :get_items) (get page :args)))"#,
+            r#"(":browser_fixture" interface_function_items (:browser_fixture))"#,
+        ),
+        (
+            r#"(begin
+              (def methods (get_items 'interface_function_items '(:browser_fixture) "Record a browser selection"))
+              (list (len methods) (get (get methods 0) :title) (get (get methods 0) :aside)))"#,
+            r#"(1 "(get_items object text)" ":browser_fixture")"#,
+        ),
+        (
+            r#"(get_items 'interface_function_items '(:browser_empty) "")"#,
+            "()",
+        ),
+        (
+            r#"(call (find_srv :browser_fixture) '(:browser_status))"#,
+            "(() 0)",
+        ),
+        (
+            r#"(begin
+              (def page (on_click (get methods 0)))
+              (def choices (get_items (get page :get_items) (get page :args) ""))
+              (list (get page :get_items) (len choices)))"#,
+            "(service_call_items 2)",
+        ),
+        (
+            r#"(call (find_srv :browser_fixture) '(:browser_status))"#,
+            "(() 1)",
+        ),
+        (
+            r#"(begin
+              (def page (on_click (get choices 1)))
+              (def choices (get_items (get page :get_items) (get page :args) "\"hello\""))
+              (list (len choices) (on_click (get choices 0))))"#,
+            "(1 :close)",
+        ),
+        (
+            r#"(call (find_srv :browser_fixture) '(:browser_status))"#,
+            r#"((((:browser/item :title "Second" :id 2) "hello")) 1)"#,
+        ),
+        // A colliding export must not replace the palette's get_items callback.
+        (
+            r#"(get (get (get_items 'interface_function_items '(:gui_fixture) "") 0) :title)"#,
+            r#""(gui_echo value)""#,
+        ),
+        // Browsing and invoking the palette's own exports must not self-call.
+        (
+            r#"(on_click (get (get_items 'interface_function_items '(:vrsjmp) "palette_status") 0))"#,
+            ":close",
+        ),
+        (
+            r#"(get_items 'service_call_items '(:browser_fixture browser_plain ()) "(")"#,
+            "()",
+        ),
+        (
+            r#"(on_click (get (get_items 'service_call_items '(:browser_fixture browser_plain ()) "42") 0))"#,
+            ":close",
+        ),
+    ] {
+        assert_eq!(
+            evaluate(&palette, source).await,
+            Form::from_expr(expected).unwrap(),
+            "{source}"
+        );
+    }
+
+    evaluate(
+        &owner,
+        "(spawn_srv! :browser_fixture :interface '(browser_status))",
+    )
+    .await;
+    assert_eq!(
+        evaluate(
+            &palette,
+            r#"(map (get_items 'interface_function_items '(:browser_fixture) "")
+                    (fn (row) (get row :title)))"#,
+        )
+        .await,
+        Form::from_expr(r#"("(browser_status)")"#).unwrap()
+    );
+    assert_eq!(
+        evaluate(&palette, "(err? (try (on_click (get methods 0))))").await,
+        Form::from_expr("true").unwrap()
+    );
 }
 
 #[tokio::test]
