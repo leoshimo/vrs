@@ -14,7 +14,7 @@ In Emacs's `vrs-mode`, put point on or just after the closing parenthesis:
 | Keys | Action |
 | --- | --- |
 | `C-c C-e` | Evaluate the expression. |
-| `C-u C-c C-e` | Replace it with the result. |
+| `C-u C-c C-e` | Retain the result as literal source, including needed quotes. |
 | `C-c C-r` | Evaluate the selected region. |
 | `C-u C-c C-r` | Replace the region with its result. |
 | `C-g` | Cancel a waiting evaluation and reset its session; keep the source. |
@@ -113,8 +113,8 @@ remaining arguments, and replaces the entity expression with the call.
 `:cmd` for recording. `vrs-choose-field` selects a field from a record.
 
 The choice can happen in vrsjmp and still return to the editor: run
-`M-x vrsjmp-browse-functions`, or evaluate `(vrsjmp_browse_functions)` with
-`C-u C-c C-e`. The GUI uses the functions bound in its own service; Enter returns
+`M-x vrsjmp-browse-functions`, or use `M-x vrs-insert-evaluated-code` on
+`(vrsjmp_browse_functions)`. The GUI uses the functions bound in its own service; Enter returns
 a call with placeholders, and **Cmd-K → Fill arguments** fills it first.
 The editor retains the returned call as source. Keep vrsjmp running for this
 path; the Emacs commands work without it. Within vrsjmp itself, the
@@ -207,7 +207,8 @@ You can also evaluate definitions and an inspection together:
   (macroexpand_1 '(srv! :test :interface '(echo))))
 ```
 
-Use `C-u C-c C-e` at the end of this block to replace it with the expansion.
+Use `M-x vrs-insert-evaluated-code` at the end of this block to replace it with
+the expansion as unquoted code.
 
 ### Scope and Helpers
 
