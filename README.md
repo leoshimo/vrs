@@ -48,7 +48,6 @@ To this end:
 - `vrsjmp`: A GUI launch bar client that can also return choices to the editor
 
 [Debugging](docs/guide-debug.org) ·
-[Remote execution](docs/remote-execution.md) ·
 [Core Concepts](docs/concepts.md) · [Demos](docs/demos.md) ·
 [Design Notes](DESIGN.org) · [AI and VRS](docs/ai.md)
 
@@ -89,14 +88,17 @@ ordinary `cargo run` development. Append `:PORT` to either `tcp://HOST` or
 MagicDNS names are resolved by OpenSSH without exposing the VRS listener. The
 listener remains bound to localhost.
 
-VRS keeps each link open, exchanges service snapshots and registration
-changes, and caches them locally. `find_srv` and `ls_srv` only query that cache;
-they do not contact nodes per call. The last registration observed locally wins
-when a service name exists on several nodes. Remote `ls_srv` entries include a
-`:node` string. Each side sends a heartbeat every five seconds. After fifteen
-seconds without a valid message, the link is closed and that node's cached
-services are removed. Configured outgoing links keep reconnecting every two
-seconds.
+Keep a service near its data, tools, or hardware while editing it from your
+laptop. Send a local file to a connected node:
+
+```sh
+vrsctl --node home-server ./scripts/feedbin.ll
+```
+
+The source runs there; its functions become available here through `bind_srv`.
+Edit and resend it, and existing bindings follow the replacement. `remote!`
+does the same for an inline block. The [speaker example](docs/concepts.md#nodes-and-peering)
+puts sound on another Mac and calls it from a laptop.
 
 To run two nodes on one machine, give each daemon a distinct local socket,
 node name, and listener port:
@@ -106,8 +108,8 @@ cargo run --bin vrsd -- --node alpha --node-port 8773 --socket /tmp/alpha.socket
 cargo run --bin vrsd -- --node beta  --node-port 8774 --socket /tmp/beta.socket
 ```
 
-This is deliberately only service discovery and message routing. It does not
-restart services or guarantee singletons. Sending to a disconnected node fails
+Both nodes must run compatible builds. Remote execution does not install a
+restart policy or guarantee singletons. Sending to a disconnected node fails
 immediately. Every `call`, whether local or remote, fails after five seconds if
 the service has not replied; calls are never retried automatically. A process
 can change its default with `(call_timeout 30)`.
@@ -310,7 +312,7 @@ Each process has a dedicated mailbox that it can poll to receive messages:
 ### Services - Registry, Discovery, Binding
 
 A service is a process registered under a name, with an exported interface.
-`spawn_srv!` starts a child service and waits for registration:
+`spawn_srv!` starts a child service and returns once it can receive messages:
 
 ```lyric
 (defn! echo (message) message)

@@ -80,9 +80,9 @@ To create a service, define its functions and list the ones to expose:
 (echo "hello") # => "hello"
 ```
 
-`spawn_srv!` starts a child service and returns when it is ready. Use `srv!`
-instead when the current process should become the service; it keeps waiting
-for requests. Define exported functions before starting the service.
+`spawn_srv!` returns the child's PID after registration and subscriptions are
+ready, or raises an error if the child exits first. Use `srv!` when the current
+process should become the service. Define exported functions before startup.
 
 ## Building a Call in the Editor
 
@@ -370,6 +370,18 @@ Subscribe to a topic to receive its future publications:
 
 Earlier publications are not replayed to new subscribers.
 
+Services can react to topics alongside their ordinary calls:
+
+```lyric
+(defn! celebrate (task) (exec "unicornleap"))
+(spawn_srv! :celebration :interface '()
+  :topics '((:todo_completed celebrate)))
+```
+
+Each handler receives the published value and shares the service's state.
+Events are node-local and best-effort; publishing does not wait for handlers
+to finish.
+
 ## External Commands
 
 `exec` returns a program's exit status, stdout, and stderr. `decode` turns text
@@ -404,7 +416,29 @@ Connect another node to discover and call its services by name:
 (ls_srv)
 ```
 
-Commands run on the node hosting the service.
+Put a capability on the machine that has it. With a connected Mac named `home`,
+evaluate this from your laptop:
+
+```lyric
+(remote! "home"
+  (defn! announce (message) (exec "say" message))
+  (spawn_srv! :speaker :interface '(announce)))
+
+(bind_srv :speaker)
+(announce "The backup has finished.")
+```
+
+The home Mac speaks. Change the implementation and evaluate it again; existing
+bindings follow the replacement. Services started by `remote!` are discoverable
+on the calling node when it returns. For an independently starting service,
+`(wait_srv :speaker :pid expected)` can wait for a particular instance.
+
+`vrsctl --node home ./speaker.ll` sends a local file's source; the file need not
+exist on `home`. `vrsctl --node home` opens a persistent remote REPL, also usable
+as Emacs's `vrs-vrsctl-command`. Code runs with the destination's files and tools;
+dependencies and startup configuration are separate. Both nodes need compatible
+builds. Cancellation stops waiting without rolling back effects, and failed
+evaluations are never automatically replayed.
 
 ## Introspection
 
