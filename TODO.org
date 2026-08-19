@@ -134,6 +134,14 @@ cancellation works, using the existing process/service/message model.
 See [[*Device-local actions in hypermedia clients]] and
 [[*Per-process responder chains for function calls]].
 
+** TODO More source-embedded debug tools
+
+Add a =log!= macro for deliberate logging alongside =dbg!= observations.
+Explore a TUI for the same inspection tasks as the CLI and web viewer.
+Add alternate web visualizations of result data, including an HTML render view.
+Revisit implementing bounded observation history with ordinary VRS services or
+retained pub/sub topics; keep the synchronous VM observation hook nonblocking.
+
 ** TODO Runtime hooks inspired by Ruby TracePoint
 
 Provide hooks for observing Lyric execution without editing the observed code.
