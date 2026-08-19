@@ -310,6 +310,11 @@ Add an entry to `favorite_items` that opens the page:
 
 Enter runs a row's `:on_click` expression. Escape returns to the previous page.
 Optional `:actions` use the same row format and appear in the Cmd-K menu.
+The menu initially selects the first secondary action when available. An action
+with the same `:on_click` form as its row is treated as primary and grouped above
+the secondary actions. Typing reveals a search field at the bottom; Escape closes the menu
+and restores the page search. Actions can include an optional `:icon` string:
+`"open"`, `"link"`, `"copy"`, or `"command"` (the default).
 Reload your edits with `(run "./scripts/vrsjmp.ll")`.
 
 For an action that asks for arguments and then runs a function, use:
