@@ -1,0 +1,267 @@
+#+TITLE: A short guide to Lyric
+#+OPTIONS: toc:2 num:nil
+
+Lyric is a small, lexically scoped Lisp. Functions are values, programs are
+s-expressions, and quotation lets you work with code as data. This guide covers
+the language; the [[file:../README.md][VRS README]] covers the runtime and clients.
+
+Each block below can run on its own. With VRS running, paste a block into
+=scratch.ll= in Emacs =vrs-mode= and use =C-u C-c C-c= to see a transcript, or
+enter its expressions one at a time in the =vrsctl= REPL. Lines marked =# =>=
+show representative results and are ordinary comments. See the
+[[file:../README.md][README]] for Emacs setup. The [[file:../lyric/README.md][Lyric reference]] gives the detailed quotation,
+formatting, and macro contracts.
+
+* Values and bindings
+
+Numbers, strings, keywords, booleans, and =nil= evaluate to themselves.
+Symbols name bindings. Ordinary calls use =(function argument ...)= and
+evaluate the function and arguments from left to right. =#= starts a line comment.
+
+#+begin_src vrs
+(+ 20 22)                          # => 42
+(list 42 "hello" :ready true nil)   # => (42 "hello" :ready true nil)
+
+(def message "hello lyric!")
+message                           # => "hello lyric!"
+(set message "goodbye lyric!")
+message                           # => "goodbye lyric!"
+#+end_src
+
+=def= creates or replaces a binding in the current scope. =set= updates the
+nearest existing binding, and errors if none exists. =let= introduces local
+bindings; their initializers run in the surrounding scope. =begin= evaluates
+several expressions in order and returns the last value without a new scope.
+
+#+begin_src vrs
+(def amount 40)
+(let ((amount 2) (original amount))
+  (+ original amount))             # => 42
+amount                             # => 40
+(begin (set amount (+ amount 1))
+       (+ amount 1))               # => 42
+#+end_src
+
+Regular strings use escapes such as =\n= and =\"=. Triple-quoted strings
+preserve quotes and backslashes. Indented multiline blocks drop the opening
+newline and common indentation; the final newline remains. Neither string
+syntax interpolates expressions.
+
+#+begin_src vrs
+(def text """
+    say "hello"
+    C:\notes
+    """)
+text                               # => "say \"hello\"\nC:\\notes\n"
+#+end_src
+
+* Functions
+
+=fn= and =lambda= are synonyms. =defn!= names a function, and the last body
+expression is its return value. The =!= marks a macro call; we'll define one
+below. Ordinary function calls need no marker.
+
+#+begin_src vrs
+(defn! double (x)
+  (+ x x))
+(double 21)                        # => 42
+((fn (x) (+ x 1)) 41)               # => 42
+
+(defn! with_value (x f)
+  (f x))
+(with_value 21 double)              # => 42
+(with_value 41 (lambda (x) (+ x 1))) # => 42
+#+end_src
+
+Functions close over their lexical bindings, including bindings updated with
+=set=:
+
+#+begin_src vrs
+(defn! make_counter (count)
+  (fn ()
+    (set count (+ count 1))
+    count))
+(def next (make_counter 0))
+(next)                             # => 1
+(next)                             # => 2
+#+end_src
+
+* Lists and keyword fields
+
+Quote (='=) returns a form as data. =list= constructs a list from computed
+values. The empty list is ='()=, distinct from =nil=. =get= uses zero-based
+indexes, accepts negative indexes from the end, and returns =nil= when absent.
+=push= returns a new list with an element appended; it leaves the original
+value unchanged.
+
+#+begin_src vrs
+(def numbers '(1 2 3))
+(get numbers 0)                     # => 1
+(get numbers -1)                    # => 3
+(get numbers 9)                     # => nil
+(contains? numbers 2)               # => true
+(len numbers)                      # => 3
+(push numbers 4)                    # => (1 2 3 4)
+numbers                            # => (1 2 3)
+(eq? '() nil)                       # => false
+#+end_src
+
+Records are ordinary flat lists with keyword/value fields. With a keyword,
+=get= finds its first occurrence and returns the following element.
+=map= and =filter= take the list first, then the function. =apply= calls a
+function with a list of argument values.
+
+#+begin_src vrs
+(def item '(:title "Notebook" :pages 80))
+(get item :title)                   # => "Notebook"
+(get item :missing)                 # => nil
+(list :title (get item :title)
+      :pages (+ (get item :pages) 1))
+# => (:title "Notebook" :pages 81)
+
+(map '(1 2 3) (fn (x) (+ x x)))     # => (2 4 6)
+(filter '(0 1 0 2) (fn (x) (not? (eq? x 0))))
+# => (1 2)
+(apply + '(10 20 12))               # => 42
+#+end_src
+
+* Control flow and patterns
+
+=if= evaluates only the selected branch; an omitted else branch returns
+=nil=. False conditions are =nil=, =false=, =0=, =""=, and the empty list.
+Nonzero integers, nonempty strings/lists, and =true= are true conditions.
+Other types, including keywords and symbols, are invalid conditions.
+
+#+begin_src vrs
+(if (eq? 2 2) "equal" "different") # => "equal"
+(if false "yes")                   # => nil
+(if 0 "nonzero" "zero")            # => "zero"
+(not? '())                         # => true
+
+(cond ((eq? 3 1) :one)
+      ((eq? 3 2) :two)
+      (true :many))                # => :many
+(when! true (+ 20 22))              # => 42
+(and! false (error "skipped"))      # => false
+(or! nil "fallback" (error "skipped")) # => "fallback"
+#+end_src
+
+=cond= selects the first true clause. =when!=, =and!=, and =or!= are standard
+macros; =and!= and =or!= stop as soon as their result is determined and return
+the last evaluated value.
+
+=match= compares a value with patterns in order. Keywords and other literals
+match themselves, symbols bind matched values, and =_= ignores a value.
+=def= can also destructure a value, raising an error if the pattern fails.
+
+#+begin_src vrs
+(def result '(:ok (20 22)))
+(match result
+  ((:ok (a b)) (+ a b))
+  ((:err reason) reason)
+  (_ "unknown result"))            # => 42
+
+(def (:ok (left right)) result)
+(+ left right)                     # => 42
+#+end_src
+
+=try= turns a raised error into an error value; a successful result passes
+through unchanged. =err?= and =ok?= inspect that distinction. A list tagged
+=:err= is still just a list, not a raised error.
+
+#+begin_src vrs
+(try (+ 20 22))                    # => 42
+(err? (try (error "missing item"))) # => true
+(ok? (try (+ 20 22)))               # => true
+(err? '(:err "ordinary data"))      # => false
+#+end_src
+
+* Quotation and code templates
+
+Reading produces data; evaluating runs it. ='FORM= is shorthand for
+=(quote FORM)=. =pretty= returns readable text, useful for inspecting a form
+or reading it back.
+
+#+begin_src vrs
+(def code '(+ 20 22))
+code                               # => (+ 20 22)
+(get code 0)                       # => +
+(eval code)                        # => 42
+(read "(+ 20 22)")                 # => (+ 20 22)
+(eval (read "(+ 20 22)"))           # => 42
+(pretty code)                      # => "(+ 20 22)"
+(eq? (read (pretty code)) code)     # => true
+#+end_src
+
+Backtick starts a template. Comma inserts one evaluated value; comma-at
+splices the elements of an evaluated list. The template constructs code
+without running the resulting call.
+
+#+begin_src vrs
+(def base 20)
+(def extra '(10 12))
+(def code `(+ ,base ,@extra))
+code                               # => (+ 20 10 12)
+(eval code)                        # => 42
+`(values ,extra ,@extra)            # => (values (10 12) 10 12)
+#+end_src
+
+When generated code should receive a list or symbol as literal data, include
+the quote that the future call needs:
+
+#+begin_src vrs
+(def item '(:title "Notebook" :pages 80))
+(def code `(get ',item :title))
+code                               # => (get '(:title "Notebook" :pages 80) :title)
+(eval code)                        # => "Notebook"
+#+end_src
+
+Splices require lists, including ='()=; =nil= is not an empty splice. See
+the [[file:../lyric/README.md][Lyric reference's quotation section]] for nesting and evaluation rules.
+
+* Documentation and metadata
+
+A function's leading string is its docstring. =help= returns it, and =meta=
+returns a keyword-field list with the function's argument names and metadata.
+=with_meta= returns a lambda with the supplied metadata; its real argument
+names are retained. =ls_env= lists visible bindings as symbols.
+
+#+begin_src vrs
+(defn! double (x)
+  "Add a number to itself."
+  (+ x x))
+(help double)                      # => "Add a number to itself."
+(get (meta double) :args)           # => ((:name x))
+(def labelled (with_meta double '(:category :math)))
+(get (meta labelled) :category)     # => :math
+(labelled 21)                      # => 42
+(contains? (ls_env) 'double)        # => true
+#+end_src
+
+* Macros
+
+A macro receives unevaluated source arguments and returns one form to execute
+at the call site. A final =& body= parameter collects the remaining forms;
+=begin= lets the expansion contain several expressions.
+
+#+begin_src vrs
+(defmacro unless (test & body)
+  `(if ,test nil (begin ,@body)))
+
+(unless! false (+ 20 22))           # => 42
+(unless! true (error "skipped"))    # => nil
+(macroexpand_1 '(unless! false (+ 20 22)))
+# => (if false nil (begin (+ 20 22)))
+(macroexpand_1 '(defn! double (x) (+ x x)))
+# => (def double (fn (x) (+ x x)))
+#+end_src
+
+Macros expand whenever execution reaches their call, including calls inside
+existing functions. Redefining a macro changes subsequent calls. Transformers
+use their definition's lexical scope; generated code runs in the caller's scope.
+
+=macroexpand_1= expands one outer call; =macroexpand= repeats outer expansion.
+Both run the transformer, including any effects, but leave its returned code
+unevaluated. Quote the call you want to inspect. Lyric does not provide automatic
+macro hygiene; use =gensym= when introducing local names. See the
+[[file:../lyric/README.md][Lyric reference's macro section]] for scope, expansion inspection, and limits.
