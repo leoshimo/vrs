@@ -247,3 +247,29 @@ fn emacs_evaluation_against_test_runtime() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn dbg_views_share_real_recording_filters_and_editor_source_origins() -> Result<()> {
+    let runtime = TestRuntime::new()?;
+    let source = "(defn! twice (x) (+ x x))\n(dbg! (map '(2 3) twice))";
+    let request =
+        serde_json::json!({"source":source,"file":"/tmp/observe.ll","line":20,"column":1});
+    runtime.pipe_input(&["--session"], Some(&format!("{request}\n")));
+    let transcript = runtime.pipe(&["dbg", "--once", "--all", "--details"]);
+    ensure!(transcript.contains("(map '(2 3) twice)"), "{transcript}");
+    ensure!(transcript.contains("/tmp/observe.ll:21:7"), "{transcript}");
+    ensure!(transcript.contains("# arg 1: 2"), "{transcript}");
+    let json = runtime.pipe(&["dbg", "--once", "--json", "--at", "observe.ll:20:18"]);
+    // Correct source location (the inner + starts at column 18 here).
+    let history: serde_json::Value = serde_json::from_str(&json)?;
+    let records = history["records"].as_array().unwrap();
+    ensure!(
+        records
+            .iter()
+            .filter(|r| r["site"]["form"] == "(+ x x)")
+            .count()
+            == 2,
+        "{json}"
+    );
+    Ok(())
+}
