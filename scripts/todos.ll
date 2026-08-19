@@ -10,7 +10,7 @@
 
 (defn! save_todos ()
   "(save_todos) - save current state to file"
-  (fdump todos_path (list :id id :todos todos)))
+  (fdump todos_path `(:id ,id :todos ,todos)))
 
 (defn! next_id ()
   "(next_id) - Return the next ID to assign"
@@ -21,11 +21,11 @@
 (defn! add_todo (title)
   "(add_todo TITLE) - Add a new todo named TITLE"
   (def id (next_id))
-  (publish :todos_event (list :todos_created title))
+  (publish :todos_event `(:todos_created ,title))
   (set todos (push todos
-                   (list :todo
-                      :id id
-                      :title title)))
+                   `(:todo
+                  :id ,id
+                  :title ,title)))
   (save_todos))
 
 (defn! get_todos ()
@@ -41,13 +41,13 @@
   "(set_todos_done_by_id ID) - Mark the given TODO item with given ID as done "
   # filter clicked todos
   (set todos (filter todos (fn (it) (not? (contains? it id)))))
-  (publish :todos_event (list :todos_completed id))
+  (publish :todos_event `(:todos_completed ,id))
   (save_todos))
 
 (defn! clear_todos ()
   "(clear_todos) - Remove all todos"
   (set todos '())
-  (publish :todos_event (list :todos_cleared))
+  (publish :todos_event '(:todos_cleared))
   (save_todos))
 
 (spawn_srv! :todos :interface '(get_todos add_todo set_todos_done set_todos_done_by_id clear_todos))

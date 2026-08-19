@@ -90,12 +90,12 @@
   (if (not? (list? args)) (error "Page arguments must be a list"))
   (def prompt (str (or! (get page :prompt) "Choose…")))
   (def title (str (or! (get page :title) prompt)))
-  (def prepared (list :push_page :get_items (get page :get_items)
-                     :title title :prompt prompt
-                     :args (concat (list id) args)
-                     :on_cancel `(cancel_input ,id)))
+  (def prepared `(:push_page :get_items ,(get page :get_items)
+                 :title ,title :prompt ,prompt
+                 :args ,(concat (list id) args)
+                 :on_cancel (cancel_input ,id)))
   (pending_requests)
-  (set pending_inputs (push pending_inputs (list :id id :owner owner :page prepared)))
+  (set pending_inputs (push pending_inputs `(:id ,id :owner ,owner :page ,prepared)))
   (show_gui)
   :ok)
 
@@ -117,9 +117,9 @@
 
 (defn! pending_input_items (query)
   (fuzzy_match query (map (pending_requests) (fn (request)
-    (list :title (get (get request :page) :title) :subtitle "Waiting for input"
-          :on_click `(resume_input ,(get request :id))
-          :actions (list (make_item "Cancel request" `(cancel_input ,(get request :id))))))) display))
+    `(:title ,(get (get request :page) :title) :subtitle "Waiting for input"
+      :on_click (resume_input ,(get request :id))
+      :actions ,(list (make_item "Cancel request" `(cancel_input ,(get request :id)))))))))
 
 (defn! get_items (callback args query)
   "Render a named page using fixed argument values followed by the input text"
@@ -127,7 +127,7 @@
 
 (defn! push_page (callback prompt)
   "Return an instruction to push a lazily rendered page in the GUI"
-  (list :push_page :get_items callback :prompt prompt))
+  `(:push_page :get_items ,callback :prompt ,prompt))
 
 # TODO: Revisit the begin_interaction hook: separate immediate page restoration
 # from slower context enrichment.
@@ -139,7 +139,7 @@
     (let ((context (try (get_context))))
       (+ (push_page 'root_items "Search commands…")
          '(:title "Home")
-         (list :args (list (if (list? context) context '())))))))
+         `(:args ,(list (if (list? context) context '())))))))
 
 (defn! root_items (context query)
   "Retrieve the root command palette's final ordered items"
@@ -173,16 +173,16 @@
 
 (defn! make_item (title command)
   "Create an item with TITLE and COMMAND"
-  (list :title title :on_click command))
+  `(:title ,title :on_click ,command))
 
 (defn! make_item_ex (title command hints)
   "Create an item with TITLE and COMMAND and HINTS"
-  (list :hints hints :title title :on_click command))
+  `(:hints ,hints :title ,title :on_click ,command))
 
 (defn! input_page (id callback args title prompt)
   (input_request id)
-  (list :push_page :get_items callback :args (concat (list id) args)
-        :title title :prompt prompt :on_cancel `(cancel_input ,id)))
+  `(:push_page :get_items ,callback :args ,(concat (list id) args)
+    :title ,title :prompt ,prompt :on_cancel (cancel_input ,id)))
 
 (defn! choose_items (id choices mode query)
   (input_request id)
@@ -191,17 +191,17 @@
     (def value (if fields (get choice 1) choice))
     (def title (if fields (display (get choice 0)) (choice_label value)))
     (def detail (if (list? value) (display value) (choice_label value)))
-    (list :title title
-          :subtitle (if (eq? title detail) "" detail)
-          :on_click `(finish_input ,id ',value)))))
+    `(:title ,title
+      :subtitle ,(if (eq? title detail) "" detail)
+      :on_click (finish_input ,id ',value)))))
   (fuzzy_match query rows (fn (row)
     (list (get row :title) (get row :subtitle)))))
 
 (defn! function_item (name)
   (def metadata (meta (eval name)))
-  (list :title (display (call_form name '()))
-        :subtitle (get metadata :doc)
-        :aside (display (get metadata :service))))
+  `(:title ,(display (call_form name '()))
+    :subtitle ,(get metadata :doc)
+    :aside ,(display (get metadata :service))))
 
 (defn! browse_functions_page ()
   (+ (push_page 'service_function_items "Search functions or services…")
@@ -210,7 +210,7 @@
 (defn! service_function_items (query)
   (map (service_functions query) (fn (name)
     (+ (function_item name)
-       (list :on_click `(call_interactively ',name))))))
+       `(:on_click (call_interactively ',name))))))
 
 (defn! function_items (id query)
   "Return call forms to the editor without running the selected function."
@@ -219,9 +219,9 @@
     (fn (name)
       (def form (call_form name '()))
       (+ (function_item name)
-         (list :on_click `(finish_input ,id ',form)
-               :actions (list
-                 (make_item "Fill arguments" `(fill_call ,id ',name '()))))))))
+         `(:on_click (finish_input ,id ',form)
+           :actions ,(list
+             (make_item "Fill arguments" `(fill_call ,id ',name '()))))))))
 
 (defn! fill_call (id name arguments)
   "Use interactive completion providers to build source without executing it."
@@ -243,10 +243,10 @@
   (def type (get arg :type))
   (if (empty? (get_entity_completions type))
     (error (format "No completions configured for {}" (display type))))
-  (map (fuzzy_match query (argument_entities type) display) (fn (entity)
+  (map (fuzzy_match query (argument_entities type)) (fn (entity)
     (+ (make_item (entity_title entity)
          `(fill_call_value ,id ',name ',arguments ',entity))
-       (list :subtitle (get entity :app))))))
+       `(:subtitle ,(get entity :app))))))
 
 (defn! interactive_items (context)
   # One row per command, not one row per captured object. Window commands live
@@ -265,19 +265,19 @@
                        (command_title name))
            (if (empty? matches) choose
              `(continue_call ',name '(,(get matches 0)))))
-         (list :actions
-           (+ (map matches (fn (entity)
-                (make_item (entity_title entity)
-                  `(continue_call ',name '(,entity)))))
-              (let ((args (get (meta (eval name)) :args)))
-                (if (empty? args) '()
-                  (if (empty? (get_entity_completions (get (get args 0) :type))) '()
-                    (list (make_item "Choose…" choose)))))))))))
+         `(:actions
+       ,(+ (map matches (fn (entity)
+            (make_item (entity_title entity)
+              `(continue_call ',name '(,entity)))))
+          (let ((args (get (meta (eval name)) :args)))
+            (if (empty? args) '()
+              (if (empty? (get_entity_completions (get (get args 0) :type))) '()
+                (list (make_item "Choose…" choose)))))))))))
 
 (defn! save_page (page)
   "Save to Read Later"
   (interactive :web/page)
-  (def result (feedbin_call (list :feedbin_save (get page :url) (get page :title))))
+  (def result (feedbin_call `(:feedbin_save ,(get page :url) ,(get page :title))))
   (if (empty? result) (error "Feedbin did not save the page. Check its connection and authentication.") result))
 
 (defn! copy_page_url (page)
@@ -302,11 +302,11 @@
       (def type (get arg :type))
       (def choices (and! (not? (eq? type nil))
                         (not? (empty? (get_entity_completions type)))))
-      (list :push_page :get_items 'call_items
-            :args (list name values)
-            :title (command_title name)
-            :prompt (format "{} · {}{}" (display name) (display (get arg :name))
-                       (if choices "" " · e.g. \"hello\", 42, '(…)"))))))
+      `(:push_page :get_items call_items
+        :args ,(list name values)
+        :title ,(command_title name)
+        :prompt ,(format "{} · {}{}" (display name) (display (get arg :name))
+                   (if choices "" " · e.g. \"hello\", 42, '(…)"))))))
 
 (defn! call_expression (name values source)
   (continue_call name (push values (eval (read source)))))
@@ -318,15 +318,15 @@
   (if (empty? providers)
     (if (or! (eq? query "") (err? (try (read query)))) '()
       (list (make_item (str "Use " query) `(call_expression ',name ',values ,query))))
-    (map (fuzzy_match query (argument_entities type) display) (fn (entity)
+    (map (fuzzy_match query (argument_entities type)) (fn (entity)
       (+ (make_item (or! (get entity :title) (entity_title entity))
            `(continue_call ',name ',(push values entity)))
-         (list :subtitle (if (eq? type :os/app)
-                           (get entity :bundle_id)
-                           (get entity :app))
-               :aside (if (get entity :id) (str (get entity :id)) nil)
-               :actions (+ (entity_actions entity)
-                           (if (eq? type :os/window) (window_actions entity) '()))))))))
+         `(:subtitle ,(if (eq? type :os/app)
+                       (get entity :bundle_id)
+                       (get entity :app))
+           :aside ,(if (get entity :id) (str (get entity :id)) nil)
+           :actions ,(+ (entity_actions entity)
+                       (if (eq? type :os/window) (window_actions entity) '()))))))))
 
 (defn! entity_actions (entity)
   "Secondary actions come from the commands imported into this service"
@@ -406,7 +406,7 @@
   (def create (if (eq? title "") '(error "Task title is empty")
                  `(things_add ,title "")))
   (+ (list (+ (make_item "Add to Things Inbox" create)
-              (list :subtitle (if (eq? title "") nil title))))
+              `(:subtitle ,(if (eq? title "") nil title))))
      (safari_task_items context)
      (matching_task_items title)))
 
@@ -420,7 +420,7 @@
         (fn (task)
           (def excerpt (match_excerpt query (get task :notes)))
           (+ (make_item (get task :title) `(open_things_task ',task))
-             (list :subtitle (if excerpt excerpt (get task :notes)) :aside "Things")))))))
+             `(:subtitle ,(if excerpt excerpt (get task :notes)) :aside "Things")))))))
 
 (defn! safari_task_items (context)
   # Use the captured origin, not whichever app is focused after opening jmp.
@@ -437,7 +437,7 @@
             (def title (if (get page :title) (trim_text (get page :title)) ""))
             (if (eq? title "") (set title url))
             (list (+ (make_item "Add Safari Tab to Things" `(things_add ,title ,url))
-                     (list :subtitle title)))))))))
+                     `(:subtitle ,title)))))))))
 
 (defn! feedbin_call (message)
   "Let transport errors reach the palette toast rather than masquerading as no results"
@@ -469,7 +469,7 @@
       (feedbin_call '(:feedbin_saved_pages 20))
       (let ((collection (pages_collection)))
         (if collection
-          (feedbin_call (list :feedbin_search_in collection query 20))
+          (feedbin_call `(:feedbin_search_in ,collection ,query 20))
           '()))))
   (map (filter entries (fn (entry) (if (list? entry) (get entry :url) false))) (fn (entry)
     (def url (get entry :url))
@@ -477,12 +477,12 @@
     (def host (get (split "/" url) 2))
     (def saved (get entry :created_at))
     (+ (make_item title `(open_url ,url))
-       (list :subtitle (str (if host host url)
-                           (if saved (str " · Saved " (get (split "T" saved) 0)) ""))
-             :actions (list
-               (make_item "Open in Browser" `(open_url ,url))
-               (make_item "Copy URL" `(set_clipboard ,url))
-               (make_item "Copy Title and URL" `(set_clipboard ,(str title "\n" url)))))))))
+       `(:subtitle ,(str (if host host url)
+                       (if saved (str " · Saved " (get (split "T" saved) 0)) ""))
+         :actions ,(list
+           (make_item "Open in Browser" `(open_url ,url))
+           (make_item "Copy URL" `(set_clipboard ,url))
+           (make_item "Copy Title and URL" `(set_clipboard ,(str title "\n" url)))))))))
 
 (def notes_cache nil)
 (defn! apple_notes_page ()
@@ -490,7 +490,7 @@
   (+ (push_page 'apple_notes_items "Search Apple Notes…") '(:title "Apple Notes")))
 
 (defn! apple_notes_items (query)
-  (map (fuzzy_match query notes_cache display) (fn (note)
+  (map (fuzzy_match query notes_cache) (fn (note)
     (make_item (get note :title) `(open_note ,(get note :id))))))
 
 (def stickies_get_cache '())
@@ -499,14 +499,14 @@
   (+ (push_page 'stickies_items "Search Stickies…") '(:title "Stickies")))
 
 (defn! stickies_items (query)
-  (map (fuzzy_match query stickies_get_cache display) (fn (note)
+  (map (fuzzy_match query stickies_get_cache) (fn (note)
     (make_item (get note :title) `(stickies_open ,(get note :title))))))
 
 (def tailscale_cache nil)
 (defn! tailscale_page ()
   (set tailscale_cache (get_tailscale_snapshot))
   (+ (push_page 'tailscale_items "Search devices and web endpoints…")
-     (list :title (str "Tailscale · " (get tailscale_cache :summary)))))
+     `(:title ,(str "Tailscale · " (get tailscale_cache :summary)))))
 
 (defn! tailscale_ping (device)
   (def result (ping_tailscale_device device))
@@ -524,16 +524,16 @@
                      (fn (field) (not? (eq? (get device (get field 0)) nil)))))
   (+ (make_item (get device :title)
        (if address `(set_clipboard ,address) '(error "This device has no address")))
-     (list :subtitle (str (or! (get device :dns) (get device :hostname))
-                         (if address (str " · " address) ""))
-           :aside (str (get device :os) " · "
-                       (if (get device :online) "Online" "Offline")
-                       (if (get device :self) " · This device" ""))
-           :actions (+ (map copies (fn (field)
-                         (make_item (get field 1) `(set_clipboard ,(get device (get field 0))))))
-                       (if (or! (get device :self)
-                                (not? (or! (get device :ipv4) (get device :ipv6)))) '()
-                         (list (make_item "Ping Device" `(tailscale_ping ',device))))))))
+     `(:subtitle ,(str (or! (get device :dns) (get device :hostname))
+                     (if address (str " · " address) ""))
+       :aside ,(str (get device :os) " · "
+                   (if (get device :online) "Online" "Offline")
+                   (if (get device :self) " · This device" ""))
+       :actions ,(+ (map copies (fn (field)
+                     (make_item (get field 1) `(set_clipboard ,(get device (get field 0))))))
+                   (if (or! (get device :self)
+                            (not? (or! (get device :ipv4) (get device :ipv6)))) '()
+                     (list (make_item "Ping Device" `(tailscale_ping ',device))))))))
 
 (defn! tailscale_items (query)
   # One snapshot per page visit; network I/O never runs on each keystroke.
@@ -542,9 +542,9 @@
             (list (get page :title) (get page :device) (get page :url)
                   (get page :description)))) (fn (page)
        (+ (make_item (get page :title) `(open_url ,(get page :url)))
-          (list :subtitle (str (get page :device) " · " (get page :url))
-                :aside "Web"
-                :actions (entity_actions (+ '(:web/page) page))))))
+          `(:subtitle ,(str (get page :device) " · " (get page :url))
+            :aside "Web"
+            :actions ,(entity_actions (+ '(:web/page) page))))))
      (map (fuzzy_match query (get tailscale_cache :devices) (fn (device)
             (list (get device :title) (get device :hostname) (get device :os)
                   (or! (get device :dns) "") (or! (get device :ipv4) "")
@@ -557,9 +557,9 @@
   (+ (push_page 'obsidian_items "Search Obsidian files…") '(:title "Obsidian")))
 
 (defn! obsidian_items (query)
-  (map (fuzzy_match query obsidian_cache display) (fn (note)
+  (map (fuzzy_match query obsidian_cache) (fn (note)
     (+ (make_item (get note :title) `(open_obsidian_file ,(get note :file)))
-       (list :subtitle (get note :file))))))
+       `(:subtitle ,(get note :file))))))
 
 (def cloud_tabs_cache '())
 (defn! cloud_tabs_page ()
@@ -576,10 +576,10 @@
   (map tabs (fn (tab)
     (def url (get tab :url))
     (+ (make_item (get tab :title) `(open_url ,url))
-       (list :subtitle url :aside (get tab :device)
-             :actions (+ (list (make_item "Open in Browser" `(open_url ,url))
-                              (make_item "Copy URL" `(set_clipboard ,url)))
-                         (entity_actions tab)))))))
+       `(:subtitle ,url :aside ,(get tab :device)
+         :actions ,(+ (list (make_item "Open in Browser" `(open_url ,url))
+                          (make_item "Copy URL" `(set_clipboard ,url)))
+                     (entity_actions tab)))))))
 
 (def browser_history_cache '())
 (defn! browser_history_page ()
@@ -589,12 +589,12 @@
      '(:title "Browser History")))
 
 (defn! browser_history_items (query)
-  (map (fuzzy_match query browser_history_cache display) (fn (entry)
+  (map (fuzzy_match query browser_history_cache) (fn (entry)
     (def url (get entry :url))
-    (def page (list :web/page :title (get entry :title) :url url))
+    (def page `(:web/page :title ,(get entry :title) :url ,url))
     (+ (make_item (get entry :title) `(open_url ,url))
-       (list :subtitle (get (split "/" url) 2) :aside (get entry :visited)
-             :actions (entity_actions page))))))
+       `(:subtitle ,(get (split "/" url) 2) :aside ,(get entry :visited)
+         :actions ,(entity_actions page))))))
 
 (def antinote_cache '())
 (defn! antinote_page ()
@@ -603,16 +603,16 @@
      '(:title "Antinote")))
 
 (defn! antinote_items (query)
-  (map (fuzzy_match query antinote_cache display) (fn (note)
+  (map (fuzzy_match query antinote_cache) (fn (note)
     (def excerpt (match_excerpt query (get note :content)))
     (+ (make_item (get note :title) `(open_antinote_note ',note))
-       (list :subtitle (if excerpt excerpt (get note :modified))
-             :aside (if excerpt
-                      (if (get note :modified) (get (split " " (get note :modified)) 0) nil)
-                      nil)
-             :actions (list
-               (make_item "Copy Note" `(set_clipboard ,(get note :content)))
-               (make_item "Open Antinote" '(open_antinote))))))))
+       `(:subtitle ,(if excerpt excerpt (get note :modified))
+         :aside ,(if excerpt
+                  (if (get note :modified) (get (split " " (get note :modified)) 0) nil)
+                  nil)
+         :actions ,(list
+           (make_item "Copy Note" `(set_clipboard ,(get note :content)))
+           (make_item "Open Antinote" '(open_antinote))))))))
 
 (def github_cache '())
 (defn! github_page ()
@@ -621,9 +621,9 @@
   (+ (push_page 'github_items "Search pull requests…") '(:title "GitHub PRs")))
 
 (defn! github_items (query)
-  (map (fuzzy_match query github_cache display) (fn (pr)
+  (map (fuzzy_match query github_cache) (fn (pr)
     (+ (make_item (get pr :title) `(open_url ,(get pr :url)))
-       (list :subtitle (get pr :url))))))
+       `(:subtitle ,(get pr :url))))))
 
 # TODO: Nice to have "prefix-drop" for these prefixed names
 (defn! macro_items (query)
@@ -631,8 +631,8 @@
   (if (not? (contains? query "macro:"))
     '()
     (+
-     (map (get_macros) (fn (m) (list :title (get m :name)
-                                     :on_click `(eval ,(get m :cmds)))))
+     (map (get_macros) (fn (m) `(:title ,(get m :name)
+                                 :on_click (eval ,(get m :cmds)))))
      (list
       (if (macro_is_recording)
         (make_item "macro: Stop Recording" '(end_macro_record))

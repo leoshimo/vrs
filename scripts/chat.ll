@@ -25,13 +25,13 @@
   "(spawn_chat CHAT_NAME SYSTEM_PROMPT) - Spawn a new process registered as CHAT_NAME with SYSTEM_PROMPT for a new chat session"
   (def parent (self))
   (spawn (fn ()
-           (def msgs (list (list :system system_prompt)))
+           (def msgs (list `(:system ,system_prompt)))
 
            (defn! send_message (message)
              "(send_message MESSAGE) - Send message to chat session then return new assistant message"
-             (set msgs (push msgs (list :user message)))
+             (set msgs (push msgs `(:user ,message)))
              (def assistant_msg (run_llm msgs))
-             (set msgs (push msgs (list :assistant assistant_msg)))
+             (set msgs (push msgs `(:assistant ,assistant_msg)))
              assistant_msg)
 
            (defn! get_messages ()
@@ -40,12 +40,12 @@
 
            (defn! clear_messages ()
              "(clear_messages) - Clear messages in session. This does not clear system prompt"
-             (set msgs (list :system system_prompt)))
+             (set msgs `(:system ,system_prompt)))
 
            (spawn_srv! chat_name :interface '(get_messages send_message clear_messages))
            
-           (send parent (list :spawned chat_name))))
-  (recv (list :spawned chat_name)) # don't return until child is ready
+           (send parent `(:spawned ,chat_name))))
+  (recv `(:spawned ,chat_name)) # don't return until child is ready
   )
 
 (spawn_srv! :chat :interface '(spawn_chat))

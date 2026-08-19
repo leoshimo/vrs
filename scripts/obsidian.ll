@@ -25,7 +25,7 @@
           """))
   (if (eq? (get result :exit) 0)
     (map (decode :json (get result :stdout))
-         (fn (f) (list :title (get (split "/" f) -1) :file (str vault_path "/" f))))
+         (fn (f) `(:title ,(get (split "/" f) -1) :file ,(str vault_path "/" f))))
     (error (str "Could not read Obsidian vault: " (get result :stderr)))))
 
 (defn! open_obsidian_file (file)

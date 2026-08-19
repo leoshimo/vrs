@@ -7,8 +7,8 @@
   (def result (exec "yabai" "-m" "query" "--displays"))
   (if (eq? (get result :exit) 0)
     (map (decode :json (get result :stdout)) (fn (display)
-      (list :os/display :id (get display :id) :index (get display :index)
-            :title (format "Display {}" (get display :index)))))
+      `(:os/display :id ,(get display :id) :index ,(get display :index)
+        :title ,(format "Display {}" (get display :index)))))
     '()))
 
 (set_entity_completions :os/display 'get_displays)

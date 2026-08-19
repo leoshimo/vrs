@@ -21,7 +21,7 @@
 
 (defn! save_jump_list ()
   "(save_jump_list) - Save current jump_list to filesystem"
-  (spawn (fn () (fdump jump_list_path (list :id id :rlist jump_list)))))
+  (spawn (fn () (fdump jump_list_path `(:id ,id :rlist ,jump_list)))))
 
 (defn! get_jump_list ()
   "(get_jump_list) - Get all items in jump list"
@@ -30,7 +30,7 @@
 
 (defn! add_jump_list (title url)
   "(add_jump_list TITLE URL) - Add item with TITLE and URL to jump list"
-  (set jump_list (push jump_list (list :id id :jump_list :title title :url url)))
+  (set jump_list (push jump_list `(:id ,id :jump_list :title ,title :url ,url)))
   (set id (+ id 1))
   (save_jump_list)
   (publish :jump_list_event :updated_jump_list)
