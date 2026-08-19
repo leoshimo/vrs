@@ -174,7 +174,8 @@ Records are ordinary property lists on the existing `:dbg` pub/sub topic:
 decimal strings. Scripts can use the existing `get`, `filter`, and `map` operations
 to build another viewer. `vrsctl -s dbg -f` also exposes raw live updates.
 
-Each runtime has one in-memory recording of up to 512 call/scope records.
+Each runtime has one in-memory recording of up to 512 call/scope records and
+4 MiB of encoded record data, keeping snapshots within the connection limit.
 Recording uses a nonblocking publication path; a slow viewer cannot hold up the
 computation. Viewers reconcile with snapshots to recover dropped pub/sub
 notifications. If the recording lock is busy, an observation may be dropped;
