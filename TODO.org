@@ -4,6 +4,12 @@
 
 ** Hypermedia Client - vrsjmp
 
+*** TODO Simplify vrsjmp
+
+Consider pub/sub and Phoenix LiveView-style ergonomics for page updates and
+interactions. Explore routes and registering pages to routes to simplify page
+definitions and navigation.
+
 *** TODO Revisit pub/sub wakeups for GUI input requests
 
 For now, keep pending input requests in the existing =:vrsjmp= service and
