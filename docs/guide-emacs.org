@@ -80,6 +80,8 @@ does not show them automatically. Use =C-c C-e= to inspect =(demo_items)= now.
 | Choose a record field | =M-x vrs-choose-field= | Replace source with the field's literal value. |
 | Insert a function call | =C-c C-b= | Insert argument names as placeholders. |
 | Insert a filled function call | =C-u C-c C-b= | Prompt for arguments and insert the call; do not execute it. |
+| Browse a service's interface | =C-c C-s= | Choose a service, then insert a function call with placeholders. |
+| Fill a service call | =C-u C-c C-s= | Choose a service and function, then prompt for arguments. |
 | Build an action on an entity | =C-c C-a= | Replace the entity expression with a filled call; do not execute it. |
 | Execute an action on an entity | =M-x vrs-execute-action= | Keep source; run the chosen action and display its result. |
 | Build a call in the GUI | =M-x vrsjmp-browse-functions= | Insert the call returned by vrsjmp. |
@@ -137,6 +139,18 @@ Repeat with =demo_note=. After choosing an item, type ="hello"= for the text
 argument, including quotes. The call should be inserted with ="hello"=, and the
 log should still be empty. Entering a call such as =(demo_items)= as an argument
 also only inserts that expression; it does not evaluate it during construction.
+
+To start from a service, use =C-c C-s= (=M-x vrs-browse-services=). Choose
+=:chooser_demo=, then =demo_move=. The second minibuffer lists only that
+service's exported functions, with their signatures and documentation.
+=C-u C-c C-s= also fills arguments before inserting the call.
+
+The service list comes from the registry, so it includes services you have not
+bound yet. Selecting a service runs =bind_srv= in the shared editor session;
+its functions and completion providers remain available for later evaluations.
+As with =bind_srv=, exported names replace existing bindings of the same name.
+Browsing does not execute the selected function. =C-g= at either prompt keeps
+the buffer unchanged; it does not undo a completed service binding.
 
 * Start with an entity and construct an action
 
