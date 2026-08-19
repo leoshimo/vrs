@@ -19,47 +19,53 @@ Paste this into =scratch.ll= in Emacs =vrs-mode= and evaluate with =C-c C-c=:
 # => 10
 #+end_src
 
-Open either viewer before or after evaluation:
+Open a viewer before evaluating:
 
 #+begin_src sh
 vrsctl dbg
 vrsctl dbg --web
 #+end_src
 
-The terminal prints retained history, then follows live updates until Ctrl-C.
-Calls appear as they complete, followed by the evaluation result. A long
+Both viewers start with new observations after connecting. The terminal
+follows updates until Ctrl-C. Calls appear as they complete, followed by
+the result of the =dbg!= block. A long
 call prints =running…=, then its outcome with the same =wait N= label. This is
 one call, not two. Each call shows its result and elapsed wall time, including
-waiting and child calls. Evaluated arguments and reusable call/run filters are
+waiting and child calls. Evaluated arguments and call/run IDs for filtering are
 included automatically; =--all= includes nested calls.
 
 #+begin_src sh
 vrsctl dbg --all
-vrsctl dbg --filter 'file::scratch.ll:2:3'
-vrsctl dbg --filter 'expr::"(+ x x)" status::error'
+vrsctl dbg --filter 'file:scratch.ll:2:3'
+vrsctl dbg --filter 'expr:"(+ x x)" status:error'
 #+end_src
 
 Both viewers use one filter language. Terms narrow the selection together:
-=file::scratch.ll= matches a path substring; =file::scratch.ll:2:3= selects an
-exact line and optional column; =expr::"(+ x x)"= searches source text. Plain
-words search expressions too. Use =status::running=, =status::returned=,
-=status::error=, or =status::cancelled=; =time::>100ms= selects longer calls.
-=run::ID= selects an evaluation; =call::ID= selects a call and its descendants.
+=file:scratch.ll= matches a path substring; =file:scratch.ll:2:3= selects an
+exact line and optional column; =expr:"(+ x x)"= searches source text. Plain
+words search expressions too. Use =status:running=, =status:returned=,
+=status:error=, or =status:cancelled=; =time:>100ms= selects longer calls.
+=run:ID= selects an evaluation; =call:ID= selects a call and its descendants.
 File/run filters keep the terminal overview compact. Specific expression,
 location, status, time, or call filters can find nested calls directly.
 
-In the browser, select source to inspect inputs/results on the side. Pin up to
-three calls to compare beside the current selection. Chevrons open children;
-clicking locations adds filters without changing expansion. The =?= explains
-syntax. Choose oldest/newest evaluations, source-location history, or slowest
-calls. New rows fade in; running calls show a live timer. Scrolling away from
-the live edge preserves your position and shows a button for new calls.
+In the browser, click a call to inspect it. Shift-click selects a range;
+Up/Down moves the selection and Shift-Up/Down extends it. Cmd/Ctrl-click toggles
+individual calls. Each selected call gets an inspector; its =×= deselects it.
+Drag the divider to resize the list and inspectors. Chevrons open children;
+clicking locations adds filters. The =?= explains controls and filter syntax.
 
-=map= invokes its supplied function once per element. With =--all= these rows
-say =invoke (fn …)=: their result belongs to that invocation, not to constructing
-the function. The inner =(+ x x)= calls remain available too. Special forms such
-as =def= are not call rows. Spawned processes and remote handlers need their own
-=dbg!= blocks to observe execution there.
+=Group by: Run= groups calls from one execution of a =dbg!= block; =Source
+location= groups repeated calls from the same place. Choose newest/oldest runs
+or slowest calls. New rows fade in, running calls show a timer, and scrolling
+away from new calls preserves your position. A warning appears if disconnected.
+
+=map= calls its supplied function once per element. Open its children (or use
+=--all= in the terminal) to see those calls and their arguments/results. A
+source name such as =twice= identifies the function when available; otherwise
+it says =fn=. The function definition is in the inspector. Inner =(+ x x)=
+calls remain available too. Spawned processes and remote handlers need their
+own =dbg!= blocks to observe execution there.
 
 Try =(dbg! (+ 1 2) (sleep 30) (error "should not run"))= and press =C-g= while
 it waits in Emacs. Emacs closes the evaluation connection; VRS cancels its fiber
