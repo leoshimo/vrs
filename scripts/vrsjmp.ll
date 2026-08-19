@@ -128,7 +128,7 @@
   "Return an instruction to push a lazily rendered page in the GUI"
   `(:push_page :get_items ,callback :prompt ,prompt))
 
-(defn! begin_interaction ()
+(defn! root_page ()
   "Return pending input or Home without querying other apps"
   (set things_cache nil)
   (def requests (pending_requests))
@@ -379,7 +379,7 @@
 
 (defn! entity_actions (entity)
   "Secondary actions come from the commands imported into this service"
-  (map (filter (interactive_commands) (fn (name) (accepts_context? name entity)))
+  (map (entity_functions entity)
     (fn (name)
       (make_item (command_title name)
         `(continue_call ',name '(,entity))))))
@@ -788,4 +788,4 @@
     (if (eq? (get result 0) :push_page) result :close)
     :close))
 
-(spawn_srv! :vrsjmp :interface '(get_items on_click enqueue_input))
+(spawn_srv! :vrsjmp :interface '(root_page get_items on_click enqueue_input))

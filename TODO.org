@@ -19,7 +19,7 @@ definitions and navigation.
 
 For now, keep pending input requests in the existing =:vrsjmp= service and
 publish =:show= on its topic. The GUI receives notifications on its ordinary
-client connection, then asks =begin_interaction= and =get_items= what to show.
+client connection, then asks =root_page= and =get_items= what to show.
 The GUI continues to own navigation history. Repeated wakeups may be combined;
 pub/sub messages are not retained. Slow or disconnected subscribers can miss
 events.
