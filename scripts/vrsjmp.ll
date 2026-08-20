@@ -719,6 +719,7 @@
          (make_item "Distill" '(open_app "Distill"))
          (make_item "Antinote" '(open_antinote))
          (make_item "Browse Antinote" '(antinote_page))
+         (make_item "Patina" '(open_app "Patina"))
 
          (make_item "Marketplace" '(open_url "https://www.facebook.com/marketplace"))
 
