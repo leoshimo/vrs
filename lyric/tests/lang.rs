@@ -42,8 +42,41 @@ fn int() {
 }
 
 #[test]
+fn subtraction() {
+    assert_eq!(eval_expr("(- 10 3)"), Ok(Val::Int(7)));
+    assert_eq!(eval_expr("(- 10 3 2)"), Ok(Val::Int(5)));
+    assert_eq!(eval_expr("(- 5)"), Ok(Val::Int(-5)));
+    assert_eq!(eval_expr("(- -5)"), Ok(Val::Int(5)));
+    assert_matches!(eval_expr("(-)"), Err(Error::UnexpectedArguments(_)));
+    assert_matches!(eval_expr("(- 5 :two)"), Err(Error::UnexpectedType(_)));
+    assert_matches!(eval_expr("(- -2147483648)"), Err(Error::Runtime(_)));
+}
+
+#[test]
 fn string() {
     assert_eq!(eval_expr("\"hello\"").unwrap(), Val::string("hello"));
+
+    let block = concat!("\"\"\"\n", "    printf \"%s\\\\n\" \"$1\"\n", "    \"\"\"",);
+    assert_eq!(
+        eval_expr(block).unwrap(),
+        Val::string("printf \"%s\\\\n\" \"$1\"\n")
+    );
+}
+
+#[test]
+fn get_handles_positive_and_negative_indexes() {
+    assert_eq!(
+        eval_expr("(get '(one two three) 0)"),
+        Ok(Val::symbol("one"))
+    );
+    assert_eq!(
+        eval_expr("(get '(one two three) -1)"),
+        Ok(Val::symbol("three"))
+    );
+    assert_eq!(eval_expr("(get '(one two three) 3)"), Ok(Val::Nil));
+    assert_eq!(eval_expr("(get '(one two three) -4)"), Ok(Val::Nil));
+    assert_eq!(eval_expr("(get '() -1)"), Ok(Val::Nil));
+    assert_eq!(eval_expr("(get '(one) -2147483648)"), Ok(Val::Nil));
 }
 
 #[test]

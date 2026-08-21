@@ -93,17 +93,9 @@ async fn main() -> Result<()> {
 
     tokio::select! {
         biased;
-        res = run => {
-            if let Err(e) = res {
-                eprintln!("Terminated with error: {e}");
-            }
-        },
-        _ = client.closed() => {
-            eprintln!("Connection closed");
-        }
+        res = run => res,
+        _ = client.closed() => Err(anyhow::anyhow!("Connection closed")),
     }
-
-    Ok(())
 }
 
 /// The clap CLI interface
@@ -153,10 +145,12 @@ async fn run_cmd(client: &Client, cmd: &str) -> Result<()> {
     let f = lyric::parse(cmd)?;
     let resp = client.request(f).await?;
     match resp.contents {
-        Ok(c) => println!("{}", c),
-        Err(e) => eprintln!("{}", e),
+        Ok(c) => {
+            println!("{}", c);
+            Ok(())
+        }
+        Err(e) => Err(anyhow::anyhow!("{e}")),
     }
-    Ok(())
 }
 
 /// Run a script file
@@ -168,10 +162,7 @@ async fn run_file(client: &Client, format: &Format, file: Box<dyn Read>) -> Resu
         match f.read_line(&mut line) {
             Ok(0) => break,
             Ok(_) => (),
-            Err(e) => {
-                eprintln!("Error reading file - {}", e);
-                break;
-            }
+            Err(e) => return Err(e).with_context(|| "Error reading file"),
         }
 
         lineno += 1;
@@ -182,8 +173,7 @@ async fn run_file(client: &Client, format: &Format, file: Box<dyn Read>) -> Resu
                 continue;
             }
             Err(e) => {
-                eprintln!("{}: {} - {}", lineno, e, line);
-                break;
+                return Err(anyhow::anyhow!("{}: {} - {}", lineno, e, line.trim_end()));
             }
         };
 
@@ -193,24 +183,17 @@ async fn run_file(client: &Client, format: &Format, file: Box<dyn Read>) -> Resu
 
         line.clear();
 
-        match client.request(f).await {
-            Ok(resp) if *format == Format::Editor => match resp.contents {
-                Ok(c) => println!("# => {}", c),
-                Err(e) => eprintln!("# => {}", e),
-            },
-            Ok(resp) => match resp.contents {
-                Ok(c) => println!("{}", c),
-                Err(e) => eprintln!("{}", e),
-            },
-            Err(e) => {
-                eprintln!("{}", e);
-            }
+        let resp = client.request(f).await?;
+        match resp.contents {
+            Ok(c) if *format == Format::Editor => println!("# => {}", c),
+            Ok(c) => println!("{}", c),
+            Err(e) => return Err(anyhow::anyhow!("{e}")),
         }
     }
 
     if !line.trim().is_empty() && !line.trim().starts_with('#') {
         if let Err(e) = lyric::parse(&line) {
-            eprintln!("{}: {} - {}", lineno, e, line.trim());
+            return Err(anyhow::anyhow!("{}: {} - {}", lineno, e, line.trim()));
         }
     }
 
@@ -225,3 +208,94 @@ async fn run_file(client: &Client, format: &Format, file: Box<dyn Read>) -> Resu
 // TODO: Test case for incomplete expressions
 // TODO: Test case for incomplete expressions that are comments
 // TODO: Test case for --bind=SRV_NAME
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use vrs::Runtime;
+
+    async fn runtime_client() -> (Runtime, Client) {
+        let runtime = Runtime::new("vrsctl");
+        let (client, runtime_conn) = Connection::pair().unwrap();
+        runtime.handle_conn(runtime_conn).await.unwrap();
+        (runtime, Client::new(client))
+    }
+
+    #[tokio::test]
+    async fn run_cmd_succeeds_for_value() {
+        let (_runtime, client) = runtime_client().await;
+        run_cmd(&client, "(+ 20 22)").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn run_cmd_propagates_evaluation_error() {
+        let (_runtime, client) = runtime_client().await;
+        let error = run_cmd(&client, "(undefined_function)").await.unwrap_err();
+
+        assert!(error.to_string().contains("undefined_function"));
+    }
+
+    #[tokio::test]
+    async fn run_cmd_propagates_async_error_without_closing_client() {
+        let (_runtime, client) = runtime_client().await;
+        let error = run_cmd(&client, "(publish :my_topic)").await.unwrap_err();
+
+        assert!(error.to_string().contains("publish expects two arguments"));
+        run_cmd(&client, "(+ 20 22)").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn raw_block_string_executes_via_stdin_with_positional_arguments() {
+        let (_runtime, client) = runtime_client().await;
+        let expression = concat!(
+            "(get (exec \"sh\" \"-s\" \"--\" \"argument with spaces\"\n",
+            "           :stdin \"\"\"\n",
+            "           printf '<%s>\\n' \"$1\"\n",
+            "           printf '%s\\n' 'C:\\tmp \"quoted\"'\n",
+            "           \"\"\") :stdout)",
+        );
+
+        let response = client
+            .request(lyric::parse(expression).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(
+            response.contents.unwrap(),
+            lyric::Form::string("<argument with spaces>\nC:\\tmp \"quoted\"\n")
+        );
+    }
+
+    #[test]
+    fn all_repository_lyric_scripts_parse() {
+        let scripts_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../scripts");
+        for entry in std::fs::read_dir(scripts_dir).unwrap() {
+            let entry = entry.unwrap();
+            if !entry.file_type().unwrap().is_file() {
+                continue;
+            }
+            let path = entry.path();
+            if path.extension().and_then(|extension| extension.to_str()) != Some("ll") {
+                continue;
+            }
+
+            let source = std::fs::read_to_string(&path).unwrap();
+            let mut pending = String::new();
+            for (index, line) in source.split_inclusive('\n').enumerate() {
+                pending.push_str(line);
+                match lyric::parse(&pending) {
+                    Ok(_) => pending.clear(),
+                    Err(lyric::Error::IncompleteExpression(_)) => {}
+                    Err(error) => panic!("{}:{}: {error}", path.display(), index + 1),
+                }
+            }
+
+            assert!(
+                pending.trim().is_empty() || pending.trim().starts_with('#'),
+                "{} ended with an incomplete expression: {}",
+                path.display(),
+                pending.trim()
+            );
+        }
+    }
+}

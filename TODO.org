@@ -16,7 +16,7 @@ Goal: Build Core Runtime Features
 
 - [ ] Init File
 - [ ] File IO for Simple Storage
-- [ ] Command IO
+- [X] Command IO
 - [ ] Process Links and Supervisor
 - [ ] Rust Macros for Code Compression
 - [ ] Lyric Macros
@@ -51,6 +51,29 @@ Convenience APIs to see running services and some level of introspection
 - [X] =register=
 - [X] =ls-srv=
 - [X] =find-srv=
+
+** TODO System-wide Job Configuration and Node Affinity
+
+Goal: Manage processes and services more like =launchd=: declare the desired
+configuration for the whole VRS system, then keep it running across available
+nodes.
+
+- Use one job model for long-running services, one-shot processes, and scheduled
+  or periodic jobs (cron-like work).
+- Treat service names as stable system-wide identities so callers do not need to
+  know where a service is running.
+- Allow jobs to have strict node affinity when they depend on that node's
+  hardware, GUI session, credentials, or local data.
+- Reconcile the configuration as nodes connect, disconnect, and restart: start
+  missing jobs on permitted nodes and remove stale service registrations.
+- Never move or fail over a strict-affinity job to another node.
+- Keep placement and scheduling policy separate from the Lyric service
+  implementation and calling semantics.
+
+Examples: =:os_browser= is tied to an interactive Mac, while Feedbin and Oura
+indexing are periodic jobs assigned to the always-on node. The conditional
+startup currently written by hand in =scripts/init.ll= should eventually be
+expressed through this model.
 
 ** DONE IPC - =srv= and =bind_srv=
 
@@ -111,11 +134,20 @@ Purpose:
 Read / Write S-Expressions to File
 Goal: Replace hard-coded data in =launcher.ll=
 
-** TODO Command IO - Better =exec=
+** DONE Command IO - Better =exec=
 
 Goal: Better interface over =Command= to access:
-- Process output
+- Captured stdout and stderr
 - Exit code
+
+** TODO Streaming Command IO Handle
+
+Add a first-class process / IO handle for streaming commands:
+- Support lazy, incremental consumption instead of eagerly buffering all output
+- Incrementally read stdout and stderr
+- Write to and close stdin
+- Wait for completion, inspect status, and terminate the child process
+- Integrate lazy results with pagination and loading states in hypermedia UI code
 
 ** TODO Revisit Runtime / Client Boundary
 Goal: Revisit protocol b/t/ Runtime / Client w/ New Learnings
@@ -190,17 +222,6 @@ via references captured.
 
 Thought: Allow but discourage passing lambdas
 
-** TODO Better Escape Characters
-
-Currently, escaping backslash is hacked together - see lexer for strings
-
-Add proper support for:
-- \n
-- \'
-- \"
-
-And appropriate printing of those values
-
 ** TODO quasiquote, unquote, unquote-splice
 ** TODO Macros
 - [ ] [[https://www.youtube.com/watch?v=M4qj2ictRpg&t=22s][Gavin - Macros in ELisp]]
@@ -224,7 +245,7 @@ Alternate Idea: Only support =rest= - but build convenience for:
 - [ ] =rest=
 - [ ] =keyword= arguments
 
-** TODO Math Operators =-=
+** DONE Math Operator =-=
 ** TODO Pinning Symbols in Pattern Matches
 
 Using the *value* of symbol instead of symbol
@@ -282,7 +303,6 @@ Use query string! e.g.:
 ** TODO Demo: Process Manager over =ps=
 Exercises Embark Mechanics + Consuming Program Output
 Generate hypermedia based on =ps= output
-** TODO Notification Service
 ** TODO Journal / Brain
 A replacement for "self-texting"
 
@@ -294,7 +314,6 @@ A chat interface for:
 - Task Management
 - "Assistant"
 
-** TODO Chat Service over Cogni
 * rnd
 ** TODO LLM Blocks
 
@@ -416,7 +435,6 @@ Extend to visual elements? UI:
 ** TODO Voice Client Shell
 * integration
 ** TODO Selected Text
-** TODO Clipboard
 ** TODO Browser Page
 ** TODO Image
 * perf
@@ -455,68 +473,8 @@ Extend to visual elements? UI:
 ** TODO =(loop 0)= blocks new connection only via REPL, but not =vrsctl -c "(loop 0)"=
 ** TODO Using =(map (ps) (lambda (p) (kill p)))= results in runtime crash sometimes
 ** TODO Disconnecting from REPL after running =loop 0= does not quit as expected.
-** TODO Sending client request for undefined method hangs indefinitely
-
-Test case to repro
-
-#+begin_src rust
-//! Tests for [Client] Pubsub API
-
-use lyric::parse;
-use vrs::{Client, Connection, Form, KeywordId, Program, Runtime};
-
-/// Test Client::subscribe between client and runtime service process
-#[tokio::test]
-async fn client_pubsub_process_and_service() {
-    let rt = Runtime::new();
-
-    // counter service
-    let prog = Program::from_expr(
-        r#"(begin
-        (def count 0)
-        (defn increment (n)
-            (set count (+ count n))
-            (publish :count count))
-        (srv :counter :interface '(increment)))
-        "#,
-    )
-    .unwrap();
-    rt.run(prog).await.unwrap();
-
-    let (local, remote) = Connection::pair().unwrap();
-    let client = Client::new(local);
-    rt.handle_conn(remote).await.unwrap();
-
-    // subscribe then increment
-    let mut sub = client.subscribe(KeywordId::from("count")).await.unwrap();
-    client
-        .request(parse("(increment 1)").unwrap())
-        .await
-        .unwrap();
-    client
-        .request(parse("(increment 10)").unwrap())
-        .await
-        .unwrap();
-    client
-        .request(parse("(increment 31)").unwrap())
-        .await
-        .unwrap();
-
-    assert_eq!(
-        sub.recv().await.unwrap(),
-        Form::Int(1),
-        "should publish 1 after (increment 1)"
-    );
-}
-
-// TODO: Pubsub from another client
-
-#+end_src
-
 ** TODO Processes that run =srv= does not exit after =vrsctl= exits
 I.e. killing connection does NOT terminate proc.
-** TODO bug - =(publish :my_topic)= terminates vrsctl w/o helpful error
-Errors in REPL are sub-par quality
 * wishlist
 Record of "I want to be able to" thoughts
 ** Open a visual structured editor for building interfaces from source, with changes reflected in source

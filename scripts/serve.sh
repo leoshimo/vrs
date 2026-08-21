@@ -1,96 +1,56 @@
 #!/usr/bin/env sh
-# serve.sh - Trivial Serve
+# Start the runtime and, unless running headless, the GUI. Service
+# configuration lives in ./scripts/init.ll.
 #
-# Examples
-#     ./serve.sh       - Live-On
-#     ./serve.sh dev   - Development
-#     ./serve.sh demo  - Demo
-#
+# Usage:
+#   ./scripts/serve.sh          # release runtime and GUI
+#   ./scripts/serve.sh dev      # debug runtime and GUI
+#   ./scripts/serve.sh headless # release runtime only
 
-MODE="$1"
+set -u
 
-if [ -z "$MODE" ]; then
-    MODE="live-on"
-fi
-
-
-if [ "$TMUX" ]; then
-    tmux rename-window "vrs-srv-$MODE"
-fi
-
-CARGO_ARGS=
+MODE="${1:-live-on}"
+CARGO_ARGS=""
 if [ "$MODE" != "dev" ]; then
     CARGO_ARGS="--release"
 fi
 
-echo "Mode: $MODE"
+if [ "${TMUX:-}" ]; then
+    tmux rename-window "vrs-srv-$MODE"
+fi
 
-while true; do
-     PID=$(cargo run --bin vrsd "$CARGO_ARGS" > "vrsd-$MODE.log") &
+cargo run $CARGO_ARGS --bin vrsd -- --init ./scripts/init.ll > "vrsd-$MODE.log" 2>&1 &
+VRSD_PID=$!
+VRSJMP_PID=""
 
-     while true; do
-         cargo run --bin vrsctl $CARGO_ARGS -- --command ':healthcheck' >/dev/null 2>&1
-         if [ $? -eq 0 ]; then
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/chat.ll >/dev/null
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/system_appearance.ll >/dev/null
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/todos.ll >/dev/null
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/cmd_macro.ll >/dev/null
+cleanup() {
+    kill "$VRSD_PID" 2>/dev/null || true
+    if [ -n "$VRSJMP_PID" ]; then
+        kill "$VRSJMP_PID" 2>/dev/null || true
+    fi
+}
+trap cleanup INT TERM EXIT
 
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/interfacegen.ll >/dev/null
-
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/os_maps.ll >/dev/null
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/os_notes.ll >/dev/null
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/obsidian.ll >/dev/null
-
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/os_display.ll >/dev/null
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/os_window.ll >/dev/null
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/os_notify.ll >/dev/null
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/os_browser.ll >/dev/null
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/os_screencap.ll >/dev/null
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/os_cal.ll >/dev/null
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/os_clipboard.ll >/dev/null
-
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/github.ll >/dev/null
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/safari_history.ll >/dev/null
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/youtube.ll >/dev/null
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/stickies.ll >/dev/null
-
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/reeder.ll >/dev/null
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/eden.ll >/dev/null
-
-             if [ "$MODE" = "demo" ]; then
-                 cargo run --bin vrsctl $CARGO_ARGS ./scripts/rlist_demo.ll >/dev/null
-                 cargo run --bin vrsctl $CARGO_ARGS ./scripts/nl_shell_demo.ll >/dev/null
-
-                 sleep 3
-                 cargo run --bin vrsctl $CARGO_ARGS -- --command "(begin (bind_srv :rlist) (add_rlist \"File over app\" \"https://stephango.com/file-over-app\"))"
-                 cargo run --bin vrsctl $CARGO_ARGS -- --command '(exec "osascript" "-e" "tell application id \"tracesOf.Uebersicht\" to refresh widget id \"vrs_shell-jsx\"")'
-             else
-                 cargo run --bin vrsctl $CARGO_ARGS ./scripts/rlist.ll >/dev/null
-                 cargo run --bin vrsctl $CARGO_ARGS ./scripts/nl_shell.ll >/dev/null
-             fi
-
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/nl_scheduler.ll >/dev/null
-
-             cargo run --bin vrsctl $CARGO_ARGS ./scripts/vrs_shell_refresh.ll >/dev/null
-
-             if [ "$MODE" = "demo" ]; then
-                 cargo run --bin vrsctl $CARGO_ARGS ./scripts/vrsjmp_demo.ll >/dev/null
-             else
-                 cargo run --bin vrsctl $CARGO_ARGS ./scripts/vrsjmp.ll >/dev/null
-             fi
-
-             # Restart vrsjmp if not dev
-             if [ "$MODE" != "dev" ]; then
-                 pkill -ax "vrsjmp"
-                 PID=$(RUST_LOG=debug cargo run --bin vrsjmp "$CARGO_ARGS" > /dev/null) &
-                 wait $PID
-             fi
-
-             echo "Launched Services"
-             break
-         fi
-         sleep 2
-     done
-     wait $PID
+# vrsd binds its client socket only after scripts/init.ll completes. Do not
+# launch the GUI until the daemon is accepting requests, and stop if
+# initialization fails.
+until cargo run $CARGO_ARGS --bin vrsctl -- --command ':healthcheck' >/dev/null 2>&1; do
+    if ! kill -0 "$VRSD_PID" 2>/dev/null; then
+        wait "$VRSD_PID"
+        VRSD_STATUS=$?
+        echo "vrsd exited before initialization completed (status $VRSD_STATUS); see vrsd-$MODE.log" >&2
+        if [ "$VRSD_STATUS" -eq 0 ]; then
+            VRSD_STATUS=1
+        fi
+        exit "$VRSD_STATUS"
+    fi
+    sleep 1
 done
+
+if [ "$MODE" != "headless" ]; then
+    cargo run $CARGO_ARGS --bin vrsjmp &
+    VRSJMP_PID=$!
+    wait "$VRSD_PID" "$VRSJMP_PID"
+else
+    wait "$VRSD_PID"
+fi

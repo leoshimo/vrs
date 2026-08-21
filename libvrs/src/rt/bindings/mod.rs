@@ -1,5 +1,6 @@
 mod fs;
 mod mailbox;
+mod node;
 mod open;
 mod proc;
 mod pubsub;
@@ -14,14 +15,18 @@ pub(crate) use mailbox::call_fn;
 pub(crate) use mailbox::ls_msgs_fn;
 pub(crate) use mailbox::recv_fn;
 pub(crate) use mailbox::send_fn;
+pub(crate) use node::configure_fn;
 
+pub(crate) use proc::call_timeout_fn;
 pub(crate) use proc::kill_fn;
+pub(crate) use proc::node_name_fn;
 pub(crate) use proc::pid_fn;
 pub(crate) use proc::ps_fn;
 pub(crate) use proc::self_fn;
 pub(crate) use proc::sleep_fn;
 pub(crate) use proc::spawn_fn;
 
+pub(crate) use system::decode_fn;
 pub(crate) use system::exec_fn;
 pub(crate) use system::shell_expand_fn;
 
@@ -43,3 +48,4 @@ pub(crate) use pubsub::subscribe_fn;
 
 pub(crate) use fs::fdump_fn;
 pub(crate) use fs::fread_fn;
+pub(crate) use fs::run_script_fn;

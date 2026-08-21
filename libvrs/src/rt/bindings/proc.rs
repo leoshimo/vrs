@@ -11,7 +11,7 @@ pub(crate) fn self_fn() -> NativeFn {
     NativeFn {
         doc: "(self) - Returns process id of caller".to_string(),
         func: |f, _| {
-            let pid = f.locals().pid;
+            let pid = f.locals().pid.clone();
             Ok(NativeFnOp::Return(Val::Extern(Extern::ProcessId(pid))))
         },
     }
@@ -21,7 +21,7 @@ pub(crate) fn self_fn() -> NativeFn {
 pub(crate) fn pid_fn() -> NativeFn {
     NativeFn {
         doc: "(pid NUMBER) - Creates a new process id type for given NUMBER".to_string(),
-        func: |_, args| {
+        func: |f, args| {
             let pid = match args {
                 [Val::Int(pid)] => pid,
                 _ => {
@@ -31,8 +31,45 @@ pub(crate) fn pid_fn() -> NativeFn {
                 }
             };
             Ok(NativeFnOp::Return(Val::Extern(Extern::ProcessId(
-                ProcessId::from(*pid as usize),
+                ProcessId::new(f.locals().node_name.clone(), *pid as usize),
             ))))
+        },
+    }
+}
+
+/// Binding to get the immutable name of the current runtime node.
+pub(crate) fn node_name_fn() -> NativeFn {
+    NativeFn {
+        doc: "(node_name) - Returns the name of the runtime node hosting this process.".to_string(),
+        func: |f, args| {
+            if !args.is_empty() {
+                return Err(Error::UnexpectedArguments(
+                    "node_name expects no arguments".to_string(),
+                ));
+            }
+            Ok(NativeFnOp::Return(Val::String(
+                f.locals().node_name.clone(),
+            )))
+        },
+    }
+}
+
+/// Binding to configure the default timeout for calls made by this process.
+pub(crate) fn call_timeout_fn() -> NativeFn {
+    NativeFn {
+        doc: "(call_timeout SECS) - Configure the timeout for calls made by this process."
+            .to_string(),
+        func: |f, args| {
+            let seconds = match args {
+                [Val::Int(seconds)] if *seconds >= 0 => *seconds as u64,
+                _ => {
+                    return Err(Error::UnexpectedArguments(
+                        "call_timeout expects one non-negative integer".to_string(),
+                    ))
+                }
+            };
+            f.locals_mut().call_timeout = Duration::from_secs(seconds);
+            Ok(NativeFnOp::Return(Val::keyword("ok")))
         },
     }
 }
@@ -108,8 +145,8 @@ async fn ps_impl(fiber: &mut Fiber) -> Result<Val> {
 /// Implementation for (kill PID)
 async fn kill_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
     let pid = match args[..] {
-        [Val::Extern(Extern::ProcessId(pid))] => pid,
-        [Val::Int(pid)] => ProcessId::from(pid as usize),
+        [Val::Extern(Extern::ProcessId(ref pid))] => pid.clone(),
+        [Val::Int(pid)] => ProcessId::new(fiber.locals().node_name.clone(), pid as usize),
         _ => {
             return Err(Error::UnexpectedArguments(
                 "kill should have one integer argument".to_string(),
@@ -161,7 +198,7 @@ mod tests {
 
     #[tokio::test]
     async fn binding_self() {
-        let k = kernel::start();
+        let k = kernel::start_test();
         let hdl = k
             .spawn_prog(Program::from_expr("(self)").unwrap())
             .await
@@ -177,7 +214,7 @@ mod tests {
 
     #[tokio::test]
     async fn sleep() {
-        let k = kernel::start();
+        let k = kernel::start_test();
         let hdl = k
             .spawn_prog(Program::from_expr("(sleep 0)").unwrap())
             .await
@@ -193,8 +230,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn call_timeout() {
+        let k = kernel::start_test();
+        let hdl = k
+            .spawn_prog(Program::from_expr("(call_timeout 30)").unwrap())
+            .await
+            .expect("Kernel should spawn new process");
+
+        assert_eq!(
+            hdl.join().await.unwrap().status.unwrap(),
+            ProcessResult::Done(Val::keyword("ok"))
+        );
+    }
+
+    #[tokio::test]
     async fn ps() {
-        let k = kernel::start();
+        let k = kernel::start_test();
         let hdl = k
             .spawn_prog(Program::from_expr("(ps)").unwrap())
             .await
@@ -213,7 +264,7 @@ mod tests {
     async fn kill() {
         use tokio::time;
 
-        let k = kernel::start();
+        let k = kernel::start_test();
 
         let kill_target = k
             .spawn_prog(Program::from_expr("(loop (sleep 0))").unwrap())
@@ -238,7 +289,7 @@ mod tests {
 
     #[tokio::test]
     async fn binding_spawn() {
-        let k = kernel::start();
+        let k = kernel::start_test();
 
         let prog = r#"(begin
             (spawn (lambda () (loop (sleep 0)))) # spawn infinite loop

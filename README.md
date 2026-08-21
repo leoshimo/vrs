@@ -46,6 +46,63 @@ To this end:
 - `vrsctl`: A thin CLI client over `libvrs`
 - `vrsjmp`: A GUI launch bar client
 
+## Init scripts and nodes
+
+`vrsd --init PATH` evaluates a script inside the runtime before accepting local
+clients. Unlike `load`/`fread`, `(run PATH)` evaluates all of a file's top-level
+forms with an implicit `begin`, in a fresh process, and waits for that process
+to finish. Services created by `spawn_srv` keep running.
+
+Every daemon has an immutable string node name. It defaults to the machine's
+short hostname and can be set explicitly:
+
+```sh
+cargo run --bin vrsd -- --node laptop --init ./scripts/init.ll
+```
+
+The repository's `scripts/init.ll` can nonblockingly add nodes to the service
+registry:
+
+```lisp
+(if (eq? (node_name) "home-server")
+    (run "./scripts/feedbin.ll")
+    (configure :nodes '("ssh://home-server")))
+```
+
+Use `./scripts/serve.sh headless` on a node that should run the daemon and its
+services without launching the `vrsjmp` GUI.
+
+Endpoints name their transport explicitly. Release builds use VRS port `8773`;
+debug builds use `8774`, keeping a persistent `serve.sh` runtime isolated from
+ordinary `cargo run` development. Append `:PORT` to either `tcp://HOST` or
+`ssh://HOST` to select another port explicitly. The SSH transport runs
+`ssh -W 127.0.0.1:PORT HOST`, so SSH aliases, Bonjour names, and Tailscale
+MagicDNS names are resolved by OpenSSH without exposing the VRS listener. The
+listener remains bound to localhost.
+
+VRS keeps each link open, exchanges service snapshots and registration
+changes, and caches them locally. `find_srv` and `ls_srv` only query that cache;
+they do not contact nodes per call. The last registration observed locally wins
+when a service name exists on several nodes. Remote `ls_srv` entries include a
+`:node` string. Each side sends a heartbeat every five seconds. After fifteen
+seconds without a valid message, the link is closed and that node's cached
+services are removed. Configured outgoing links keep reconnecting every two
+seconds.
+
+To run two nodes on one machine, give each daemon a distinct local socket,
+node name, and listener port:
+
+```sh
+cargo run --bin vrsd -- --node alpha --node-port 8773 --socket /tmp/alpha.socket
+cargo run --bin vrsd -- --node beta  --node-port 8774 --socket /tmp/beta.socket
+```
+
+This is deliberately only service discovery and message routing. It does not
+restart services or guarantee singletons. Sending to a disconnected node fails
+immediately. Every `call`, whether local or remote, fails after five seconds if
+the service has not replied; calls are never retried automatically. A process
+can change its default with `(call_timeout 30)`.
+
 <p align="center">
     <img src="https://raw.github.com/leoshimo/vrs/main/assets/vrs-arch-stack.png">
 </p>
@@ -63,6 +120,12 @@ The runtime runs software written in Lyric lang:
 # Use `def` to define new bindings
 # e.g. "hello lyric!" string to symbol `msg`
 (def msg "hello lyric!")
+
+# Raw block strings preserve quotes and backslashes. Indented multiline blocks
+# drop their leading newline and common indentation.
+(def script """
+    printf '%s\n' "$1"
+    """)
 
 # Update bindings with `set`
 (set msg "goodbye lyric!")
@@ -308,13 +371,13 @@ The runtime has built-in global pubsub mechanism.
 
 # Get system appearance state
 (defn is_darkmode ()
-  (def (:ok result) (exec "osascript"
-                          "-e" "tell application \"System Events\""
-                          "-e" "tell appearance preferences"
-                          "-e" "return dark mode"
-                          "-e" "end tell"
-                          "-e" "end tell"))
-  (eq? result "true"))
+  (def result (exec "osascript"
+                    "-e" "tell application \"System Events\""
+                    "-e" "tell appearance preferences"
+                    "-e" "return dark mode"
+                    "-e" "end tell"
+                    "-e" "end tell"))
+  (eq? (get (decode :lines (get result :stdout)) 0) "true"))
 
 # Set system appearance state
 (defn set_darkmode (dark)
@@ -370,10 +433,13 @@ debugging - see `vrsctl --help` for an overview of available commands.
 
 ### Emacs Integration
 
-There is an major-mode available for Emacs - `lyric-mode`.
+An Emacs major mode is available at [`emacs/lyric-mode.el`](emacs/lyric-mode.el).
 
 It provides syntax highlighting and bindings useful for bottom-up, interactive,
-editor-centric software development.
+editor-centric software development. It recognizes raw block strings and sends
+the exact source expression to `vrsctl`, so multiline scripts can be evaluated
+with `lyric-eval-last-sexp` without being read and rewritten as Emacs Lisp.
 
-The package is currently not available via package repositories - but is
-available in my [dotfiles repository](https://github.com/leoshimo/dots/blob/527bd86095f7c082e6fd6a7658698c8745c65be0/emacs/.emacs.d/init.org#lyric--vrs).
+The mode currently depends on `janet-mode`. Add the `emacs` directory to
+`load-path`, require `lyric-mode`, and customize `lyric-vrsctl-command` when
+additional service bindings are needed.

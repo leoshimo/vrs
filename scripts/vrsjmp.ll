@@ -2,10 +2,52 @@
 # vrsjmp.ll - vrsjmp commandbar
 #
 
-(defn is_personal? () (eq? (exec "uname" "-n") "shinjuku.local"))
+(defn is_personal? ()
+  (eq? (get (decode :lines (get (exec "uname" "-n") :stdout)) 0)
+       "shinjuku.local"))
 
-# TODO: Move to init.ll w/ supervision tree
+(defn open_xcode ()
+  "Open the active Xcode selected by xcode-select"
+  (exec "bash" "-seuo" "pipefail"
+        :stdin """
+        xcode_app="$(xcode-select -p | grep -oE 'Xcode[^/]+')"
+        open -a "$xcode_app"
+        """))
+
+(defn toggle_desktop ()
+  "Toggle Finder desktop icon visibility"
+  (exec "bash" "-seuo" "pipefail"
+        :stdin """
+        create_desktop="$(defaults read com.apple.finder CreateDesktop 2>/dev/null || echo false)"
+
+        if [ "$create_desktop" = "true" ]; then
+            defaults write com.apple.finder CreateDesktop false
+        else
+            defaults write com.apple.finder CreateDesktop true
+        fi
+
+        killall Finder
+        """))
+
+(defn toggle_dock_autohide ()
+  "Toggle automatic Dock hiding"
+  (exec "bash" "-seuo" "pipefail"
+        :stdin """
+        current="$(defaults read com.apple.Dock autohide)"
+
+        if [ "$current" -eq 1 ]; then
+            defaults write com.apple.Dock autohide -bool false
+        else
+            defaults write com.apple.Dock autohide -bool true
+        fi
+
+        killall Dock
+        """))
+
+# TODO: Move to scripts/init.ll w/ supervision tree
 (bind_srv :system_appearance)
+(bind_srv :os_browser)
+(bind_srv :os_notify)
 (bind_srv :rlist)
 (bind_srv :nl_shell)
 (bind_srv :nl_scheduler)
@@ -21,7 +63,6 @@
 (bind_srv :cmd_macro)
 (bind_srv :safari_history)
 (bind_srv :github)
-(bind_srv :reeder)
 (bind_srv :os_clipboard)
 (bind_srv :stickies)
 
@@ -35,7 +76,7 @@
      (display_items query)
      (window_items query)
      (scheduler_items query)
-     # (reeder_items query)
+     (feedbin_items query)
      (eden_items query)
      (rlist_items query)
      (youtube_items query)
@@ -125,13 +166,29 @@
            (fn (t) (list :title (format "t: Mark Done - {}" (get t :title))
                          :on_click (list 'set_todos_done_by_id (get t :id)))))))
 
-# (defn reeder_items (query)
-#   "(reeder_items QUERY) - Returns markup for reeder items"
-#   (if (not? (contains? query "rd:"))
-#       '()
-#       (begin
-#        (if (eq? query "rd:") (reeder_refresh_items))
-#        (map (reeder_get_items) (fn (it) (make_item (format "rd: {}" (get it :title)) (list 'open_url (get it :url))))))))
+(def saved_pages_cache '())
+(defn feedbin_call (message)
+  "Call the Feedbin service, returning an empty list while its node is unavailable"
+  (let ((result (try (call (find_srv :feedbin) message))))
+    (if (err? result) '() result)))
+
+(defn feedbin_items (query)
+  "(feedbin_items QUERY) - Return the 20 most recently saved Feedbin Pages"
+  (if (not? (contains? query "rd:"))
+      '()
+      (begin
+       (if (eq? query "rd:")
+         (set saved_pages_cache (feedbin_call '(:feedbin_saved_pages))))
+       (map saved_pages_cache
+            (fn (it)
+              (make_item (format "rd: {}" (get it :title))
+                         (list 'open_url (get it :url))))))))
+
+(defn feedbin_save_active_tab ()
+  "Save the active browser tab to Feedbin Pages"
+  (let ((tab (active_tab)))
+    (feedbin_call
+      (list :feedbin_save (get tab :url) (get tab :title)))))
 
 (defn notes_items (query)
   "(notes_items) - Returns markup for notes"
@@ -248,7 +305,7 @@
          (make_item "Soulver" '(open_app "Soulver 3"))
          (make_item "1Password" '(open_app "1Password"))
          (make_item "TLDraw" '(open_url "https://www.tldraw.com"))
-         (make_item "Xcode" '(exec "open_xcode")) # TODO: Built-in regex
+         (make_item "Xcode" '(open_xcode)) # TODO: Built-in regex
          (make_item "Chrome" '(open_app "Google Chrome"))
          (make_item "Obsidian" '(open_app "Obsidian"))
          (make_item "Script Debugger" '(open_app "Script Debugger"))
@@ -265,6 +322,7 @@
 
          (make_item "Distill" '(open_app "Distill"))
          (make_item "Antinote" '(open_app "Antinote"))
+         (make_item "Patina" '(open_app "Patina"))
 
          (make_item "Marketplace" '(open_url "https://www.facebook.com/marketplace"))
 
@@ -307,15 +365,15 @@
    (list (make_item "Restart vrsd" '(exec "pkill" "-ax" "vrsd"))
          (make_item "Toggle Darkmode" '(toggle_darkmode))
          (make_item "Toggle Color Filter" '(toggle_color_filters))
-         (make_item "Toggle Desktop" '(exec "desktop_toggle"))
-         (make_item "Toggle Dock" '(exec "dock_autohide_toggle"))
+         (make_item "Toggle Desktop" '(toggle_desktop))
+         (make_item "Toggle Dock" '(toggle_dock_autohide))
          (make_item "Toggle QuickShade" '(toggle_quick_shade))
          (make_item "Open in Wayback" '(active_tab_open_wayback))
          (make_item "Show Desktop" '(show_desktop))
          (make_item "Toggle DND" '(toggle_do_not_disturb)))
 
-   # reeder
-   (list (make_item "Add to Reeder" '(reeder_add_active_tab)))
+   # read later
+   (list (make_item "Save to Read Later" '(feedbin_save_active_tab)))
 
    # jump list
    (list (make_item "Add to Jump List" '(add_rlist_active_tab))

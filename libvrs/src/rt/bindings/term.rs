@@ -1,5 +1,6 @@
 //! Bindings for interacting with [Connection]
 use crate::{
+    connection::Error as ConnectionError,
     rt::program::{Extern, Fiber, NativeAsyncFn, Val},
     Response,
 };
@@ -53,12 +54,16 @@ async fn send_resp_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
         "recv_req failed - no connected terminal".to_string(),
     ))?;
 
-    let resp = Response {
-        req_id: *req_id,
-        contents: Ok(contents
+    let contents = match contents {
+        Val::Error(error) => Err(ConnectionError::EvaluationError(error.clone())),
+        contents => Ok(contents
             .clone()
             .try_into()
             .map_err(|e| Error::Runtime(format!("{e}")))?),
+    };
+    let resp = Response {
+        req_id: *req_id,
+        contents,
     };
 
     term.send_response(resp)
@@ -74,7 +79,7 @@ mod tests {
     use crate::rt::program::{self, term_env, Form};
     use crate::rt::pubsub::PubSub;
     use crate::rt::term::Term;
-    use crate::rt::{kernel, Process, ProcessSet};
+    use crate::rt::{kernel, Process, ProcessId, ProcessSet};
     use crate::{Connection, ProcessResult, Program, Request};
     use assert_matches::assert_matches;
 
@@ -84,7 +89,7 @@ mod tests {
 
         let mut procs = ProcessSet::new();
         let prog = Program::from_expr("(recv_req)").unwrap().env(term_env());
-        let _ = Process::from_prog(0.into(), prog)
+        let _ = Process::from_prog(ProcessId::new("test", 0), prog)
             .term(Term::spawn(local, PubSub::spawn()))
             .spawn(&mut procs);
 
@@ -117,7 +122,7 @@ mod tests {
             (send_resp req_id "Goodbye world"))
         "#;
         let prog = Program::from_expr(prog).unwrap().env(term_env());
-        let hdl = Process::from_prog(0.into(), prog)
+        let hdl = Process::from_prog(ProcessId::new("test", 0), prog)
             .term(Term::spawn(local, PubSub::spawn()))
             .spawn(&mut procs)
             .unwrap();
@@ -152,7 +157,7 @@ mod tests {
         let mut procs = ProcessSet::new();
 
         let prog = program::term_prog();
-        let _ = Process::from_prog(0.into(), prog)
+        let _ = Process::from_prog(ProcessId::new("test", 0), prog)
             .term(Term::spawn(local, PubSub::spawn()))
             .spawn(&mut procs);
 
@@ -171,8 +176,39 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn term_e2e_returns_evaluation_errors_as_response_errors() {
+        let (local, mut remote) = Connection::pair().unwrap();
+        let mut procs = ProcessSet::new();
+
+        let _ = Process::from_prog(ProcessId::new("test", 0), program::term_prog())
+            .term(Term::spawn(local, PubSub::spawn()))
+            .spawn(&mut procs);
+
+        remote
+            .send_req(Request {
+                id: 11,
+                contents: Val::from_expr("(undefined_function)")
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+            })
+            .await
+            .unwrap();
+
+        assert_matches!(
+            remote.recv_resp().await,
+            Some(Ok(Response {
+                req_id: 11,
+                contents: Err(ConnectionError::EvaluationError(
+                    Error::UndefinedSymbol(symbol)
+                )),
+            })) if symbol == lyric::SymbolId::from("undefined_function")
+        );
+    }
+
+    #[tokio::test]
     async fn standard_procs_has_no_bindings() {
-        let k = kernel::start();
+        let k = kernel::start_test();
 
         {
             let prog = Program::from_expr("(recv_req)").unwrap().env(term_env());

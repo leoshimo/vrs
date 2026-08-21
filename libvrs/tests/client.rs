@@ -5,7 +5,7 @@ use vrs::{Client, Connection, Response, Runtime};
 
 #[tokio::test]
 async fn request_response() {
-    let runtime = Runtime::new();
+    let runtime = Runtime::new("test");
     let (local, remote) = Connection::pair().unwrap();
     let remote = Client::new(remote);
 
@@ -30,7 +30,7 @@ async fn request_response() {
 async fn request_response_multi() {
     use lyric::parse as p;
 
-    let runtime = Runtime::new();
+    let runtime = Runtime::new("test");
     let (local, remote) = Connection::pair().unwrap();
     let client = Client::new(remote);
 
@@ -62,7 +62,7 @@ async fn request_response_multi() {
 async fn request_response_parallel() {
     let (local, remote) = Connection::pair().unwrap();
 
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
     let _ = rt.handle_conn(remote).await.unwrap();
 
     let client = Client::new(local);

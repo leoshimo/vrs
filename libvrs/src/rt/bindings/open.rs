@@ -3,7 +3,7 @@
 use crate::rt::program::Lambda;
 use lyric::{compile, parse, SymbolId};
 
-// TODO: Move these to init.ll global bindings
+// TODO: Move these to scripts/init.ll global bindings
 
 /// Binding for open_url
 pub(crate) fn open_url_fn() -> Lambda {

@@ -47,7 +47,31 @@ struct Client {
 }
 
 enum Cmd {
-    Request(Form, oneshot::Sender<Response>),
+    Request(Form, oneshot::Sender<Result<Response>>),
+}
+
+async fn request_once(client: &mut Option<vrs::Client>, form: Form) -> Result<Response> {
+    if client.is_none() {
+        let socket = vrs::runtime_socket();
+        let conn = UnixStream::connect(socket)
+            .await
+            .map(Connection::new)
+            .with_context(|| "Failed to connect to vrsd socket")?;
+        *client = Some(vrs::Client::new(conn));
+    }
+
+    let result = client
+        .as_ref()
+        .expect("client should be connected")
+        .request(form)
+        .await;
+    match result {
+        Ok(response) => Ok(response),
+        Err(error) => {
+            *client = None;
+            Err(error).with_context(|| "VRS request failed")
+        }
+    }
 }
 
 impl Client {
@@ -67,17 +91,12 @@ impl Client {
         self.hdl_tx = Some(tx);
 
         self.task = Some(tauri::async_runtime::spawn(async move {
-            let socket = vrs::runtime_socket();
-            let conn = UnixStream::connect(socket)
-                .await
-                .map(Connection::new)
-                .with_context(|| "Failed to connect to vrsd socket")?;
-            let client = vrs::Client::new(conn);
+            let mut client = None;
 
             while let Some(cmd) = rx.recv().await {
                 match cmd {
                     Cmd::Request(f, resp_tx) => {
-                        let res = client.request(f).await?;
+                        let res = request_once(&mut client, f).await;
                         let _ = resp_tx.send(res);
                     }
                 }
@@ -93,39 +112,41 @@ impl Client {
             let hdl_tx = self.hdl_tx.clone().expect("Client task is not started");
             let (resp_tx, resp_rx) = oneshot::channel();
             hdl_tx.send(Cmd::Request(form, resp_tx)).await?;
-            let res = resp_rx
+            resp_rx
                 .await
-                .with_context(|| "Failed to receive response")?;
-
-            Ok(res)
+                .with_context(|| "Failed to receive response")?
         })
     }
+}
+
+fn query_request(query: &str) -> Form {
+    Form::List(vec![
+        Form::symbol("begin"),
+        Form::List(vec![Form::symbol("bind_srv"), Form::keyword("vrsjmp")]),
+        Form::List(vec![Form::symbol("get_items"), Form::string(query)]),
+    ])
 }
 
 #[tauri::command]
 fn set_query(query: &str, state: tauri::State<State>) -> Vec<serde_json::Value> {
     let mut matcher = state.matcher.lock().unwrap();
-
-    // TODO: Contents of `query` should be escaped
-    let request = match Form::from_expr(&format!(
-        "(begin (bind_srv :vrsjmp) (get_items \"{}\"))",
-        query
-    )) {
-        Ok(f) => f,
-        Err(lyric::Error::IncompleteExpression(_)) => return vec![],
-        Err(e) => {
-            error!("Invalid form for user query - {e}");
+    let response = match state.client.request(query_request(query)) {
+        Ok(response) => response,
+        Err(error) => {
+            error!("Error requesting items - {error}");
             return vec![];
         }
     };
 
-    let response = state.client.request(request).unwrap();
-
-    let items = match response.contents.unwrap() {
-        Form::List(items) => items.iter().map(|i| i.to_string()).collect(),
-        e => {
+    let items = match response.contents {
+        Ok(Form::List(items)) => items.iter().map(|i| i.to_string()).collect(),
+        Ok(e) => {
             error!("Received unexpected response from client - {e}");
             vec![]
+        }
+        Err(error) => {
+            error!("Error evaluating item request - {error}");
+            return vec![];
         }
     };
 
@@ -267,5 +288,26 @@ fn center_in_primary_monitor(window: &Window) {
     let y = monitor_pos.y + (monitor_size.height / 2 - window_size.height / 2) as i32;
     if let Err(e) = window.set_position(PhysicalPosition::new(x, y)) {
         tracing::error!("Failed to set position - {e}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn query_request_preserves_user_text_as_data() {
+        let query = "quotes \" backslash \\ newline\n) (exec \"unexpected\")";
+        let request = query_request(query);
+
+        assert_eq!(
+            request,
+            Form::List(vec![
+                Form::symbol("begin"),
+                Form::List(vec![Form::symbol("bind_srv"), Form::keyword("vrsjmp")]),
+                Form::List(vec![Form::symbol("get_items"), Form::string(query)]),
+            ])
+        );
+        assert_eq!(Form::from_expr(&request.to_string()).unwrap(), request);
     }
 }

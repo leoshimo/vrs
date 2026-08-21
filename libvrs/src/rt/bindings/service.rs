@@ -103,7 +103,7 @@ async fn register_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
 /// Binding for ls_srv
 pub(crate) fn ls_srv_fn() -> NativeAsyncFn {
     NativeAsyncFn {
-        doc: "(ls_srv) - Returns a list containing all registered services and exported interface"
+        doc: "(ls_srv) - Returns the selected service and exported interface for every registered name"
             .to_string(),
         func: |f, args| Box::new(ls_srv_impl(f, args)),
     }
@@ -209,7 +209,7 @@ async fn info_srv_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
         .ok_or(Error::Runtime(format!("No service found for {keyword}")))?;
 
     match query.as_str() {
-        "pid" => Ok(Val::Extern(Extern::ProcessId(entry.pid()))),
+        "pid" => Ok(entry.process_val()),
         "interface" => Ok(Val::List(entry.interface().to_vec())),
         "interface_doc" => {
             let mut interface_doc = vec![];
@@ -318,13 +318,18 @@ pub(crate) fn spawn_srv_fn() -> NativeFn {
 }
 
 /// Implementation for (spawn_srv) that matches (srv)'s signature
-fn spawn_srv_impl(_f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
+fn spawn_srv_impl(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
     // Expand
     //     (spawn_srv :SRV_NAME :interface '(sym_a sym_b))
     // Into
-    //     (spawn (lambda () (begin
-    //            (try (kill (find_srv :SRV_NAME)))
-    //            (srv :SRV_NAME :interface '(sym_a sym_b)))))
+    //     (let ((__spawned_service
+    //              (spawn (lambda ()
+    //                (begin
+    //                  (try (kill (find_srv :SRV_NAME)))
+    //                  (srv :SRV_NAME :interface '(sym_a sym_b)
+    //                       :ready <parent-pid>))))))
+    //       (recv (list :service_ready __spawned_service))
+    //       __spawned_service)
 
     let mut srv = vec![Val::symbol("srv")];
     srv.push(args[0].clone());
@@ -333,16 +338,31 @@ fn spawn_srv_impl(_f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
         srv.push(Val::keyword("interface"));
         srv.push(Val::List(vec![Val::symbol("quote"), interfaces.clone()]));
     }
+    srv.push(Val::keyword("ready"));
+    srv.push(Val::Extern(Extern::ProcessId(f.locals().pid.clone())));
 
     let kill_srv = Val::from_expr(&format!("(try (kill (find_srv {})))", args[0].clone())).unwrap();
-
-    let ast = Val::List(vec![
+    let spawn = Val::List(vec![
         Val::symbol("spawn"),
         Val::List(vec![
             Val::symbol("lambda"),
             Val::List(vec![]),
             Val::List(vec![Val::symbol("begin"), kill_srv, Val::List(srv)]),
         ]),
+    ]);
+    let child = Val::symbol("__spawned_service");
+    let ast = Val::List(vec![
+        Val::symbol("let"),
+        Val::List(vec![Val::List(vec![child.clone(), spawn])]),
+        Val::List(vec![
+            Val::symbol("recv"),
+            Val::List(vec![
+                Val::symbol("list"),
+                Val::keyword("service_ready"),
+                child.clone(),
+            ]),
+        ]),
+        child,
     ]);
 
     let bc = compile(&ast)?;
@@ -438,41 +458,54 @@ fn srv_impl(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
         Val::keyword("interface"),
         Val::List(vec![Val::symbol("quote"), interface]),
     ]);
+    let ready_form = kwargs::get(args, &KeywordId::from("ready")).map(|ready| {
+        Val::List(vec![
+            Val::symbol("send"),
+            ready.clone(),
+            Val::List(vec![
+                Val::symbol("list"),
+                Val::keyword("service_ready"),
+                Val::List(vec![Val::symbol("self")]),
+            ]),
+        ])
+    });
 
     // TODO: Rust macros plz
-    let ast = Val::List(vec![
-        Val::symbol("begin"),
-        register_form,
+    let service_loop = Val::List(vec![
+        Val::symbol("loop"),
+        // (def (r src msg) (recv))
         Val::List(vec![
-            Val::symbol("loop"),
-            // (def (r src msg) (recv))
+            Val::symbol("def"),
             Val::List(vec![
-                Val::symbol("def"),
-                Val::List(vec![
-                    Val::symbol("r"),
-                    Val::symbol("src"),
-                    Val::symbol("msg"),
-                ]),
-                Val::List(vec![Val::symbol("recv")]),
-            ]),
-            // (def resp (try (match ...)))
-            Val::List(vec![
-                Val::symbol("def"),
-                Val::symbol("resp"),
-                Val::List(vec![Val::symbol("try"), Val::List(match_form)]),
-            ]),
-            // (send src (list r resp))
-            Val::List(vec![
-                Val::symbol("send"),
+                Val::symbol("r"),
                 Val::symbol("src"),
-                Val::List(vec![
-                    Val::symbol("list"),
-                    Val::symbol("r"),
-                    Val::symbol("resp"),
-                ]),
+                Val::symbol("msg"),
+            ]),
+            Val::List(vec![Val::symbol("recv")]),
+        ]),
+        // (def resp (try (match ...)))
+        Val::List(vec![
+            Val::symbol("def"),
+            Val::symbol("resp"),
+            Val::List(vec![Val::symbol("try"), Val::List(match_form)]),
+        ]),
+        // (send src (list r resp))
+        Val::List(vec![
+            Val::symbol("send"),
+            Val::symbol("src"),
+            Val::List(vec![
+                Val::symbol("list"),
+                Val::symbol("r"),
+                Val::symbol("resp"),
             ]),
         ]),
     ]);
+    let mut body = vec![Val::symbol("begin"), register_form];
+    if let Some(ready_form) = ready_form {
+        body.push(ready_form);
+    }
+    body.push(service_loop);
+    let ast = Val::List(body);
 
     let bc = compile(&ast)?;
     Ok(NativeFnOp::Exec(bc))

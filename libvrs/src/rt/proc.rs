@@ -1,5 +1,6 @@
 use super::kernel::WeakKernelHandle;
 use super::mailbox::Message;
+use super::peer::PeerHandle;
 use super::program::{Extern, Locals, Val};
 use super::pubsub::PubSubHandle;
 use super::registry::Registry;
@@ -8,6 +9,7 @@ use crate::rt::mailbox::{Mailbox, MailboxHandle};
 use crate::rt::{Error, Result};
 use crate::Program;
 use futures::future::{FutureExt, Shared};
+use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinSet;
 use tracing::info;
@@ -16,8 +18,11 @@ use tracing::info;
 pub type ProcessSet = JoinSet<ProcessExit>;
 
 /// IDs assigned to processes
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ProcessId(usize);
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ProcessId {
+    node: String,
+    id: usize,
+}
 
 /// A running process in runtime
 pub struct Process {
@@ -27,6 +32,9 @@ pub struct Process {
 }
 
 /// A handle to [Process]
+// TODO: Introduce an owning handle whose drop kills the process, similar to
+// tokio process kill_on_drop, without making internal shared handle clones
+// accidentally terminate it.
 #[derive(Debug, Clone)]
 pub struct ProcessHandle {
     id: ProcessId,
@@ -55,7 +63,7 @@ impl Process {
     /// Create a new process for program
     pub(crate) fn from_prog(id: ProcessId, prog: Program) -> Self {
         Self {
-            id,
+            id: id.clone(),
             prog,
             locals: Locals::new(id),
         }
@@ -70,6 +78,16 @@ impl Process {
     /// Set registry handle for process
     pub(crate) fn registry(mut self, r: Registry) -> Self {
         self.locals.registry(r);
+        self
+    }
+
+    pub(crate) fn peers(mut self, peers: PeerHandle) -> Self {
+        self.locals.peers(peers);
+        self
+    }
+
+    pub(crate) fn node_name(mut self, node_name: String) -> Self {
+        self.locals.node_name(node_name);
         self
     }
 
@@ -92,9 +110,9 @@ impl Process {
         let (exit_tx, exit_rx) = oneshot::channel();
         let (msg_tx, mut msg_rx) = mpsc::channel(32);
 
-        let mailbox: MailboxHandle = Mailbox::spawn(self.id);
+        let mailbox: MailboxHandle = Mailbox::spawn(self.id.clone());
         let proc_hdl = ProcessHandle {
-            id: self.id,
+            id: self.id.clone(),
             hdl_tx: msg_tx,
             exit_rx: exit_rx.shared(),
             mailbox,
@@ -110,18 +128,18 @@ impl Process {
                 res = lyric::run(&mut fiber) => {
                     match res {
                         Ok(v) => ProcessExit {
-                            id: self.id,
+                            id: self.id.clone(),
                             status: Ok(ProcessResult::Done(v)),
                         },
                         Err(e) => ProcessExit {
-                            id: self.id,
+                            id: self.id.clone(),
                             status: Err(Error::EvaluationError(e)),
                         }
                     }
                 },
                 Some(msg) = msg_rx.recv() => match msg {
                     Event::Kill => ProcessExit {
-                        id: self.id,
+                        id: self.id.clone(),
                         status: Ok(ProcessResult::Cancelled)
                     }
                 },
@@ -139,7 +157,11 @@ impl Process {
 impl ProcessHandle {
     /// Get the ID
     pub fn id(&self) -> ProcessId {
-        self.id
+        self.id.clone()
+    }
+
+    pub(crate) fn id_ref(&self) -> &ProcessId {
+        &self.id
     }
 
     /// Send kill message to process. Effect is not immediate.
@@ -175,20 +197,25 @@ enum Event {
 }
 
 impl ProcessId {
-    pub fn inner(&self) -> &usize {
-        &self.0
+    pub fn new(node: impl Into<String>, id: usize) -> Self {
+        Self {
+            node: node.into(),
+            id,
+        }
     }
-}
 
-impl From<usize> for ProcessId {
-    fn from(value: usize) -> Self {
-        Self(value)
+    pub fn node(&self) -> &str {
+        &self.node
+    }
+
+    pub fn inner(&self) -> &usize {
+        &self.id
     }
 }
 
 impl std::fmt::Display for ProcessId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<pid {}>", self.0)
+        write!(f, "<{}:{}>", self.node, self.id)
     }
 }
 
@@ -227,16 +254,20 @@ mod tests {
 
     use super::*;
 
+    fn test_pid(id: usize) -> ProcessId {
+        ProcessId::new("test", id)
+    }
+
     #[tokio::test]
     async fn spawn_simple() {
         let mut procs = ProcessSet::new();
         let prog = Program::from_expr("\"Hello\"").unwrap();
-        let _ = Process::from_prog(99.into(), prog)
+        let _ = Process::from_prog(test_pid(99), prog)
             .spawn(&mut procs)
             .unwrap();
 
         let res = procs.join_next().await.unwrap().unwrap();
-        assert_eq!(res.id, 99.into());
+        assert_eq!(res.id, test_pid(99));
         assert_eq!(
             res.status.unwrap(),
             ProcessResult::Done(Val::string("Hello")),
@@ -247,14 +278,14 @@ mod tests {
     async fn processes_are_isolated() {
         let mut procs = ProcessSet::new();
         let prog = Program::from_expr("(def x 0)").unwrap();
-        let _ = Process::from_prog(0.into(), prog)
+        let _ = Process::from_prog(test_pid(0), prog)
             .spawn(&mut procs)
             .unwrap();
         let res = procs.join_next().await.unwrap().unwrap();
         assert_eq!(res.status.unwrap(), ProcessResult::Done(Val::Int(0)),);
 
         let prog = Program::from_expr("x").unwrap();
-        let _ = Process::from_prog(0.into(), prog)
+        let _ = Process::from_prog(test_pid(0), prog)
             .spawn(&mut procs)
             .unwrap();
         let res = procs.join_next().await.unwrap().unwrap();
@@ -270,16 +301,20 @@ mod tests {
         let mut procs = ProcessSet::new();
 
         let prog = Program::from_expr("(self)").unwrap();
-        let hdl = Process::from_prog(99.into(), prog)
+        let hdl = Process::from_prog(test_pid(99), prog)
             .spawn(&mut procs)
             .unwrap();
 
-        assert_eq!(hdl.id(), 99.into(), "ProcessHandle should have matching ID");
+        assert_eq!(
+            hdl.id(),
+            test_pid(99),
+            "ProcessHandle should have matching ID"
+        );
 
         let res = procs.join_next().await.unwrap().unwrap();
         assert_eq!(
             res.status.unwrap(),
-            ProcessResult::Done(Val::Extern(Extern::ProcessId(99.into()))),
+            ProcessResult::Done(Val::Extern(Extern::ProcessId(test_pid(99)))),
             "(self) should return assigned PID"
         );
     }

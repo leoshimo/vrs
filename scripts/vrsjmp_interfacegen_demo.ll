@@ -5,6 +5,7 @@
 (bind_srv :os_notify)
 (bind_srv :interfacegen)
 
+(call_timeout 60)
 (def items (interfacegen "UI for pomodoro timer for 10 seconds, 5 minutes, and 25 minutes"))
 
 (defn get_items (query)

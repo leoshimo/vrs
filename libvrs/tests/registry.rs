@@ -7,7 +7,7 @@ use vrs::{Error, Extern, Program, Runtime, Val};
 
 #[tokio::test]
 async fn list_services_empty() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let prog = Program::from_expr("(ls_srv)").unwrap();
     let hdl = rt.run(prog).await.unwrap();
@@ -18,7 +18,7 @@ async fn list_services_empty() {
 
 #[tokio::test]
 async fn list_services() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let srv_a = Program::from_expr("(begin (register :service_a) (recv))").unwrap();
     let srv_a = rt.run(srv_a).await.unwrap();
@@ -78,7 +78,7 @@ async fn list_services() {
 
 #[tokio::test]
 async fn find_service() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let srv_a = Program::from_expr("(begin (register :service_a) (recv))").unwrap();
     let srv_a = rt.run(srv_a).await.unwrap();
@@ -95,7 +95,7 @@ async fn find_service() {
 #[tokio::test]
 #[tracing_test::traced_test]
 async fn find_service_dropped() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let srv_a = Program::from_expr("(begin (register :service_a) (recv))").unwrap();
     let _ = rt.run(srv_a).await.unwrap();
@@ -125,7 +125,7 @@ async fn find_service_dropped() {
 
 #[tokio::test]
 async fn find_service_unknown() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let srv_a = Program::from_expr("(begin (register :service_a) (recv))").unwrap();
     let _ = rt.run(srv_a).await.unwrap();
@@ -146,7 +146,7 @@ async fn find_service_unknown() {
 
 #[tokio::test]
 async fn double_register_fails() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let srv_a = Program::from_expr("(begin (register :service_a) (recv))").unwrap();
     let srv_a = rt.run(srv_a).await.unwrap();
@@ -192,7 +192,7 @@ async fn double_register_fails() {
 
 #[tokio::test]
 async fn overwrite_register_succeeds() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let srv_a = Program::from_expr("(begin (register :service_a) (recv))").unwrap();
     let _srv_a = rt.run(srv_a).await.unwrap();
@@ -227,7 +227,7 @@ async fn overwrite_register_succeeds() {
 
 #[tokio::test]
 async fn registry_updates_after_exit() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let srv_a = Program::from_expr("(begin (register :service_a) (recv))").unwrap();
     let srv_a = rt.run(srv_a).await.unwrap();
@@ -277,7 +277,7 @@ async fn registry_updates_after_exit() {
 
 #[tokio::test]
 async fn registry_updates_after_kill() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let srv_a = Program::from_expr("(begin (register :service_a) (recv))").unwrap();
     let srv_a = rt.run(srv_a).await.unwrap();
