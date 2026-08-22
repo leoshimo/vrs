@@ -49,6 +49,13 @@ with JSON output (stable IDs, dates, calendar, location, and URLs), then adapt
 =os_cal.ll= to return structured entities for a lazy page. Keep event creation
 and natural-language scheduling separate.
 
+** TODO HTML client for VRS
+
+Let web pages use runtime capabilities through a browser client for VRS services.
+
+- Make the tour itself a client: edit and evaluate examples in the page, inspect
+  live results, and use services created by earlier examples in later ones.
+
 ** TODO Personal Timeline service
 
 Record a chronology of meaningful interactions across devices through a VRS
