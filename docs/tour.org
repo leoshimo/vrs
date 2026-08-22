@@ -35,8 +35,9 @@ every device a way into the whole system.
 
 * Working through the tour
 
-With [[file:../README.md][VRS running]], the examples work in the =vrsctl= REPL. For live
-editing, use [[file:guide-emacs.org][the editor]]:
+With [[file:../README.md][VRS running]], the examples can be run in the =vrsctl= REPL.
+
+For the full live editing experience, use [[file:guide-emacs.org][the editor]]:
 
 #+begin_src sh
 emacs -Q -L emacs -l vrs-mode scratch.ll
