@@ -7,7 +7,7 @@
              (vrs/service_option_pairs (slice options 2))))))
 
 (defn! vrs/service_options (options allow_ready)
-  (def interface nil)
+  (def interface ''())
   (def topics ''())
   (def ready nil)
   (def seen '())
@@ -22,7 +22,6 @@
         (if (not? allow_ready) (error "spawn_srv! does not accept :ready"))
         (set ready value)))
       (_ (error "service macro expects :interface, :topics, or :ready")))))
-  (if (not? (contains? seen :interface)) (error "service macro requires :interface"))
   (list :interface interface :topics topics :ready ready :has_ready (contains? seen :ready)))
 
 (defn! vrs/service_clauses (interface)
@@ -65,7 +64,7 @@
       (if (err? ,result) (vrs/report_service_event_error ,service ,topic ,result)))))))
 
 (defmacro srv (name & options)
-  "(srv! NAME :interface EXPR [:topics EXPR] [:ready PID-EXPR]) - Serve calls and topic handlers in the current process."
+  "(srv! NAME [:interface EXPR] [:topics EXPR] [:ready PID-EXPR]) - Serve calls and topic handlers in the current process. The interface defaults to an empty list."
   (def parsed (vrs/service_options options true))
   (def interface (eval_caller (get parsed :interface)))
   (def clauses (vrs/service_clauses interface))
@@ -107,7 +106,7 @@
          (_ nil)))))
 
 (defmacro spawn_srv (name & options)
-  "(spawn_srv! NAME :interface EXPR [:topics EXPR]) - Return the child's PID after local subscriptions and registration. Raise an error if it exits before readiness. No startup deadline or health check."
+  "(spawn_srv! NAME [:interface EXPR] [:topics EXPR]) - Return the child's PID after local subscriptions and registration. The interface defaults to an empty list. Raise an error if it exits before readiness. No startup deadline or health check."
   (def parsed (vrs/service_options options false))
   (def interface (eval_caller (get parsed :interface)))
   # Validate before spawning so errors reach the caller instead of losing readiness.

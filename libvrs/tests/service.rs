@@ -77,13 +77,54 @@ async fn service_dispatch_survives_event_errors_and_uses_current_handler() {
 }
 
 #[tokio::test]
+async fn service_macros_default_to_empty_interfaces() {
+    let result = run_service_program(
+        r#"(begin
+      (def parent (self))
+      (def spawned (spawn_srv! :empty_spawned))
+      (def current (spawn (fn () (srv! :empty_current :ready parent))))
+      (recv (list :service_ready current))
+      (list
+        (info_srv :empty_spawned :interface)
+        (info_srv :empty_current :interface)
+        (call spawned '(:missing))
+        (call current '(:missing))))"#,
+    )
+    .await;
+    assert_eq!(
+        result,
+        Val::from_expr("(() () (:err \"Unrecognized message\") (:err \"Unrecognized message\"))")
+            .unwrap()
+    );
+}
+
+#[tokio::test]
+async fn spawned_service_supports_topics_without_an_interface_option() {
+    let result = run_service_program(
+        r#"(begin
+      (def parent (self))
+      (def evaluations 0)
+      (defn! report (data) (send parent (list :payload data)))
+      (spawn_srv! :listener
+        :topics (begin (set evaluations (+ evaluations 1)) '((:value report))))
+      (publish :value '(one two))
+      (list evaluations (info_srv :listener :interface) (recv '(:payload _))))"#,
+    )
+    .await;
+    assert_eq!(
+        result,
+        Val::from_expr("(1 () (:payload (one two)))").unwrap()
+    );
+}
+
+#[tokio::test]
 async fn current_process_service_supports_topics_without_exported_calls() {
     let result = run_service_program(
         r#"(begin
       (def parent (self))
       (def child (spawn (fn ()
         (defn! report (report) (send parent (list :payload report)))
-        (srv! :listener :ready parent :topics '((:value report)) :interface '()))))
+        (srv! :listener :ready parent :topics '((:value report))))))
       (recv (list :service_ready child))
       (publish :value '(one two))
       (recv '(:payload _)))"#,

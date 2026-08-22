@@ -185,9 +185,7 @@ async fn service_macro_option_errors_are_catchable_before_spawning() {
             Val::Bool(true)
         );
         for options in [
-            "",
             ":interface",
-            ":ready (self)",
             ":unknown '()",
             ":interface '() :unknown nil",
             ":interface '() :ready",
@@ -204,7 +202,11 @@ async fn service_macro_option_errors_are_catchable_before_spawning() {
             assert_eq!(result, value("(true 0 ())"), "{name} {options}");
         }
     }
-    for options in [":interface '() :ready nil", ":ready nil :interface '()"] {
+    for options in [
+        ":ready (self)",
+        ":interface '() :ready nil",
+        ":ready nil :interface '()",
+    ] {
         assert_eq!(
             run(&format!(
                 "(list (err? (try (spawn_srv! :bad {options}))) (ls_srv))"
