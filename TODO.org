@@ -313,6 +313,13 @@ I.e. the hypermedia is generated based rules on entities it matches
 Thought - Running embark-like mechanics is itself a cmd - i.e. "show me embark
 meno on this item"
 
+** TODO Desktop context daemon and CLI
+
+Expose desktop context through a daemon and CLI interface. Recognize entities
+in that context, like URLView recognizing URLs in text, and plumb the resulting
+entities into existing actions. Build on =scripts/os_context.ll= so vrsjmp and
+other clients can use the same context and entity actions.
+
 ** TODO General User IO
 Give VRs capability to see (web pages, screen), Hear (user, text) and prompt for
 input (text, voice, selection)
