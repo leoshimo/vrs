@@ -1,28 +1,66 @@
 #+TITLE: Design Notes
 
-Design sketches and proposals. See [[file:docs/concepts.md][Core Concepts]] for the current implementation.
+Design principles, current mechanisms, and proposals. Sections marked as ideas,
+goals, or WIP describe directions rather than promises of implemented behavior.
+See [[file:docs/concepts.md][Core Concepts]] for the current programming interface.
 
 * Mission and Approach
 
-Goal of VRS is to accelerate my own programming. It hopes to enable individuals
-to build software experiences on the scale of world's largest software
-companies.
+VRS aims to accelerate my own programming. The ambition is to let individuals
+build software experiences on the scale of the world's largest software
+companies, while keeping those tools understandable and changeable by their
+authors.
 
-To this end, it is designed to minimize impedance at every layer of stack,
-looking at programming as one comprehensive experience.
+The language, runtime, services, clients, user interfaces, editor, and access to
+other devices are designed together. The unit of design is the whole path from
+trying an expression to building, using, inspecting, and revising a tool. This
+scope matters: a small shared vocabulary can remove repeated work between
+layers that would otherwise need separate conventions.
 
-Every facet of programming - language, execution environment, clients, user
-interfaces, editing, etc - is designed from the ground up to work together. The
-goal isn't to build any one component to be the best, but to provide the best
-holistic experience - deliberately designed, end-to-end, over every aspect of
-building software.
+Personal software includes small, situated tools as well as lasting programs.
+An experiment may be useful once, become a daily tool, or suggest something
+else to build. Continued authorship matters: using a tool should leave its
+behavior accessible to inspection and revision. Play is part of the intended
+experience, including finding out what is being built during building.
 
-In the latent space, runtime is:
-- An environment where making has character of play
-   - Find out what is being built during building
-- Computer supports the creative spirit - uniform, dynamic, fun
-- Has feeling of being inside a program
-   - Like Common Lisp and Emacs
+** Design qualities
+
+VRS is *pragmatic* about how services are built. Services are written in Lyric,
+VRS's scripting language. They can define their own behavior and compose
+command-line tools, database queries, and application scripting. Their
+functions are available to programs and interactive tools across connected
+devices. Application-specific access is implemented in the service, where
+callers can reuse it. Adapters still require implementation and maintenance.
+
+VRS is *uniform* across its language, runtime, user interfaces, and editor.
+Calls take the same form whether a service runs locally or on another connected
+device. An expression tried at the REPL can become an action in a user interface.
+A user action can be recorded as the expression it executes, then pasted into
+source or evaluated again. An expression in the source can be replaced with a
+literal representation of its result. Functions, values, expressions, and
+message-based processes provide the shared vocabulary. Uniform access does not
+require identical presentations.
+
+VRS is *interactive* throughout the programming process. Build iteratively
+against the running system, invoking functions and inspecting actual results
+as you write. The editor is one of its clients, so editing can use the same
+live capabilities as other programs. Reevaluating a service lets existing
+clients use its changed behavior on subsequent calls.
+
+Directness and economy are consequences of this design. /Direct/ describes the
+short distance between an expression and the operation it performs. /Economical/
+means fewer concepts and less repeated integration work. /Exploratory/ describes
+learning what to build through actual results; /iterative/ and /incremental/
+describe revising and extending working pieces. These are related qualities,
+rather than independent features that each need another abstraction.
+
+Composition is a way of building software. The design question is what makes it
+easy to combine capabilities, inspect the result, and keep changing the program.
+An operation can become part of a program, an interface action, or a call from
+another device through the same interface. "Remixing" and "software scrapbooking"
+describe useful moments: collecting live values, retaining a command, or putting
+results from several services in one view. They support the broader live
+programming model rather than define its limits.
 
 * Technical Goals
 
@@ -33,34 +71,47 @@ Build an environment that enables:
 
 * Influences
 
-Emacs - Extensible, uniform, interactive, moldable software
-environment. Immediate Feedback while building.
+Emacs - An extensible environment in which using, inspecting, and programming
+tools can happen together. Live extension and immediate feedback while building.
 
 Erlang - Message based, distributed software runtime w/ userspace
 concurrency. "Let It Crash" philosophy. Simple, powerful concurrency.
 
 Hypermedia - Self-describing, uniform interface. Thin general-purpose clients.
 
-Unix - Composability of programs via stdio, pipes, and plaintext. Polyglot.
+Unix - Deliberate compatibility through stdio, pipes, and common conventions.
+Small programs written in different languages can do useful work together.
+VRS seeks the shell's practical, exploratory feel across modern applications
+and devices.
+
+Acme - Shared interaction conventions let an editor work with independent
+programs. The editor participates in an integrating environment.
 
 Plan 9 - Per-process hierarchical namespaces and hypermedia approach to plaintext via plumber
+
+Related writing: [[https://www.nokia.com/bell-labs/about/dennis-m-ritchie/retro.html][Ritchie's Unix retrospective]],
+[[https://9p.io/sys/doc/acme/acme.html][Pike's Acme paper]], and the [[https://www.gnu.org/software/emacs/manual/html_node/emacs/Intro.html][Emacs introduction]].
 
 [[./assets/vrs-venn.png]]
 
 * Experience
 
-*interactive*
-High-level of introspection and live molding of environment
+Evaluate the experience through complete interactions:
 
-*hackability*
-Built for hacking software
+- Discover a capability, call it, and inspect the actual result.
+- Keep a useful value as source and build the next operation around it.
+- Use the same capability from a second client or program.
+- Revise a service and observe the change through existing callers.
+- Trace a failure to the expression or adapter that needs changing.
 
-*simplicity*
-Uniform interface, with small number of primitives
+A second consumer is a useful test of the design: does it reuse the interface,
+or require another application-specific integration? The tour demonstrates
+these paths; an inventory of primitives alone does not establish their value.
 
 * Design: Uniformity
 
-Uniformity is a key principle to remove friction.
+Uniformity reduces the number of conventions a programmer must learn and the
+translations required between parts of a program.
 
 VRS has uniformity:
 - In representation - over data, code, and markup
@@ -68,16 +119,24 @@ VRS has uniformity:
 - In boundaries - over functions, clients, external programs, networks, and devices
 - In interactions - over programs, users, automation, and agents.
 
-Uniform Interface - Common Primitives
-Compute and Data Substrate
-Turn O(M*N) problems into O(M+N)
+** Economy through shared interfaces
 
-Everything is a Function Call
-- Generate user interfaces off function call signature
-- User interactions are function calls
-- Agents can use function calls
-- Data queries are function calls
-- User interactions directly translate to a program - same for agent
+For M capability providers and N clients, the aim is to write M service adapters
+and N runtime clients, rather than M*N pairwise integrations. This is a design
+target for reusable interface work, not a complexity bound on every application.
+Parsing, authentication, application semantics, and client-specific presentation
+still need work. The service is where application-specific access is implemented
+and shared.
+
+The same expression can be tried at the REPL, composed into another function,
+or stored as an interface action. Recorded commands remain expressions that can
+be edited and evaluated. This directness depends on the shared language and
+calling conventions, not on the absence of abstractions.
+
+Uniformity is about access and composition. A terminal picker, a graphical
+menu, and an editor can use the same functions while presenting different
+interactions. Each client implements its interaction protocol once; new actions
+within that protocol can be supplied by running code.
 
 * Architectural Components
 
@@ -94,7 +153,50 @@ Clients - CLI programs (=vrsctl=), GUI programs (=vrsjmp=), and editors
 
 [[./assets/vrs-arch-stack.png]]
 
+* Services and Devices
+
+A service is a running program exposing a named collection of callable
+functions. It can provide access to another application or implement the
+capability itself. Programs use the service interface; its implementation can
+combine whatever mechanisms are practical on its host.
+
+Examples of this approach already in the repository:
+
+- [[file:scripts/os_browser.ll][Browser]]: application scripting reads Safari's current page; SQLite reads
+  its locally synced iCloud tab cache. Reading the cache does not force a sync.
+- [[file:scripts/os_notes.ll][Apple Notes]] and [[file:scripts/antinote.ll][Antinote]]: database queries provide note data, while
+  scripting or application URLs perform actions. A shared search can combine
+  their results without a new integration in each client.
+- [[file:scripts/feedbin.ll][Feedbin]]: an existing CLI supplies capabilities to a runtime service.
+
+For example, composing browser data with a todo service does not require a
+Safari extension for each destination. The work of obtaining the browser data
+is available to a script, an automation, or an interactive tool. A desktop
+widget or an aggregate agenda would be further clients to build, not capabilities
+implied by the service itself.
+
+** One programming environment across devices
+
+Peered nodes discover services that programs can bind and call through the same
+function interface. Put a capability on the device that has it: a home Mac can
+host a speaker service, while a program on the laptop calls its =announce=
+function. The shared interface makes the collection of devices programmable
+together; remote latency and failure still matter.
+
+=remote!= and =vrsctl --node= support sending code to another node and starting
+services there. Existing service bindings follow a replacement implementation
+with the same interface. Code runs with the destination's files and tools;
+dependencies, startup configuration, and persistent state are separate concerns.
+See [[file:docs/concepts.md::#nodes-and-peering][Nodes and Peering]] for current behavior.
+
 * Client and Runtime
+
+A client is a program that connects to the runtime, calls its functions, and
+works with returned values. CLI tools, shell scripts, graphical applications,
+and editors provide different ways to interact with the same environment.
+An editor's client connection gives editing commands access to live functions
+and data.
+
 ** Goals
 
 Communication between client and runtime is a simple message-based and transport
@@ -317,6 +419,17 @@ programs that sleep in a loop:
       (do_a_thing))
 #+end_src
 
+Waiting is ordinary program state. A spawned indexer can run, sleep, and repeat;
+a service can handle topic events alongside function calls in one event loop.
+For example, a todo-completion event can trigger the external =unicornleap=
+program through a separate service. This makes scheduling and reactions
+programmable using the same execution model.
+
+Spawned programs can outlive the client that started them, but their in-memory
+state does not survive runtime termination. Sleeping processes are not durable
+jobs. Inspecting a process's reason for waiting, including metadata that could
+support supplying its next input, remains a design direction.
+
 ** What is a Fiber
 
 A fiber is a sequence of instructions that can be cooperatively scheduled. When
@@ -347,6 +460,22 @@ yielding calls:
    - Fiber driver is not involved
 
 * Hypermedia (WIP)
+
+** Current mechanism
+
+In [[file:scripts/vrsjmp.ll][vrsjmp]], a page names its item callback and entries carry =:on_click=
+expressions. The GUI and [[file:scripts/vrsjmp_cli.sh][shell client]] use this protocol; the runtime evaluates
+the selected action. Changing a page or action can change what existing clients
+do without changing their implementations. Both the shell client and the
+compiled GUI can use new actions expressed in this protocol. New kinds of
+widgets or interaction protocols still require client support.
+
+"Self-describing" refers to the data naming available actions and how to invoke
+them. It does not mean every client understands every representation or can
+execute arbitrary code locally. The broader document and multimodal client
+architecture below is a design sketch.
+
+** Direction
 
 The client interface uses hypermedia between the runtime and interactive client
 shells.
@@ -512,6 +641,22 @@ General Purpose Inputs
 
 * Object Store
 
+** Current entity/action mechanism
+
+Tagged values and =interactive= function metadata already support action
+discovery. =entity_functions= examines bound functions for a matching first
+argument tag; it does not execute actions or completion providers. A =ps=
+adapter can decode output into =:os/process= values, inspect each intermediate
+result at the REPL, and offer =copy_pid= or =terminate_process= through metadata.
+Emacs actions and vrsjmp's Cmd-K menu use the same query. Completion providers
+supply live argument choices when requested.
+
+These are ordinary values and functions; the metadata guides interaction rather
+than enforcing types. See [[file:docs/concepts.md::#entities-and-completions][Entities and Completions]]. A persistent object store,
+automatic relationship graph, and proactive suggestions below are proposals.
+
+** Object store proposal
+
 *What is it?*
 General Purpose, Object Store that's focused on linking data and functionality
 on that data.
@@ -612,44 +757,62 @@ A high level mental model for async tasks in runtime is:
 
 Interesting Characteristics of System
 
-** Idea: Uniformity in Edittime vs. Runtime
+** Live inspection and source
 
-Edittime: Phase when program is being actively edited by programmer
-Runtime: Phase when that program is running
+The [[file:docs/guide-emacs.org][editor]] provides access to the running system while code is being written.
+As a runtime client, it can invoke the same functions as other programs,
+including functions that provide choices or construct code. Inspection happens
+against actual application data. An expression can be replaced in source with
+a literal representation of its evaluated result. That result can become a
+fixture, a starting value, or material for the next program. Only values
+representable as source can be retained this way.
 
-VRS takes advantages of uniformity between these two (generally distinct) stages
-of developing software, e.g.:
+This supports an incremental loop: evaluate an expression, inspect its result,
+and choose the next change from what was learned. Source can also invoke code
+generators, including generators for interface data; their results can be
+inspected and inserted as code. The programmer can ask the system questions
+while constructing a program instead of predicting every intermediate result.
 
-- Copilot-like codegen experiences used during edittime can be invoked by
-  programs at runtime.
-- Runtime interactions of programs, users, automation, and agents can be reified
-  at edittime (i.e. user interactions can be turned into a program with little effort)
+Reevaluating the code that starts a service with =spawn_srv!= replaces its
+process. Existing callers with compatible bindings use the replacement on
+subsequent service calls, including across devices. This applies to CLI tools,
+scripts, editors, and graphical applications; they need not be rebuilt to use
+changed service behavior. Clients that support the service's interaction
+protocol can also use new actions expressed through that protocol. This does
+not migrate old stack frames or preserve service state automatically.
 
-This extends into test and debug phases of programming - debugging and testing
-can be done via uniform, universal mechanisms without use of secondary tools or concepts.
+[[file:docs/guide-debug.org][Source-associated debugging]] uses =dbg!= to capture calls, arguments, and
+results in bounded runtime history, available to viewers and through
+=dbg_history=. This makes an observation beside the source reusable as a tool.
+Spawned processes and remote handlers need their own observation blocks;
+stepping and time-travel replay are separate design work.
 
-** Idea: Data, Functions, and Interactive Runtime
-- The shape of data implies certain functions can be applied to access or mutate it.
-- System should support querying set of available functions for given shape of data
-- Functions themselves are function-shaped data
-- Applications:
-   - Programs can use this to dynamically resolve set of actions for given piece
-     of data (e.g. todo list element actions: toggle, add note, etc)
-   - Agents can query for functionality available on piece of data it is working on
-   - Editor can leverage this to generate scaffolding code
-- Related: Plan 9 - Plumber (Rob Pike). Emacs - Embark Package. Hypermedia.
+** Commands as editable programs
 
-** Idea: Homoiconicity
-- Symbolic expression is data, code, and interface
-- Datagen is codegen is interfacegen
-- Every piece of data can embed every other piece of data
-- Exact same mechanism (S-expression generation) can be across range of scenarios:
-   - for programming - program generation at edit-time (copilot)
-   - for agents - program generation at runtime
-   - for generated interfaces - interface generation at runtime
-   - programs, users, and agents are all modelled like programs
-- Interactions can be reified as code - interaction of user can be recorded as
-  series of function calls - which is a valid program
+The command execution helpers and vrsjmp publish selected expressions to =:cmd=.
+A subscriber can inspect that stream or collect expressions into a =begin=
+form. [[file:scripts/cmd_macro.ll][Command macros]] use the service event loop to record these forms for
+later evaluation. Observation, manual repetition, and programmatic recording
+share the same representation. The expression behind a recorded user action
+can be pasted into source, edited, or run again using the ordinary evaluator.
+
+Publication is explicit, not an automatic log of every function call. Evaluating
+a recording performs the operations again against current state; it does not
+restore the earlier environment. Pub/sub is currently node-local and best-effort,
+with no replay for late subscribers. A local event handler can still call a
+service on another device.
+
+** Code as data
+
+Lyric uses s-expressions for data, code, and interface descriptions. Constructing
+a program or an interface uses the same list operations and quotation as other
+data construction. A generator called by the editor is also callable by another
+program; its result can be inspected before evaluation.
+
+Live queries can supply data while constructing a program or a prompt. This
+reduces the need to transcribe application state or predict it from memory.
+[[file:docs/ai.md][AI and VRS]] applies this to code and interface generation. The underlying
+capability belongs to ordinary programs as well as agents.
 
 * Word Cloud
 
@@ -665,6 +828,17 @@ can be done via uniform, universal mechanisms without use of secondary tools or 
 * VRS and Agents
 
 [[file:docs/ai.md][AI and VRS]]
+
+* Open Design Questions
+
+- How should service startup, dependencies, ownership, and state preservation
+  fit the live editing model across devices?
+- What delivery, ordering, and recovery contract should cross-device pub/sub
+  provide before it becomes part of the shared service interface?
+- How can process waiting reasons be inspected and acted upon without confusing
+  observation, cancellation, and supplying an awaited value?
+- What minimal interaction protocol supports richer clients, including a web
+  client and an executable tour, while keeping application actions in services?
 
 * References
 
