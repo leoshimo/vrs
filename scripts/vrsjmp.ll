@@ -70,6 +70,80 @@
 (bind_srv :stickies)
 
 (def pending_inputs '())
+(def action_runs '())
+
+(defn! action_record (id)
+  (get (filter action_runs (fn (record) (eq? (get record :id) id))) 0))
+
+(defn! finish_action (id result)
+  "Receive an action's result without coupling its lifetime to the GUI window."
+  (def record (action_record id))
+  (set action_runs (filter action_runs (fn (record) (not? (eq? (get record :id) id)))))
+  (if (and! record (err? result))
+    (set action_runs (push action_runs
+      (+ record (list :error (display result))))))
+  :ok)
+
+(defn! execute_action (record)
+  "Run a captured call in a child; only the palette service updates the records."
+  (def owner (self))
+  (def id (get record :id))
+  (def form (get record :form))
+  (def started (try (spawn (fn ()
+    (def result (try (begin
+      (def value (eval form))
+      # Match vrs/execute_command's handling of subprocess results.
+      (if (list? value)
+        (if (not? (eq? (get value :exit) nil))
+          (if (not? (eq? (get value :exit) 0))
+            (error (str "Command failed: " (get value :stderr))))))
+      value)))
+    (call owner (list :finish_action id result))))))
+  (if (err? started) (finish_action id started))
+  :close)
+
+(defn! start_action (title form)
+  "Retain already captured source values and start one user-selected action."
+  (def record (list :id (display (ref)) :title title :form form))
+  (set action_runs (push action_runs record))
+  (execute_action record))
+
+(defn! retry_action (id)
+  (def record (action_record id))
+  # A second activation while running must not create another attempt.
+  (if (and! record (get record :error))
+    (begin
+      (set record (list :id id :title (get record :title) :form (get record :form)))
+      (set action_runs (map action_runs (fn (old)
+        (if (eq? (get old :id) id) record old))))
+      (execute_action record)))
+  :refresh)
+
+(defn! dismiss_action (id)
+  (set action_runs (filter action_runs (fn (record) (not? (eq? (get record :id) id)))))
+  :refresh)
+
+(defn! failed_action_items (query)
+  (fuzzy_match query
+    (map (filter action_runs (fn (record) (get record :error))) (fn (record)
+      (def id (get record :id))
+      `(:title ,(get record :title) :aside "Failed"
+        :subtitle ,(str (get record :error) "\n" (display (get record :form)))
+        :on_click (retry_action ,id)
+        :actions ,(list (make_item "Retry" `(retry_action ,id))
+                        (make_item "Dismiss" `(dismiss_action ,id))))))
+    (fn (item) (list (get item :title) (get item :subtitle)))))
+
+(defn! direct_action? (form)
+  "Recognize ordinary command calls; palette navigation and macro controls stay local."
+  (if (and! (list? form) (symbol? (get form 0)))
+    (let ((callable (try (eval (get form 0)))))
+      (if (lambda? callable)
+        (let ((metadata (meta callable)))
+          (and! (not? (contains? '(:vrsjmp :cmd_macro) (get metadata :service)))
+                (or! (get metadata :interactive) (keyword? (get metadata :service)))))
+        false))
+    false))
 
 (defn! pending_requests ()
   "Drop abandoned requests. The waiting caller consumes these liveness messages."
@@ -141,6 +215,7 @@
 (defn! root_items (query)
   "Retrieve the root command palette's final ordered items"
   (+ (pending_input_items query)
+     (failed_action_items query)
      (if (and! (not? (eq? query "")) (eq? (get (split "-" query) 0) ""))
        (task_items query)
        (command_items query))))
@@ -248,7 +323,10 @@
   (def metadata (service_call_metadata service name))
   (def signature (get metadata :args))
   (if (eq? (len values) (len signature))
-    (invoke_service_function service name values)
+    (if (contains? '(:vrsjmp :cmd_macro) service)
+      (invoke_service_function service name values)
+      (start_action (or! (get metadata :doc) (display name))
+        `(call (find_srv ,service) ',(concat (list (keyword name)) values))))
     (let ((arg (get signature (len values))))
       `(:push_page :get_items service_call_items
         :args ,(list service name values) :title ,(get metadata :doc)
@@ -326,7 +404,7 @@
     (fn (name)
       (def choose `(call_interactively ',name))
       (+ (make_item (command_title name)
-           (if (eq? name 'save_page) '(save_active_tab) choose))
+           (if (eq? name 'save_page) '(save_page (active_tab)) choose))
          `(:actions
            ,(if (empty? (get (meta (eval name)) :args)) '()
               (list (make_item "Choose…" choose))))))))
@@ -334,14 +412,11 @@
 (defn! save_page (page)
   "Save to Read Later"
   (interactive :web/page)
+  (if (or! (not? (list? page)) (not? (get page :url)))
+    (error "No active browser page to save."))
   (def result (feedbin_call `(:feedbin_save ,(get page :url) ,(get page :title))))
-  (if (empty? result) (error "Feedbin did not save the page. Check its connection and authentication.") result))
-
-(defn! save_active_tab ()
-  "Read the configured browser's current page only when Save is selected"
-  (def pages (browser_pages))
-  (if (empty? pages) (error "No active browser page to save."))
-  (save_page (get pages 0)))
+  (if (err? result) result
+    (if (empty? result) (error "Feedbin did not save the page. Check its connection and authentication.") result)))
 
 (defn! call_interactively (name)
   "Fill a named command's required arguments using completion pages, then call it"
@@ -350,7 +425,10 @@
 (defn! continue_call (name values)
   (def signature (get (meta (eval name)) :args))
   (if (eq? (len values) (len signature))
-    (apply (eval name) values)
+    (if (contains? '(:vrsjmp :cmd_macro) (get (meta (eval name)) :service))
+      (apply (eval name) values)
+      (start_action (command_title name)
+        (concat (list name) (map values literal_form))))
     (let ((arg (get signature (len values))))
       (def type (get arg :type))
       (def choices (and! (not? (eq? type nil))
@@ -811,9 +889,19 @@
 (defn! on_click (item)
   "Handle an on_click payload from item"
   (def cmd (get item :on_click))
-  (def result (vrs/execute_command cmd))
+  # Opt into input snapshots with e.g. :on_click (save_page (active_tab)).
+  # Only outer-call arguments are retained; reads inside the function run again.
+  # begin and other compound forms use normal execution without retry capture.
+  (def result
+    (if (direct_action? cmd)
+      (begin
+        (publish :cmd cmd)
+        (def values (map (slice cmd 1) (fn (arg) (eval arg))))
+        (start_action (get item :title)
+          (concat (list (get cmd 0)) (map values literal_form))))
+      (vrs/execute_command cmd)))
   (if (list? result)
     (if (eq? (get result 0) :push_page) result :close)
     (if (eq? result :refresh) :refresh :close)))
 
-(spawn_srv! :vrsjmp :interface '(root_page get_items on_click enqueue_input))
+(spawn_srv! :vrsjmp :interface '(root_page get_items on_click enqueue_input finish_action))

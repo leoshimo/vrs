@@ -444,6 +444,10 @@ See [[file:docs/ai.md][AI and VRS]] for examples and open design questions.
 Goal: Recovering from process or host failure
 
 Use cases:
+- Context captured inside functions: a function reads the active browser tab,
+  then saves it. Retain that intermediate value across a failure or restart so
+  recovery saves the original tab, even when the read is inside a wrapper or
+  =begin= rather than an argument of the GUI's top-level call.
 - Multi-step actions: save an article, then create a follow-up task. If the
   second step fails or the host restarts, retain the evaluated inputs and
   completed progress so recovery can resume that step without repeating the
@@ -460,7 +464,10 @@ or safely repeats those effects, rather than assuming they did not happen.
 
 These use cases need durable progress and resumption. The smaller vrsjmp manual
 retry design retains a failed call's arguments in memory and starts the whole
-call again; it does not resume inside a =begin=, function body, or loop.
+call again. =:on_click (save_page (active_tab))= snapshots the tab at interaction
+time; =(save_active_tab)= cannot snapshot a read hidden inside its body. These
+snapshots disappear when the vrsjmp service restarts. This is not resumption
+inside a =begin=, function body, or loop.
 
 ** TODO Program Migration
 Goal: Moving snapshot of running program from machine to machine

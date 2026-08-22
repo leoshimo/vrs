@@ -76,6 +76,7 @@ const navigation = new Navigation(createTransport(invoke), state => {
             element.id = "result-" + index;
             element.className = "item";
             element.dataset.rich = String(Boolean(item.subtitle));
+            element.dataset.multiline = String(Boolean(item.subtitle?.includes("\n")));
             element.setAttribute("role", "option");
             element.setAttribute("aria-label", [item.title, item.subtitle, item.aside].filter(Boolean).join(" — "));
             const copy = document.createElement("span");

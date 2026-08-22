@@ -67,6 +67,9 @@ button:focus-visible { outline: 1px solid var(--accent); outline-offset: -2px; }
     background: transparent; color: var(--ink);
 }
 .item[data-rich="true"] { height: 46px; }
+.item[data-multiline="true"] { height: auto; min-height: 46px; padding-block: 8px; align-items: flex-start; }
+.item[data-multiline="true"] .item-subtitle { white-space: pre-wrap; overflow-wrap: anywhere; }
+.item[data-multiline="true"] .item-aside { padding-top: 2px; }
 .item--focus, .item:active { background: var(--selection); }
 .item-copy { flex: 1; min-width: 0; }
 .item-title { display: block; font-size: 14px; line-height: 20px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

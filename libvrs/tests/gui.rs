@@ -33,7 +33,9 @@ async fn fixture() -> (Runtime, Arc<Client>) {
                         "get_items", "push_page", "command_items", "browse_services_page", "service_items",
                         "browse_service_page", "interface_function_items", "service_call_metadata",
                         "invoke_service_function", "continue_service_call", "service_call_expression",
-                        "service_call_items", "display_page", "display_items"].contains(&name.as_str()))))
+                        "service_call_items", "display_page", "display_items", "direct_action?",
+                        "action_record", "finish_action", "execute_action", "start_action",
+                        "retry_action", "dismiss_action", "failed_action_items"].contains(&name.as_str()))))
         .map(|form| form.to_string())
         .collect::<Vec<_>>()
         .join("\n");
@@ -45,6 +47,7 @@ async fn fixture() -> (Runtime, Arc<Client>) {
         (spawn_srv! :gui_fixture :interface '(gui_echo))
         (bind_srv :gui_fixture)
         (def pending nil)
+        (def action_runs '())
         (defn! enqueue_input (id owner page)
           (set pending (list id owner page))
           (publish :queued page)
@@ -64,6 +67,7 @@ async fn fixture() -> (Runtime, Arc<Client>) {
         (defn! query_items (query) '())
         (defn! make_item_ex (title command hints) (make_item title command))
         (defn! palette_status () :ready)
+        (defn! palette_actions () action_runs)
         (def display_mode "1470x956@2x 60Hz 8bpp")
         (defn! list_alternative_resolutions ()
           (map '("1470x956@2x 60Hz 8bpp" "1710x1112@2x 60Hz 8bpp") (fn (mode)
@@ -71,7 +75,7 @@ async fn fixture() -> (Runtime, Arc<Client>) {
         (defn! select_resolution (mode)
           (if (contains? mode "(current)") (error "Labels are not mode descriptors"))
           (set display_mode mode))
-        (spawn_srv! :vrsjmp :interface '(enqueue_input finish choice_rows on_click get_items palette_status))
+        (spawn_srv! :vrsjmp :interface '(enqueue_input finish choice_rows on_click get_items palette_status palette_actions finish_action))
     "#,
             ))
             .unwrap(),
@@ -223,6 +227,14 @@ async fn service_browser_navigates_unbound_interfaces_and_calls_without_shadowin
             Form::from_expr(expected).unwrap(),
             "{source}"
         );
+        // Invocation now returns before the child action completes.
+        timeout(Duration::from_secs(3), async {
+            while evaluate(&palette, "(palette_actions)").await != Form::from_expr("()").unwrap() {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .unwrap();
     }
 
     evaluate(
