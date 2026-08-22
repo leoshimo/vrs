@@ -1,19 +1,18 @@
-#+TITLE: A Tour of VRS
-#+OPTIONS: toc:2 num:nil
+# A Tour of VRS
 
 VRS is a personal programming environment for building and composing
 software across your applications and devices. Its design combines a
 practical, exploratory style of programming with relentlessly uniform
 abstractions.
 
-In VRS, /services/ make their functions available to other programs and user
-interfaces. They are written in [[file:guide-lyric.org][Lyric]], VRS's scripting language.
+In VRS, *services* make their functions available to other programs and user
+interfaces. They are written in [Lyric](guide-lyric.org), VRS's scripting language.
 Like a Unix shell, it's built for hacking software together from
 command-line programs, local databases, and UI automation—whatever gets
 the job done.
 
-The REPL, shell scripts, graphical applications, and even your [[file:guide-emacs.org][editor]] and [[file:guide-debug.org][debugger]]
-are /clients/ of VRS. Each can run code, introspect live state, and use the full
+The REPL, shell scripts, graphical applications, and even your [editor](guide-emacs.org) and [debugger](guide-debug.org)
+are *clients* of VRS. Each can run code, introspect live state, and use the full
 capabilities of the runtime.
 
 The environment extends across devices. Connect a laptop and a home
@@ -33,28 +32,30 @@ the changes without restarting.
 VRS is a live, personal software ecosystem, grown one small script at a time—with
 the whole system available to programs and user interfaces across all your devices.
 
-* Working through the tour
 
-With [[file:../README.md][VRS running]], the examples can be run in the =vrsctl= REPL.
+## Working through the tour
 
-For the full live editing experience, use [[file:guide-emacs.org][the editor]]:
+With [VRS running](../README.md), the examples can be run in the `vrsctl` REPL.
 
-#+begin_src sh
+For the full live editing experience, use [the editor](guide-emacs.org):
+
+```sh
 emacs -Q -L emacs -l vrs-mode scratch.ll
-#+end_src
+```
 
-In the editor, =C-c C-e= evaluates an expression and =C-c C-c= evaluates
+In the editor, `C-c C-e` evaluates an expression and `C-c C-c` evaluates
 the buffer.
 
-* Build a todo service
+
+## Build a todo service
 
 A small script can add a capability to the whole VRS environment,
 available across connected devices through ordinary function calls.
 
 Here is a simple todo service:
 
-#+name: todo-service
-#+begin_src vrs
+<!-- example: todo-service -->
+```vrs
 # todos.ll
 (def todos '())
 
@@ -70,12 +71,12 @@ Here is a simple todo service:
 
 # Start (or update) the service with these functions.
 (spawn_srv! :todos :interface '(get_todos add_todo complete_todo))
-#+end_src
+```
 
 Once deployed, its functions are available from the REPL:
 
-#+name: use-todos
-#+begin_src vrs
+<!-- example: use-todos -->
+```vrs
 (bind_srv :todos)
 (get_todos)
 # => ()
@@ -85,14 +86,14 @@ Once deployed, its functions are available from the REPL:
 
 (get_todos)
 # => ((:title "Buy coffee" :notes ""))
-#+end_src
+```
 
 The todo functions can compose with existing services. VRS's
-[[file:../scripts/os_browser.ll][browser service]] exposes Safari's current page through =active_tab=.
+[browser service](../scripts/os_browser.ll) exposes Safari's current page through `active_tab`.
 Inspect its result in the REPL, then use the title and URL as a todo's notes:
 
-#+name: compose-browser-todo
-#+begin_src vrs
+<!-- example: compose-browser-todo -->
+```vrs
 (bind_srv :os_browser)
 (def tab (active_tab))
 # => (:title "VRS" :url "https://github.com/leoshimo/vrs")
@@ -100,25 +101,25 @@ Inspect its result in the REPL, then use the title and URL as a todo's notes:
 (add_todo "Try VRS"
   (format "{}\n{}" (get tab :title) (get tab :url)))
 # => (:title "Try VRS" :notes "VRS\nhttps://github.com/leoshimo/vrs")
-#+end_src
+```
 
 The REPL shows the browser's actual data, so the composition can be tried
 before it becomes part of the service. In the editor, the result can also
 be inserted directly into source:
 
-#+name: retain-browser-result
-#+begin_src vrs
+<!-- example: retain-browser-result -->
+```vrs
 # Place the cursor after this expression and press C-u C-c C-e.
 (active_tab)
 
 # The expression is replaced with its result:
 '(:title "VRS" :url "https://github.com/leoshimo/vrs")
-#+end_src
+```
 
 Add a function that creates a todo with the current Safari page attached:
 
-#+name: todo-from-tab
-#+begin_src vrs
+<!-- example: todo-from-tab -->
+```vrs
 # todos.ll — replace the final spawn_srv! with this block, then reevaluate.
 (bind_srv :os_browser)
 
@@ -130,29 +131,30 @@ Add a function that creates a todo with the current Safari page attached:
 # Update the service to include the new function.
 (spawn_srv! :todos
   :interface '(get_todos add_todo complete_todo add_todo_from_tab))
-#+end_src
+```
 
-Reevaluating =todos.ll= makes this new function available through the service:
+Reevaluating `todos.ll` makes this new function available through the service:
 
-#+name: capture-todo
-#+begin_src vrs
+<!-- example: capture-todo -->
+```vrs
 (bind_srv :todos) # Discover the newly added function.
 (add_todo_from_tab "Try VRS")
 # => (:title "Try VRS" :notes "VRS\nhttps://github.com/leoshimo/vrs")
-#+end_src
+```
 
-* Build a user interface
+
+## Build a user interface
 
 A function that works at the REPL can become an action in a user interface
-with very little code. VRS's user interface markup is /self-describing/:
+with very little code. VRS's user interface markup is *self-describing*:
 it specifies what to display and what to execute.
 
-Each =:on_click= field in the markup contains the actual expression to
+Each `:on_click` field in the markup contains the actual expression to
 execute, arguments included. Add two actions: create a todo, or create a
 todo with context from Safari.
 
-#+name: todo-ui
-#+begin_src vrs
+<!-- example: todo-ui -->
+```vrs
 # todo-ui.ll
 (bind_srv :todos)
 
@@ -165,12 +167,12 @@ todo with context from Safari.
 
 (defn! todo_items (query)
   (add_todo_items query))
-#+end_src
+```
 
-Build a =:vrsjmp= service to serve the page and evaluate selections:
+Build a `:vrsjmp` service to serve the page and evaluate selections:
 
-#+name: ui-service
-#+begin_src vrs
+<!-- example: ui-service -->
+```vrs
 # Append to todo-ui.ll, then evaluate the file.
 (defn! root_page ()
   # The page names the function that supplies its entries.
@@ -188,12 +190,12 @@ Build a =:vrsjmp= service to serve the page and evaluate selections:
 
 # The desktop app and terminal script use this shared service.
 (spawn_srv! :vrsjmp :interface '(root_page get_items on_click))
-#+end_src
+```
 
 The REPL can show what a client receives:
 
-#+name: ui-interaction
-#+begin_src vrs
+<!-- example: ui-interaction -->
+```vrs
 (bind_srv :vrsjmp)
 (def page (root_page)) # The description of the current user interface.
 
@@ -206,31 +208,32 @@ The REPL can show what a client receives:
 (get items 1) # Inspect the second choice, including its executable action.
 # => (:title "Add todo with this page: Buy coffee"
 #     :on_click (add_todo_from_tab "Buy coffee"))
-#+end_src
+```
 
-The desktop app =vrsjmp= and the shell script
-[[file:../scripts/vrsjmp-terminal][vrsjmp-terminal]] share this =:vrsjmp= service. Both display the same markup;
+The desktop app `vrsjmp` and the shell script
+[vrsjmp-terminal](../scripts/vrsjmp-terminal) share this `:vrsjmp` service. Both display the same markup;
 selecting an entry asks the service to evaluate the expression included in it.
 The same user interface runs in the terminal:
 
-#+name: shell-client
-#+begin_src sh
+<!-- example: shell-client -->
+```sh
 ./scripts/vrsjmp-terminal
-#+end_src
+```
 
-Typing /Buy coffee/ in either client displays the two actions. Neither
+Typing *Buy coffee* in either client displays the two actions. Neither
 client contains a todo implementation: the service supplies the markup
-and the expressions to run. The terminal script uses =fzf= for presentation;
+and the expressions to run. The terminal script uses `fzf` for presentation;
 the desktop app renders graphical entries.
 
-** Show and complete todos
+
+### Show and complete todos
 
 Extend the running application to list, search, and complete todos.
 Keep the capture actions and add a function that turns existing todos into
 choices:
 
-#+name: live-todos
-#+begin_src vrs
+<!-- example: live-todos -->
+```vrs
 # todo-ui.ll — add this helper, replace todo_items, and reevaluate the file.
 (defn! matching_todo_items (query)
   # Search real todos, then attach the call that completes each one.
@@ -241,74 +244,76 @@ choices:
 
 (defn! todo_items (query)
   (+ (add_todo_items query) (matching_todo_items query)))
-#+end_src
+```
 
-Search for /coffee/: /Complete: Buy coffee/ now appears alongside the
+Search for *coffee*: *Complete: Buy coffee* now appears alongside the
 capture actions. The new search and completion actions are immediately
 available in both user interfaces—without rebuilding the desktop app or
 editing the terminal script.
 
-* Turn an interaction into a program
 
-Selecting an item executes the =:on_click= expression from its markup—the
-same code a program would run. Use the runtime's built-in /pubsub/ to inspect those
+## Turn an interaction into a program
+
+Selecting an item executes the `:on_click` expression from its markup—the
+same code a program would run. Use the runtime's built-in *pubsub* to inspect those
 expressions as the software is used. Publish each selected action to a
-topic, =:tour_cmd=, for another client to follow:
+topic, `:tour_cmd`, for another client to follow:
 
-#+name: publishing-clicks
-#+begin_src vrs
+<!-- example: publishing-clicks -->
+```vrs
 # todo-ui.ll — replace on_click and reevaluate the file, including spawn_srv!.
 (defn! on_click (item)
   (def command (get item :on_click))
   (publish :tour_cmd command) # Send the expression to subscribers before running it.
   (eval command)
   :close)
-#+end_src
+```
 
 A second client follows the topic:
 
-#+begin_src sh
+```sh
 vrsctl --subscribe tour_cmd --follow
-#+end_src
+```
 
-Selecting /Add todo: Buy coffee/ in the terminal or desktop app prints:
+Selecting *Add todo: Buy coffee* in the terminal or desktop app prints:
 
-#+begin_example
+```
 (add_todo "Buy coffee" "")
-#+end_example
+```
 
 The output is exactly the code that ran. It can be pasted into source,
 edited, combined with other expressions, or run again.
 
-For example, the [[file:../scripts/cmd_macro.ll][command-macro service]] collects these expressions into a
-program to replay. The full =:vrsjmp= service also uses executable expressions
+For example, the [command-macro service](../scripts/cmd_macro.ll) collects these expressions into a
+program to replay. The full `:vrsjmp` service also uses executable expressions
 to retry failed calls, retaining their argument values in the call itself.
 
 Each interaction can reveal a function call with real arguments.
 Using the application reveals how to program it.
 
-* Build interactions from functions and data
+
+## Build interactions from functions and data
 
 Earlier, we wrote the function calls to add and complete todos. VRS's
 metadata interface also lets programs discover which functions accept a
 value, or fetch available values from the environment to pass to a function.
 
-Give each todo a leading =:todo= tag, then associate two operations with it: complete
+Give each todo a leading `:todo` tag, then associate two operations with it: complete
 the todo or copy its title.
 
-#+name: tagged-todos
-#+begin_src vrs
+<!-- example: tagged-todos -->
+```vrs
 # todos.ll — replace add_todo.
 (defn! add_todo (title notes)
   (def todo `(:todo :title ,title :notes ,notes)) # The leading tag identifies a todo.
   (set todos (push todos todo))
   todo)
-#+end_src
+```
 
-Functions declare what they accept through =interactive= metadata:
+Functions declare what they accept through `interactive` metadata:
 
-#+name: todo-operations
-#+begin_src vrs
+<!-- example: todo-operations -->
+```vrs
 # todos.ll — replace complete_todo and add copy_todo.
 (defn! complete_todo (todo)
   "Complete todo"
@@ -319,93 +324,96 @@ Functions declare what they accept through =interactive= metadata:
   "Copy todo title"
   (interactive :todo)
   (exec "pbcopy" :stdin (get todo :title)))
-#+end_src
+```
 
-Register =get_todos= as the provider of available =:todo= entities. Clients
+Register `get_todos` as the provider of available `:todo` entities. Clients
 can then fetch current todos to use as arguments. Updating the service
 makes both the functions and their metadata available:
 
-#+name: todo-metadata-service
-#+begin_src vrs
+<!-- example: todo-metadata-service -->
+```vrs
 # todos.ll — replace the final spawn_srv!, then reevaluate the file.
 (set_entity_completions :todo 'get_todos)
 (spawn_srv! :todos
   :interface '(get_todos add_todo complete_todo add_todo_from_tab copy_todo))
-#+end_src
+```
 
 VRS makes this metadata available to programs. The REPL can inspect
 exactly what another client would receive:
 
-#+name: inspect-todo-metadata
-#+begin_src vrs
+<!-- example: inspect-todo-metadata -->
+```vrs
 (bind_srv :todos)
 (get (meta complete_todo) :args)
 # => ((:type :todo :name todo))
 
 (get (meta copy_todo) :doc)
 # => "Copy todo title"
-#+end_src
+```
 
 These declarations support two directions through the same interface.
 
-** Discover actions for a todo
+
+### Discover actions for a todo
 
 Given a todo, discover which functions accept it:
 
-#+name: todo-actions
-#+begin_src vrs
+<!-- example: todo-actions -->
+```vrs
 (def todo (add_todo "Buy coffee" ""))
 # => (:todo :title "Buy coffee" :notes "")
 
 (entity_functions todo)
 # => (complete_todo copy_todo)
-#+end_src
+```
 
 Select one of those functions and combine it with the value:
 
-#+name: invoke-todo-action
-#+begin_src vrs
+<!-- example: invoke-todo-action -->
+```vrs
 (def action 'complete_todo) # Select Complete todo.
 (def invocation `(,action ',todo))
 # => (complete_todo '(:todo :title "Buy coffee" :notes ""))
 
 (eval invocation)
-#+end_src
+```
 
-** Find arguments for a function
+
+### Find arguments for a function
 
 Start with a function this time. Read its argument type, then fetch
 available values of that type from the environment:
 
-#+name: todo-arguments
-#+begin_src vrs
+<!-- example: todo-arguments -->
+```vrs
 (add_todo "Buy tea" "")
 (def argument (first (get (meta complete_todo) :args)))
 # => (:type :todo :name todo)
 
 (argument_entities (get argument :type))
 # => ((:todo :title "Buy tea" :notes ""))
-#+end_src
+```
 
 The provider supplies the todos currently available through the service,
 including when that service runs on another device:
 
-#+name: invoke-with-todo
-#+begin_src vrs
+<!-- example: invoke-with-todo -->
+```vrs
 (def todo (first (argument_entities (get argument :type))))
 (complete_todo todo) # Choose the first candidate and call the function.
-#+end_src
+```
 
 Using this metadata, clients can start with a function and interactively
 prompt for its arguments—or start with selected data and discover applicable
-actions. For =focus_window=, a client can list available windows; for a
-window in that list, it can find functions such as =move_window=.
+actions. For `focus_window`, a client can list available windows; for a
+window in that list, it can find functions such as `move_window`.
 
-The =:vrsjmp= service uses these queries to build interactions from the
+The `:vrsjmp` service uses these queries to build interactions from the
 functions available at runtime. The editor can use them to construct calls
 in source. Each client uses the same mechanism for unfamiliar entity types.
 
-* Connect more of your software
+
+## Connect more of your software
 
 A service can give the rest of VRS a programmable way into an application.
 Hack it together from whatever gets the job done: command-line programs,
@@ -413,21 +421,22 @@ local databases, UI automation, or a small program written for the task.
 
 Existing services use several ways into applications and hardware:
 
-- [[file:../scripts/os_browser.ll][Safari]] uses AppleScript for the active page and SQLite for tabs synced
-  from other devices. Both are available through the browser service.
-- [[file:../scripts/os_notes.ll][Apple Notes]] reads titles from SQLite, opens notes through application
-  URLs, and creates them with AppleScript.
-- [[file:../scripts/antinote.ll][Antinote]] reads its SQLite database and opens notes through URLs. Its
-  tagged notes also work with the action and argument menus above.
-- [[file:../scripts/feedbin.ll][Feedbin]] runs =feedbinctl= to search articles and save pages, with recurring
-  indexing hosted in the runtime too.
-- [[file:../scripts/os_notify.ll][Notifications]] uses =osascript= on macOS and =notify-send= on Linux
-  behind the same =notify= function.
-- [[file:../scripts/os_keyboard.ll][Keyboard brightness]] reaches a private macOS framework through
-  =osascript= to read and change the backlight.
-- [[file:../scripts/ditoo.ll][Ditoo]] calls a dedicated CLI to drive a Bluetooth pixel display.
+-   [Safari](../scripts/os_browser.ll) uses AppleScript for the active page and SQLite for tabs synced
+    from other devices. Both are available through the browser service.
+-   [Apple Notes](../scripts/os_notes.ll) reads titles from SQLite, opens notes through application
+    URLs, and creates them with AppleScript.
+-   [Antinote](../scripts/antinote.ll) reads its SQLite database and opens notes through URLs. Its
+    tagged notes also work with the action and argument menus above.
+-   [Feedbin](../scripts/feedbin.ll) runs `feedbinctl` to search articles and save pages, with recurring
+    indexing hosted in the runtime too.
+-   [Notifications](../scripts/os_notify.ll) uses `osascript` on macOS and `notify-send` on Linux
+    behind the same `notify` function.
+-   [Keyboard brightness](../scripts/os_keyboard.ll) reaches a private macOS framework through
+    `osascript` to read and change the backlight.
+-   [Ditoo](../scripts/ditoo.ll) calls a dedicated CLI to drive a Bluetooth pixel display.
 
-* Respond to events: make a unicorn leap
+
+## Respond to events: make a unicorn leap
 
 A service can publish and respond to events in the environment. This
 makes it possible to attach new behavior to programs that are already
@@ -435,8 +444,8 @@ running.
 
 Let's make a unicorn leap across the screen whenever a todo is completed:
 
-#+name: completing-with-events
-#+begin_src vrs
+<!-- example: completing-with-events -->
+```vrs
 # todos.ll — replace complete_todo and reevaluate the file.
 (defn! complete_todo (todo)
   "Complete todo"
@@ -445,138 +454,142 @@ Let's make a unicorn leap across the screen whenever a todo is completed:
     (begin
       (set todos (filter todos (fn (item) (not? (eq? item todo)))))
       (publish :todo_completed todo))))
-#+end_src
+```
 
-A separate service responds by running [[https://github.com/kevinliddle/unicornleap][unicornleap]], which animates a
+A separate service responds by running [unicornleap](https://github.com/kevinliddle/unicornleap), which animates a
 unicorn across the desktop:
 
-#+name: celebration-service
-#+begin_src vrs
+<!-- example: celebration-service -->
+```vrs
 (defn! celebrate (todo)
   (exec "unicornleap"))
 
 (spawn_srv! :celebration
   :topics '((:todo_completed celebrate))) # Call celebrate with each event's value.
-#+end_src
+```
 
 Complete a todo:
 
-#+name: complete-todo
-#+begin_src vrs
+<!-- example: complete-todo -->
+```vrs
 (bind_srv :todos)
 (def todo (add_todo "Finish this example" ""))
 (complete_todo todo)
 # A unicorn leaps.
-#+end_src
+```
 
 The todo service publishes what happened; the subscriber decides what to do with it.
 Other subscribers could refresh an e-ink todo display, append completed
 tasks to a daily journal, or update a pixel display on the desk. Each is
 a small program using capabilities from the same environment.
 
-* Run recurring work
 
-VRS runs programs as lightweight /processes/. A service is a process that
+## Run recurring work
+
+VRS runs programs as lightweight *processes*. A service is a process that
 handles function calls and events; a recurring job is another process
 using the same runtime. This indexer works, waits fifteen minutes, and repeats:
 
-#+name: index-loop
-#+begin_src vrs
+<!-- example: index-loop -->
+```vrs
 (def indexer
   (spawn (fn ()
     (loop
       (publish :index_result (exec "feedbinctl" "index"))
       (sleep 900)))))
-#+end_src
+```
 
 Its results can be followed through pubsub, displayed in a user interface,
 or used by another program. The job can call services and use the same
 debugging facilities as any other VRS program. There is no separate job
 language, scheduler configuration, or observation system to learn.
 
-The [[file:../scripts/feedbin.ll][Feedbin service]] uses this pattern with error reporting and a name
+The [Feedbin service](../scripts/feedbin.ll) uses this pattern with error reporting and a name
 so reloading replaces its previous indexer.
 
-* Build capabilities across devices
+
+## Build capabilities across devices
 
 The todo service can run on a home server without a single edit to the
 scripts, services, or user interfaces that use it. For example, with a
-device named =mac-mini= [[file:../README.md::#init-scripts-and-nodes][connected as a VRS peer]], send it the same =todos.ll=:
+device named `mac-mini` [connected as a VRS peer](../README.md#init-scripts-and-nodes), send it the same `todos.ll`:
 
-#+name: deploy-todos
-#+begin_src sh
+<!-- example: deploy-todos -->
+```sh
 # Stop the example service on the laptop.
 vrsctl -c '(kill (find_srv :todos))'
 # Send the local source file to mac-mini and start the service there.
 vrsctl --node mac-mini ./todos.ll
-#+end_src
+```
 
 The laptop discovers the remote service and calls it in the usual way:
 
-#+name: call-remote-todos
-#+begin_src vrs
+<!-- example: call-remote-todos -->
+```vrs
 (bind_srv :todos) # Bind to the service now running on mac-mini.
 (add_todo_from_tab "Try VRS")
 (get_todos)
 # => ((:todo :title "Try VRS" :notes "VRS\nhttps://github.com/leoshimo/vrs"))
-#+end_src
+```
 
 The todo service runs on the remote device and calls the laptop's
-=:os_browser= service to capture its Safari page. The implementation of
-=add_todo_from_tab= needs no edits. The separate =todo-ui.ll= service and
+`:os_browser` service to capture its Safari page. The implementation of
+`add_todo_from_tab` needs no edits. The separate `todo-ui.ll` service and
 both user interfaces work without changes too.
 
 Source can also be evaluated on another device directly from the REPL or
-editor. The =remote!= block runs on the named device:
+editor. The `remote!` block runs on the named device:
 
-#+name: remote-expression
-#+begin_src vrs
+<!-- example: remote-expression -->
+```vrs
 (remote! "mac-mini"
   (node_name))
 # => "mac-mini"
-#+end_src
+```
 
 Making a capability available to VRS makes it available to all these uses,
 without another integration for each client or device.
 
-For another example, the [[file:../scripts/ditoo.ll][Ditoo service]] exposes a Bluetooth pixel display
+For another example, the [Ditoo service](../scripts/ditoo.ll) exposes a Bluetooth pixel display
 attached to a home Mac. A program on another device can put a message on it:
 
-#+name: desk-display
-#+begin_src vrs
+<!-- example: desk-display -->
+```vrs
 (call_timeout 120) # Allow time for the Bluetooth connection and upload.
 (bind_srv :ditoo)
 (ditoo_text "OFF DUTY")
-#+end_src
+```
 
 The same call can appear in a user interface or an automation. A build
-script on another device could display /BUILD PASSED/ on the desk.
+script on another device could display *BUILD PASSED* on the desk.
 
-* Inspect execution
+
+## Inspect execution
 
 The debugger is another client of the running environment. VRS's
-[[file:guide-debug.org][source-embedded tools]] make execution observable through code. For example,
-=dbg!= records calls, arguments, and results while returning the expression's
+[source-embedded tools](guide-debug.org) make execution observable through code. For example,
+`dbg!` records calls, arguments, and results while returning the expression's
 usual value. Its viewer can run in a browser or terminal:
 
-#+begin_src sh
+```sh
 vrsctl dbg --web
 # Or use vrsctl dbg for the terminal viewer.
-#+end_src
+```
 
-The =dbg!= expression returns todo titles while recording how they were
+The `dbg!` expression returns todo titles while recording how they were
 computed:
 
-#+name: debug-todos
-#+begin_src vrs
+<!-- example: debug-todos -->
+```vrs
 (bind_srv :todos)
 (dbg! (map (get_todos) (fn (todo) (get todo :title))))
-#+end_src
+```
 
 The viewer shows the service call and each local function call, with their
 arguments, results, and source locations.
 
-* That's VRS
+
+## That's VRS
 
 A todo service starts as a small script. Extend it to integrate with your
 browser, publish events, trigger automations, and power multiple user
