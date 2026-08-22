@@ -31,7 +31,7 @@ source code. Update a running service and the programs using it pick up
 the changes without restarting.
 
 VRS is a live, personal software ecosystem, grown one small script at a time—with
-every device a way into the whole system.
+the whole system available to programs and user interfaces across all your devices.
 
 * Working through the tour
 
