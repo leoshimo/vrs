@@ -1,6 +1,6 @@
 // The GUI owns history, not page behavior. Callbacks/arguments stay opaque here.
 export const rootPage = () => ({ get_items: "root_items", args: "()", title: "Home", prompt: "Search commands…", debounce_ms: 0 });
-export const retentionMs = 8 * 60 * 1000;
+export const retentionMs = 30 * 1000;
 
 export class Navigation {
     constructor(transport, render, timers = globalThis) {
@@ -13,7 +13,8 @@ export class Navigation {
         this.flight = null;
         this.action = null;
         this.visible = false;
-        this.hiddenAt = null;
+        this.lastInteractionAt = null;
+        this.idleTimer = null;
         this.opening = null;
     }
     get current() { return this.frames.at(-1); }
@@ -24,6 +25,31 @@ export class Navigation {
             error: frame?.error ?? "", canBack: this.frames.length > 1, visible: this.visible };
     }
     changed() { this.render(this.snapshot()); }
+    now() { return this.timers.now?.() ?? Date.now(); }
+    interact() {
+        this.lastInteractionAt = this.now();
+        this.scheduleIdleReset();
+    }
+    scheduleIdleReset() {
+        if (this.idleTimer !== null) this.timers.clearTimeout(this.idleTimer);
+        this.idleTimer = null;
+        if (this.lastInteractionAt === null) return;
+        const remaining = retentionMs - (this.now() - this.lastInteractionAt);
+        this.idleTimer = this.timers.setTimeout(() => {
+            this.idleTimer = null;
+            // Let an action finish before discarding its navigation state.
+            if (this.action) return;
+            this.invalidate();
+            this.opening = null;
+            this.frames = [];
+            this.lastInteractionAt = null;
+            if (this.visible) this.begin({ idleReset: true }).catch(console.error);
+            else this.changed();
+        }, Math.max(0, remaining));
+    }
+    resumeIdleReset() {
+        if (this.idleTimer === null) this.scheduleIdleReset();
+    }
     invalidate(keepAction = false) {
         if (this.timer !== null) this.timers.clearTimeout(this.timer);
         this.timer = null;
@@ -34,13 +60,14 @@ export class Navigation {
             this.action = null;
         }
     }
-    open(page = rootPage(), query = "") {
+    open(page = rootPage(), query = "", recordInteraction = true) {
         this.invalidate();
         this.frames = [];
         this.visible = true;
+        if (recordInteraction) this.interact();
         this.push(page, query);
     }
-    async begin({ background = false } = {}) {
+    async begin({ background = false, idleReset = false } = {}) {
         if (!this.visible) this.invalidate();
         // Reconnect checks may recover pending input without opening an idle
         // palette. The service still chooses the page through the same hook.
@@ -53,9 +80,11 @@ export class Navigation {
             if (result.page.on_cancel) this.open(result.page);
             return;
         }
-        if (this.frames.length && (this.visible || (this.hiddenAt !== null && Date.now() - this.hiddenAt < retentionMs))) {
+        const retain = this.frames.length && this.lastInteractionAt !== null
+            && this.now() - this.lastInteractionAt < retentionMs;
+        if (!idleReset) this.interact();
+        if (retain) {
             this.visible = true;
-            this.hiddenAt = null;
             const frames = this.frames;
             const root = frames[0];
             const opening = {};
@@ -71,7 +100,7 @@ export class Navigation {
                 // A pending input request takes precedence over retained
                 // ordinary navigation. The same request keeps its subpages.
                 if ((root.page.on_cancel ?? null) !== (result.page.on_cancel ?? null)) {
-                    this.open(result.page);
+                    this.open(result.page, "", false);
                     return;
                 }
                 root.page = result.page;
@@ -86,8 +115,10 @@ export class Navigation {
                 root.loading = false;
                 if (this.action === request) this.action = null;
                 if (this.current === root) { this.changed(); return; }
+            } finally {
+                if (this.action === request) this.action = null;
+                this.resumeIdleReset();
             }
-            if (this.action === request) this.action = null;
             // A request abandoned on hide must be retried, not left spinning.
             if (!this.current.loaded || this.current.loading) this.search(this.current.query, true, true);
             else this.changed();
@@ -96,7 +127,6 @@ export class Navigation {
         this.invalidate();
         this.frames = [{ page: rootPage(), query: "", items: [], selected: 0, loading: false, loaded: false, error: "" }];
         this.visible = true;
-        this.hiddenAt = null;
         const request = { frame: this.current, obsolete: false, bootstrap: true };
         this.action = request;
         this.changed();
@@ -104,13 +134,16 @@ export class Navigation {
             const result = await this.transport.begin();
             if (request.obsolete || !this.visible) return;
             if (result.type !== "push_page") throw new Error("Expected an initial page");
-            this.open(result.page, request.frame.query);
+            this.open(result.page, request.frame.query, false);
         } catch (error) {
             if (!request.obsolete && this.visible) {
                 this.current.error = String(error);
                 this.action = null;
                 this.changed();
             }
+        } finally {
+            if (this.action === request) this.action = null;
+            this.resumeIdleReset();
         }
     }
     push(page, query = "") {
@@ -123,6 +156,7 @@ export class Navigation {
     }
     search(text, immediate = false, preserveSelection = false) {
         if (!this.visible || !this.current) return;
+        if (!immediate) this.interact();
         // Keep fast typing while the service chooses the initial page, without
         // rendering a page that is missing its server-supplied arguments.
         if (this.action?.bootstrap) {
@@ -176,6 +210,7 @@ export class Navigation {
     }
     select(index) {
         if (!this.current || this.current.loading || this.action) return;
+        this.interact();
         const count = this.current.items.length;
         this.current.selected = count ? (index + count) % count : 0;
         this.changed();
@@ -185,6 +220,7 @@ export class Navigation {
         const primary = frame?.items[index];
         const item = actionIndex === null ? primary : primary?.actions?.[actionIndex];
         if (!item || frame.loading || this.action || !this.visible) return;
+        this.interact();
         frame.selected = index;
         const request = { frame, obsolete: false };
         this.action = request;
@@ -211,10 +247,12 @@ export class Navigation {
             if (!request.obsolete && this.visible && this.current === frame) frame.error = String(error);
         } finally {
             if (this.action === request) this.action = null;
+            this.resumeIdleReset();
             this.changed();
         }
     }
     back() {
+        this.interact();
         if (this.frames.length <= 1) { this.close(); return; }
         this.invalidate();
         const leaving = this.frames.pop();
@@ -229,7 +267,7 @@ export class Navigation {
         // clear its query while hidden; reopening invalidates the old action.
         this.invalidate(true);
         this.visible = false;
-        this.hiddenAt = Date.now();
+        this.interact();
         this.opening = null;
         this.changed();
     }

@@ -176,6 +176,12 @@ actionFilter.addEventListener("compositionstart", revealActionSearch);
 actionFilter.addEventListener("input", () => { revealActionSearch(); renderMenu(); });
 actionList.addEventListener("pointerdown", event => event.preventDefault());
 input.addEventListener("input", () => { closeMenu(); navigation.search(input.value); });
+// Include scrolling and action-menu interaction, which do not change pages.
+for (const event of ["keydown", "pointerdown", "pointermove", "wheel", "input"]) {
+    window.addEventListener(event, () => {
+        if (navigation.visible) navigation.interact();
+    }, { capture: true, passive: true });
+}
 window.addEventListener("keydown", event => {
     if (event.isComposing) return;
     if (event.metaKey && event.key.toLowerCase() === "k") { event.preventDefault(); toggleMenu(); return; }

@@ -44,18 +44,29 @@ test("initial page resolves before showing; cancelled openings stay hidden", asy
 const item = title => ({ id: title, title, on_click: title });
 function setup() {
     const queries = [], actions = [], starts = [], timers = new Map();
-    let nextTimer = 0, closed = 0;
+    let nextTimer = 0, closed = 0, now = 0;
     const nav = new Navigation({
         begin: () => new Promise((resolve, reject) => starts.push({resolve, reject})),
         query: (page, text) => new Promise((resolve, reject) => queries.push({page, text, resolve, reject})),
         dispatch: form => new Promise((resolve, reject) => actions.push({form, resolve, reject})),
         close: () => closed++,
     }, () => {}, {
-        setTimeout: fn => { timers.set(++nextTimer, fn); return nextTimer; },
+        now: () => now,
+        setTimeout: (fn, delay) => { timers.set(++nextTimer, {fn, at: now + delay}); return nextTimer; },
         clearTimeout: id => timers.delete(id),
     });
-    return {nav, queries, actions, starts, timers, closed: () => closed,
-        fire: () => { const pending = [...timers.values()]; timers.clear(); pending.forEach(fn => fn()); }};
+    const advance = ms => {
+        const end = now + ms;
+        while (timers.size) {
+            const [id, timer] = [...timers].sort((a, b) => a[1].at - b[1].at)[0];
+            if (timer.at > end) break;
+            now = timer.at;
+            timers.delete(id);
+            timer.fn();
+        }
+        now = end;
+    };
+    return {nav, queries, actions, starts, timers, advance, closed: () => closed};
 }
 
 test("activating a row selects it and Back restores query, results, and selection", async () => {
@@ -122,7 +133,7 @@ test("multi-argument pages keep whole opaque arguments and Back restores the pre
 test("debounce coalesces input and never accumulates in-flight renders", async () => {
     const t = setup(); t.nav.open({...rootPage(), debounce_ms: 200});
     for (const q of ["e", "em", "emacs"]) t.nav.search(q);
-    assert.equal(t.timers.size, 1); t.fire();
+    assert.equal(t.timers.size, 2); t.advance(200);
     assert.equal(t.queries.length, 1);
     t.queries[0].resolve([item("obsolete")]); await tick();
     assert.equal(t.queries.length, 2);
@@ -143,7 +154,7 @@ test("Escape drops pending timers and late action responses", async () => {
     assert.equal(t.nav.visible, false);
     t.nav.open({...rootPage(), debounce_ms:200});
     t.nav.search("pending"); t.nav.close();
-    assert.equal(t.timers.size, 0);
+    assert.equal(t.timers.size, 1, "only the idle reset remains after dismissal");
 });
 
 test("errors leave the GUI usable and a later query can recover", async () => {
@@ -271,20 +282,78 @@ test("stale same-text response after reopening cannot overwrite current frame", 
     assert.equal(t.nav.current.items[0].title, "new session");
 });
 
-test("reopen retains the page for eight minutes while refreshing the initial page", async () => {
+test("reopen retains the page for 30 seconds while refreshing the initial page", async () => {
     const t = setup(); t.nav.open();
     t.queries[0].resolve([item("Read Later")]); await tick();
     t.nav.push({...rootPage(), get_items: "read_later_items"}, "emacs");
     t.queries[1].resolve([item("first"), item("second")]); await tick();
-    t.nav.select(1); t.nav.close(); t.nav.begin();
+    t.nav.select(1); t.nav.close(); t.advance(29_999); t.nav.begin();
     assert.equal(t.nav.current.query, "emacs");
     assert.equal(t.nav.current.selected, 1);
     t.starts[0].resolve({type: "push_page", page: {...rootPage(), args: '("request-8")'}}); await tick();
     assert.equal(t.queries.length, 2, "cached subpage isn't reloaded on reopen");
     assert.equal(t.nav.frames[0].page.args, '("request-8")');
-    t.nav.close(); t.nav.hiddenAt -= retentionMs; t.nav.begin();
+    t.nav.close(); t.advance(30_000);
+    assert.equal(t.nav.frames.length, 0, "hidden navigation expires without reopening");
+    assert.equal(t.nav.visible, false);
+    assert.equal(t.starts.length, 1, "expiring hidden state does not contact the service");
+    t.nav.begin();
     assert.equal(t.nav.frames.length, 1);
     assert.equal(t.nav.current.query, "");
+});
+
+test("visible idle navigation resets 30 seconds after the last interaction", async () => {
+    assert.equal(retentionMs, 30_000);
+    const t = setup(); t.nav.open();
+    t.queries[0].resolve([]); await tick();
+    t.nav.push({...rootPage(), get_items: "note_items"}, "notes");
+    t.queries[1].resolve([item("first"), item("second")]); await tick();
+    t.advance(29_000); t.nav.select(1);
+    t.advance(29_000);
+    assert.equal(t.nav.current.page.get_items, "note_items");
+    t.nav.search("new search");
+    t.queries[2].resolve([item("match")]); await tick();
+    t.advance(29_000); t.nav.interact(); // Scrolling or action-menu interaction.
+    t.advance(29_999);
+    assert.equal(t.nav.current.query, "new search");
+    t.advance(1);
+    assert.equal(t.nav.visible, true);
+    assert.equal(t.nav.frames.length, 1);
+    assert.equal(t.nav.current.query, "");
+    assert.equal(t.nav.current.selected, 0);
+    t.starts[0].resolve({type: "push_page", page: rootPage()}); await tick();
+    t.queries[3].resolve([item("Home command")]); await tick();
+    t.advance(60_000);
+    assert.equal(t.starts.length, 1, "the idle reset does not keep refreshing Home");
+    assert.equal(t.nav.current.page.get_items, "root_items");
+});
+
+test("dismissal starts a fresh 30 seconds even after prolonged visible use", async () => {
+    const t = setup(); t.nav.open();
+    t.queries[0].resolve([]); await tick();
+    t.nav.push({...rootPage(), get_items: "note_items"});
+    t.queries[1].resolve([]); await tick();
+    t.advance(29_000); t.nav.suspend();
+    t.advance(29_999);
+    assert.equal(t.nav.frames.length, 2);
+    t.advance(1);
+    assert.equal(t.nav.frames.length, 0);
+});
+
+test("idle reset waits for an action and drops a late query response", async () => {
+    const t = setup(); t.nav.open();
+    t.queries[0].resolve([item("Browse Notes")]); await tick();
+    t.nav.activate(); t.advance(30_000);
+    assert.equal(t.nav.snapshot().loading, true);
+    assert.equal(t.starts.length, 0);
+    t.actions[0].resolve({type: "push_page", page: {...rootPage(), get_items: "note_items"}});
+    await tick(); t.advance(0);
+    assert.equal(t.nav.current.page.get_items, "root_items");
+    t.starts[0].resolve({type: "push_page", page: rootPage()}); await tick();
+    t.queries[1].resolve([item("late note")]); await tick();
+    assert.equal(t.nav.current.items.length, 0);
+    t.queries[2].resolve([item("Home")]); await tick();
+    assert.equal(t.nav.current.items[0].title, "Home");
 });
 
 test("reopening a root page never dispatches stale items while refreshing", async () => {
@@ -300,6 +369,36 @@ test("reopening a root page never dispatches stale items while refreshing", asyn
 
 const inputPage = id => ({...rootPage(), get_items: "function_items", args: `("${id}")`,
     on_cancel: `(:on_click (cancel_input "${id}"))`});
+
+test("idle reset discards input navigation without cancelling its pending request", async () => {
+    const t = setup(); t.nav.open(inputPage("waiting"));
+    t.queries[0].resolve([]); await tick();
+    t.nav.push({...rootPage(), get_items: "fill_call_items"}, "old argument");
+    t.queries[1].resolve([]); await tick();
+    t.advance(30_000);
+    assert.equal(t.actions.length, 0, "idleness does not dispatch cancellation");
+    t.starts[0].resolve({type: "push_page", page: inputPage("waiting")}); await tick();
+    assert.equal(t.nav.frames.length, 1);
+    assert.equal(t.nav.current.query, "");
+    assert.equal(t.nav.current.page.on_cancel, inputPage("waiting").on_cancel);
+    t.queries[2].resolve([]); await tick();
+    t.nav.suspend(); t.advance(30_000);
+    assert.equal(t.nav.frames.length, 0);
+    assert.equal(t.actions.length, 0);
+    t.nav.begin();
+    t.starts[1].resolve({type: "push_page", page: inputPage("waiting")}); await tick();
+    assert.equal(t.nav.current.page.on_cancel, inputPage("waiting").on_cancel);
+});
+
+test("a dismissed opening that finishes after the deadline still expires", async () => {
+    const t = setup(); t.nav.begin(); t.nav.suspend();
+    t.advance(30_000);
+    t.starts[0].resolve({type: "push_page", page: rootPage()}); await tick();
+    t.advance(0);
+    assert.equal(t.nav.frames.length, 0);
+    assert.equal(t.nav.visible, false);
+    assert.equal(t.timers.size, 0);
+});
 
 test("show bursts share an opening and never toggle a visible input closed", async () => {
     const t = setup(), shown = [];
