@@ -578,10 +578,10 @@ arguments, results, and source locations.
 
 * That's VRS
 
-A todo service starts as a small script. It can be extended to use the
-browser, trigger automations, and power desktop and terminal user interfaces.
-Its capabilities are available to other programs and clients, whether it
-runs locally or on another device.
+A todo service starts as a small script. Extend it to integrate with your
+browser, publish events, trigger automations, and power multiple user
+interfaces. Its capabilities remain available to other programs and
+clients, whether it runs locally or on another device.
 
 VRS uses its programming language as the common interface between programs,
 user interfaces, and devices. Source code, user interface markup, and
