@@ -20,9 +20,9 @@ The environment extends across devices. Connect a laptop and a home
 server as peers, and programs can use capabilities from both through
 ordinary function calls.
 
-Programs and user interfaces share the same exact representation. An
-expression from the REPL can be included directly in a user interface
-as an action. User interactions, in turn, can be recorded directly into
+Programs and user interface markup share the same exact representation.
+An expression from the REPL can be included directly in that markup as
+an action. User interactions, in turn, can be recorded directly into
 programs—then edited, combined, and run again.
 
 Development happens iteratively, against the running system. The editor
@@ -147,9 +147,9 @@ A function that works at the REPL can become an action in a user interface
 with very little code. VRS's user interface markup is /self-describing/:
 it specifies what to display and what to execute.
 
-Each =:on_click= contains the same expression that could be typed at the
-REPL, with its arguments already included. Add two actions: create a todo,
-or create a todo with context from Safari.
+Each =:on_click= field in the markup contains the actual expression to
+execute, arguments included. Add two actions: create a todo, or create a
+todo with context from Safari.
 
 #+name: todo-ui
 #+begin_src vrs
@@ -250,8 +250,8 @@ editing the terminal script.
 
 * Turn an interaction into a program
 
-Selecting an item executes its =:on_click= expression—the same code a
-program would run. Use the runtime's built-in /pubsub/ to inspect those
+Selecting an item executes the =:on_click= expression from its markup—the
+same code a program would run. Use the runtime's built-in /pubsub/ to inspect those
 expressions as the software is used. Publish each selected action to a
 topic, =:tour_cmd=, for another client to follow:
 
@@ -586,7 +586,7 @@ runs locally or on another device.
 VRS uses its programming language as the common interface between programs,
 user interfaces, and devices. Source code, user interface markup, and
 recorded actions share symbolic expressions. An expression can be tried
-at the REPL and included directly in a user interface as an action.
+at the REPL and included directly in user interface markup as an action.
 Recording the interaction produces that same expression as source code.
 The shared representation does much of the work that would otherwise
 require custom integration code.
