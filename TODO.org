@@ -56,6 +56,17 @@ Let web pages use runtime capabilities through a browser client for VRS services
 - Make the tour itself a client: edit and evaluate examples in the page, inspect
   live results, and use services created by earlier examples in later ones.
 
+** TODO Hypermedia format and React bindings for VRS state and pub/sub
+
+Design the new hypermedia format around service-owned state, live updates, and
+callable actions, with Phoenix LiveView-style ergonomics. Add React bindings
+for reading VRS state, subscribing to pub/sub updates, and sending interactions
+through ordinary VRS calls. Use this format for pages and generated widgets.
+
+Work out initial state and subscription ordering, recovery after missed updates
+or reconnection, and subscription cleanup when a view closes. Services remain
+authoritative for shared data; clients own rendering and local input state.
+
 ** TODO Personal Timeline service
 
 Record a chronology of meaningful interactions across devices through a VRS
@@ -89,6 +100,17 @@ iOS client.
 
 References: [[https://www.inkandswitch.com/embark/][Ink & Switch Embark]] and
 [[https://www.inkandswitch.com/potluck/][Potluck]].
+
+*** TODO Generate small interactive widgets over VRS services
+
+Generate a useful widget from a request, with editable view definitions and
+actions bound to existing VRS services. Let clients choose its placement and
+keep it open independently of vrsjmp. Save the definition so it can be reopened
+and reshaped while running. Build on the new [[*Hypermedia format and React bindings for VRS state and pub/sub][hypermedia format and React bindings]].
+
+First experiment: generate a checklist backed by the existing todo service,
+complete an item in the widget and see the change in vrsjmp, then add a
+quick-entry field to the same widget without losing its data.
 
 ** Runtime Core v0.2
 
