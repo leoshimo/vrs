@@ -1,0 +1,57 @@
+#!/usr/bin/env zsh
+# A terminal interface to the :vrsjmp service.
+set -euo pipefail
+
+# Internal entry point used by fzf's reload command.
+if [[ ${1-} == --items ]]; then
+    page=$2 query=$3
+    shift 3
+    # Insert the query as a Lyric string, never as executable source.
+    query=${query//\\/\\\\}
+    query=${query//\"/\\\"}
+    vrsctl "$@" --raw -c "(begin (bind_srv :vrsjmp)
+      (def page '$page)
+      (def args (get page :args))
+      (defn! label (value)
+        (def text (if value (str value) \"\"))
+        (map '(\"\t\" \"\n\" \"\r\") (fn (separator)
+          (set text (apply join (+ '(\" \") (split separator text))))))
+        text)
+      (apply join (+ '(\"\n\") (map
+        (get_items (get page :get_items) (if args args '()) \"$query\")
+        (fn (item)
+          (def title (label (get item :title)))
+          (def subtitle (label (get item :subtitle)))
+          (format \"{}\t{}{}\" (display item) title
+            (if (eq? subtitle \"\") \"\" (str \"  —  \" subtitle))))))))"
+    exit
+fi
+
+command -v fzf >/dev/null
+typeset -a pages client_args fetch
+client_args=("$@") # Forward vrsctl options, such as --socket or --node.
+script=${0:A}
+pages=("$(vrsctl "${client_args[@]}" -c '(begin (bind_srv :vrsjmp) (root_page))')")
+
+while (( ${#pages} )); do
+    page=${pages[-1]}
+    title=$(vrsctl "${client_args[@]}" --raw -c "(or! (get '$page :title) \"VRS\")")
+    fetch=("$script" --items "$page")
+    items=$("${fetch[@]}" "" "${client_args[@]}")
+    # Keep page data out of fzf's placeholder expansion. It quotes {q} itself.
+    reload="${(q)script} --items \"\$VRSJMP_CLI_PAGE\" {q}"
+    for option in "${client_args[@]}"; do reload+=" ${(q)option}"; done
+    if selected=$(print -r -- "$items" | VRSJMP_CLI_PAGE="$page" SHELL=/bin/zsh \
+        fzf --disabled --no-sort --reverse --delimiter=$'\t' --with-nth=2.. \
+        --border --border-label=" $title " --info=inline-right \
+        --bind "change:reload:$reload"); then
+        # fzf displays the label but returns the original row, including its item.
+        selected=${selected%%$'\t'*}
+        result=$(vrsctl "${client_args[@]}" -c "(begin (bind_srv :vrsjmp) (on_click '$selected))")
+        if [[ "$result" == ':close' ]]; then exit 0; fi
+        if [[ "$result" == ':refresh' ]]; then continue; fi
+        pages+=("$result")
+    else
+        pages[-1]=()
+    fi
+done
