@@ -52,6 +52,25 @@ async fn nodes() -> (Runtime, Runtime, Client, Client) {
 }
 
 #[tokio::test]
+async fn history_reads_remote_service_and_pid_without_using_its_mailbox() {
+    let (_alpha, _beta, a, b) = nodes().await;
+    eval(&a, "(def original (remote! \"beta\" (defn! echo (value) value) (spawn_srv! :echo :interface '(echo))))").await;
+    eval(&a, "(bind_srv :echo)").await;
+    eval(&a, "(echo (+ 2 3))").await;
+    let expected = Form::from_expr("((echo 5))").unwrap();
+    assert_eq!(eval(&a, "(history :echo)").await, expected);
+    assert_eq!(eval(&a, "(history original)").await, expected);
+    assert_eq!(eval(&b, "(history :echo)").await, expected);
+    eval(
+        &a,
+        "(remote! \"beta\" (defn! echo (value) value) (spawn_srv! :echo :interface '(echo)))",
+    )
+    .await;
+    assert_eq!(eval(&a, "(history :echo)").await, Form::List(vec![]));
+    assert_eq!(eval(&a, "(history original)").await, expected);
+}
+
+#[tokio::test]
 async fn remote_code_is_quoted_isolated_and_returns_real_pids() {
     let (_alpha, _beta, a, _) = nodes().await;
     assert_eq!(

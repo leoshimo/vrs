@@ -76,6 +76,8 @@ async fn evaluate(client: &Client, defaults: &Output, line: &str) -> Result<(Str
     let line = request.line.map(NonZeroUsize::get).unwrap_or(1);
     let column = request.column.map(NonZeroUsize::get).unwrap_or(1);
     if output.format == Format::Editor {
+        // Transcript output submits each form separately, so client history
+        // contains one entry per form rather than one for the whole selection.
         crate::run_file_at(
             client,
             &output,

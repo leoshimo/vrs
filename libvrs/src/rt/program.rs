@@ -69,6 +69,7 @@ pub struct Locals {
     /// Id of process owning fiber
     pub(crate) pid: ProcessId,
     pub(crate) debug: Option<crate::debug::Store>,
+    pub(crate) history: Option<super::history::Store>,
     /// Stable name of the runtime node hosting this process.
     pub(crate) node_name: String,
     /// Handle to kernel process
@@ -167,6 +168,7 @@ pub fn term_prog() -> Program {
     let prog = r#"
         (loop
             (def (req_id contents) (recv_req))
+            (try (vrs/history_capture_submission contents))
             (send_resp req_id (try (eval contents))))
     "#;
 
@@ -180,6 +182,7 @@ impl Locals {
         Self {
             pid,
             debug: None,
+            history: None,
             node_name: "local".to_string(),
             kernel: None,
             registry: None,
@@ -237,6 +240,15 @@ impl PartialEq for Program {
 pub fn proc_env() -> Env {
     let mut e = Env::standard();
     e.bind_native(SymbolId::from("dbg_history"), crate::debug::history_fn());
+    e.bind_native_async(SymbolId::from("history"), super::history::history_fn());
+    e.bind_native(
+        SymbolId::from("history_append"),
+        super::history::append_fn(),
+    );
+    e.bind_native(
+        SymbolId::from("vrs/history_submission"),
+        super::history::submission_fn(),
+    );
     e.bind_native(SymbolId::from("fuzzy_match"), bindings::fuzzy_match_fn());
     e.bind_native(
         SymbolId::from("match_excerpt"),

@@ -30,7 +30,10 @@ async fn service_expansion_inspects_runtime_exports_without_starting_service() {
     .await;
     let parts = result.as_list().unwrap();
     let rendered = parts[0].to_string();
-    assert!(rendered.contains("((:echo x) (echo x))"), "{rendered}");
+    assert!(
+        rendered.contains("((:echo x) (begin (try (history_append (concat (list 'echo) (map (list x) literal_form)))) (echo x)))"),
+        "{rendered}"
+    );
     assert!(
         rendered.contains("(_ '(:err \"Unrecognized message\"))"),
         "{rendered}"

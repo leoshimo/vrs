@@ -22,6 +22,46 @@ const PRETTY: &str = "((:name :echo\n  :node \"alpha\"\n  :interface ((ping x) (
 const DEFAULT_PRETTY: &str = "((:name :echo :node \"alpha\" :interface ((ping x) (pong y)))\n (:name :clock :interface ((now))))\n";
 
 #[test]
+fn session_history_distinguishes_submitted_code_from_service_calls() -> Result<()> {
+    let runtime = TestRuntime::new()?;
+    runtime.pipe(&["-c", "(begin (def count 0) (defn! add_count (amount) (set count (+ count amount))) (spawn_srv! :counter :interface '(add_count)))"]);
+    let requests = [
+        serde_json::json!({"source": "(bind_srv :counter)"}),
+        serde_json::json!({"source": "(add_count (+ 1 1))"}),
+        serde_json::json!({"source": "(history)"}),
+        serde_json::json!({"source": "(history :counter)"}),
+        serde_json::json!({"source": "(history)"}),
+        serde_json::json!({"source": "(+ 1 2)\n(+ 3 4)", "format": "editor"}),
+        serde_json::json!({"source": "(history)"}),
+    ];
+    let input = requests
+        .iter()
+        .map(|request| format!("{request}\n"))
+        .collect::<String>();
+    let output = runtime.pipe_input(&["--session", "--format", "compact"], Some(&input));
+    let replies = output
+        .lines()
+        .map(serde_json::from_str::<serde_json::Value>)
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    assert_eq!(replies.len(), requests.len());
+    for reply in &replies {
+        assert_eq!(reply["ok"], true, "{reply}");
+    }
+    assert_eq!(replies[1]["output"], "2\n");
+    assert_eq!(
+        replies[2]["output"],
+        "((bind_srv :counter) (add_count (+ 1 1)))\n"
+    );
+    assert_eq!(replies[3]["output"], "((add_count 2))\n");
+    assert_eq!(replies[4]["output"], replies[2]["output"]);
+    assert_eq!(
+        replies[6]["output"],
+        "((bind_srv :counter) (add_count (+ 1 1)) (+ 1 2) (+ 3 4))\n"
+    );
+    Ok(())
+}
+
+#[test]
 fn command_terminal_default_width_and_compact_override() -> Result<()> {
     let runtime = TestRuntime::new()?;
     let expression = format!("'{VALUE}");
@@ -169,7 +209,12 @@ fn service_expansion_contains_direct_match_and_round_trips() -> Result<()> {
       (list (pretty code) (eq? code (read (pretty code)))
             (contains? (ls_srv) :test)))";
     let output = runtime.pipe(&["-c", source]);
-    assert!(output.contains("((:echo x) (echo x))"), "{output}");
+    assert!(output.contains("((:echo x)"), "{output}");
+    assert!(
+        output.contains("(history_append (concat (list 'echo) (map (list x) literal_form)))"),
+        "{output}"
+    );
+    assert!(output.contains("(echo x)))"), "{output}");
     assert!(
         output.contains(r#"(_ '(:err \"Unrecognized message\"))"#),
         "{output}"

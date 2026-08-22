@@ -31,15 +31,26 @@
     (def callable (eval_caller name))
     (if (not? (lambda? callable)) (error "exported service value must be a lambda"))
     # Keep ordinary parameter names readable. Rename a parameter if it would
-    # shadow the handler, and capture wildcard arguments for the direct call.
-    (def renamed (gensym "argument"))
+    # shadow the handler or history helpers; capture wildcard arguments too.
+    (def renamed '())
     (def params (map (get (meta callable) :args) (fn (arg)
       (def param (get arg :name))
       (cond
         ((eq? param '_) (gensym "argument"))
-        ((eq? param name) renamed)
+        ((or! (eq? param name)
+              (contains? '(history_append literal_form list map concat try) param))
+          (begin
+            (def key (keyword param))
+            # Repeated names must remain the same pattern variable.
+            (if (not? (contains? renamed key))
+              (set renamed (+ renamed (list key (gensym "argument")))))
+            (get renamed key)))
         (true param)))))
-    (list (concat (list (keyword name)) params) (concat (list name) params)))))
+    (list (concat (list (keyword name)) params)
+      `(begin
+        (try (history_append
+          (concat (list ',name) (map (list ,@params) literal_form))))
+        (,name ,@params))))))
 
 # Each topic has one named, single-argument handler. Keep payloads as data.
 (defn! vrs/topic_clauses (topics service)

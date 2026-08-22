@@ -159,6 +159,7 @@ struct Kernel {
     registry: Registry,
     pubsub: PubSubHandle,
     debug: crate::debug::Store,
+    history: super::history::Store,
     node_name: String,
     peers: Option<PeerHandle>,
 }
@@ -173,6 +174,7 @@ impl Kernel {
         let pubsub = PubSub::spawn();
         Self {
             debug: crate::debug::Store::new(pubsub.clone()),
+            history: super::history::Store::default(),
             weak_hdl: handle.downgrade(),
             procs: ProcessSet::new(),
             proc_hdls: HashMap::new(),
@@ -230,6 +232,7 @@ impl Kernel {
             .registry(self.registry.clone())
             .node_name(self.node_name.clone())
             .pubsub(self.pubsub.clone())
+            .history(self.history.clone())
             .debug(self.debug.clone());
         if let Some(peers) = &self.peers {
             proc = proc.peers(peers.clone());

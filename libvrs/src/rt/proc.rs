@@ -96,6 +96,11 @@ impl Process {
         self
     }
 
+    pub(crate) fn history(mut self, history: super::history::Store) -> Self {
+        self.locals.history = Some(history);
+        self
+    }
+
     /// Set pubsub handle for process
     pub(crate) fn pubsub(mut self, pubsub: PubSubHandle) -> Self {
         self.locals.pubsub(pubsub);

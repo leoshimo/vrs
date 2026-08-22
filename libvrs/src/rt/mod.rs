@@ -1,5 +1,6 @@
 mod bindings;
 mod error;
+mod history;
 mod kernel;
 pub mod program;
 pub(crate) mod pubsub;
