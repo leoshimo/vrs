@@ -156,7 +156,7 @@
            (make_item "iCloud Tabs" '(cloud_tabs_page))
            (make_item "Tailscale" '(tailscale_page))
            (make_item "Windows" '(call_interactively 'focus_window))
-           (make_item_ex "Configure Display Resolution" '(display_page) 'd)
+           (make_item_ex "Display Resolution" '(display_page) 'd)
            (make_item "Toggle Keyboard Backlight" '(toggle_keyboard_backlight))
            (make_item_ex "Browse GitHub PRs" '(github_page) 'gh)
            (make_item "Download YT Video" '(download_video_active_tab)))
@@ -411,14 +411,14 @@
                   `(open_url ,(format "https://www.amazon.com/s?k={}" query)))
        )))
 
-(def resolutions_cache '())
 (defn! display_page ()
-  (set resolutions_cache (list_alternative_resolutions))
-  (+ (push_page 'display_items "Search resolutions…") '(:title "Configure Display Resolution")))
+  (+ (push_page 'display_items "Search resolutions…") '(:title "Display Resolution")))
 
 (defn! display_items (query)
-  (map (fuzzy_match query resolutions_cache str) (fn (resolution)
-    (make_item resolution `(select_resolution ,resolution)))))
+  (map (fuzzy_match query (list_alternative_resolutions) str) (fn (resolution)
+    # The current marker is presentation, not part of the mode descriptor.
+    (def desc (get (split " (current)" resolution) 0))
+    (make_item resolution `(begin (select_resolution ,desc) :refresh)))))
 
 (defn! window_actions (window)
   "Apply existing layout commands to the chosen window, not the launcher"
@@ -814,6 +814,6 @@
   (def result (vrs/execute_command cmd))
   (if (list? result)
     (if (eq? (get result 0) :push_page) result :close)
-    :close))
+    (if (eq? result :refresh) :refresh :close)))
 
 (spawn_srv! :vrsjmp :interface '(root_page get_items on_click enqueue_input))

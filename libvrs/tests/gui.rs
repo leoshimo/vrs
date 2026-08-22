@@ -33,7 +33,7 @@ async fn fixture() -> (Runtime, Arc<Client>) {
                         "get_items", "push_page", "command_items", "browse_services_page", "service_items",
                         "browse_service_page", "interface_function_items", "service_call_metadata",
                         "invoke_service_function", "continue_service_call", "service_call_expression",
-                        "service_call_items"].contains(&name.as_str()))))
+                        "service_call_items", "display_page", "display_items"].contains(&name.as_str()))))
         .map(|form| form.to_string())
         .collect::<Vec<_>>()
         .join("\n");
@@ -64,6 +64,13 @@ async fn fixture() -> (Runtime, Arc<Client>) {
         (defn! query_items (query) '())
         (defn! make_item_ex (title command hints) (make_item title command))
         (defn! palette_status () :ready)
+        (def display_mode "1470x956@2x 60Hz 8bpp")
+        (defn! list_alternative_resolutions ()
+          (map '("1470x956@2x 60Hz 8bpp" "1710x1112@2x 60Hz 8bpp") (fn (mode)
+            (if (eq? mode display_mode) (str mode " (current)") mode))))
+        (defn! select_resolution (mode)
+          (if (contains? mode "(current)") (error "Labels are not mode descriptors"))
+          (set display_mode mode))
         (spawn_srv! :vrsjmp :interface '(enqueue_input finish choice_rows on_click get_items palette_status))
     "#,
             ))
@@ -79,6 +86,43 @@ async fn fixture() -> (Runtime, Arc<Client>) {
     let (client, _) = connect(&runtime).await;
     evaluate(&client, "(bind_srv :vrsjmp)").await;
     (runtime, client)
+}
+
+#[tokio::test]
+async fn display_resolution_refreshes_labels_and_can_reselect_the_original_current_row() {
+    let (_runtime, palette) = fixture().await;
+    for (source, expected) in [
+        (
+            r#"(begin
+              (def entry (get (get_items 'command_items '() "Display Resolution") 0))
+              (def page (on_click entry))
+              (list (get entry :title) (get page :title) (get page :get_items)))"#,
+            r#"("Display Resolution" "Display Resolution" display_items)"#,
+        ),
+        (
+            r#"(begin
+              (def rows (get_items 'display_items '() ""))
+              (def original (get rows 0))
+              (list (get original :title) (on_click (get rows 1))))"#,
+            r#"("1470x956@2x 60Hz 8bpp (current)" :refresh)"#,
+        ),
+        (
+            r#"(map (get_items 'display_items '() "") (fn (row) (get row :title)))"#,
+            r#"("1470x956@2x 60Hz 8bpp" "1710x1112@2x 60Hz 8bpp (current)")"#,
+        ),
+        ("(on_click original)", ":refresh"),
+        (
+            r#"(map (get_items 'display_items '() "current") (fn (row) (get row :title)))"#,
+            r#"("1470x956@2x 60Hz 8bpp (current)")"#,
+        ),
+        ("(on_click original)", ":refresh"),
+    ] {
+        assert_eq!(
+            evaluate(&palette, source).await,
+            Form::from_expr(expected).unwrap(),
+            "{source}"
+        );
+    }
 }
 
 #[tokio::test]

@@ -41,7 +41,7 @@ test("initial page resolves before showing; cancelled openings stay hidden", asy
     starts[2](); await cancelled;
     assert.equal(shown.length, 1);
 });
-const item = title => ({ title, on_click: title });
+const item = title => ({ id: title, title, on_click: title });
 function setup() {
     const queries = [], actions = [], starts = [], timers = new Map();
     let nextTimer = 0, closed = 0;
@@ -168,6 +168,50 @@ test("a secondary action dispatches its own opaque command on the selected row",
     t.actions[0].resolve({type: "close"}); await tick();
     assert.equal(t.closed(), 1);
     assert.equal(t.nav.current.query, "");
+});
+
+test("refresh keeps the page, query, and selected command as current labels move", async () => {
+    const t = setup(); t.nav.open(rootPage(), "Display");
+    t.queries[0].resolve([item("Display Resolution")]); await tick();
+    const page = {...rootPage(), get_items: "display_items"};
+    t.nav.push(page, "60Hz");
+    const rows = [item("1470x956"), item("1710x1112")];
+    t.queries[1].resolve(rows); await tick();
+    t.nav.activate(1);
+    t.actions[0].resolve({type: "refresh"}); await tick();
+    assert.equal(t.nav.visible, true);
+    assert.equal(t.closed(), 0);
+    assert.equal(t.nav.frames.length, 2);
+    assert.equal(t.queries[2].text, "60Hz");
+    assert.equal(t.queries[2].page, page);
+    // Preserve identity even if fresh labels reorder the search results.
+    t.queries[2].resolve([{...rows[1], title: "1710x1112 (current)", on_click: "updated row"}, rows[0]]); await tick();
+    assert.equal(t.nav.current.query, "60Hz");
+    assert.equal(t.nav.current.selected, 0);
+    assert.equal(t.nav.current.items[0].title, "1710x1112 (current)");
+    t.nav.activate(); t.actions[1].resolve({type: "refresh"}); await tick();
+    t.queries[3].resolve([rows[0], {...rows[1], title: "1710x1112 (current)"}]); await tick();
+    assert.equal(t.nav.current.selected, 1);
+    t.nav.back();
+    assert.equal(t.nav.current.query, "Display");
+});
+
+test("refresh arriving while hidden preserves the query and reloads on reopen", async () => {
+    const t = setup(); t.nav.open();
+    t.queries[0].resolve([item("Display Resolution")]); await tick();
+    t.nav.push({...rootPage(), get_items: "display_items"}, "60Hz");
+    const rows = [item("first"), item("second")];
+    t.queries[1].resolve(rows); await tick();
+    t.nav.activate(1); t.nav.suspend();
+    t.actions[0].resolve({type: "refresh"}); await tick();
+    assert.equal(t.nav.visible, false);
+    assert.equal(t.nav.current.query, "60Hz");
+    assert.equal(t.nav.current.loaded, false);
+    assert.equal(t.queries.length, 2);
+    t.nav.begin(); t.starts[0].resolve({type: "push_page", page: rootPage()}); await tick();
+    assert.equal(t.queries[2].text, "60Hz");
+    t.queries[2].resolve(rows); await tick();
+    assert.equal(t.nav.current.selected, 1);
 });
 
 for (const subpage of [false, true]) {

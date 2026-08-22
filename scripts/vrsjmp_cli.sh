@@ -21,6 +21,7 @@ while (( ${#pages} )); do
     if selected=$(print -r -- "$items" | fzf --exact --no-sort --reverse); then
         result=$("${ctl[@]}" -c "(begin (bind_srv :vrsjmp) (on_click '$selected))")
         if [[ "$result" == ':close' ]]; then exit 0; fi
+        if [[ "$result" == ':refresh' ]]; then continue; fi
         pages+=("$result")
     else
         pages[-1]=()

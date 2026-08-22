@@ -89,7 +89,7 @@ export class Navigation {
             }
             if (this.action === request) this.action = null;
             // A request abandoned on hide must be retried, not left spinning.
-            if (!this.current.loaded || this.current.loading) this.search(this.current.query, true);
+            if (!this.current.loaded || this.current.loading) this.search(this.current.query, true, true);
             else this.changed();
             return;
         }
@@ -121,7 +121,7 @@ export class Navigation {
         this.frames.push({ page, query: "", items: [], selected: 0, loading: false, loaded: false, error: "" });
         this.search(query, true);
     }
-    search(text, immediate = false) {
+    search(text, immediate = false, preserveSelection = false) {
         if (!this.visible || !this.current) return;
         // Keep fast typing while the service chooses the initial page, without
         // rendering a page that is missing its server-supplied arguments.
@@ -138,7 +138,8 @@ export class Navigation {
         this.changed();
         const enqueue = () => {
             this.timer = null;
-            this.pending = { frame, text, obsolete: false };
+            this.pending = { frame, text, obsolete: false,
+                selectedId: preserveSelection ? frame.items[frame.selected]?.id : undefined };
             this.pump();
         };
         const delay = immediate ? 0 : (frame.page.debounce_ms ?? 0);
@@ -154,7 +155,9 @@ export class Navigation {
             const items = await this.transport.query(request.frame.page, request.text);
             if (!request.obsolete && this.visible && this.current === request.frame) {
                 request.frame.items = items;
-                request.frame.selected = 0;
+                const selected = request.selectedId === undefined ? 0
+                    : items.findIndex(item => item.id === request.selectedId);
+                request.frame.selected = Math.max(0, selected);
                 request.frame.loaded = true;
             }
         } catch (error) {
@@ -197,6 +200,9 @@ export class Navigation {
                 frame.selected = 0;
                 frame.loaded = false;
                 if (this.visible) this.close(false);
+            } else if (result.type === "refresh") {
+                frame.loaded = false;
+                if (this.visible) this.search(frame.query, true, true);
             } else if (this.visible) {
                 if (result.type === "push_page") this.push(result.page);
                 else throw new Error("Unrecognized navigation response");

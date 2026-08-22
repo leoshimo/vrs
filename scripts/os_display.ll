@@ -14,14 +14,22 @@
 (set_entity_completions :os/display 'get_displays)
 
 (defn! list_alternative_resolutions ()
-  "(list_other_resolutions) - Lists available resolution except current)"
+  "List favorite resolutions and the current mode, marked with (current)."
   (def result (exec "hs" "-q" "-c" "display.list_resolutions()"))
   (if (eq? (get result :exit) 0)
     (decode :lines (get result :stdout))
-    '()))
+    (error (get result :stderr))))
 
 (defn! select_resolution (desc)
   "(select_resolution DESC) - Select resolution for descriptor"
-  (exec "hs" "-q" "-c" (format "display.select_resolution(\"{}\")" desc)))
+  (def result (exec "hs" "-q" "-c" (format """
+    local screen = hs.screen.mainScreen()
+    local mode = screen:availableModes()[{}]
+    assert(mode, 'Resolution is no longer available')
+    assert(screen:setMode(mode.w, mode.h, mode.scale, mode.freq, mode.depth),
+           'Failed to change resolution')
+    """ (display (get (split " (current)" desc) 0)))))
+  (if (eq? (get result :exit) 0) result
+    (error (get result :stderr))))
 
 (spawn_srv! :os_display :interface '(list_alternative_resolutions select_resolution get_displays))

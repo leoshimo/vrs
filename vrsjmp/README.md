@@ -13,6 +13,16 @@ The service browser reads the live registry, including services that vrsjmp has
 not imported. Browsing leaves vrsjmp's function bindings intact. **Browse
 Functions** continues to search functions already bound in vrsjmp.
 
+## Display resolution
+
+Choose **Display Resolution** from Home. Selecting a resolution keeps the page
+and search open, preserves the selected mode, and refreshes the **(current)**
+marker from the display. The marker is only a label; that row can be selected
+again after switching modes. Unavailable modes and failed changes show an error.
+
+Page actions can return `:refresh` to query the current page again without
+closing it or adding a history entry.
+
 ## MacBook keyboard backlight
 
 On the MacBook node, `:os_keyboard` uses macOS's built-in `osascript` and its

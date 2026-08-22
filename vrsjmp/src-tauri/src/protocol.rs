@@ -4,6 +4,7 @@ use serde::Serialize;
 
 #[derive(Debug, Serialize, PartialEq)]
 pub struct Item {
+    pub id: String,
     pub title: String,
     pub subtitle: Option<String>,
     pub subtitle_spans: Vec<TextSpan>,
@@ -39,6 +40,7 @@ pub struct Page {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Action {
     Close,
+    Refresh,
     PushPage { page: Page },
 }
 
@@ -111,6 +113,8 @@ pub fn items(value: Form) -> Result<Vec<Item>> {
             };
             let (subtitle, subtitle_spans) = subtitle(values)?;
             Ok(Item {
+                // Labels can change when an action refreshes the current page.
+                id: field(values, "on_click").unwrap().to_string(),
                 title: command.title,
                 subtitle,
                 subtitle_spans,
@@ -174,6 +178,9 @@ fn item_command(item: &Form, primary: Option<&Form>) -> Result<ItemCommand> {
 pub fn action(value: Form) -> Result<Action> {
     if value == Form::keyword("close") {
         return Ok(Action::Close);
+    }
+    if value == Form::keyword("refresh") {
+        return Ok(Action::Refresh);
     }
     let Form::List(ref values) = value else {
         bail!("Unexpected action response: {value}");
@@ -266,6 +273,17 @@ mod tests {
         )
         .is_err());
         assert_eq!(action(Form::keyword("close")).unwrap(), Action::Close);
+        assert_eq!(action(Form::keyword("refresh")).unwrap(), Action::Refresh);
+        let resolutions = items(
+            Form::from_expr(
+                r#"((:title "1470x956 (current)" :on_click (select_resolution "1470x956"))
+                (:title "1470x956" :on_click (select_resolution "1470x956")))"#,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(resolutions[0].id, resolutions[1].id);
+        assert_ne!(resolutions[0].on_click, resolutions[1].on_click);
         assert!(items(Form::from_expr("((:title 42))").unwrap()).is_err());
         assert!(action(Form::keyword("unexpected")).is_err());
         let rows = items(
