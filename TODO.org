@@ -420,6 +420,26 @@ See [[file:docs/ai.md][AI and VRS]] for examples and open design questions.
 
 ** TODO Durable Execution
 Goal: Recovering from process or host failure
+
+Use cases:
+- Multi-step actions: save an article, then create a follow-up task. If the
+  second step fails or the host restarts, retain the evaluated inputs and
+  completed progress so recovery can resume that step without repeating the
+  confirmed save. A =begin= or function body is a concrete place to explore
+  this; retrying the whole function does not provide statement-level resumption.
+- Recurring automation: a =loop= polls a feed, handles new entries, then sleeps.
+  Recover its cursor, progress within the current iteration, and next wakeup
+  after a crash or restart. Decide whether missed intervals are skipped or
+  caught up, and how to avoid duplicate active loops or repeated completed work.
+
+Distinguish confirmed effects from calls whose reply was lost: an unacknowledged
+call may already have changed the external system. Define how recovery checks
+or safely repeats those effects, rather than assuming they did not happen.
+
+These use cases need durable progress and resumption. The smaller vrsjmp manual
+retry design retains a failed call's arguments in memory and starts the whole
+call again; it does not resume inside a =begin=, function body, or loop.
+
 ** TODO Program Migration
 Goal: Moving snapshot of running program from machine to machine
 ** TODO Agent Programs
