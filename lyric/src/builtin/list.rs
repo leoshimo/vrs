@@ -82,6 +82,38 @@ pub fn get_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     }
 }
 
+/// Return the first list element without evaluating it.
+pub fn first_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
+    NativeFn {
+        metadata: vec![],
+        doc: "(first LIST) - Return the first element, or nil for an empty list".to_string(),
+        func: |_, args| match args {
+            [Val::List(items)] => Ok(NativeFnOp::Return(
+                items.first().cloned().unwrap_or(Val::Nil),
+            )),
+            _ => Err(Error::UnexpectedArguments(
+                "first expects a list argument".to_string(),
+            )),
+        },
+    }
+}
+
+/// Return the last list element without evaluating it.
+pub fn last_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
+    NativeFn {
+        metadata: vec![],
+        doc: "(last LIST) - Return the last element, or nil for an empty list".to_string(),
+        func: |_, args| match args {
+            [Val::List(items)] => Ok(NativeFnOp::Return(
+                items.last().cloned().unwrap_or(Val::Nil),
+            )),
+            _ => Err(Error::UnexpectedArguments(
+                "last expects a list argument".to_string(),
+            )),
+        },
+    }
+}
+
 /// Language binding for `len`
 pub fn len_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {

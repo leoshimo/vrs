@@ -46,6 +46,8 @@ impl<T: Extern, L: Locals> Env<T, L> {
             .bind_native(SymbolId::from("error"), builtin::types::error_fn())
             .bind_native(SymbolId::from("push"), builtin::push_fn())
             .bind_native(SymbolId::from("get"), builtin::get_fn())
+            .bind_native(SymbolId::from("first"), builtin::list::first_fn())
+            .bind_native(SymbolId::from("last"), builtin::list::last_fn())
             .bind_native(SymbolId::from("map"), builtin::map_fn())
             .bind_native(SymbolId::from("apply"), builtin::list::apply_fn())
             .bind_native(SymbolId::from("len"), builtin::len_fn())

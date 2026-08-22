@@ -151,6 +151,47 @@ fn string() {
 }
 
 #[test]
+fn list_endpoints_preserve_values_and_compose_as_functions() {
+    for (name, expected) in [
+        ("first", "((one) (two) nil)"),
+        ("last", "((+ 1 2) (two) nil)"),
+    ] {
+        let source = format!("(map '(((one) (+ 1 2)) ((two)) ()) {name})");
+        assert_eq!(
+            eval_expr(&source).unwrap(),
+            Val::from_expr(expected).unwrap()
+        );
+    }
+}
+
+#[test]
+fn list_endpoints_evaluate_the_argument_once() {
+    for (name, expected) in [("first", "(1 1)"), ("last", "(2 1)")] {
+        let source = format!(
+            "(begin (def calls 0)
+                (defn! values () (set calls (+ calls 1)) '(1 2))
+                (list ({name} (values)) calls))"
+        );
+        assert_eq!(
+            eval_expr(&source).unwrap(),
+            Val::from_expr(expected).unwrap()
+        );
+    }
+}
+
+#[test]
+fn list_endpoints_require_one_list() {
+    for name in ["first", "last"] {
+        for args in ["", "nil", "42", "\"abc\"", "'() '()"] {
+            assert_matches!(
+                eval_expr(&format!("({name} {args})")),
+                Err(Error::UnexpectedArguments(_))
+            );
+        }
+    }
+}
+
+#[test]
 fn get_handles_positive_and_negative_indexes() {
     assert_eq!(
         eval_expr("(get '(one two three) 0)"),
