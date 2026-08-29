@@ -318,6 +318,21 @@ impl<T: Extern, L: Locals> PartialEq for Lambda<T, L> {
     }
 }
 
+fn escape_string(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '\\' => escaped.push_str("\\\\"),
+            '"' => escaped.push_str("\\\""),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            ch => escaped.push(ch),
+        }
+    }
+    escaped
+}
+
 impl<T: Extern, L: Locals> std::fmt::Display for Val<T, L>
 where
     T: std::fmt::Display,
@@ -327,7 +342,7 @@ where
             Val::Nil => write!(f, "nil"),
             Val::Bool(b) => write!(f, "{}", if *b { "true" } else { "false" }),
             Val::Int(i) => write!(f, "{}", i),
-            Val::String(s) => write!(f, "\"{}\"", s),
+            Val::String(s) => write!(f, "\"{}\"", escape_string(s)),
             Val::Keyword(k) => write!(f, "{}", k),
             Val::Symbol(s) => write!(f, "{}", s),
             Val::List(l) => match &l[..] {
@@ -368,7 +383,7 @@ impl std::fmt::Display for Form {
             Form::Nil => write!(f, "nil"),
             Form::Bool(b) => write!(f, "{}", if *b { "true" } else { "false" }),
             Form::Int(i) => write!(f, "{}", i),
-            Form::String(s) => write!(f, "\"{}\"", s),
+            Form::String(s) => write!(f, "\"{}\"", escape_string(s)),
             Form::Keyword(k) => write!(f, "{}", k),
             Form::Symbol(s) => write!(f, "{}", s),
             Form::List(l) => match &l[..] {
@@ -519,6 +534,16 @@ mod tests {
             Val::string("  hello  world  ").to_string(),
             "\"  hello  world  \"",
         );
+        assert_eq!(
+            Val::string("line one\n\"line two\"\\end\r\t").to_string(),
+            "\"line one\\n\\\"line two\\\"\\\\end\\r\\t\""
+        );
+    }
+
+    #[test]
+    fn displayed_string_round_trips() {
+        let value = Val::string("line one\n\"line two\"\\end\r\t");
+        assert_eq!(Val::try_from(value.to_string().as_str()).unwrap(), value);
     }
 
     #[test]

@@ -118,6 +118,9 @@ impl Tokens<'_> {
                 } else {
                     let actual_ch = match ch {
                         'n' if escaped => '\n',
+                        'r' if escaped => '\r',
+                        't' if escaped => '\t',
+                        '\\' if escaped => '\\',
                         '"' if escaped => '\"',
                         _ => ch,
                     };
@@ -274,6 +277,13 @@ mod tests {
                 lex(r#""Hello \"World\"""#),
                 Ok(vec![Token::String(r#"Hello "World""#.to_string())]),
                 "Escaped quotes should be part of strings"
+            );
+            assert_eq!(
+                lex(r#""line one\nline two\r\t\\end""#),
+                Ok(vec![Token::String(
+                    "line one\nline two\r\t\\end".to_string()
+                )]),
+                "Display escapes should round-trip through the lexer"
             );
             assert_eq!(
                 lex(r#"(exec "osascript" "-e" "tell application \"System Events\"")"#),
@@ -453,5 +463,5 @@ mod tests {
 }
 
 // TODO(bug): Cannot parse non-number "-" prefix:
-//     vrs> (- (read (get (exec "date" "+%s") 1)) 10)
+//     vrs> (- (read (get (exec "date" "+%s") :stdout)) 10)
 //     Incomplete expression - Unable to parse integer - -

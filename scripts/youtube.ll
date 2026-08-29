@@ -5,11 +5,8 @@
 (bind_srv :os_notify)
 (bind_srv :os_browser)
 
-(def ytdlp_download_dir "~/Downloads/yt-dlp")
+(def ytdlp_download_dir (shell_expand "~/Downloads/yt-dlp"))
 (def ytdlp_download_filename_template "%(uploader)s/%(title)s/%(title)s.%(ext)s")
-
-# TODO: Write Bash Scripts directly in lyric?
-(def ytdlp_shim_script (shell_expand "~/proj/vrs/scripts/youtube_ytdlp_shim.sh"))
 
 (defn download_video (url)
   "(download_video URL) - Downloads video at URL"
@@ -18,14 +15,14 @@
     (begin
      (spawn (fn ()
               (notify "yt-dlp" (format "Downloading \n{}" url))
-              (def res (try (exec "yt-dlp"
-                                  "--quiet"
-                                  "--write-webloc-link"
-                                  "-o" (format "{}/{}" ytdlp_download_dir ytdlp_download_filename_template)
-                                  url)))
-              (if (ok? res)
+              (def result (exec "yt-dlp"
+                                "--quiet"
+                                "--write-webloc-link"
+                                "-o" (format "{}/{}" ytdlp_download_dir ytdlp_download_filename_template)
+                                url))
+              (if (eq? (get result :exit) 0)
                 (notify "yt-dlp" (format "Downloaded \n{}" url))
-                (notify "yt-dlp" (format "Error \n{}" (dbg res))))))
+                (notify "yt-dlp" (format "Error \n{}" (get result :stderr))))))
     :ok)))
 
 (defn download_video_active_tab ()
@@ -34,7 +31,15 @@
 
 (defn list_videos ()
   "(list_videos) - List available youtube videos"
-   (read (get (exec ytdlp_shim_script) -1)))
+  (def result (exec "find" ytdlp_download_dir "-type" "f" "-name" "*.webm"))
+  (if (eq? (get result :exit) 0)
+    (map (decode :lines (get result :stdout))
+         (fn (path)
+           (begin
+            (def parts (split "/" path))
+            (list :title (format "{} - {}" (get parts -3) (get parts -2))
+                  :path path))))
+    '()))
 
 # TODO: Write about iterative dev experience? Took ~15m?
 # - Inspiration - flying to japan

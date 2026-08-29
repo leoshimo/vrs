@@ -16,7 +16,10 @@
 
 (defn run_llm (msgs)
   "(run_llm MSGS) - Given a set of message s-exprs, run the LLM to receive an assistant message"
-  (eval (msgs_to_cogni_cmd msgs)))
+  (def result (eval (msgs_to_cogni_cmd msgs)))
+  (if (eq? (get result :exit) 0)
+    (get result :stdout)
+    (error (get result :stderr))))
 
 (defn spawn_chat (chat_name system_prompt)
   "(spawn_chat CHAT_NAME SYSTEM_PROMPT) - Spawn a new process registered as CHAT_NAME with SYSTEM_PROMPT for a new chat session"
@@ -27,7 +30,7 @@
            (defn send_message (message)
              "(send_message MESSAGE) - Send message to chat session then return new assistant message"
              (set msgs (push msgs (list :user message)))
-             (def (:ok assistant_msg) (run_llm msgs))
+             (def assistant_msg (run_llm msgs))
              (set msgs (push msgs (list :assistant assistant_msg)))
              assistant_msg)
 

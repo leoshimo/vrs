@@ -308,13 +308,13 @@ The runtime has built-in global pubsub mechanism.
 
 # Get system appearance state
 (defn is_darkmode ()
-  (def (:ok result) (exec "osascript"
-                          "-e" "tell application \"System Events\""
-                          "-e" "tell appearance preferences"
-                          "-e" "return dark mode"
-                          "-e" "end tell"
-                          "-e" "end tell"))
-  (eq? result "true"))
+  (def result (exec "osascript"
+                    "-e" "tell application \"System Events\""
+                    "-e" "tell appearance preferences"
+                    "-e" "return dark mode"
+                    "-e" "end tell"
+                    "-e" "end tell"))
+  (eq? (get (decode :lines (get result :stdout)) 0) "true"))
 
 # Set system appearance state
 (defn set_darkmode (dark)

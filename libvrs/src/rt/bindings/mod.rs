@@ -22,6 +22,7 @@ pub(crate) use proc::self_fn;
 pub(crate) use proc::sleep_fn;
 pub(crate) use proc::spawn_fn;
 
+pub(crate) use system::decode_fn;
 pub(crate) use system::exec_fn;
 pub(crate) use system::shell_expand_fn;
 

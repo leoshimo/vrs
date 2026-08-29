@@ -19,8 +19,9 @@
   "(get_events START_DATE END_DATE) - Search for calendar events that occur between START_DATE and END_DATE
    START_DATE and END_DATE are both quoted strings that specify start and end date.
    Valid date formats are \"1/1\", \"1/1/2024\", \"now\", \"today at 8am\", \"in one hour\", and other standard date formats."
-  (exec "eventkitcli" "events"
-        "--start-date" (str start_date)
-        "--end-date" (str end_date)))
+  (get (exec "eventkitcli" "events"
+             "--start-date" (str start_date)
+             "--end-date" (str end_date))
+       :stdout))
 
 (spawn_srv :os_cal :interface '(create_event get_events))

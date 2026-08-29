@@ -3,7 +3,7 @@
 
 (defn macOS? ()
   "Determine if current device is macOS"
-  (eq? (get (exec "uname" "-s") 1) "Darwin"))
+  (eq? (get (decode :lines (get (exec "uname" "-s") :stdout)) 0) "Darwin"))
 
 (defn macos_ui_notify (title message)
   "Show Notification UI for macOS"

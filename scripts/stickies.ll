@@ -4,8 +4,19 @@
 
 (defn stickies_get ()
   "(stickies_open) - Returns open Stickies windows"
-  (def (:ok res) (exec "./scripts/stickies_get.sh"))
-  (read res))
+  (def result
+    (exec "osascript"
+          "-e" "tell application \"System Events\""
+          "-e" "tell process \"Stickies\""
+          "-e" "set window_titles to title of every window"
+          "-e" "end tell"
+          "-e" "end tell"
+          "-e" "set AppleScript's text item delimiters to linefeed"
+          "-e" "return window_titles as text"))
+  (if (eq? (get result :exit) 0)
+    (map (decode :lines (get result :stdout))
+         (fn (title) (list :title title)))
+    '()))
 
 (defn stickies_open (name)
   "(stickies_open NAME) - Open Stickies with NAME"

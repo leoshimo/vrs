@@ -216,6 +216,7 @@ pub fn proc_env() -> Env {
 
     {
         e.bind_native_async(SymbolId::from("exec"), bindings::exec_fn())
+            .bind_native(SymbolId::from("decode"), bindings::decode_fn())
             .bind_native(SymbolId::from("shell_expand"), bindings::shell_expand_fn());
     }
 
