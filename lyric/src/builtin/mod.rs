@@ -25,6 +25,7 @@ pub(crate) use list::list_fn;
 pub(crate) use list::map_fn;
 pub(crate) use list::push_fn;
 pub(crate) use log::dbg_fn;
+pub(crate) use math::minus_fn;
 pub(crate) use math::plus_fn;
 pub(crate) use refs::ref_fn;
 pub(crate) use string::display_fn;

@@ -222,7 +222,7 @@ Alternate Idea: Only support =rest= - but build convenience for:
 - [ ] =rest=
 - [ ] =keyword= arguments
 
-** TODO Math Operators =-=
+** DONE Math Operator =-=
 ** TODO Pinning Symbols in Pattern Matches
 
 Using the *value* of symbol instead of symbol

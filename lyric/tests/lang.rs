@@ -42,6 +42,17 @@ fn int() {
 }
 
 #[test]
+fn subtraction() {
+    assert_eq!(eval_expr("(- 10 3)"), Ok(Val::Int(7)));
+    assert_eq!(eval_expr("(- 10 3 2)"), Ok(Val::Int(5)));
+    assert_eq!(eval_expr("(- 5)"), Ok(Val::Int(-5)));
+    assert_eq!(eval_expr("(- -5)"), Ok(Val::Int(5)));
+    assert_matches!(eval_expr("(-)"), Err(Error::UnexpectedArguments(_)));
+    assert_matches!(eval_expr("(- 5 :two)"), Err(Error::UnexpectedType(_)));
+    assert_matches!(eval_expr("(- -2147483648)"), Err(Error::Runtime(_)));
+}
+
+#[test]
 fn string() {
     assert_eq!(eval_expr("\"hello\"").unwrap(), Val::string("hello"));
 }

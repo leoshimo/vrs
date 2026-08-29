@@ -25,6 +25,7 @@ impl<T: Extern, L: Locals> Env<T, L> {
         e.bind_native(SymbolId::from("contains?"), builtin::contains_fn())
             .bind_native(SymbolId::from("eq?"), builtin::eq_fn())
             .bind_native(SymbolId::from("+"), builtin::plus_fn())
+            .bind_native(SymbolId::from("-"), builtin::minus_fn())
             .bind_native(SymbolId::from("ref"), builtin::ref_fn())
             .bind_native(SymbolId::from("list"), builtin::list_fn())
             .bind_native(SymbolId::from("push"), builtin::push_fn())
