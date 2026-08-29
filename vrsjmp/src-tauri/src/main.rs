@@ -102,24 +102,18 @@ impl Client {
     }
 }
 
+fn query_request(query: &str) -> Form {
+    Form::List(vec![
+        Form::symbol("begin"),
+        Form::List(vec![Form::symbol("bind_srv"), Form::keyword("vrsjmp")]),
+        Form::List(vec![Form::symbol("get_items"), Form::string(query)]),
+    ])
+}
+
 #[tauri::command]
 fn set_query(query: &str, state: tauri::State<State>) -> Vec<serde_json::Value> {
     let mut matcher = state.matcher.lock().unwrap();
-
-    // TODO: Contents of `query` should be escaped
-    let request = match Form::from_expr(&format!(
-        "(begin (bind_srv :vrsjmp) (get_items \"{}\"))",
-        query
-    )) {
-        Ok(f) => f,
-        Err(lyric::Error::IncompleteExpression(_)) => return vec![],
-        Err(e) => {
-            error!("Invalid form for user query - {e}");
-            return vec![];
-        }
-    };
-
-    let response = state.client.request(request).unwrap();
+    let response = state.client.request(query_request(query)).unwrap();
 
     let items = match response.contents.unwrap() {
         Form::List(items) => items.iter().map(|i| i.to_string()).collect(),
@@ -267,5 +261,26 @@ fn center_in_primary_monitor(window: &Window) {
     let y = monitor_pos.y + (monitor_size.height / 2 - window_size.height / 2) as i32;
     if let Err(e) = window.set_position(PhysicalPosition::new(x, y)) {
         tracing::error!("Failed to set position - {e}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn query_request_preserves_user_text_as_data() {
+        let query = "quotes \" backslash \\ newline\n) (exec \"unexpected\")";
+        let request = query_request(query);
+
+        assert_eq!(
+            request,
+            Form::List(vec![
+                Form::symbol("begin"),
+                Form::List(vec![Form::symbol("bind_srv"), Form::keyword("vrsjmp")]),
+                Form::List(vec![Form::symbol("get_items"), Form::string(query)]),
+            ])
+        );
+        assert_eq!(Form::from_expr(&request.to_string()).unwrap(), request);
     }
 }
