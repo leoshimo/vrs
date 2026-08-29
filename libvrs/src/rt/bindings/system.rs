@@ -277,6 +277,14 @@ fn decode_tsv(input: &str, columns: Option<Vec<String>>) -> Result<Val> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_matches::assert_matches;
+
+    fn decode(args: Vec<Val>) -> Result<Val> {
+        match decode_impl(&args)? {
+            NativeFnOp::Return(value) => Ok(value),
+            _ => panic!("decode should return a value without yielding or executing bytecode"),
+        }
+    }
 
     #[tokio::test]
     async fn exec_captures_exact_output_and_nonzero_exit() {
@@ -328,9 +336,11 @@ mod tests {
 
     #[test]
     fn decodes_json_to_lyric_values() {
-        let value =
-            decode_json(r#"[{"id":42,"title":"hello","visible":true,"other":null,"opacity":0.5}]"#)
-                .unwrap();
+        let value = decode(vec![
+            Val::keyword("json"),
+            Val::string(r#"[{"id":42,"title":"hello","visible":true,"other":null,"opacity":0.5}]"#),
+        ])
+        .unwrap();
 
         let Val::List(items) = value else {
             panic!("expected a list");
@@ -352,20 +362,68 @@ mod tests {
     }
 
     #[test]
+    fn decodes_nested_json_and_preserves_unsupported_numbers() {
+        let value = decode(vec![
+            Val::keyword("json"),
+            Val::string(
+                r#"{"items":[{"title":"line\n\"quoted\""}],"large":2147483648,"small":-2147483649,"whole":1.0}"#,
+            ),
+        ])
+        .unwrap();
+        let Val::List(object) = value else {
+            panic!("expected an object association list");
+        };
+
+        assert_eq!(
+            lyric::kwargs::get(&object, &lyric::KeywordId::from("large")),
+            Some(Val::string("2147483648"))
+        );
+        assert_eq!(
+            lyric::kwargs::get(&object, &lyric::KeywordId::from("small")),
+            Some(Val::string("-2147483649"))
+        );
+        assert_eq!(
+            lyric::kwargs::get(&object, &lyric::KeywordId::from("whole")),
+            Some(Val::Int(1))
+        );
+        assert_eq!(
+            lyric::kwargs::get(&object, &lyric::KeywordId::from("items")),
+            Some(Val::List(vec![Val::List(vec![
+                Val::keyword("title"),
+                Val::string("line\n\"quoted\""),
+            ])]))
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_json() {
+        assert_matches!(
+            decode(vec![Val::keyword("json"), Val::string("{not json}")]),
+            Err(Error::Runtime(message)) if message.contains("failed to decode JSON")
+        );
+    }
+
+    #[test]
     fn decodes_lines_without_a_trailing_empty_record() {
         assert_eq!(
-            decode_lines("one\r\ntwo\n\n"),
+            decode(vec![Val::keyword("lines"), Val::string("one\r\ntwo\n\n")]).unwrap(),
             Val::List(vec![Val::string("one"), Val::string("two")])
+        );
+        assert_eq!(
+            decode(vec![Val::keyword("lines"), Val::string("")]).unwrap(),
+            Val::List(vec![])
         );
     }
 
     #[test]
     fn decodes_tsv_with_declarative_columns() {
         assert_eq!(
-            decode_tsv(
-                "1\tFirst title\n2\tSecond\ttitle\n",
-                Some(vec!["id".into(), "title".into()])
-            )
+            decode(vec![
+                Val::keyword("tsv"),
+                Val::string("1\tFirst title\n2\tSecond\ttitle\n"),
+                Val::keyword("columns"),
+                Val::List(vec![Val::keyword("id"), Val::keyword("title")]),
+            ])
             .unwrap(),
             Val::List(vec![
                 Val::List(vec![
@@ -381,6 +439,58 @@ mod tests {
                     Val::string("Second\ttitle"),
                 ]),
             ])
+        );
+    }
+
+    #[test]
+    fn decodes_tsv_rows_without_columns_and_pads_missing_fields() {
+        assert_eq!(
+            decode(vec![Val::keyword("tsv"), Val::string("1\tFirst title\n")]).unwrap(),
+            Val::List(vec![Val::List(vec![
+                Val::string("1"),
+                Val::string("First title"),
+            ])])
+        );
+        assert_eq!(
+            decode(vec![
+                Val::keyword("tsv"),
+                Val::string("1\n"),
+                Val::keyword("columns"),
+                Val::List(vec![Val::keyword("id"), Val::keyword("title")]),
+            ])
+            .unwrap(),
+            Val::List(vec![Val::List(vec![
+                Val::keyword("id"),
+                Val::string("1"),
+                Val::keyword("title"),
+                Val::string(""),
+            ])])
+        );
+    }
+
+    #[test]
+    fn rejects_unsupported_formats_and_invalid_options() {
+        assert_matches!(
+            decode(vec![Val::keyword("csv"), Val::string("one,two")]),
+            Err(Error::UnexpectedArguments(message)) if message.contains("unsupported decode format")
+        );
+        assert_matches!(
+            decode(vec![
+                Val::keyword("json"),
+                Val::string("{}"),
+                Val::keyword("columns"),
+                Val::List(vec![]),
+            ]),
+            Err(Error::UnexpectedArguments(message)) if message.contains("does not accept options")
+        );
+        assert_matches!(
+            decode(vec![
+                Val::keyword("tsv"),
+                Val::string("one"),
+                Val::keyword("columns"),
+                Val::List(vec![Val::symbol("not-a-keyword")]),
+            ]),
+            Err(Error::UnexpectedArguments(message)) if message.contains("must contain keywords")
         );
     }
 }
