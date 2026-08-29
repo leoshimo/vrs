@@ -36,16 +36,18 @@ pub fn get_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
         doc: "(get LIST ATTR) - Returns element within LIST for given ATTR, which can be 0-indexed position in list, or keywords for association lists. Negative indexes return from end of list.".to_string(),
         func: |_, x| match x {
             [Val::List(l), Val::Int(idx)] => {
-                let index = if *idx >= 0 {
-                    *idx as usize
+                let index = if let Ok(index) = usize::try_from(*idx) {
+                    Some(index)
                 } else {
-                    l.len() + *idx as usize
+                    usize::try_from(idx.unsigned_abs())
+                        .ok()
+                        .and_then(|offset| l.len().checked_sub(offset))
                 };
 
-                let elem = match l.get(index) {
-                    Some(elem) => elem.clone(),
-                    None => Val::Nil,
-                };
+                let elem = index
+                    .and_then(|index| l.get(index))
+                    .cloned()
+                    .unwrap_or(Val::Nil);
                 Ok(NativeFnOp::Return(elem))
             }
             [Val::List(l), Val::Keyword(target)] => Ok(NativeFnOp::Return(
