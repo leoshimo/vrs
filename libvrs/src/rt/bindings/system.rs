@@ -1,15 +1,17 @@
 //! Host System Bindings
 
+use std::process::Stdio;
+
 use crate::rt::program::{NativeAsyncFn, NativeFn, NativeFnOp, Val};
 use lyric::{Error, Result};
 use serde_json::Value as JsonValue;
-use tokio::process::Command;
+use tokio::{io::AsyncWriteExt, process::Command};
 use tracing::debug;
 
 /// Binding for exec
 pub(crate) fn exec_fn() -> NativeAsyncFn {
     NativeAsyncFn {
-        doc: "(exec PROG ARG1 ARG2 ... ARGN) - Execute PROG and return (:exit CODE :stdout STRING :stderr STRING).".to_string(),
+        doc: "(exec PROG ARG1 ... ARGN [:stdin STRING]) - Execute PROG, optionally write STRING to stdin, and return (:exit CODE :stdout STRING :stderr STRING).".to_string(),
         func: |_, args| Box::new(exec_impl(args)),
     }
 }
@@ -44,8 +46,8 @@ pub(crate) fn shell_expand_fn() -> NativeFn {
 
 /// Implementation of (exec PROG ARGS...)
 async fn exec_impl(args: Vec<Val>) -> Result<Val> {
-    let (prog, args) = args.split_first().ok_or(Error::UnexpectedArguments(
-        " Unexpected arguments to exec = (exec PROG [ARGS...])".to_string(),
+    let (prog, rest) = args.split_first().ok_or(Error::UnexpectedArguments(
+        "Unexpected arguments to exec - expected (exec PROG [ARGS...] [:stdin STRING])".to_string(),
     ))?;
 
     let prog = match prog {
@@ -57,23 +59,66 @@ async fn exec_impl(args: Vec<Val>) -> Result<Val> {
         }
     };
 
+    let option_start = rest
+        .iter()
+        .position(|arg| matches!(arg, Val::Keyword(_)))
+        .unwrap_or(rest.len());
+    let (args, options) = rest.split_at(option_start);
+
     let args = args
         .iter()
         .map(|a| match a {
             Val::String(s) => Ok(s.clone()),
             _ => Err(Error::UnexpectedArguments(
-                "exec can handle string arguments only".to_string(),
+                "exec command arguments must be strings".to_string(),
             )),
         })
         .collect::<Result<Vec<_>>>()?;
 
+    let stdin = match options {
+        [] => None,
+        [Val::Keyword(option), Val::String(input)] if option.as_str() == "stdin" => {
+            Some(input.clone())
+        }
+        _ => {
+            return Err(Error::UnexpectedArguments(
+                "exec accepts only trailing :stdin STRING options".to_string(),
+            ))
+        }
+    };
+
     debug!("exec {:?} {:?}", &prog, &args);
 
-    let output = Command::new(prog.clone())
+    let mut command = Command::new(prog.clone());
+    command
         .args(args.clone())
-        .output()
-        .await
+        .stdin(if stdin.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let mut child = command
+        .spawn()
         .map_err(|e| Error::Runtime(format!("{e}")))?;
+
+    let output = if let Some(input) = stdin {
+        let mut child_stdin = child.stdin.take().ok_or(Error::Runtime(
+            "stdin pipe was unavailable after spawning process".to_string(),
+        ))?;
+        let write_stdin = async move {
+            child_stdin.write_all(input.as_bytes()).await?;
+            child_stdin.shutdown().await
+        };
+        let (write_result, output_result) = tokio::join!(write_stdin, child.wait_with_output());
+        write_result.map_err(|e| Error::Runtime(format!("failed to write stdin: {e}")))?;
+        output_result
+    } else {
+        child.wait_with_output().await
+    }
+    .map_err(|e| Error::Runtime(format!("{e}")))?;
 
     let exit = output.status.code().unwrap_or(-1);
     let stdout = String::from_utf8(output.stdout)
@@ -252,6 +297,31 @@ mod tests {
                 Val::string(" out\n"),
                 Val::keyword("stderr"),
                 Val::string(" err\n"),
+            ])
+        );
+    }
+
+    #[tokio::test]
+    async fn exec_writes_string_to_stdin() {
+        let value = exec_impl(vec![
+            Val::string("sh"),
+            Val::string("-c"),
+            Val::string("cat"),
+            Val::keyword("stdin"),
+            Val::string("line one\nline two\n"),
+        ])
+        .await
+        .unwrap();
+
+        assert_eq!(
+            value,
+            Val::List(vec![
+                Val::keyword("exit"),
+                Val::Int(0),
+                Val::keyword("stdout"),
+                Val::string("line one\nline two\n"),
+                Val::keyword("stderr"),
+                Val::string(""),
             ])
         );
     }
