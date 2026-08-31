@@ -55,6 +55,12 @@ fn subtraction() {
 #[test]
 fn string() {
     assert_eq!(eval_expr("\"hello\"").unwrap(), Val::string("hello"));
+
+    let block = concat!("\"\"\"\n", "    printf \"%s\\\\n\" \"$1\"\n", "    \"\"\"",);
+    assert_eq!(
+        eval_expr(block).unwrap(),
+        Val::string("printf \"%s\\\\n\" \"$1\"\n")
+    );
 }
 
 #[test]

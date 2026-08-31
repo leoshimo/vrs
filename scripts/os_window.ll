@@ -62,10 +62,19 @@
   (exec "yabai" "--message" "window" "--display" "2")
   (exec "yabai" "--message" "display" "--focus" "2"))
 
-# TODO: Explore embedding shell scripts in Lyric? Macro? How will pipe work?
 (defn window_split ()
   "(window_split) - Split currently focused window and last focused window horizontally in display"
-  (exec "yabai_window_split"))
+  (exec "bash" "-seuo" "pipefail"
+        :stdin """
+        command -v yabai >/dev/null
+        command -v jq >/dev/null
+
+        primary_win="$(yabai -m query --windows | jq 'first(.[] | select(."has-focus" == true)).id')"
+        aux_win="$(yabai -m query --windows | jq 'first(.[] | select(."has-focus" == false)).id')"
+
+        yabai --message window "$primary_win" --grid "1:2:0:0:1:1"
+        yabai --message window "$aux_win" --grid "1:2:1:0:1:1"
+        """))
 
 (defn show_desktop ()
   "(show_desktop) - Show the desktop"

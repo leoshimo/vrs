@@ -22,8 +22,21 @@
 
 (defn reeder_add (url title)
   "(reeder_add URL title) - Add item with URL to Reeder"
-  (exec "feedbin_add_page" url title)
-  :ok)
+  (def result
+    (exec "bash" "-seuo" "pipefail" "--" url title
+          :stdin """
+          basic_auth="$(op item get Feedbin --fields 'label=basic_auth')"
+
+          curl --silent \
+               --request POST \
+               --user "$basic_auth" \
+               --data-urlencode "url=$1" \
+               --data-urlencode "title=$2" \
+               https://api.feedbin.com/v2/pages.json
+          """))
+  (if (eq? (get result :exit) 0)
+    :ok
+    (error (get result :stderr))))
 
 (defn reeder_add_active_tab ()
   "(reeder_add_active_tab) - Add current active page of browser to reeder"

@@ -64,6 +64,12 @@ The runtime runs software written in Lyric lang:
 # e.g. "hello lyric!" string to symbol `msg`
 (def msg "hello lyric!")
 
+# Raw block strings preserve quotes and backslashes. Indented multiline blocks
+# drop their leading newline and common indentation.
+(def script """
+    printf '%s\n' "$1"
+    """)
+
 # Update bindings with `set`
 (set msg "goodbye lyric!")
 
@@ -370,10 +376,13 @@ debugging - see `vrsctl --help` for an overview of available commands.
 
 ### Emacs Integration
 
-There is an major-mode available for Emacs - `lyric-mode`.
+An Emacs major mode is available at [`emacs/lyric-mode.el`](emacs/lyric-mode.el).
 
 It provides syntax highlighting and bindings useful for bottom-up, interactive,
-editor-centric software development.
+editor-centric software development. It recognizes raw block strings and sends
+the exact source expression to `vrsctl`, so multiline scripts can be evaluated
+with `lyric-eval-last-sexp` without being read and rewritten as Emacs Lisp.
 
-The package is currently not available via package repositories - but is
-available in my [dotfiles repository](https://github.com/leoshimo/dots/blob/527bd86095f7c082e6fd6a7658698c8745c65be0/emacs/.emacs.d/init.org#lyric--vrs).
+The mode currently depends on `janet-mode`. Add the `emacs` directory to
+`load-path`, require `lyric-mode`, and customize `lyric-vrsctl-command` when
+additional service bindings are needed.

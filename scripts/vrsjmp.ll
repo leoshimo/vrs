@@ -6,6 +6,44 @@
   (eq? (get (decode :lines (get (exec "uname" "-n") :stdout)) 0)
        "shinjuku.local"))
 
+(defn open_xcode ()
+  "Open the active Xcode selected by xcode-select"
+  (exec "bash" "-seuo" "pipefail"
+        :stdin """
+        xcode_app="$(xcode-select -p | grep -oE 'Xcode[^/]+')"
+        open -a "$xcode_app"
+        """))
+
+(defn toggle_desktop ()
+  "Toggle Finder desktop icon visibility"
+  (exec "bash" "-seuo" "pipefail"
+        :stdin """
+        create_desktop="$(defaults read com.apple.finder CreateDesktop 2>/dev/null || echo false)"
+
+        if [ "$create_desktop" = "true" ]; then
+            defaults write com.apple.finder CreateDesktop false
+        else
+            defaults write com.apple.finder CreateDesktop true
+        fi
+
+        killall Finder
+        """))
+
+(defn toggle_dock_autohide ()
+  "Toggle automatic Dock hiding"
+  (exec "bash" "-seuo" "pipefail"
+        :stdin """
+        current="$(defaults read com.apple.Dock autohide)"
+
+        if [ "$current" -eq 1 ]; then
+            defaults write com.apple.Dock autohide -bool false
+        else
+            defaults write com.apple.Dock autohide -bool true
+        fi
+
+        killall Dock
+        """))
+
 # TODO: Move to init.ll w/ supervision tree
 (bind_srv :system_appearance)
 (bind_srv :rlist)
@@ -250,7 +288,7 @@
          (make_item "Soulver" '(open_app "Soulver 3"))
          (make_item "1Password" '(open_app "1Password"))
          (make_item "TLDraw" '(open_url "https://www.tldraw.com"))
-         (make_item "Xcode" '(exec "open_xcode")) # TODO: Built-in regex
+         (make_item "Xcode" '(open_xcode)) # TODO: Built-in regex
          (make_item "Chrome" '(open_app "Google Chrome"))
          (make_item "Obsidian" '(open_app "Obsidian"))
          (make_item "Script Debugger" '(open_app "Script Debugger"))
@@ -310,8 +348,8 @@
    (list (make_item "Restart vrsd" '(exec "pkill" "-ax" "vrsd"))
          (make_item "Toggle Darkmode" '(toggle_darkmode))
          (make_item "Toggle Color Filter" '(toggle_color_filters))
-         (make_item "Toggle Desktop" '(exec "desktop_toggle"))
-         (make_item "Toggle Dock" '(exec "dock_autohide_toggle"))
+         (make_item "Toggle Desktop" '(toggle_desktop))
+         (make_item "Toggle Dock" '(toggle_dock_autohide))
          (make_item "Toggle QuickShade" '(toggle_quick_shade))
          (make_item "Open in Wayback" '(active_tab_open_wayback))
          (make_item "Show Desktop" '(show_desktop))
