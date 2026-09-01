@@ -44,3 +44,4 @@ pub(crate) use pubsub::subscribe_fn;
 
 pub(crate) use fs::fdump_fn;
 pub(crate) use fs::fread_fn;
+pub(crate) use fs::run_script_fn;

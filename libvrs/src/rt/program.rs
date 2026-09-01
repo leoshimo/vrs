@@ -94,6 +94,15 @@ impl Program {
         Self::from_val(val)
     }
 
+    /// Create a program from a script containing multiple top-level forms.
+    pub fn from_script(script: &str) -> Result<Self> {
+        let forms = lyric::parse_script(script)?;
+        let body = std::iter::once(Val::symbol("begin"))
+            .chain(forms.into_iter().map(Val::from))
+            .collect();
+        Self::from_val(Val::List(body))
+    }
+
     pub fn from_lambda(lambda: Lambda) -> Result<Self> {
         if !lambda.params.is_empty() {
             return Err(Error::UnexpectedArguments(
@@ -211,7 +220,8 @@ pub fn proc_env() -> Env {
 
     {
         e.bind_native_async(SymbolId::from("fread"), bindings::fread_fn())
-            .bind_native_async(SymbolId::from("fdump"), bindings::fdump_fn());
+            .bind_native_async(SymbolId::from("fdump"), bindings::fdump_fn())
+            .bind_native_async(SymbolId::from("run"), bindings::run_script_fn());
     }
 
     {
