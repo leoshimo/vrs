@@ -16,3 +16,4 @@ tokio = { version = "1.40.0", features = ["full"] }
 anyhow = "1.0.89"
 tracing-subscriber = "0.3.18"
 tracing = "0.1.40"
+clap = { version = "4.5.20", features = ["derive"] }
