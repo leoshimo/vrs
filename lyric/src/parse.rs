@@ -18,6 +18,16 @@ pub fn parse(expr: &str) -> Result<Form> {
     Ok(form)
 }
 
+/// Parse a script containing zero or more top-level forms.
+pub fn parse_script(expr: &str) -> Result<Vec<Form>> {
+    let mut tokens = lex(expr)?.into_iter().peekable();
+    let mut forms = Vec::new();
+    while tokens.peek().is_some() {
+        forms.push(parse_form(&mut tokens)?);
+    }
+    Ok(forms)
+}
+
 /// Parse single expression into a form. Returns result of tuple of parsed form and remaining tokens
 fn parse_form<I>(tokens: &mut Peekable<I>) -> Result<Form>
 where
@@ -73,6 +83,18 @@ mod tests {
             parse("            "),
             Err(Error::IncompleteExpression(_))
         ));
+    }
+
+    #[test]
+    fn parse_script_top_level_forms() {
+        assert_eq!(
+            parse_script("(def x 1)\n(+ x 2)"),
+            Ok(vec![
+                Form::List(vec![Form::symbol("def"), Form::symbol("x"), Form::Int(1)]),
+                Form::List(vec![Form::symbol("+"), Form::symbol("x"), Form::Int(2)]),
+            ])
+        );
+        assert_eq!(parse_script("# only a comment\n"), Ok(vec![]));
     }
 
     #[test]
