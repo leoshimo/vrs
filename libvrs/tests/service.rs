@@ -4,7 +4,7 @@ use vrs::{ProcessResult, Program, Runtime, Val};
 
 #[tokio::test]
 async fn srv_echo() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let echo_prog = r#" (begin 
         (defn echo (name) (list "got" name))
@@ -37,7 +37,7 @@ async fn srv_echo() {
 
 #[tokio::test]
 async fn srv_multi_interface() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let echo_prog = r#" (begin 
         (spawn (lambda () (begin
@@ -63,7 +63,7 @@ async fn srv_multi_interface() {
 
 #[tokio::test]
 async fn srv_echo_invalid_msg() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let echo_prog = r#" (begin 
         (defn echo (name) (list "got" name))
@@ -87,7 +87,7 @@ async fn srv_echo_invalid_msg() {
 
 #[tokio::test]
 async fn srv_echo_invalid_arg() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let echo_prog = r#" (begin 
         (defn echo (name) (list "got" name))
@@ -112,7 +112,7 @@ async fn srv_echo_invalid_arg() {
 
 #[tokio::test]
 async fn spawn_echo_svc() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     // Spawn + interact on same program
     let prog = r#"(begin

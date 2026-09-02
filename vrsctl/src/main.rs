@@ -216,7 +216,7 @@ mod tests {
     use vrs::Runtime;
 
     async fn runtime_client() -> (Runtime, Client) {
-        let runtime = Runtime::new();
+        let runtime = Runtime::new("vrsctl");
         let (client, runtime_conn) = Connection::pair().unwrap();
         runtime.handle_conn(runtime_conn).await.unwrap();
         (runtime, Client::new(client))

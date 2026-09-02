@@ -37,6 +37,23 @@ pub(crate) fn pid_fn() -> NativeFn {
     }
 }
 
+/// Binding to get the immutable name of the current runtime node.
+pub(crate) fn node_name_fn() -> NativeFn {
+    NativeFn {
+        doc: "(node_name) - Returns the name of the runtime node hosting this process.".to_string(),
+        func: |f, args| {
+            if !args.is_empty() {
+                return Err(Error::UnexpectedArguments(
+                    "node_name expects no arguments".to_string(),
+                ));
+            }
+            Ok(NativeFnOp::Return(Val::String(
+                f.locals().node_name.clone(),
+            )))
+        },
+    }
+}
+
 /// Binding to list processes
 pub(crate) fn ps_fn() -> NativeAsyncFn {
     NativeAsyncFn {
@@ -161,7 +178,7 @@ mod tests {
 
     #[tokio::test]
     async fn binding_self() {
-        let k = kernel::start();
+        let k = kernel::start("test".to_string());
         let hdl = k
             .spawn_prog(Program::from_expr("(self)").unwrap())
             .await
@@ -177,7 +194,7 @@ mod tests {
 
     #[tokio::test]
     async fn sleep() {
-        let k = kernel::start();
+        let k = kernel::start("test".to_string());
         let hdl = k
             .spawn_prog(Program::from_expr("(sleep 0)").unwrap())
             .await
@@ -194,7 +211,7 @@ mod tests {
 
     #[tokio::test]
     async fn ps() {
-        let k = kernel::start();
+        let k = kernel::start("test".to_string());
         let hdl = k
             .spawn_prog(Program::from_expr("(ps)").unwrap())
             .await
@@ -213,7 +230,7 @@ mod tests {
     async fn kill() {
         use tokio::time;
 
-        let k = kernel::start();
+        let k = kernel::start("test".to_string());
 
         let kill_target = k
             .spawn_prog(Program::from_expr("(loop (sleep 0))").unwrap())
@@ -238,7 +255,7 @@ mod tests {
 
     #[tokio::test]
     async fn binding_spawn() {
-        let k = kernel::start();
+        let k = kernel::start("test".to_string());
 
         let prog = r#"(begin
             (spawn (lambda () (loop (sleep 0)))) # spawn infinite loop

@@ -6,7 +6,7 @@ use vrs::{Extern, ProcessResult, Program, Runtime, Val};
 
 #[tokio::test]
 async fn spawn_pid_is_different() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let prog = r#"(begin
         (def origin_pid (self))
@@ -36,7 +36,7 @@ async fn spawn_pid_is_different() {
 
 #[tokio::test]
 async fn spawn_env_isolated() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let prog = r#" (begin
         (def origin_pid (self))
@@ -72,7 +72,7 @@ async fn spawn_env_isolated() {
 #[tokio::test]
 #[ignore] // TODO: Decide Isolation Policy / Fix
 async fn spawn_env_lambda_isolated() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let prog = r#"(begin
         (def parent_pid (self))
@@ -103,7 +103,7 @@ async fn spawn_env_lambda_isolated() {
 #[ignore] // TODO: Decide Isolation Policy / Fix
 #[tokio::test]
 async fn spawn_env_lambda_nested_isolated() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let prog = r#"(begin
         (def parent_pid (self))

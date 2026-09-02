@@ -142,7 +142,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_recv_one() {
-        let k = kernel::start();
+        let k = kernel::start("test".to_string());
 
         let hdl = k
             .spawn_prog(
@@ -165,7 +165,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_recv_two() {
-        let k = kernel::start();
+        let k = kernel::start("test".to_string());
 
         let recv = k
             .spawn_prog(Program::from_expr("(recv)").unwrap())
@@ -206,7 +206,7 @@ mod tests {
 
     #[tokio::test]
     async fn ls_msgs_empty() {
-        let k = kernel::start();
+        let k = kernel::start("test".to_string());
 
         let hdl = k
             .spawn_prog(Program::from_expr("(ls_msgs)").unwrap())
@@ -220,7 +220,7 @@ mod tests {
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn ls_msgs_nonempty() {
-        let k = kernel::start();
+        let k = kernel::start("test".to_string());
 
         let hdl = k
             .spawn_prog(
@@ -246,7 +246,7 @@ mod tests {
 
     #[tokio::test]
     async fn recv_with_pattern() {
-        let k = kernel::start();
+        let k = kernel::start("test".to_string());
 
         let recv = k
             .spawn_prog(
@@ -293,7 +293,7 @@ mod tests {
 
     #[tokio::test]
     async fn recv_with_pattern_nested() {
-        let k = kernel::start();
+        let k = kernel::start("test".to_string());
 
         let recv = k
             .spawn_prog(
@@ -340,7 +340,7 @@ mod tests {
 
     #[tokio::test]
     async fn recv_with_multipattern() {
-        let k = kernel::start();
+        let k = kernel::start("test".to_string());
 
         let prog = r#"(begin
             (send (self) :one)

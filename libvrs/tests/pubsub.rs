@@ -4,7 +4,7 @@ use vrs::{ProcessResult, Program, Runtime, Val};
 
 #[tokio::test]
 async fn single_process_pubsub() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let prog = r#"(begin
         (publish :my_topic :before_subscribe)
@@ -37,7 +37,7 @@ async fn single_process_pubsub() {
 
 #[tokio::test]
 async fn two_process_pubsub_child_to_parent() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let prog = r#"(begin
         (subscribe :my_topic)
@@ -65,7 +65,7 @@ async fn two_process_pubsub_child_to_parent() {
 
 #[tokio::test]
 async fn two_process_pubsub_parent_to_child() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let prog = r#"(begin
         (def parent (self))
@@ -101,7 +101,7 @@ async fn two_process_pubsub_parent_to_child() {
 
 #[tokio::test]
 async fn two_process_pubsub_child_loopback() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let prog = r#"(begin
         (def parent (self))
@@ -154,7 +154,7 @@ async fn two_process_pubsub_child_loopback() {
 
 #[tokio::test]
 async fn two_process_pubsub_many() {
-    let rt = Runtime::new();
+    let rt = Runtime::new("test");
 
     let prog = r#"(begin
         (def parent (self))

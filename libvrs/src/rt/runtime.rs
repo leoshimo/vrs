@@ -9,9 +9,9 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    /// Create new runtime instance
-    pub fn new() -> Self {
-        let kernel_task = kernel::start();
+    /// Create a runtime whose processes share one immutable node name.
+    pub fn new(node_name: impl Into<String>) -> Self {
+        let kernel_task = kernel::start(node_name.into());
         Self { kernel_task }
     }
 
@@ -23,11 +23,5 @@ impl Runtime {
     /// Spawn a given program
     pub async fn run(&self, prog: Program) -> Result<ProcessHandle> {
         self.kernel_task.spawn_prog(prog).await
-    }
-}
-
-impl Default for Runtime {
-    fn default() -> Self {
-        Runtime::new()
     }
 }

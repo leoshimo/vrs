@@ -271,7 +271,7 @@ mod tests {
     #[tokio::test]
     async fn register() {
         let r = Registry::spawn();
-        let k = kernel::start();
+        let k = kernel::start("test".to_string());
 
         let prog = Program::from_expr("(loop (sleep 1))").unwrap();
         let hdl_a = k.spawn_prog(prog.clone()).await.unwrap();
@@ -296,7 +296,7 @@ mod tests {
     #[tokio::test]
     async fn register_duplicate() {
         let r = Registry::spawn();
-        let k = kernel::start();
+        let k = kernel::start("test".to_string());
 
         let prog = Program::from_expr("(loop (sleep 1))").unwrap();
         let hdl_a = k.spawn_prog(prog.clone()).await.unwrap();
@@ -317,7 +317,7 @@ mod tests {
     #[tokio::test]
     async fn register_duplicate_overwrite() {
         let r = Registry::spawn();
-        let k = kernel::start();
+        let k = kernel::start("test".to_string());
 
         let prog = Program::from_expr("(loop (sleep 1))").unwrap();
         let hdl_a = k.spawn_prog(prog.clone()).await.unwrap();
@@ -341,7 +341,7 @@ mod tests {
     #[tokio::test]
     async fn deregister_on_proc_exit() {
         let r = Registry::spawn();
-        let k = kernel::start();
+        let k = kernel::start("test".to_string());
 
         let prog = Program::from_expr("(recv)").unwrap();
         let hdl = k.spawn_prog(prog.clone()).await.unwrap();
@@ -368,7 +368,7 @@ mod tests {
     #[tokio::test]
     async fn get_all() {
         let r = Registry::spawn();
-        let k = kernel::start();
+        let k = kernel::start("test".to_string());
 
         let prog = Program::from_expr("(loop (sleep 1))").unwrap();
         let hdl_a = k.spawn_prog(prog.clone()).await.unwrap();
