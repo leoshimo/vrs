@@ -54,6 +54,26 @@ pub(crate) fn node_name_fn() -> NativeFn {
     }
 }
 
+/// Binding to configure the default timeout for calls made by this process.
+pub(crate) fn call_timeout_fn() -> NativeFn {
+    NativeFn {
+        doc: "(call_timeout SECS) - Configure the timeout for calls made by this process."
+            .to_string(),
+        func: |f, args| {
+            let seconds = match args {
+                [Val::Int(seconds)] if *seconds >= 0 => *seconds as u64,
+                _ => {
+                    return Err(Error::UnexpectedArguments(
+                        "call_timeout expects one non-negative integer".to_string(),
+                    ))
+                }
+            };
+            f.locals_mut().call_timeout = Duration::from_secs(seconds);
+            Ok(NativeFnOp::Return(Val::keyword("ok")))
+        },
+    }
+}
+
 /// Binding to list processes
 pub(crate) fn ps_fn() -> NativeAsyncFn {
     NativeAsyncFn {
@@ -205,6 +225,20 @@ mod tests {
 
         assert_eq!(
             exit.status.unwrap(),
+            ProcessResult::Done(Val::keyword("ok"))
+        );
+    }
+
+    #[tokio::test]
+    async fn call_timeout() {
+        let k = kernel::start_test();
+        let hdl = k
+            .spawn_prog(Program::from_expr("(call_timeout 30)").unwrap())
+            .await
+            .expect("Kernel should spawn new process");
+
+        assert_eq!(
+            hdl.join().await.unwrap().status.unwrap(),
             ProcessResult::Done(Val::keyword("ok"))
         );
     }
