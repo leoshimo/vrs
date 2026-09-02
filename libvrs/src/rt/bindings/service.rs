@@ -4,7 +4,7 @@
 use lyric::builtin::cond::is_true;
 use lyric::{compile, kwargs, parse, Error, KeywordId, Result, SymbolId};
 
-use crate::rt::program::{Extern, Fiber, Lambda, NativeAsyncFn, NativeFn, NativeFnOp, Val};
+use crate::rt::program::{Fiber, Lambda, NativeAsyncFn, NativeFn, NativeFnOp, Val};
 use crate::rt::registry::Registration;
 
 /// Binding for register
@@ -209,7 +209,7 @@ async fn info_srv_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
         .ok_or(Error::Runtime(format!("No service found for {keyword}")))?;
 
     match query.as_str() {
-        "pid" => Ok(Val::Extern(Extern::ProcessId(entry.pid()))),
+        "pid" => Ok(entry.process_val()),
         "interface" => Ok(Val::List(entry.interface().to_vec())),
         "interface_doc" => {
             let mut interface_doc = vec![];

@@ -1,17 +1,4 @@
-use vrs::{ProcessResult, Program, Runtime, Val};
-
-#[tokio::test]
-async fn runtime_exposes_its_node_name() {
-    let runtime = Runtime::new("node");
-    let handle = runtime
-        .run(Program::from_expr("(node_name)").unwrap())
-        .await
-        .unwrap();
-    assert_eq!(
-        handle.join().await.unwrap().status.unwrap(),
-        ProcessResult::Done(Val::String("node".to_string()))
-    );
-}
+use vrs::{Extern, ProcessId, ProcessResult, Program, Runtime, Val};
 
 #[tokio::test]
 async fn script_has_implicit_begin() {
@@ -50,4 +37,20 @@ async fn run_uses_a_fresh_process_environment() {
     );
 
     std::fs::remove_file(path).unwrap();
+}
+
+#[tokio::test]
+async fn node_name_and_process_id_use_the_runtime_node() {
+    let runtime = Runtime::new("node");
+    let handle = runtime
+        .run(Program::from_expr("(list (node_name) (self))").unwrap())
+        .await
+        .unwrap();
+    assert_eq!(
+        handle.join().await.unwrap().status.unwrap(),
+        ProcessResult::Done(Val::List(vec![
+            Val::String("node".to_string()),
+            Val::Extern(Extern::ProcessId(ProcessId::new("node", 0))),
+        ]))
+    );
 }

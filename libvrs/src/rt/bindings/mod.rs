@@ -1,5 +1,6 @@
 mod fs;
 mod mailbox;
+mod node;
 mod open;
 mod proc;
 mod pubsub;
@@ -14,6 +15,7 @@ pub(crate) use mailbox::call_fn;
 pub(crate) use mailbox::ls_msgs_fn;
 pub(crate) use mailbox::recv_fn;
 pub(crate) use mailbox::send_fn;
+pub(crate) use node::configure_fn;
 
 pub(crate) use proc::kill_fn;
 pub(crate) use proc::node_name_fn;

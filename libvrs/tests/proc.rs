@@ -29,7 +29,7 @@ async fn spawn_pid_is_different() {
     };
 
     assert_matches!(
-        pids[..],
+        &pids[..],
         [Val::Extern(Extern::ProcessId(origin)), Val::Extern(Extern::ProcessId(spawn))] if origin.inner() != spawn.inner()
     )
 }
