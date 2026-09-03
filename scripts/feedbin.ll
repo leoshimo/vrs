@@ -38,18 +38,9 @@
                "--limit" (display count)))))
 
 (defn feedbin_saved_pages ()
-  "(feedbin_saved_pages) - Return the 10 most recently saved Feedbin Pages"
-  (let ((pages
-          (filter (feedbin_collections)
-            (fn (collection)
-              (if (eq? (get collection :kind) "feed")
-                (eq? (get collection :name) "Pages")
-                false)))))
-    (if (empty? pages)
-      '()
-      (feedbin_entries_from
-        (format "feed:{}" (get (get pages 0) :id))
-        10))))
+  "(feedbin_saved_pages) - Return the 20 most recently saved Feedbin Pages"
+  (decode_feedbin_result
+    (try (exec "feedbinctl" "pages" "list" "--limit" "20"))))
 
 (defn feedbin_save (url)
   "(feedbin_save URL) - Save a URL to Feedbin Pages and return its entry"
