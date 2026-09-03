@@ -67,11 +67,13 @@ cargo run --bin vrsd -- --node laptop --init ./init.ll
 (run "./scripts/feedbin.ll")
 ```
 
-Endpoints name their transport explicitly. `tcp://HOST` and `ssh://HOST` use the
-default VRS port `8773`; append `:PORT` to either form to select another VRS
-port. The SSH transport runs `ssh -W 127.0.0.1:PORT HOST`, so SSH aliases,
-Bonjour names, and Tailscale MagicDNS names are resolved by OpenSSH without
-exposing the VRS listener. The listener remains bound to localhost.
+Endpoints name their transport explicitly. Release builds use VRS port `8773`;
+debug builds use `8774`, keeping a persistent `serve.sh` runtime isolated from
+ordinary `cargo run` development. Append `:PORT` to either `tcp://HOST` or
+`ssh://HOST` to select another port explicitly. The SSH transport runs
+`ssh -W 127.0.0.1:PORT HOST`, so SSH aliases, Bonjour names, and Tailscale
+MagicDNS names are resolved by OpenSSH without exposing the VRS listener. The
+listener remains bound to localhost.
 
 VRS keeps each link open, exchanges service snapshots and registration
 changes, and caches them locally. `find_srv` and `ls_srv` only query that cache;
