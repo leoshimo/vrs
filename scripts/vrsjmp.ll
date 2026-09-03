@@ -44,8 +44,10 @@
         killall Dock
         """))
 
-# TODO: Move to init.ll w/ supervision tree
+# TODO: Move to scripts/init.ll w/ supervision tree
 (bind_srv :system_appearance)
+(bind_srv :os_browser)
+(bind_srv :os_notify)
 (bind_srv :rlist)
 (bind_srv :nl_shell)
 (bind_srv :nl_scheduler)
@@ -184,7 +186,7 @@
 
 (defn feedbin_save_active_tab ()
   "Save the active browser tab to Feedbin Pages"
-  (if (def (:url url) (active_tab))
+  (let ((url (get (active_tab) :url)))
     (feedbin_call (list :feedbin_save url))))
 
 (defn notes_items (query)
