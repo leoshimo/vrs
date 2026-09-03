@@ -132,5 +132,24 @@ async fn spawn_echo_svc() {
     );
 }
 
+#[tokio::test]
+async fn spawn_srv_returns_after_service_registration() {
+    let rt = Runtime::new("test");
+    let prog = Program::from_expr(
+        r#"(begin
+            (defn ping () :pong)
+            (def spawned (spawn_srv :ready_probe :interface '(ping)))
+            (list spawned (find_srv :ready_probe) (ping)))"#,
+    )
+    .unwrap();
+    let result = rt.run(prog).await.unwrap().join().await.unwrap();
+
+    let ProcessResult::Done(Val::List(values)) = result.status.unwrap() else {
+        panic!("expected spawn result, registry result, and service response");
+    };
+    assert_eq!(values[0], values[1]);
+    assert_eq!(values[2], Val::keyword("pong"));
+}
+
 // TODO: Test srv w/o service name errors
 // TODO: Test srv w/o :interface errors
