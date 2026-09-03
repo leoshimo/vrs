@@ -1,9 +1,11 @@
 # init.ll - VRS node configuration and service startup
 #
-# Minato is a dedicated Feedbin node. Other nodes initiate the full-duplex
-# connection and run the interactive, machine-local services.
+# Minato is a dedicated background-indexing node. Other nodes initiate the
+# full-duplex connection and run the interactive, machine-local services.
 (if (eq? (node_name) "minato")
-    (run "./scripts/feedbin.ll")
+    (begin
+      (run "./scripts/feedbin.ll")
+      (run "./scripts/oura.ll"))
     (begin
       (configure :nodes '("ssh://minato"))
       (run "./scripts/chat.ll")
