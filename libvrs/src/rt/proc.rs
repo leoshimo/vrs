@@ -32,6 +32,9 @@ pub struct Process {
 }
 
 /// A handle to [Process]
+// TODO: Introduce an owning handle whose drop kills the process, similar to
+// tokio process kill_on_drop, without making internal shared handle clones
+// accidentally terminate it.
 #[derive(Debug, Clone)]
 pub struct ProcessHandle {
     id: ProcessId,
