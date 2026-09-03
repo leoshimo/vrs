@@ -187,25 +187,31 @@ impl RegistryTask {
         self.observed
     }
 
+    fn select_entry(entries: &[Entry]) -> Option<&Entry> {
+        entries.iter().max_by_key(|entry| entry.observed)
+    }
+
     async fn handle_cmd(&mut self, cmd: Cmd) {
         match cmd {
             Cmd::Register(registration, proc, resp_tx) => {
                 let _ = resp_tx.send(self.handle_register(registration, proc));
             }
             Cmd::Lookup(keyword, resp_tx) => {
-                let selected = self.entries.get(&keyword).and_then(|entries| {
-                    entries
-                        .iter()
-                        .filter(|entry| entry.is_local())
-                        .max_by_key(|entry| entry.observed)
-                        .or_else(|| entries.iter().max_by_key(|entry| entry.observed))
-                        .cloned()
-                });
+                let selected = self
+                    .entries
+                    .get(&keyword)
+                    .and_then(|entries| Self::select_entry(entries))
+                    .cloned();
                 let _ = resp_tx.send(selected);
             }
             Cmd::NotifyExit(keyword, id, exit) => self.handle_exit(keyword, id, exit),
             Cmd::GetAll(resp_tx) => {
-                let all = self.entries.values().flatten().cloned().collect();
+                let all = self
+                    .entries
+                    .values()
+                    .filter_map(|entries| Self::select_entry(entries))
+                    .cloned()
+                    .collect();
                 let _ = resp_tx.send(all);
             }
             Cmd::LocalSnapshot(resp_tx) => {
@@ -293,11 +299,13 @@ impl RegistryTask {
         if service.pid.node() == self.node_name {
             return;
         }
-        self.remove_remote(service.pid.node(), &service.name, &service.pid);
+        let node = service.pid.node().to_string();
         let observed = self.next_observed();
         let keyword = service.name.clone();
         let entry = Entry::remote(service, observed);
-        self.entries.entry(keyword).or_default().push(entry);
+        let entries = self.entries.entry(keyword).or_default();
+        entries.retain(|entry| !entry.is_remote_on(&node));
+        entries.push(entry);
     }
 
     fn remove_remote(&mut self, node: &str, name: &KeywordId, pid: &ProcessId) {
@@ -361,6 +369,10 @@ impl Entry {
 
     fn is_local(&self) -> bool {
         matches!(self.target, EntryTarget::Local(_))
+    }
+
+    fn is_remote_on(&self, node: &str) -> bool {
+        matches!(&self.target, EntryTarget::Remote(pid) if pid.node() == node)
     }
 
     fn matches_remote(&self, node: &str, pid: &ProcessId) -> bool {
@@ -466,7 +478,59 @@ mod tests {
     use crate::{rt::kernel, Program};
 
     #[tokio::test]
-    async fn local_wins_then_latest_remote_wins() {
+    async fn remote_registration_replaces_service_from_same_node() {
+        let registry = Registry::spawn_named("here".to_string());
+        registry
+            .remote_up(ServiceDescription {
+                name: KeywordId::from("replaceable"),
+                pid: ProcessId::new("remote", 1),
+                interface: vec![Form::List(vec![
+                    Form::keyword("first_hook"),
+                    Form::symbol("cmd"),
+                ])],
+                docs: HashMap::new(),
+            })
+            .await
+            .unwrap();
+        registry
+            .remote_up(ServiceDescription {
+                name: KeywordId::from("replaceable"),
+                pid: ProcessId::new("remote", 2),
+                interface: vec![Form::List(vec![
+                    Form::keyword("second_hook"),
+                    Form::symbol("expr"),
+                ])],
+                docs: HashMap::new(),
+            })
+            .await
+            .unwrap();
+
+        let entries = registry.all().await.unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].pid(), ProcessId::new("remote", 2));
+        assert_eq!(
+            entries[0].interface(),
+            &vec![Val::List(vec![
+                Val::keyword("second_hook"),
+                Val::symbol("expr"),
+            ])]
+        );
+
+        registry
+            .remote_down(
+                "remote".to_string(),
+                KeywordId::from("replaceable"),
+                ProcessId::new("remote", 1),
+            )
+            .await
+            .unwrap();
+        let entries = registry.all().await.unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].pid(), ProcessId::new("remote", 2));
+    }
+
+    #[tokio::test]
+    async fn latest_registration_wins_across_nodes() {
         let registry = Registry::spawn_named("here".to_string());
         registry
             .remote_up(ServiceDescription {
@@ -486,6 +550,9 @@ mod tests {
             })
             .await
             .unwrap();
+        let entries = registry.all().await.unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].node(), "two");
         assert_eq!(
             registry
                 .lookup(KeywordId::from("svc"))
@@ -505,12 +572,37 @@ mod tests {
             .register(Registration::new(KeywordId::from("svc")), handle.clone())
             .await
             .unwrap();
+        let entries = registry.all().await.unwrap();
+        assert_eq!(entries.len(), 1);
+        assert!(entries[0].is_local());
         assert!(registry
             .lookup(KeywordId::from("svc"))
             .await
             .unwrap()
             .unwrap()
             .is_local());
+
+        registry
+            .remote_up(ServiceDescription {
+                name: KeywordId::from("svc"),
+                pid: ProcessId::new("three", 3),
+                interface: vec![],
+                docs: HashMap::new(),
+            })
+            .await
+            .unwrap();
+        let entries = registry.all().await.unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].node(), "three");
+        assert_eq!(
+            registry
+                .lookup(KeywordId::from("svc"))
+                .await
+                .unwrap()
+                .unwrap()
+                .node(),
+            "three"
+        );
         handle.kill().await;
     }
 }

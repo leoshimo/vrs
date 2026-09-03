@@ -103,7 +103,7 @@ async fn register_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
 /// Binding for ls_srv
 pub(crate) fn ls_srv_fn() -> NativeAsyncFn {
     NativeAsyncFn {
-        doc: "(ls_srv) - Returns a list containing all registered services and exported interface"
+        doc: "(ls_srv) - Returns the selected service and exported interface for every registered name"
             .to_string(),
         func: |f, args| Box::new(ls_srv_impl(f, args)),
     }

@@ -97,18 +97,24 @@ impl KernelHandle {
 
     /// Kill specified process
     pub(crate) async fn kill_proc(&self, pid: ProcessId) -> Result<()> {
+        let (tx, rx) = oneshot::channel();
         self.ev_tx
-            .send(Event::KillProcess(pid))
+            .send(Event::KillProcess(pid, tx))
             .await
-            .map_err(|_| Error::NoMessageReceiver("kill_procs failed".to_string()))
+            .map_err(|_| Error::NoMessageReceiver("kill_procs failed".to_string()))?;
+        rx.await
+            .map_err(Error::FailedToReceiveResponseFromKernelTask)?
     }
 
     /// Handle a message being sent from one process to another
     pub(crate) async fn send_message(&self, dst: ProcessId, val: program::Val) -> Result<()> {
+        let (tx, rx) = oneshot::channel();
         self.ev_tx
-            .send(Event::ProcessSendMessage(dst, val))
+            .send(Event::ProcessSendMessage(dst, val, tx))
             .await
-            .map_err(|_| Error::NoMessageReceiver("send_message failed".to_string()))
+            .map_err(|_| Error::NoMessageReceiver("send_message failed".to_string()))?;
+        rx.await
+            .map_err(Error::FailedToReceiveResponseFromKernelTask)?
     }
 
     /// Downgrade a strong kernel handle to weak handle
@@ -140,8 +146,8 @@ pub enum Event {
     SpawnTermProc(Connection, oneshot::Sender<ProcessHandle>),
     ProcessExit(ProcessExit),
     ListProcess(oneshot::Sender<Vec<ProcessId>>),
-    KillProcess(ProcessId),
-    ProcessSendMessage(ProcessId, program::Val),
+    KillProcess(ProcessId, oneshot::Sender<Result<()>>),
+    ProcessSendMessage(ProcessId, program::Val, oneshot::Sender<Result<()>>),
 }
 
 /// The runtime kernel task
@@ -197,8 +203,14 @@ impl Kernel {
                 let _ = tx.send(ids);
                 Ok(())
             }
-            Event::KillProcess(pid) => self.kill_proc(pid).await,
-            Event::ProcessSendMessage(dst, msg) => self.dispatch_msg(dst, msg).await,
+            Event::KillProcess(pid, tx) => {
+                let _ = tx.send(self.kill_proc(pid).await);
+                Ok(())
+            }
+            Event::ProcessSendMessage(dst, msg, tx) => {
+                let _ = tx.send(self.dispatch_msg(dst, msg).await);
+                Ok(())
+            }
         }
     }
 
@@ -253,7 +265,7 @@ impl Kernel {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Client, Connection, ProcessResult};
+    use crate::{Client, Connection, ProcessResult, Val};
     use assert_matches::assert_matches;
     use lyric::{parse as p, Form};
     use std::time::Duration;
@@ -378,6 +390,30 @@ mod tests {
 
         assert_eq!(exit.status.unwrap(), ProcessResult::Cancelled);
         assert!(k.procs().await.unwrap().is_empty(),);
+    }
+
+    #[tokio::test]
+    async fn unknown_process_commands_do_not_terminate_kernel() {
+        let k = start_test();
+        let unknown = ProcessId::new("remote", 1);
+
+        assert_matches!(
+            k.kill_proc(unknown.clone()).await,
+            Err(Error::UnknownProcess)
+        );
+        assert_matches!(
+            k.send_message(unknown, Val::keyword("hello")).await,
+            Err(Error::UnknownProcess)
+        );
+
+        let proc = k
+            .spawn_prog(Program::from_expr(":still_running").unwrap())
+            .await
+            .expect("kernel should accept commands after process lookup errors");
+        assert_eq!(
+            proc.join().await.unwrap().status.unwrap(),
+            ProcessResult::Done(Val::keyword("still_running"))
+        );
     }
 
     #[tokio::test]
