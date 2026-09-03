@@ -75,7 +75,7 @@
      (display_items query)
      (window_items query)
      (scheduler_items query)
-     # (reeder_items query)
+     (reeder_items query)
      (eden_items query)
      (rlist_items query)
      (youtube_items query)
@@ -165,13 +165,17 @@
            (fn (t) (list :title (format "t: Mark Done - {}" (get t :title))
                          :on_click (list 'set_todos_done_by_id (get t :id)))))))
 
-# (defn reeder_items (query)
-#   "(reeder_items QUERY) - Returns markup for reeder items"
-#   (if (not? (contains? query "rd:"))
-#       '()
-#       (begin
-#        (if (eq? query "rd:") (reeder_refresh_items))
-#        (map (reeder_get_items) (fn (it) (make_item (format "rd: {}" (get it :title)) (list 'open_url (get it :url))))))))
+(def saved_pages_cache '())
+(defn reeder_items (query)
+  "(reeder_items QUERY) - Return the 10 most recently saved Feedbin Pages"
+  (if (not? (contains? query "rd:"))
+      '()
+      (begin
+       (if (eq? query "rd:") (set saved_pages_cache (reeder_saved_pages)))
+       (map saved_pages_cache
+            (fn (it)
+              (make_item (format "rd: {}" (get it :title))
+                         (list 'open_url (get it :url))))))))
 
 (defn notes_items (query)
   "(notes_items) - Returns markup for notes"
@@ -355,8 +359,8 @@
          (make_item "Show Desktop" '(show_desktop))
          (make_item "Toggle DND" '(toggle_do_not_disturb)))
 
-   # reeder
-   (list (make_item "Add to Reeder" '(reeder_add_active_tab)))
+   # read later
+   (list (make_item "Save to Read Later" '(reeder_add_active_tab)))
 
    # jump list
    (list (make_item "Add to Jump List" '(add_rlist_active_tab))

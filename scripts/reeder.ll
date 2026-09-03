@@ -21,26 +21,23 @@
   items)
 
 (defn reeder_add (url title)
-  "(reeder_add URL title) - Add item with URL to Reeder"
-  (def result
-    (exec "bash" "-seuo" "pipefail" "--" url title
-          :stdin """
-          basic_auth="$(op item get Feedbin --fields 'label=basic_auth')"
+  "(reeder_add URL TITLE) - Save a URL to Feedbin Pages"
+  (bind_srv :feedbin)
+  (feedbin_save url title))
 
-          curl --silent \
-               --request POST \
-               --user "$basic_auth" \
-               --data-urlencode "url=$1" \
-               --data-urlencode "title=$2" \
-               https://api.feedbin.com/v2/pages.json
-          """))
-  (if (eq? (get result :exit) 0)
-    :ok
-    (error (get result :stderr))))
+(defn reeder_saved_pages ()
+  "(reeder_saved_pages) - Return the 10 most recently saved Feedbin Pages"
+  (let ((bound (try (bind_srv :feedbin))))
+    (if (err? bound) '() (feedbin_saved_pages))))
 
 (defn reeder_add_active_tab ()
   "(reeder_add_active_tab) - Add current active page of browser to reeder"
   (if (def (:title title :url url) (active_tab))
     (reeder_add url title)))
 
-(spawn_srv :reeder :interface '(reeder_refresh_items reeder_get_items reeder_add reeder_add_active_tab))
+(spawn_srv :reeder
+  :interface '(reeder_refresh_items
+               reeder_get_items
+               reeder_saved_pages
+               reeder_add
+               reeder_add_active_tab))
