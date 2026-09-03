@@ -61,7 +61,6 @@
 (bind_srv :cmd_macro)
 (bind_srv :safari_history)
 (bind_srv :github)
-(bind_srv :reeder)
 (bind_srv :os_clipboard)
 (bind_srv :stickies)
 
@@ -75,7 +74,7 @@
      (display_items query)
      (window_items query)
      (scheduler_items query)
-     (reeder_items query)
+     (feedbin_items query)
      (eden_items query)
      (rlist_items query)
      (youtube_items query)
@@ -166,16 +165,27 @@
                          :on_click (list 'set_todos_done_by_id (get t :id)))))))
 
 (def saved_pages_cache '())
-(defn reeder_items (query)
-  "(reeder_items QUERY) - Return the 10 most recently saved Feedbin Pages"
+(defn feedbin_call (message)
+  "Call the Feedbin service, returning an empty list while its node is unavailable"
+  (let ((result (try (call (find_srv :feedbin) message))))
+    (if (err? result) '() result)))
+
+(defn feedbin_items (query)
+  "(feedbin_items QUERY) - Return the 10 most recently saved Feedbin Pages"
   (if (not? (contains? query "rd:"))
       '()
       (begin
-       (if (eq? query "rd:") (set saved_pages_cache (reeder_saved_pages)))
+       (if (eq? query "rd:")
+         (set saved_pages_cache (feedbin_call '(:feedbin_saved_pages))))
        (map saved_pages_cache
             (fn (it)
               (make_item (format "rd: {}" (get it :title))
                          (list 'open_url (get it :url))))))))
+
+(defn feedbin_save_active_tab ()
+  "Save the active browser tab to Feedbin Pages"
+  (if (def (:title title :url url) (active_tab))
+    (feedbin_call (list :feedbin_save url title))))
 
 (defn notes_items (query)
   "(notes_items) - Returns markup for notes"
@@ -360,7 +370,7 @@
          (make_item "Toggle DND" '(toggle_do_not_disturb)))
 
    # read later
-   (list (make_item "Save to Read Later" '(reeder_add_active_tab)))
+   (list (make_item "Save to Read Later" '(feedbin_save_active_tab)))
 
    # jump list
    (list (make_item "Add to Jump List" '(add_rlist_active_tab))
