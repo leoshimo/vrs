@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # Start the runtime and, unless running headless, the GUI. Service
-# configuration lives in ../init.ll.
+# configuration lives in ./scripts/init.ll.
 #
 # Usage:
 #   ./scripts/serve.sh          # release runtime and GUI
@@ -19,7 +19,7 @@ if [ "${TMUX:-}" ]; then
     tmux rename-window "vrs-srv-$MODE"
 fi
 
-cargo run $CARGO_ARGS --bin vrsd -- --init ./init.ll > "vrsd-$MODE.log" 2>&1 &
+cargo run $CARGO_ARGS --bin vrsd -- --init ./scripts/init.ll > "vrsd-$MODE.log" 2>&1 &
 VRSD_PID=$!
 VRSJMP_PID=""
 
@@ -31,8 +31,9 @@ cleanup() {
 }
 trap cleanup INT TERM EXIT
 
-# vrsd binds its client socket only after init.ll completes. Do not launch the
-# GUI until the daemon is accepting requests, and stop if initialization fails.
+# vrsd binds its client socket only after scripts/init.ll completes. Do not
+# launch the GUI until the daemon is accepting requests, and stop if
+# initialization fails.
 until cargo run $CARGO_ARGS --bin vrsctl -- --command ':healthcheck' >/dev/null 2>&1; do
     if ! kill -0 "$VRSD_PID" 2>/dev/null; then
         wait "$VRSD_PID"

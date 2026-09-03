@@ -1,4 +1,4 @@
-# init.ll - VRS node configuration and service startup
+# scripts/init.ll - VRS node configuration and service startup
 #
 # Minato is a dedicated background-indexing node. Other nodes initiate the
 # full-duplex connection and run the interactive, machine-local services.

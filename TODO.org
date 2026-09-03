@@ -72,8 +72,8 @@ nodes.
 
 Examples: =:os_browser= is tied to an interactive Mac, while Feedbin and Oura
 indexing are periodic jobs assigned to the always-on node. The conditional
-startup currently written by hand in =init.ll= should eventually be expressed
-through this model.
+startup currently written by hand in =scripts/init.ll= should eventually be
+expressed through this model.
 
 ** DONE IPC - =srv= and =bind_srv=
 
