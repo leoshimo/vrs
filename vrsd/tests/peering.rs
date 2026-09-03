@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 use tokio::net::UnixStream;
 use tokio::process::{Child, Command};
@@ -9,18 +10,20 @@ use vrs::{Client, Connection, Form};
 
 struct TestDir(PathBuf);
 
+static TEST_DIR_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
 impl TestDir {
     fn new() -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "vrsd-peer-test-{}-{}",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir(&path).unwrap();
-        Self(path)
+        loop {
+            let sequence = TEST_DIR_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+            let path =
+                std::env::temp_dir().join(format!("vpt-{:x}-{sequence:x}", std::process::id()));
+            match std::fs::create_dir(&path) {
+                Ok(()) => return Self(path),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => panic!("failed to create test directory: {error}"),
+            }
+        }
     }
 
     fn join(&self, path: &str) -> PathBuf {
