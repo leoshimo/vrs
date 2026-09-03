@@ -42,10 +42,10 @@
   (decode_feedbin_result
     (try (exec "feedbinctl" "pages" "list" "--limit" "20"))))
 
-(defn feedbin_save (url)
-  "(feedbin_save URL) - Save a URL to Feedbin Pages and return its entry"
+(defn feedbin_save (url title)
+  "(feedbin_save URL TITLE) - Save a URL to Feedbin Pages and return its entry"
   (decode_feedbin_result
-    (try (exec "feedbinctl" "pages" "add" url))))
+    (try (exec "feedbinctl" "pages" "add" url "--title" title))))
 
 # Keep indexing outside the service process so long-running network activity
 # cannot delay entries or search calls. Naming the indexer ensures re-evaluating

@@ -186,8 +186,9 @@
 
 (defn feedbin_save_active_tab ()
   "Save the active browser tab to Feedbin Pages"
-  (let ((url (get (active_tab) :url)))
-    (feedbin_call (list :feedbin_save url))))
+  (let ((tab (active_tab)))
+    (feedbin_call
+      (list :feedbin_save (get tab :url) (get tab :title)))))
 
 (defn notes_items (query)
   "(notes_items) - Returns markup for notes"
