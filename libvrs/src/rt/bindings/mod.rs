@@ -1,4 +1,5 @@
 mod fs;
+mod fuzzy;
 mod mailbox;
 mod node;
 mod open;
@@ -50,3 +51,4 @@ pub(crate) use pubsub::subscribe_fn;
 pub(crate) use fs::fdump_fn;
 pub(crate) use fs::fread_fn;
 pub(crate) use fs::run_script_fn;
+pub(crate) use fuzzy::fuzzy_match_fn;
