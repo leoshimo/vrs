@@ -64,11 +64,30 @@
 (bind_srv :safari_history)
 (bind_srv :github)
 (bind_srv :os_clipboard)
+(try (bind_srv :os_context))
 (bind_srv :stickies)
 
-(defn get_items (query)
-  "Retrieve items to display"
-  (+ (favorite_items)
+(defn get_items (callback args query)
+  "Render a named page using fixed argument values followed by the input text"
+  (apply (eval callback) (push args query)))
+
+(defn push_page (callback prompt)
+  "Return an instruction to push a lazily rendered page in the GUI"
+  (list :push_page :get_items callback :prompt prompt))
+
+# TODO: Revisit the begin_interaction hook: separate immediate page restoration
+# from slower context enrichment, and expose context actions without reordering
+# the main results while the user is typing.
+(defn begin_interaction ()
+  "Capture context once and return the root page; ordinary on_click protocol"
+  (def context (try (get_context)))
+  (+ (push_page 'root_items "Search")
+     (list :args (list (if (list? context) context '())))))
+
+(defn root_items (context query)
+  "Retrieve the root command palette's final ordered items"
+  (def candidates (+ (context_items context)
+     (favorite_items)
      (todo_items query)
      (notes_items query)
      (stickies_items query)
@@ -76,13 +95,18 @@
      (display_items query)
      (window_items query)
      (scheduler_items query)
-     (feedbin_items query)
      (eden_items query)
      (rlist_items query)
      (youtube_items query)
      (safari_history_items query)
      (github_items query)
      (macro_items query)
+     (list (make_item "Read Later" '(read_later_page)))
+     (interactive_items context)))
+  # Prefer label matches, while also finding URLs, paths, IDs and other fields.
+  (def titles (fuzzy_match query candidates (fn (item) (get item :title))))
+  (+ titles
+     (filter (fuzzy_match query candidates display) (fn (item) (not? (contains? titles item))))
      (query_items query)))
 
 (defn make_item (title command)
@@ -92,6 +116,94 @@
 (defn make_item_ex (title command hints)
   "Create an item with TITLE and COMMAND and HINTS"
   (list :hints hints :title title :on_click command))
+
+(defn interactive_commands ()
+  (filter (ls_env) (fn (name) (eq? (get (meta (eval name)) :interactive) true))))
+
+(defn command_title (name)
+  (def metadata (meta (eval name)))
+  (if (get metadata :doc) (get metadata :doc) (display name)))
+
+(defn interactive_items (context)
+  # A captured web page is already a complete Save command, not a picker.
+  (map (filter (interactive_commands) (fn (name)
+    (if (eq? name 'save_page)
+      (empty? (filter context (fn (entity) (accepts_context? name entity))))
+      true)))
+    (fn (name)
+      (make_item (if (eq? name 'save_page) "Save a Page to Read Later…" (command_title name))
+        (list 'call_interactively (list 'quote name))))))
+
+(defn accepts_context? (name entity)
+  (def args (get (meta (eval name)) :args))
+  (if (empty? args) false
+    (eq? (get (get args 0) :type) (get entity 0))))
+
+(defn context_items (context)
+  (def items '())
+  (def commands (interactive_commands))
+  (map context (fn (entity)
+    (map (filter commands (fn (name) (accepts_context? name entity)))
+      (fn (name)
+        (set items (push items
+          (make_item (format "{} — {}" (command_title name) (entity_title entity))
+            (list 'continue_call (list 'quote name) (list 'quote (list entity))))))))))
+  items)
+
+(defn save_page (page)
+  "Save to Read Later"
+  (interactive :web/page)
+  (def result (feedbin_call (list :feedbin_save (get page :url) (get page :title))))
+  (if (empty? result) (error "Feedbin did not save the page. Check its connection and authentication.") result))
+
+(defn copy_page_url (page)
+  "Copy Page URL"
+  (interactive :web/page)
+  (set_clipboard (get page :url)))
+
+(defn copy_selected_text (selection)
+  "Copy Selected Text"
+  (interactive :text)
+  (set_clipboard (get selection :value)))
+
+(defn call_interactively (name)
+  "Fill a named command's required arguments using completion pages, then call it"
+  (continue_call name '()))
+
+(defn continue_call (name values)
+  (def signature (get (meta (eval name)) :args))
+  (if (eq? (len values) (len signature))
+    (apply (eval name) values)
+    (let ((arg (get signature (len values))))
+      (if (eq? (get arg :type) nil)
+        (error (format "No entity type for {}" (display (get arg :name)))))
+      (list :push_page :get_items 'call_items
+            :args (list name values)
+            :prompt (format "{} · {}" (command_title name) (display (get arg :name)))))))
+
+(defn entity_title (entity)
+  (if (get entity :title)
+    (if (get entity :app) (format "{} — {}" (get entity :app) (get entity :title))
+      (get entity :title))
+    (display entity)))
+
+(defn call_items (name values query)
+  (def arg (get (get (meta (eval name)) :args) (len values)))
+  (def type (get arg :type))
+  (def providers (get_entity_completions type))
+  (if (empty? providers) (error (format "No completions configured for {}" (display type))))
+  (def entities '())
+  (map providers (fn (provider)
+    (def found (try (apply (eval provider) '())))
+    (if (list? found)
+      (map found (fn (entity)
+        (if (list? entity)
+          (if (eq? (get entity 0) type)
+            (if (not? (contains? entities entity))
+              (set entities (push entities entity))))))))))
+  (map (fuzzy_match query entities display) (fn (entity)
+    (make_item (entity_title entity)
+      (list 'continue_call (list 'quote name) (list 'quote (push values entity)))))))
 
 # TODO: Query should be rule-based? I.e. "Search DWIM" - if URL, if App Name, if Bundle ID, if location (?), if long, etc
 (defn query_items (query)
@@ -133,7 +245,7 @@
       (+
        (map (get_windows)
             (fn (w) (make_item (format "w: {} - {}" (get w :app) (get w :title))
-                               (list 'focus_window (get w :id)))))
+                               (list 'focus_window (list 'quote w)))))
        (list
         (make_item "w: Split" '(window_split))
         (make_item "w: Fullscreen" '(window_fullscreen))
@@ -166,29 +278,41 @@
            (fn (t) (list :title (format "t: Mark Done - {}" (get t :title))
                          :on_click (list 'set_todos_done_by_id (get t :id)))))))
 
-(def saved_pages_cache '())
 (defn feedbin_call (message)
-  "Call the Feedbin service, returning an empty list while its node is unavailable"
-  (let ((result (try (call (find_srv :feedbin) message))))
-    (if (err? result) '() result)))
+  "Let transport errors reach the palette toast rather than masquerading as no results"
+  (call (find_srv :feedbin) message))
 
-(defn feedbin_items (query)
-  "(feedbin_items QUERY) - Return the 20 most recently saved Feedbin Pages"
-  (if (not? (contains? query "rd:"))
-      '()
-      (begin
-       (if (eq? query "rd:")
-         (set saved_pages_cache (feedbin_call '(:feedbin_saved_pages 20))))
-       (map saved_pages_cache
-            (fn (it)
-              (make_item (format "rd: {}" (get it :title))
-                         (list 'open_url (get it :url))))))))
+(defn read_later_page ()
+  (+ (push_page 'read_later_items "Read Later") '(:debounce_ms 200)))
 
-(defn feedbin_save_active_tab ()
-  "Save the active browser tab to Feedbin Pages"
-  (let ((tab (active_tab)))
-    (feedbin_call
-      (list :feedbin_save (get tab :url) (get tab :title)))))
+(def pages_collection_cache nil)
+(defn pages_collection ()
+  "Resolve the indexed Pages feed; never silently fall back to all feeds"
+  (if (not? pages_collection_cache)
+    (let ((pages (filter (feedbin_call '(:feedbin_collections))
+                  (fn (collection)
+                    (if (eq? (get collection :kind) "feed")
+                      (if (eq? (get collection :name) "Pages") true
+                        (if (get collection :feed_url)
+                          (contains? (get collection :feed_url) "pages.feedbinusercontent.com/")
+                          false))
+                      false)))))
+      (if (not? (empty? pages))
+        (set pages_collection_cache (str "feed:" (get (get pages 0) :id))))))
+  pages_collection_cache)
+
+(defn read_later_items (query)
+  "List recent saved pages or search the indexed Pages collection"
+  (def entries
+    (if (eq? query "")
+      (feedbin_call '(:feedbin_saved_pages 20))
+      (let ((collection (pages_collection)))
+        (if collection
+          (feedbin_call (list :feedbin_search_in collection query 20))
+          '()))))
+  (map (filter entries (fn (entry) (if (list? entry) (get entry :url) false))) (fn (entry)
+    (make_item (if (get entry :title) (get entry :title) (get entry :url))
+               (list 'open_url (get entry :url))))))
 
 (defn notes_items (query)
   "(notes_items) - Returns markup for notes"
@@ -227,7 +351,7 @@
   (if (not? (contains? query "eden:"))
     '()
       (+
-       (list (make_item "eden: Ask AI" (list 'eden_ai query)))
+       (list (make_item "eden: Ask AI" (list 'spawn (list 'fn '() (list 'eden_ai query)))))
        (map (eden_list) (fn (e)
            (list :title (format "eden: {}" (get e :title))
                  :on_click (list 'eden_open (get e :id))))))))
@@ -372,9 +496,6 @@
          (make_item "Show Desktop" '(show_desktop))
          (make_item "Toggle DND" '(toggle_do_not_disturb)))
 
-   # read later
-   (list (make_item "Save to Read Later" '(feedbin_save_active_tab)))
-
    # jump list
    (list (make_item "Add to Jump List" '(add_rlist_active_tab))
          (make_item "Clear Jump List" '(clear_rlist)))
@@ -392,9 +513,15 @@
   "Handle an on_click payload from item"
   (def cmd (get item :on_click))
   (publish :cmd cmd)
-  (spawn (fn ()
-           (def res (try (eval cmd)))
-           (if (err? res)
-             (notify "Encountered error" (display res))))))
+  (def result (eval cmd))
+  # `exec` returns exit status as data. A failed shell action should be a toast,
+  # not a successful close just because evaluating the expression succeeded.
+  (if (list? result)
+    (if (not? (eq? (get result :exit) nil))
+      (if (not? (eq? (get result :exit) 0))
+        (error (str "Command failed: " (get result :stderr))))))
+  (if (list? result)
+    (if (eq? (get result 0) :push_page) result :close)
+    :close))
 
 (spawn_srv :vrsjmp :interface '(get_items on_click))

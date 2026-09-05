@@ -3,22 +3,17 @@
 // TODO: Major Cleanup for Cowboy Coding
 
 use anyhow::{Context, Error, Result};
-use lyric::{kwargs, Form};
-use nucleo_matcher::{
-    pattern::{CaseMatching, Normalization, Pattern},
-    Matcher,
-};
-use serde_json::json;
-use std::sync::Mutex;
-use tauri::{
-    async_runtime::JoinHandle, AppHandle, GlobalShortcutManager, Manager, PhysicalPosition, Window,
-};
+use clap::Parser;
+use lyric::Form;
+use std::path::{Path, PathBuf};
+mod protocol;
+use tauri::{async_runtime::JoinHandle, GlobalShortcutManager, Manager, PhysicalPosition, Window};
 use tokio::{
     net::UnixStream,
     sync::{mpsc, oneshot},
 };
 use tracing::error;
-use vrs::{Connection, KeywordId, Response, Val};
+use vrs::{Connection, Response};
 
 #[cfg(target_os = "macos")]
 use tauri::ActivationPolicy;
@@ -27,21 +22,25 @@ use tauri::ActivationPolicy;
 use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
 
 struct State {
-    matcher: Mutex<Matcher>,
     client: Client,
+}
+
+#[derive(Parser)]
+struct Args {
+    /// Unix socket for vrsd; defaults to the release/debug-specific socket.
+    #[arg(long)]
+    socket: Option<PathBuf>,
 }
 
 impl State {
     fn new(client: Client) -> Self {
-        Self {
-            client,
-            matcher: Mutex::new(Matcher::default()),
-        }
+        Self { client }
     }
 }
 
 /// Tauri-client bridge
 struct Client {
+    socket: PathBuf,
     task: Option<JoinHandle<anyhow::Result<()>>>,
     hdl_tx: Option<mpsc::Sender<Cmd>>,
 }
@@ -50,9 +49,12 @@ enum Cmd {
     Request(Form, oneshot::Sender<Result<Response>>),
 }
 
-async fn request_once(client: &mut Option<vrs::Client>, form: Form) -> Result<Response> {
+async fn request_once(
+    client: &mut Option<vrs::Client>,
+    socket: &Path,
+    form: Form,
+) -> Result<Response> {
     if client.is_none() {
-        let socket = vrs::runtime_socket();
         let conn = UnixStream::connect(socket)
             .await
             .map(Connection::new)
@@ -75,8 +77,9 @@ async fn request_once(client: &mut Option<vrs::Client>, form: Form) -> Result<Re
 }
 
 impl Client {
-    fn new() -> Self {
+    fn new(socket: PathBuf) -> Self {
         Self {
+            socket,
             task: None,
             hdl_tx: None,
         }
@@ -89,6 +92,7 @@ impl Client {
 
         let (tx, mut rx) = mpsc::channel(32);
         self.hdl_tx = Some(tx);
+        let socket = self.socket.clone();
 
         self.task = Some(tauri::async_runtime::spawn(async move {
             let mut client = None;
@@ -96,7 +100,7 @@ impl Client {
             while let Some(cmd) = rx.recv().await {
                 match cmd {
                     Cmd::Request(f, resp_tx) => {
-                        let res = request_once(&mut client, f).await;
+                        let res = request_once(&mut client, &socket, f).await;
                         let _ = resp_tx.send(res);
                     }
                 }
@@ -107,101 +111,103 @@ impl Client {
         Ok(())
     }
 
-    fn request(&self, form: lyric::Form) -> Result<Response> {
-        tauri::async_runtime::block_on(async {
-            let hdl_tx = self.hdl_tx.clone().expect("Client task is not started");
-            let (resp_tx, resp_rx) = oneshot::channel();
-            hdl_tx.send(Cmd::Request(form, resp_tx)).await?;
-            resp_rx
-                .await
-                .with_context(|| "Failed to receive response")?
-        })
+    async fn request(&self, form: lyric::Form) -> Result<Response> {
+        let hdl_tx = self.hdl_tx.as_ref().context("Client task is not started")?;
+        let (resp_tx, resp_rx) = oneshot::channel();
+        hdl_tx.send(Cmd::Request(form, resp_tx)).await?;
+        resp_rx.await.context("Failed to receive response")?
     }
 }
 
-fn query_request(query: &str) -> Form {
-    Form::List(vec![
-        Form::symbol("begin"),
-        Form::List(vec![Form::symbol("bind_srv"), Form::keyword("vrsjmp")]),
-        Form::List(vec![Form::symbol("get_items"), Form::string(query)]),
-    ])
+async fn evaluate(state: &State, form: Form) -> Result<Form> {
+    state
+        .client
+        .request(form)
+        .await?
+        .contents
+        .map_err(anyhow::Error::from)
 }
 
 #[tauri::command]
-fn set_query(query: &str, state: tauri::State<State>) -> Vec<serde_json::Value> {
-    let mut matcher = state.matcher.lock().unwrap();
-    let response = match state.client.request(query_request(query)) {
-        Ok(response) => response,
-        Err(error) => {
-            error!("Error requesting items - {error}");
-            return vec![];
-        }
-    };
-
-    let items = match response.contents {
-        Ok(Form::List(items)) => items.iter().map(|i| i.to_string()).collect(),
-        Ok(e) => {
-            error!("Received unexpected response from client - {e}");
-            vec![]
-        }
-        Err(error) => {
-            error!("Error evaluating item request - {error}");
-            return vec![];
-        }
-    };
-
-    let matches = Pattern::parse(query, CaseMatching::Smart, Normalization::Smart)
-        .match_list(items, &mut matcher);
-
-    let mut result = vec![];
-    for (i, _) in matches {
-        // TODO: Make kwarg extraction more ergonomic (?)
-        let form_args = match Val::from(Form::from_expr(&i).unwrap()) {
-            Val::List(l) => l,
-            _ => panic!("Unexpected format - not a list"),
-        };
-        let title = match kwargs::get(&form_args, &KeywordId::from("title")).unwrap() {
-            Val::String(t) => t,
-            _ => panic!("Unexpected format - not a list"),
-        };
-
-        result.push(json!({
-            "title": title,
-            "on_click": format!("{}", i),
-        }))
+async fn set_query(
+    renderer: String,
+    args: String,
+    query: String,
+    state: tauri::State<'_, State>,
+) -> Result<Vec<protocol::Item>, String> {
+    let result = async {
+        let request = protocol::query_request(&renderer, &args, &query)?;
+        protocol::items(evaluate(&state, request).await?)
     }
-    result
+    .await;
+    result.map_err(|error: anyhow::Error| {
+        error!("Error requesting items: {error}");
+        error.to_string()
+    })
 }
 
 #[tauri::command]
-fn dispatch(form: &str, state: tauri::State<State>, app: tauri::AppHandle) {
-    let client = &state.client;
-
-    let dispatch = Form::from_expr(&format!("(on_click (quote {}))", form)).unwrap();
-    if let Err(e) = client.request(dispatch) {
-        error!("Error dispatching request - {e}");
+async fn dispatch(
+    form: String,
+    state: tauri::State<'_, State>,
+) -> Result<protocol::Action, String> {
+    let result = async {
+        let request = protocol::action_request(&form)?;
+        protocol::action(evaluate(&state, request).await?)
     }
+    .await;
+    result.map_err(|error: anyhow::Error| {
+        error!("Error dispatching item: {error}");
+        error.to_string()
+    })
+}
 
-    let window = app.get_window("main").unwrap();
-    let _ = window.hide();
+#[tauri::command]
+async fn begin_interaction(state: tauri::State<'_, State>) -> Result<protocol::Action, String> {
+    // The service owns context capture. The frontend requests this hook before
+    // showing the window, so the originating application still has focus.
+    let result = async {
+        protocol::action(
+            evaluate(
+                &state,
+                protocol::action_request("(:on_click (begin_interaction))")?,
+            )
+            .await?,
+        )
+    }
+    .await;
+    result.map_err(|error: anyhow::Error| error.to_string())
+}
 
+#[tauri::command]
+fn show(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_window("main") {
+        center_in_primary_monitor(&window);
+        #[cfg(target_os = "macos")]
+        app.show().map_err(|error| error.to_string())?;
+        window.show().map_err(|error| error.to_string())?;
+        window.set_focus().map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn hide(app: tauri::AppHandle) {
+    if let Some(window) = app.get_window("main") {
+        let _ = window.hide();
+    }
     #[cfg(target_os = "macos")]
     let _ = app.hide();
 }
 
 #[tauri::command]
 fn on_blur(app: tauri::AppHandle) {
-    if cfg!(debug_assertions) {
-        return; // skip hiding on debug
-    }
-    let window = app.get_window("main").unwrap();
-    let _ = window.hide();
-    #[cfg(target_os = "macos")]
-    let _ = app.hide();
+    hide(app);
 }
 
 fn main() -> Result<()> {
-    let mut client = Client::new();
+    let args = Args::parse();
+    let mut client = Client::new(args.socket.unwrap_or_else(vrs::runtime_socket));
     client
         .start()
         .with_context(|| "Failed to start vrs client")?;
@@ -209,6 +215,10 @@ fn main() -> Result<()> {
     tauri::Builder::default()
         .manage(State::new(client))
         .setup(|app| {
+            // Tauri 1/tao dereferences a missing zoom button when maximizable is
+            // false on a borderless macOS window (caught by debug Rust builds).
+            // Leave it true in config; the palette remains non-resizable and
+            // has no titlebar controls. TODO: Remove after upgrading Tauri.
             let window = app.get_window("main").unwrap();
 
             #[cfg(target_os = "macos")]
@@ -223,7 +233,6 @@ fn main() -> Result<()> {
             )
             .expect("Unsupported platform! 'apply_vibrancy' is only supported on macOS");
 
-            let handle = app.handle();
             let mut shortcuts = app.global_shortcut_manager();
 
             let binding = if cfg!(debug_assertions) {
@@ -234,31 +243,24 @@ fn main() -> Result<()> {
 
             shortcuts
                 .register(binding, move || {
-                    toggle_window_visibility(&window, &handle);
+                    let _ = window.emit("toggle-palette", ());
                 })
                 .unwrap();
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![set_query, dispatch, on_blur])
+        .invoke_handler(tauri::generate_handler![
+            set_query,
+            dispatch,
+            begin_interaction,
+            show,
+            hide,
+            on_blur
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 
     Ok(())
-}
-
-fn toggle_window_visibility(window: &Window, app_handle: &AppHandle) {
-    let visible = window
-        .is_visible()
-        .expect("should retrieve window visibility");
-    if visible {
-        #[cfg(target_os = "macos")]
-        let _ = app_handle.hide();
-        let _ = window.hide();
-    } else {
-        center_in_primary_monitor(window);
-        let _ = window.set_focus();
-    }
 }
 
 fn center_in_primary_monitor(window: &Window) {
@@ -295,19 +297,172 @@ fn center_in_primary_monitor(window: &Window) {
 mod tests {
     use super::*;
 
-    #[test]
-    fn query_request_preserves_user_text_as_data() {
-        let query = "quotes \" backslash \\ newline\n) (exec \"unexpected\")";
-        let request = query_request(query);
-
-        assert_eq!(
-            request,
-            Form::List(vec![
-                Form::symbol("begin"),
-                Form::List(vec![Form::symbol("bind_srv"), Form::keyword("vrsjmp")]),
-                Form::List(vec![Form::symbol("get_items"), Form::string(query)]),
-            ])
+    #[tokio::test]
+    async fn palette_protocol_round_trip_and_error_recovery_over_a_real_connection() {
+        let runtime = vrs::Runtime::new("gui-test");
+        let mut forms = vec![vrs::Val::symbol("begin")];
+        forms.extend(lyric::parse_script(include_str!("../../../scripts/vrsjmp.ll")).unwrap()
+            .into_iter().filter(|form| matches!(form, Form::List(values) if
+                values.first() == Some(&Form::symbol("defn")) || values.first() == Some(&Form::symbol("def"))))
+            .map(vrs::Val::from));
+        forms.extend(
+            lyric::parse_script(
+                r#"
+            (defn get_rlist () '())
+            (defn local_items () '((:title "Project Website" :on_click (open_url "https://searchable.example.test"))))
+            (defn is_personal? () false)
+            (defn feedbin_call (message) '((:title "Saved article" :url "https://example.test/")))
+            (defn open_url (url) :opened)
+            (spawn_srv :vrsjmp :interface '(get_items on_click))
+        "#,
+            )
+            .unwrap()
+            .into_iter()
+            .map(vrs::Val::from),
         );
-        assert_eq!(Form::from_expr(&request.to_string()).unwrap(), request);
+        runtime
+            .run(vrs::Program::from_val(vrs::Val::List(forms)).unwrap())
+            .await
+            .unwrap()
+            .join()
+            .await
+            .unwrap()
+            .status
+            .unwrap();
+
+        let (server, stream) = UnixStream::pair().unwrap();
+        let _process = runtime.handle_conn(Connection::new(server)).await.unwrap();
+        let mut client = Some(vrs::Client::new(Connection::new(stream)));
+        // The connection is already open; request_once must never use this path.
+        let unused = Path::new("/unused-palette-test.socket");
+        let root = request_once(
+            &mut client,
+            unused,
+            protocol::action_request("(:on_click (begin_interaction))").unwrap(),
+        )
+        .await
+        .unwrap()
+        .contents
+        .unwrap();
+        let protocol::Action::PushPage { page: root } = protocol::action(root).unwrap() else {
+            panic!()
+        };
+        assert_eq!(root.get_items, "root_items");
+        let response = request_once(
+            &mut client,
+            unused,
+            protocol::query_request(&root.get_items, &root.args, "Read Later").unwrap(),
+        )
+        .await
+        .unwrap()
+        .contents
+        .unwrap();
+        let items = protocol::items(response).unwrap();
+        assert_eq!(items[0].title, "Read Later");
+        let page = request_once(
+            &mut client,
+            unused,
+            protocol::action_request(&items[0].on_click).unwrap(),
+        )
+        .await
+        .unwrap()
+        .contents
+        .unwrap();
+        let protocol::Action::PushPage { page } = protocol::action(page).unwrap() else {
+            panic!()
+        };
+        assert_eq!(page.debounce_ms, 200);
+        let response = request_once(
+            &mut client,
+            unused,
+            protocol::query_request(&page.get_items, &page.args, "").unwrap(),
+        )
+        .await
+        .unwrap()
+        .contents
+        .unwrap();
+        let saved = protocol::items(response).unwrap();
+        assert_eq!(saved[0].title, "Saved article");
+        let response = request_once(
+            &mut client,
+            unused,
+            protocol::action_request(&saved[0].on_click).unwrap(),
+        )
+        .await
+        .unwrap()
+        .contents
+        .unwrap();
+        assert_eq!(protocol::action(response).unwrap(), protocol::Action::Close);
+        let error = request_once(
+            &mut client,
+            unused,
+            protocol::action_request("(:on_click (undefined_command))").unwrap(),
+        )
+        .await
+        .unwrap();
+        assert!(error.contents.is_err());
+        assert!(
+            client.is_some(),
+            "a script error is not a broken connection"
+        );
+        let response = request_once(
+            &mut client,
+            unused,
+            protocol::query_request(&page.get_items, &page.args, "").unwrap(),
+        )
+        .await
+        .unwrap()
+        .contents
+        .unwrap();
+        assert_eq!(protocol::items(response).unwrap(), saved);
+
+        // The user's concrete Save scenario: a captured page fills the argument,
+        // so Enter performs the action and closes instead of opening a picker.
+        let context = "(((:web/page :title \"Example Domain\" :url \"https://example.test/\")))";
+        let response = request_once(
+            &mut client,
+            unused,
+            protocol::query_request("root_items", context, "Save").unwrap(),
+        )
+        .await
+        .unwrap()
+        .contents
+        .unwrap();
+        let actions = protocol::items(response).unwrap();
+        assert_eq!(actions[0].title, "Save to Read Later — Example Domain");
+        assert!(!actions
+            .iter()
+            .any(|item| item.title == "Save a Page to Read Later…"));
+        let response = request_once(
+            &mut client,
+            unused,
+            protocol::action_request(&actions[0].on_click).unwrap(),
+        )
+        .await
+        .unwrap()
+        .contents
+        .unwrap();
+        assert_eq!(protocol::action(response).unwrap(), protocol::Action::Close);
+        let response = request_once(
+            &mut client,
+            unused,
+            protocol::query_request("root_items", "(())", "searchable.example.test").unwrap(),
+        )
+        .await
+        .unwrap()
+        .contents
+        .unwrap();
+        assert_eq!(
+            protocol::items(response).unwrap()[0].title,
+            "Project Website"
+        );
+        let response = request_once(
+            &mut client,
+            unused,
+            protocol::action_request("(:on_click (list :exit 1 :stderr \"Missing app\"))").unwrap(),
+        )
+        .await
+        .unwrap();
+        assert!(response.contents.is_err());
     }
 }

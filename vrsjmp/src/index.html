@@ -13,11 +13,15 @@
 
 <body>
     <div data-tauri-drag-region class="root">
+        <button id="back" type="button" hidden aria-label="Back (Escape)">‹ Back</button>
         <input placeholder="Search" id="input-field" class="input-field" autoFocus
                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+        <span id="loading" role="status" aria-label="Loading" hidden></span>
         <hr class="input-field-separator"></hr>
-        <div id="output-list" class="list list--empty">
+        <div id="status" role="status" aria-live="polite"></div>
+        <div id="output-list" class="list list--empty" role="listbox" aria-label="Commands">
         </div>
+        <div id="toast" role="alert" hidden></div>
     </div>
 </body>
 </html>

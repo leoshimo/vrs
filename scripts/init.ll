@@ -20,6 +20,7 @@
       (run "./scripts/os_window.ll")
       (run "./scripts/os_notify.ll")
       (run "./scripts/os_browser.ll")
+      (run "./scripts/os_context.ll")
       (run "./scripts/os_screencap.ll")
       (run "./scripts/os_cal.ll")
       (run "./scripts/os_clipboard.ll")

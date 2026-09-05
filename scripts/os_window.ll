@@ -3,20 +3,34 @@
 #
 
 (defn get_windows ()
-  "(get_windows) - Get all windows"
+  "(get_windows) - Get visible windows, excluding the launcher itself"
   (def result (exec "yabai" "-m" "query" "--windows"))
   (if (eq? (get result :exit) 0)
     (map (filter (decode :json (get result :stdout))
-                 (fn (window) (get window :is-visible)))
-         (fn (window) (list :id (get window :id)
+                 (fn (window)
+                   (if (eq? (get window :title) "vrsjmp") false
+                     (get window :is-visible))))
+         (fn (window) (list :os/window :id (get window :id)
                             :app (get window :app)
                             :title (get window :title))))
     '()))
 
-# TODO: Consider dynamic type check - e.g. `islist?` / `isstring?` to accept flexible window selector
-(defn focus_window (window_id)
-  "(focus_window WINDOW_ID) - Focus window with given ID"
-  (exec "yabai" "-m" "window" (str window_id) "--focus"))
+(defn focus_window (window)
+  "Focus Window"
+  (interactive :os/window)
+  (def result (exec "yabai" "-m" "window" (str (get window :id)) "--focus"))
+  (if (eq? (get result :exit) 0) result
+    (error (str "Could not focus window: " (get result :stderr)))))
+
+(defn move_window (window destination)
+  "Move Window to Display"
+  (interactive :os/window :os/display)
+  (def result (exec "yabai" "-m" "window" (str (get window :id))
+                    "--display" (str (get destination :index))))
+  (if (eq? (get result :exit) 0) result
+    (error (str "Could not move window: " (get result :stderr)))))
+
+(set_entity_completions :os/window 'get_windows)
 
 (defn yabai_grid (grid_str)
   (exec "yabai" "--message" "window" "--grid" grid_str))
@@ -89,4 +103,5 @@
                 window_split
                 show_desktop
                 get_windows
-                focus_window))
+                focus_window
+                move_window))
