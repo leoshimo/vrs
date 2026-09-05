@@ -37,10 +37,10 @@
                "--collection" collection
                "--limit" (display count)))))
 
-(defn feedbin_saved_pages ()
-  "(feedbin_saved_pages) - Return the 20 most recently saved Feedbin Pages"
+(defn feedbin_saved_pages (count)
+  "(feedbin_saved_pages COUNT) - Return up to COUNT most recently saved Feedbin Pages"
   (decode_feedbin_result
-    (try (exec "feedbinctl" "pages" "list" "--limit" "20"))))
+    (try (exec "feedbinctl" "pages" "list" "--limit" (display count)))))
 
 (defn feedbin_save (url title)
   "(feedbin_save URL TITLE) - Save a URL to Feedbin Pages and return its entry"
