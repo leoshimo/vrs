@@ -9,6 +9,7 @@ use tracing::debug;
 /// binding to get current process's pid
 pub(crate) fn self_fn() -> NativeFn {
     NativeFn {
+        metadata: vec![],
         doc: "(self) - Returns process id of caller".to_string(),
         func: |f, _| {
             let pid = f.locals().pid.clone();
@@ -20,6 +21,7 @@ pub(crate) fn self_fn() -> NativeFn {
 /// binding to create a new PID
 pub(crate) fn pid_fn() -> NativeFn {
     NativeFn {
+        metadata: vec![],
         doc: "(pid NUMBER) - Creates a new process id type for given NUMBER".to_string(),
         func: |f, args| {
             let pid = match args {
@@ -40,6 +42,7 @@ pub(crate) fn pid_fn() -> NativeFn {
 /// Binding to get the immutable name of the current runtime node.
 pub(crate) fn node_name_fn() -> NativeFn {
     NativeFn {
+        metadata: vec![],
         doc: "(node_name) - Returns the name of the runtime node hosting this process.".to_string(),
         func: |f, args| {
             if !args.is_empty() {
@@ -57,6 +60,7 @@ pub(crate) fn node_name_fn() -> NativeFn {
 /// Binding to configure the default timeout for calls made by this process.
 pub(crate) fn call_timeout_fn() -> NativeFn {
     NativeFn {
+        metadata: vec![],
         doc: "(call_timeout SECS) - Configure the timeout for calls made by this process."
             .to_string(),
         func: |f, args| {
@@ -77,6 +81,7 @@ pub(crate) fn call_timeout_fn() -> NativeFn {
 /// Binding to list processes
 pub(crate) fn ps_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(ps) - Returns a list of running process by process id".to_string(),
         func: |f, _| Box::new(ps_impl(f)),
     }
@@ -85,6 +90,7 @@ pub(crate) fn ps_fn() -> NativeAsyncFn {
 /// Binding to kill process
 pub(crate) fn kill_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(kill PID) - Kill process with process id PID".to_string(),
         func: |f, args| Box::new(kill_impl(f, args)),
     }
@@ -93,6 +99,7 @@ pub(crate) fn kill_fn() -> NativeAsyncFn {
 /// Binding for sleep
 pub(crate) fn sleep_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(sleep SECS) - Sleep current process for SECS seconds, blocking execution."
             .to_string(),
         func: |_, args| {
@@ -118,6 +125,7 @@ pub(crate) fn sleep_fn() -> NativeAsyncFn {
 /// Binding for spawn
 pub(crate) fn spawn_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(spawn LAMBDA) - Spawn a new child process that runs LAMBDA in new process space."
             .to_string(),
         func: |f, args| Box::new(spawn_impl(f, args)),

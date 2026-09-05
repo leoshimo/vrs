@@ -219,6 +219,46 @@ async fn configured_node_reconnects_and_routes_service_calls() {
 }
 
 #[tokio::test]
+async fn remote_bind_preserves_interactive_metadata_and_completion_defaults() {
+    let dir = TestDir::new();
+    let alpha_init = dir.join("alpha.ll");
+    let beta_init = dir.join("beta.ll");
+    let alpha_socket = dir.join("alpha.socket");
+    let beta_socket = dir.join("beta.socket");
+    let (alpha_port, beta_port) = node_ports();
+    std::fs::write(
+        &alpha_init,
+        format!("(configure :nodes '(\"tcp://127.0.0.1:{beta_port}\"))"),
+    )
+    .unwrap();
+    std::fs::write(
+        &beta_init,
+        r#"
+        (defn objects () '((:example/object :id 7)))
+        (defn choose (object) (interactive :example/object) object)
+        (set_entity_completions :example/object 'objects)
+        (spawn_srv :remote_probe :interface '(objects choose))
+    "#,
+    )
+    .unwrap();
+    let _beta = spawn_vrsd("beta", beta_port, &beta_socket, &beta_init);
+    let _alpha = spawn_vrsd("alpha", alpha_port, &alpha_socket, &alpha_init);
+    let client = connect_client(&alpha_socket).await;
+    wait_for_value(
+        &client,
+        r#"(begin
+        (bind_srv :remote_probe)
+        (list (get (meta choose) :interactive)
+              (get (get (get (meta choose) :args) 0) :type)
+              (get_entity_completions :example/object)
+              (choose (get (objects) 0))))"#,
+        &Form::from_expr("(true :example/object (objects) (:example/object :id 7))").unwrap(),
+        "remote metadata, provider defaults, or object invocation failed",
+    )
+    .await;
+}
+
+#[tokio::test]
 async fn republished_service_replaces_previous_remote_registration() {
     let test_dir = TestDir::new();
     let alpha_socket = test_dir.join("alpha.socket");

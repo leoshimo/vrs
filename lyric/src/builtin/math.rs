@@ -4,6 +4,7 @@ use crate::{Error, Extern, Locals, NativeFn, NativeFnOp, Result, Val};
 /// Native binding for `+`
 pub fn plus_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        metadata: vec![],
         doc: "(+ LHS RHS) - If LHS and RHS are integers, returns sum of LHS and RHS.\
               If LHS and RHS are lists, returns a new list containing elements of LHS followed by elements of RHS.".to_string(),
         func: |_, args| match args {
@@ -25,6 +26,7 @@ pub fn plus_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
 /// Native binding for `-`
 pub fn minus_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
+        metadata: vec![],
         doc: "(- NUM1 NUM2 ... NUMN) - With one integer, returns its negation. With multiple integers, subtracts each remaining integer from the first.".to_string(),
         func: |_, args| {
             let (first, rest) = args.split_first().ok_or_else(|| {

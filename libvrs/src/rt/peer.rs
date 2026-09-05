@@ -102,7 +102,8 @@ enum PeerMessage {
         services: Vec<ServiceDescription>,
     },
     RegistryUp {
-        service: ServiceDescription,
+        // Function metadata can be sizeable; keep all queued messages compact.
+        service: Box<ServiceDescription>,
     },
     RegistryDown {
         name: lyric::KeywordId,
@@ -264,7 +265,7 @@ impl PeerManager {
                     },
                     event = registry_events.recv() => match event {
                         Ok(RegistryEvent::Up(service)) => {
-                            broadcast(&sessions, PeerMessage::RegistryUp { service }).await;
+                            broadcast(&sessions, PeerMessage::RegistryUp { service: Box::new(service) }).await;
                         }
                         Ok(RegistryEvent::Down { name, pid }) => {
                             broadcast(&sessions, PeerMessage::RegistryDown { name, pid }).await;
@@ -312,7 +313,7 @@ impl PeerManager {
                                     let _ = registry.replace_remote(node, services).await;
                                 }
                                 PeerMessage::RegistryUp { service } if service.pid.node() == node => {
-                                    let _ = registry.remote_up(service).await;
+                                    let _ = registry.remote_up(*service).await;
                                 }
                                 PeerMessage::RegistryDown { name, pid } if pid.node() == node => {
                                     let _ = registry.remote_down(node, name, pid).await;

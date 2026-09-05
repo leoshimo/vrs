@@ -14,6 +14,7 @@ fn eval_expr(e: &str) -> Result<Val> {
     env.bind_native(
         SymbolId::from("echo_args"),
         NativeFn {
+            metadata: vec![],
             doc: "".to_string(),
             func: |_, x| Ok(NativeFnOp::Return(Val::List(x.to_vec()))),
         },
@@ -28,6 +29,44 @@ fn eval_expr(e: &str) -> Result<Val> {
     };
 
     Ok(res)
+}
+
+#[test]
+fn interactive_is_metadata_not_executed_function_body() {
+    let value = eval_expr(
+        r#"(begin
+        (defn focus (window) "Focus Window" (interactive :os/window) window)
+        (list (focus '(:os/window :id 7)) (get (meta focus) :interactive)
+              (get (get (get (meta focus) :args) 0) :name)
+              (get (get (get (meta focus) :args) 0) :type)))"#,
+    )
+    .unwrap();
+    assert_eq!(
+        value,
+        Val::from_expr("((:os/window :id 7) true window :os/window)").unwrap()
+    );
+    assert!(eval_expr("(fn (x y) (interactive :os/window) x)").is_err());
+    assert!(eval_expr("(fn (x) (interactive \"window\") x)").is_err());
+}
+
+#[test]
+fn environment_discovery_and_completion_overrides_are_process_local() {
+    assert_eq!(
+        eval_expr(
+            r#"(begin
+        (defn source () '())
+        (set_entity_completions :example/object 'source)
+        (defn nested () (list (contains? (ls_env) 'source)
+                             (get_entity_completions :example/object)))
+        (nested))"#
+        )
+        .unwrap(),
+        Val::from_expr("(true (source))").unwrap()
+    );
+    assert_eq!(
+        eval_expr("(get_entity_completions :example/object)").unwrap(),
+        Val::List(vec![])
+    );
 }
 
 #[test]

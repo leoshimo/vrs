@@ -86,6 +86,7 @@ mod tests {
         env.bind_native_async(
             SymbolId::from("async_call"),
             NativeAsyncFn {
+                metadata: vec![],
                 doc: "".to_string(),
                 func: |_, _| {
                     Box::new(async {
@@ -108,6 +109,7 @@ mod tests {
         env.bind_native_async(
             SymbolId::from("async_inc"),
             NativeAsyncFn {
+                metadata: vec![],
                 doc: "".to_string(),
                 func: |_, args| {
                     let num = match args[..] {
@@ -134,6 +136,7 @@ mod tests {
         env.bind_native_async(
             SymbolId::from("async_err"),
             NativeAsyncFn {
+                metadata: vec![],
                 doc: "".to_string(),
                 func: |_, args| {
                     Box::new(async move {
@@ -157,6 +160,7 @@ mod tests {
         env.bind_native_async(
             SymbolId::from("async_err"),
             NativeAsyncFn {
+                metadata: vec![],
                 doc: "".to_string(),
                 func: |_, _| {
                     Box::new(async { Err(Error::Runtime("async call failed".to_string())) })
@@ -179,6 +183,7 @@ mod tests {
         env.bind_native_async(
             SymbolId::from("async_inc"),
             NativeAsyncFn {
+                metadata: vec![],
                 doc: "".to_string(),
                 func: |_, args| {
                     let num = match args[..] {

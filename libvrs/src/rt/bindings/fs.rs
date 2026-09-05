@@ -9,6 +9,7 @@ use tokio::{
 
 pub(crate) fn fread_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(fread PATH) - Read the symbolic expression from file at PATH".to_string(),
         func: |f, args| Box::new(fread_impl(f, args)),
     }
@@ -41,6 +42,7 @@ async fn fread_impl(_fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
 
 pub(crate) fn fdump_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(fdump PATH FORM) - Dump the symbolic expression FORM to file at PATH".to_string(),
         func: |f, args| Box::new(fdump_impl(f, args)),
     }
@@ -48,6 +50,7 @@ pub(crate) fn fdump_fn() -> NativeAsyncFn {
 
 pub(crate) fn run_script_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(run PATH) - Evaluate every top-level form in PATH in a fresh process and wait for it to finish"
             .to_string(),
         func: |f, args| Box::new(run_script_impl(f, args)),

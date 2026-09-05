@@ -8,6 +8,7 @@ use tracing::error;
 
 pub(crate) fn subscribe_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(subscribe TOPIC) - Subscribe current process to receive pubsub messages for TOPIC."
             .to_string(),
         func: |f, args| Box::new(subscribe_impl(f, args)),
@@ -16,6 +17,7 @@ pub(crate) fn subscribe_fn() -> NativeAsyncFn {
 
 pub(crate) fn publish_fn() -> NativeAsyncFn {
     NativeAsyncFn {
+        metadata: vec![],
         doc: "(publish TOPIC DATA) - Publish DATA over TOPIC, notifying all active subscribers."
             .to_string(),
         func: |f, args| Box::new(publish_impl(f, args)),
