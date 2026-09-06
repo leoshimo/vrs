@@ -16,6 +16,14 @@
     '(:err "Unrecognized message")
     (apply (resolve (get (get choices 0) :name)) (slice message 1))))
 
+(defn vrs/service_loop (description resolve)
+  # The resolver captures the caller's scope before entering this helper, so
+  # these ordinary local names cannot shadow the caller's exported handlers.
+  (loop
+    (def (request source message) (recv))
+    (def response (try (vrs/dispatch description resolve message)))
+    (send source (list request response))))
+
 (defn vrs/service_stub_form (service record)
   "Build source for one imported method; does not install or call it."
   (def signature (get record :interface))

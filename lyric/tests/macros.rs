@@ -152,6 +152,36 @@ async fn gensym_gives_single_evaluation_and_source_round_trip() {
 }
 
 #[tokio::test]
+async fn gensym_names_put_readable_hints_first_and_remain_source_symbols() {
+    let mut names = std::collections::HashSet::new();
+    for (argument, prefix) in [
+        ("", "tmp"),
+        ("\"value\"", "value"),
+        ("\"value\"", "value"),
+        ("\"\"", "tmp"),
+        ("\"!?雪\"", "tmp"),
+        ("\"42\"", "_42"),
+        ("\"service-name\"", "servicename"),
+        ("\"true\"", "true"),
+        (
+            "\"abcdefghijklmnopqrstuvwxyz0123456789\"",
+            "abcdefghijklmnopqrstuvwxyz012345",
+        ),
+    ] {
+        let symbol = eval(&format!("(gensym {argument})")).await.unwrap();
+        let name = symbol.as_symbol().unwrap().to_string();
+        let suffix = name.strip_prefix(&format!("{prefix}__")).unwrap();
+        assert_eq!(suffix.len(), 16);
+        assert!(names.insert(name.clone()));
+        assert_eq!(Value::from_expr(&name).unwrap(), symbol);
+        assert_eq!(
+            eval(&format!("(let (({name} 42)) {name})")).await.unwrap(),
+            Value::Int(42)
+        );
+    }
+}
+
+#[tokio::test]
 async fn expansion_limits_recover() {
     assert_eq!(eval("(begin (defmacro forever () '(forever!)) (list (err? (try (forever!))) (when! true 42)))").await.unwrap(), Value::from_expr("(true 42)").unwrap());
     assert!(eval("(begin (defmacro spin () (loop nil)) (spin!))")

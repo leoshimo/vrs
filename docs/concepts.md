@@ -151,6 +151,13 @@ had hardcoded its temporary's name as `value`, it would hide the caller's
 `value` in the fallback expression. `gensym` avoids that collision; Lyric does
 not automatically protect all generated names this way.
 
+Names put the hint first, for example `value__p7Fq2mR8tK4vW9xB`. The 16-character
+random suffix keeps independently generated names distinct, including when an
+expansion is printed and read back. `(gensym)` uses `tmp` as the hint. Give
+temporaries meaningful hints, and use ordinary helper functions for code that
+doesn't need access to the caller's variables. For example, `srv!` delegates its
+message loop to `vrs/service_loop`, so the loop's locals need no generated IDs.
+
 Macro definitions belong to a process. Functions retain the expansions they
 were compiled with, so reevaluate a function after changing a macro it uses.
 VRS's `srv!` and `spawn_srv!` use macros to generate service control flow;
