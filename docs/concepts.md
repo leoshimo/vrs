@@ -1,95 +1,74 @@
 # Core Concepts
 
-## Lyric Forms
+## Forms
 
-Lyric uses the same representation for code and structured data. A form can be
-constructed, stored, sent to another process, or evaluated later.
+Lyric represents code and data as values: symbols, keywords, numbers, strings,
+and lists. A list can hold data or describe an expression to evaluate.
+
+`pretty` formats a value as a string, using a default width of 90 columns:
 
 ```lyric
-(def command '(+ 40 2))
-(eval command) # => 42
+(pretty (ls_srv))
+(pretty (ls_srv) 60)
 ```
 
-Large results are displayed with indentation in the terminal and Emacs. Use
-`(pretty VALUE)` to get that display as a string; the default target width is 90
-columns, or pass a width such as `(pretty (ls_srv) 60)`.
+The terminal and Emacs format results automatically. Piped `vrsctl` output stays
+compact; use `--format pretty` when piping to `less`.
 
-Compact output has no added line breaks. `vrsctl` uses it by default when piped,
-so scripts can keep treating each result as one line. Use `--format pretty`
-when piping to a reader such as `less`. Ordinary data can be printed and read
-back: `(read (pretty '(1 2 3)))` returns `(1 2 3)`. Printed functions and process
-handles describe runtime objects; reading those descriptions cannot recreate
-the original objects.
+## Quotation and Templates
 
-## Quotation and Code Templates
-
-Quote (`'`) keeps an expression as data. `eval` executes it later:
+Quote (`'`) keeps an expression as data. `eval` executes it:
 
 ```lyric
 '(+ 40 2)        # => (+ 40 2)
 (eval '(+ 40 2)) # => 42
 ```
 
-Backtick makes a template. Comma inserts one computed value; comma-at inserts
-the elements of a computed list:
+Backtick builds a template. Comma inserts a value; comma-at inserts the elements
+of a list:
 
 ```lyric
 (def amount 40)
-(def command `(+ ,amount 2))
-command        # => (+ 40 2)
-(eval command) # => 42
+`(+ ,amount 2) # => (+ 40 2)
 
 (def numbers '(10 20 12))
 `(+ ,@numbers) # => (+ 10 20 12)
 ```
 
-This is how vrsjmp builds commands to store in an item's `:on_click` field.
-When a command should receive an entity as data, the generated source needs a
-quote around that entity:
+When generating a call that takes a list as data, quote the inserted list:
 
 ```lyric
 (def window '(:os/window :id 42))
+(focus_window window)    # Passes the value of window.
 
-# In a normal call, the variable's value is passed directly:
-(focus_window window)
-
-# This template inserts the list as another expression to execute:
-`(focus_window ,window)
-# => (focus_window (:os/window :id 42))
-
-# Keep the inserted list as literal data in the later call:
-`(focus_window ',window)
-# => (focus_window '(:os/window :id 42))
+`(focus_window ,window)  # => (focus_window (:os/window :id 42))
+`(focus_window ',window) # => (focus_window '(:os/window :id 42))
 ```
 
-The first generated form would try to call `:os/window` when evaluated. The
-second passes the window record. A window entity is an ordinary list, not a
-special object literal. An already evaluated function argument is not evaluated
-again; this distinction matters because a template constructs source for a
-future evaluation. Strings and numbers are already literal expressions, so
-`(open_url ,url)` inside a backtick template needs no extra quote around a URL
-string.
+Evaluating the first template would try to call `:os/window`. The second passes
+the window record to `focus_window`. Strings and numbers need no extra quote.
 
 ## Macros
 
-A macro receives source forms and generates code. When execution reaches a
-macro call, Lyric runs the macro, compiles its result, and executes that code
-in the call's scope. This is runtime code generation. Define a macro with
-`defmacro` and invoke it with `!`:
+A macro receives unevaluated expressions and returns code. Define it with
+`defmacro` and call it with `!`:
 
 ```lyric
 (defmacro unless (condition & body)
   `(when! (not? ,condition) ,@body))
 
-(unless! false (+ 20 22)) # => 42
-(unless! true (error "should not run")) # => nil
+(unless! false (+ 20 22))                  # => 42
+(unless! true (error "should not run"))    # => nil
 ```
 
-Here `& body` collects the remaining expressions. An ordinary function receives
-already evaluated arguments; a macro receives their source. This lets a macro
-arrange for some expressions to be skipped, as in the second call above.
+`& body` collects the remaining expressions. Unlike a function, a macro can
+choose which arguments get evaluated.
 
-Inspect the generated code with `macroexpand_1` or `macroexpand`:
+Expansion happens when execution reaches the call. Lyric runs the macro,
+compiles its result, and executes that code in the caller's scope. Calls inside
+functions expand on each invocation; redefining a macro affects the next call.
+
+### Inspecting an Expansion
 
 ```lyric
 (macroexpand_1 '(unless! false (+ 20 22)))
@@ -99,80 +78,18 @@ Inspect the generated code with `macroexpand_1` or `macroexpand`:
 # => (if (not? false) (begin (+ 20 22)) nil)
 ```
 
-`macroexpand_1` performs one outer expansion. `macroexpand` keeps expanding while
-the result's outer expression is another macro call; it does not recursively
-expand every nested expression. Both run the macro body and return the generated
-source without executing that generated program. The macro body can still
-perform effects, including calling services or changing variables. The quote
-is necessary because these inspection functions evaluate their arguments normally.
+`macroexpand_1` expands once. `macroexpand` repeats while the result is another
+outer macro call; it does not walk nested expressions. Quote the call to inspect
+it. Both functions run the macro body, including any side effects, but leave the
+generated code unevaluated.
 
-For example, evaluate this region to inspect the service macro:
+### Scope and Helpers
 
-```lyric
-(defn echo (x) x)
-(macroexpand_1 '(srv! :test :interface '(echo)))
-```
+Macros and their helpers use the scope where they were defined. They can call
+ordinary functions, inspect definitions, change variables, and perform I/O.
+`(for_syntax ...)` behaves like `(begin ...)`; define helpers with `defn`.
 
-The result contains a receive loop and a direct dispatch expression:
-
-```lyric
-(match message
-  ((:echo x) (echo x))
-  (_ '(:err "Unrecognized message")))
-```
-
-Here `message` abbreviates a generated temporary name. There is no shared
-runtime dispatcher or `resolve` callback. The clause calls the `echo` visible
-where `srv!` runs. Its pattern uses the handler's parameters at startup; later
-calls look up the handler again, so replacing its implementation still works.
-
-`srv!` evaluates `:interface` once during expansion, before the generated code
-evaluates the service name and optional readiness expression. It inspects the
-named functions with `meta` to generate the clauses. It does not call the
-handlers during expansion. Inspection can therefore run an effectful interface
-expression, but does not register the service or enter the receive loop.
-
-The interface can be an ordinary function argument:
-
-```lyric
-(defn start (exports)
-  (defn echo (x) x)
-  (spawn_srv! :test :interface exports))
-
-(start '(echo))
-```
-
-When execution reaches the macro, `exports` already contains `'(echo)` and the
-local `echo` function already exists. No separate setup stage or declaration
-inspection is needed. Expansion happens on each executed macro call, rather
-than once when `start` is defined. An invalid interface fails at that point.
-
-Without the outer quote, `srv!` runs first and enters its service loop. In
-Emacs, put point on or just after the closing parenthesis of
-`(srv! :test :interface '())` and press `C-c C-m`; the command adds the quote.
-`C-u C-c C-m` uses `macroexpand`. `C-g` cancels a waiting evaluation and
-terminates its client, leaving the source intact. Cancellation does not undo
-effects already performed. For custom macros, evaluate their definitions and
-an explicit expansion call together in a region: each editor command uses a
-fresh connection.
-
-Macro bodies use ordinary functions and lexical scope, just like other code:
-
-```lyric
-(defn add_one_form (expression) `(+ ,expression 1))
-(defmacro increment (expression) (add_one_form expression))
-(increment! 41) # => 42
-```
-
-`add_one_form` runs while generating `(+ 41 1)`. It can read existing variables,
-inspect functions, call services, and perform I/O. There is no separate
-`for_syntax` environment anymore. The old `(for_syntax ...)` spelling remains
-an alias for `begin`, for compatibility; use ordinary definitions in new code.
-Changing a helper or redefining a macro affects the next invocation, including
-calls inside functions that have already been defined.
-
-A macro's own variables and helpers use its definition scope. To evaluate an
-argument's source in the macro **call's** scope, use `eval_caller`:
+Use `eval_caller` to evaluate source in the macro call's scope:
 
 ```lyric
 (defmacro remember (expression)
@@ -181,19 +98,21 @@ argument's source in the macro **call's** scope, use `eval_caller`:
 
 (defn example (x)
   (remember! (+ x 1)))
+
 (example 41) # => 42
 ```
 
-`expression` initially contains `(+ x 1)` as data. `eval_caller` evaluates it
-where `remember!` was called, where `x` is 41. Ordinary `eval` still uses its
-own lexical scope. `eval_caller` is available only during expansion, including
-in helpers called by a macro. Use it when a macro needs an argument's value
-while generating code; most macros can simply put the argument's source into
-their result. Returned expansions must be source data, so this `remember!`
-example supports values such as numbers and lists, not opaque function or
-process objects.
+Here `eval_caller` evaluates `(+ x 1)` where `x` is 41. Ordinary `eval` uses its
+own lexical scope. `eval_caller` is available during expansion, including in
+helpers called by a macro. Returned code cannot embed live functions or process
+handles.
 
-`gensym` creates a fresh symbol for a variable introduced by generated code:
+Macro definitions belong to a process. Spawned processes inherit the definitions
+and can redefine them independently.
+
+### Generated Names
+
+`gensym` makes a fresh symbol for a variable introduced by a macro:
 
 ```lyric
 (defmacro or_else (expression fallback)
@@ -205,31 +124,36 @@ process objects.
 (or_else! false value) # => 42
 ```
 
-The generated temporary stores `expression` so it runs only once. If the macro
-had hardcoded its temporary's name as `value`, it would hide the caller's
-`value` in the fallback expression. `gensym` avoids that collision; Lyric does
-not automatically protect all generated names this way.
+The temporary evaluates `expression` once. A fixed name such as `value` would
+hide the caller's `value` in the fallback. `gensym` avoids that collision, using
+a name such as `value__p7Fq2mR8tK4vW9xB`. Lyric does not rename generated variables
+automatically.
 
-Names put the hint first, for example `value__p7Fq2mR8tK4vW9xB`. The 16-character
-random suffix keeps independently generated names distinct, including when an
-expansion is printed and read back. `(gensym)` uses `tmp` as the hint. Give
-temporaries meaningful hints. `srv!` uses fresh names for the receive loop's
-locals while retaining readable handler argument names such as `x`. It only
-renames a handler argument if necessary to avoid capture or handle a wildcard.
+### In Emacs
 
-Macro definitions belong to a process. A spawned process receives its own
-snapshot of the macro definitions; redefining a macro there does not change the
-parent's definition. Quoted source does not carry macro definitions with it.
-`bind_srv` remains an ordinary runtime function that discovers the live interface.
-Expansion has instruction, nesting, and value-size limits to catch runaway
-transformers; normal generated service loops run outside those limits.
+In `lyric-mode`, put point on or just after a call's closing parenthesis and press
+`C-c C-m` to show its expansion. `C-u C-c C-m` uses `macroexpand`.
+
+Each editor command opens a fresh connection. Include local definitions in the
+same evaluation:
+
+```lyric
+(begin
+  (defn echo (x) x)
+  (macroexpand_1 '(srv! :test :interface '(echo))))
+```
+
+At the final closing parenthesis, `C-u C-c C-e` replaces this block with its
+formatted expansion. To evaluate a selected region, use `C-c C-r`; add `C-u` to
+replace it. `C-c C-e` always evaluates one expression, regardless of selection.
+
+`C-g` cancels a waiting evaluation. It does not undo effects already performed.
 
 ## Function Metadata
 
-Functions can declare the entity types their arguments accept with a leading
-`interactive` declaration, after an optional docstring. `meta` exposes this
-annotation together with the argument names and documentation. These types guide
-interaction; they do not enforce type checking when the function is called.
+`interactive` declares argument types for the palette. `meta` returns these
+annotations, argument names, and documentation. The annotations do not enforce
+types at runtime.
 
 ```lyric
 (defn focus_window (window)
@@ -241,63 +165,44 @@ interaction; they do not enforce type checking when the function is called.
 # => ((:type :os/window :name window))
 ```
 
-One concrete use is `vrsjmp.ll`'s `call_interactively`: it reads this metadata to
-offer argument-selection pages. That helper is described under
-[Hypermedia (WIP)](#hypermedia-wip), rather than being a runtime primitive itself.
+`call_interactively` uses this metadata to prompt for arguments; see
+[Interactive Calls](#interactive-calls).
 
 ## Entities and Completions
 
-An entity is an ordinary list whose first item identifies its type, followed by
-properties. This is a convention for exchanging values, not a separate object
-store or a type hierarchy.
+An entity is a list with a type tag followed by properties:
 
 ```lyric
 '(:os/window :id 123 :app "Safari" :title "VRS")
 ```
 
-An environment associates each entity type with provider function names.
-`get_entity_completions` retrieves those names without invoking them. The current
-interactive palette calls providers with no arguments; each returns a list of
-entities, which the palette can filter and present.
+Completion providers return entities of a given type. The palette calls them
+with no arguments and presents the results for selection.
 
 ```lyric
 (set_entity_completions :os/window 'get_windows)
 (get_entity_completions :os/window) # => (get_windows)
 ```
 
-Providers can be imported as service defaults. Defaults for the same type combine
-across bound services; a local `set_entity_completions` replaces them for that
-type. It accepts one provider symbol or a list of symbols. Passing `nil` removes
-the local override and restores imported defaults; an empty list disables
-completions for that type locally.
+`get_entity_completions` returns provider names without calling them.
+`set_entity_completions` accepts one name or a list. Local providers override
+those imported by `bind_srv`: `nil` restores imported defaults, while `'()`
+disables completions for that type. Defaults from multiple services combine.
 
-## Processes
+## Processes and Messages
 
-VRS programs run in lightweight, isolated processes. Each process has its own
-environment and mailbox and is identified by a node-qualified process ID.
+Each VRS process has an environment, a mailbox, and a process ID that includes
+its node. `spawn` starts a process; `send` and `recv` exchange values:
 
 ```lyric
 (def parent (self))
-(spawn (lambda () (send parent :hello)))
-(recv) # => :hello
-```
-
-## Message Passing
-
-Processes communicate by sending ordinary Lyric values to one another. A
-receiver can use pattern matching to interpret those values.
-
-```lyric
-(send (self) '(:greeting "hello"))
+(spawn (fn () (send parent '(:greeting "hello"))))
 (match (recv)
   ((:greeting message) message)) # => "hello"
 ```
 
-## Calls and Deadlines
-
-`call` provides request-response communication on top of message passing. Calls
-have a configurable deadline so an unresponsive process does not block its
-caller indefinitely.
+`call` sends a request and waits for a reply. `call_timeout` sets the deadline
+in seconds for calls made by the current process:
 
 ```lyric
 (call_timeout 10)
@@ -306,48 +211,55 @@ caller indefinitely.
 
 ## Services
 
-A service is a process registered under a stable name. It runs a message loop
-and can publish selected Lyric functions as its interface.
+A service is a process registered under a name. `srv!` registers the current
+process and serves its exported functions. `spawn_srv!` starts a child service
+and waits for registration:
 
 ```lyric
-(defn echo (message) message)
+(defn echo (x) x)
 (spawn_srv! :echo :interface '(echo))
 
 (find_srv :echo)
-(info_srv :echo :interface) # => ((:echo message))
+(info_srv :echo :interface) # => ((:echo x))
 ```
 
-## Service Binding
+`srv!` reads the handlers' parameters and generates a receive loop containing:
 
-`bind_srv` turns a published service interface into local-looking functions.
-Calling one of these functions sends a message to the service and waits for its
-reply.
+```lyric
+(match message
+  ((:echo x) (echo x))
+  (_ '(:err "Unrecognized message")))
+```
 
-Bindings preserve function metadata, including `interactive` annotations. They
-also import entity-completion defaults whose provider functions are exported in
-the service's interface. Binding does not run those providers, and rebinding
-refreshes that service's defaults without replacing local completion overrides.
+`message` abbreviates a generated name. The patterns are fixed at startup.
+Calls look up the handlers again, so their implementations can be replaced
+while the service runs.
+
+The interface is evaluated once during expansion. It can use variables already
+defined at the call:
+
+```lyric
+(defn start (exports)
+  (defn echo (x) x)
+  (spawn_srv! :test :interface exports))
+
+(start '(echo))
+```
+
+`bind_srv` creates functions that send requests to the service:
 
 ```lyric
 (bind_srv :echo)
 (echo "hello") # => "hello"
 ```
 
-## Service Discovery
-
-The registry lets programs inspect and locate services by name without knowing
-their process IDs or where they are running.
-
-```lyric
-(ls_srv)
-(find_srv :echo)
-(info_srv :echo :interface_doc)
-```
+Bindings preserve metadata and import completion providers exported by the
+service. Rebinding refreshes those defaults and preserves local overrides.
 
 ## Pub/Sub
 
-Pub/sub broadcasts transient updates through named topics. Subscribers receive
-future publications through their normal process mailboxes.
+Topics broadcast updates to subscribers' mailboxes. Subscriptions receive
+future publications; messages are not retained for later subscribers.
 
 ```lyric
 (subscribe :clock)
@@ -357,24 +269,25 @@ future publications through their normal process mailboxes.
 
 ## External Commands
 
-`exec` invokes host programs and returns their exit status, standard output,
-and standard error as Lyric data. `decode` can turn common text formats into
-structured values.
+`exec` runs a host program and returns its exit status, stdout, and stderr.
+`decode` parses text into values:
 
 ```lyric
 (def result (exec "printf" "one\ntwo\n"))
 (decode :lines (get result :stdout)) # => ("one" "two")
 ```
 
-## Script Execution and Initialization
+## Scripts and Initialization
 
-`run` evaluates every top-level form in a file in a fresh process, as though the
-file had an implicit `begin`. `vrsd` can run an initialization script before it
-accepts clients; services spawned by that script continue running.
+`run` evaluates a file in a fresh process, with an implicit `begin` around its
+forms:
 
 ```lyric
 (run "./scripts/counter.ll")
 ```
+
+`vrsd --init` runs a script before accepting clients. Services started by the
+script continue running after it finishes:
 
 ```sh
 cargo run --bin vrsd -- --init ./scripts/init.ll
@@ -382,9 +295,8 @@ cargo run --bin vrsd -- --init ./scripts/init.ll
 
 ## Nodes and Peering
 
-Multiple VRS daemons can exchange service registrations and route process
-messages. Programs continue to discover services by name regardless of which
-configured node currently provides them.
+VRS daemons exchange service registrations and route messages between nodes.
+Programs can discover services by name across configured nodes:
 
 ```lyric
 (node_name) # => "laptop"
@@ -394,21 +306,13 @@ configured node currently provides them.
 
 ## Hypermedia (WIP)
 
-A service can return not just information to display, but actions the client can
-take next. In vrsjmp, Lyric defines the contents and behavior; the GUI provides
-the input field, list, and navigation stack. The client does not need to know
-about individual integrations such as Feedbin or window management.
-
-This is currently an application protocol, not a set of new language primitives.
-The helpers below are ordinary functions in [vrsjmp.ll](../scripts/vrsjmp.ll).
-The GUI carries command expressions back to that service; it does not evaluate
-Lyric itself.
+[vrsjmp.ll](../scripts/vrsjmp.ll) describes pages and actions with Lyric values.
+The GUI displays them and sends selected commands back to the service for
+evaluation.
 
 ### Pages and Navigation
 
-`push_page` returns an instruction naming the function that will produce a page's
-items and the input field's prompt. Optional properties include a title, fixed
-arguments, and a debounce delay in milliseconds.
+`push_page` names a function that supplies page items and a prompt:
 
 ```lyric
 (defn read_later_page ()
@@ -416,67 +320,51 @@ arguments, and a debounce delay in milliseconds.
      '(:title "Read Later" :debounce_ms 200)))
 ```
 
-The GUI pushes the page and requests its contents lazily through
-`get_items(callback, args, query)`. That Lyric function invokes the named callback
-with any fixed arguments followed by the input text. For Read Later, an empty
-query shows the last 20 saved pages; other queries search them. Debounce defaults
-to zero, while this page waits 200 milliseconds after typing stops.
-
-The GUI owns the stack. Escape goes back, restoring the previous page's input and
-selection; at the root it closes the palette. Reopening retains navigation for
-eight minutes. The `begin_interaction` hook in `vrsjmp.ll` captures context and
-returns the root page when opening, including when a retained page is restored.
-Context capture is currently awaited before showing the palette.
+The GUI calls `get_items` with the callback name, fixed arguments, and query.
+The service calls the callback with those arguments followed by the query.
+The GUI maintains a page stack; Escape returns to the previous page.
 
 ### Rows and Actions
 
-Rows describe a title, optional subtitle and right-aligned aside, a primary
-command, and optional secondary actions for the Cmd-K menu.
+Rows contain display text, a command, and optional secondary actions:
 
 ```lyric
 '(:title "VRS"
   :subtitle "github.com"
-  :on_click (open_url "https://github.com")
+  :on_click (open_url "https://github.com/leoshimo/vrs")
   :actions ((:title "Copy URL"
-             :on_click (set_clipboard "https://github.com"))))
+             :on_click (set_clipboard "https://github.com/leoshimo/vrs"))))
 ```
 
-For either a primary or secondary action, the GUI sends the selected command
-record to the service's `on_click`. The service evaluates its `:on_click`
-expression and returns a `:push_page` instruction or `:close`. Errors leave the
-palette open and appear in a toast. Secondary actions may be explicitly supplied
-by a page or generated from an entity's eligible commands.
+The service's `on_click` evaluates the selected command and returns a
+`:push_page` instruction or `:close`. Secondary actions use the same record
+format and appear in the Cmd-K menu.
 
 ### Interactive Calls
 
-`call_interactively` uses function metadata and entity completions to build a
-sequence of argument-selection pages, then calls the function with the selected
-values. These helpers run inside the `vrsjmp.ll` service.
+`call_interactively` reads a function's metadata and prompts for its arguments:
 
 ```lyric
 (call_interactively 'focus_window)
 ```
 
-For Focus Window, the service reads the `:os/window` argument annotation, invokes
-the configured window providers, and returns rows representing windows. Selecting
-one completes the call. Move Window to Display uses the same mechanism for two
-arguments: first a window, then a display, with Back available between pages.
+For a `:os/window` argument, it calls the window completion providers and shows
+their results. Selecting a window supplies the argument and calls the function.
+Functions with more arguments get another selection page for each one.
 
-The same metadata works in reverse. Given an entity, `entity_actions` finds
-interactive functions in the service's environment whose first argument has the
-same type. It supplies that entity and prompts for any remaining arguments. This
-supports context-derived commands and secondary actions without a separate
-action registry; matching currently uses exact type tags.
+`entity_actions` works from a selected entity: it finds interactive functions
+whose first argument has the same type tag, supplies that entity, and prompts
+for any remaining arguments.
 
-## Introspection and Live Evaluation
+## Introspection
 
-The runtime exposes its current environments, processes, services, interfaces,
-and documentation. These operations support experimenting from `vrsctl` or an
-editor while the runtime remains active.
+Inspect definitions, documentation, processes, and services from `vrsctl` or
+Emacs:
 
 ```lyric
 (ls_env)
 (help recv)
 (ps)
 (ls_srv)
+(info_srv :echo :interface_doc)
 ```
