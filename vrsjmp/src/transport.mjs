@@ -11,10 +11,28 @@ export const createTransport = invoke => ({
 // opening must not show the window when its delayed response finally arrives.
 export function createOpening(navigation, show) {
     let latest;
-    return async () => {
+    return async options => {
         const opening = {};
         latest = opening;
-        await navigation.begin();
+        await navigation.begin(options);
         if (latest === opening && navigation.visible) await show();
+    };
+}
+
+// A wakeup focuses an existing input flow, and bursts share one opening.
+// An explicit close followed by an open starts a new, cancellable operation.
+export function createShowHandler(navigation, show) {
+    const open = createOpening(navigation, show);
+    let running;
+    return (options = {}) => {
+        if (running && (navigation.visible || options.background)) return running;
+        if (!options.background && navigation.visible && navigation.current?.page.on_cancel) {
+            return Promise.resolve(show());
+        }
+        const operation = open(options);
+        running = operation;
+        const done = () => { if (running === operation) running = null; };
+        operation.then(done, done);
+        return operation;
     };
 }

@@ -291,7 +291,13 @@ pub(crate) fn install_service_library(env: &mut crate::Env) {
     type Macros = lyric::macros::MacroEnv<crate::Extern, crate::Locals>;
     static LIBRARY: OnceLock<(Macros, Vec<(SymbolId, Val)>)> = OnceLock::new();
     let (macros, definitions) = LIBRARY.get_or_init(|| {
-        let source = concat!(include_str!("../stdlib/service-macros.ll"), "\n", include_str!("../stdlib/services.ll"));
+        let source = concat!(
+            include_str!("../stdlib/service-macros.ll"),
+            "\n",
+            include_str!("../stdlib/services.ll"),
+            "\n",
+            include_str!("../stdlib/gui.ll")
+        );
         let forms = lyric::parse_script(source).expect("standard service library must parse");
         let names: Vec<_> = forms
             .iter()

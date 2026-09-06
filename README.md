@@ -553,6 +553,18 @@ with `lyric-eval-last-sexp` without being read and rewritten as Emacs Lisp.
 - `C-g` aborts a waiting evaluation, terminates its client, and preserves the
   source. Effects already performed are not undone.
 
+Evaluate `(pick_call)` with `C-u C-c C-e` to insert a call using vrsjmp. Search
+for a bound service method and press Enter to insert its form with argument names as
+placeholders. In the Cmd-K actions menu, choose **Fill arguments** to use the
+same completion providers as `call_interactively`, one page per argument. The
+last selection returns the form without executing it. Escape out of the picker
+cancels the evaluation and leaves the original expression intact.
+
+The GUI must be running for automatic opening. Requests remain in the
+`:vrsjmp` service if a wakeup is missed, and are checked again on opening or
+reconnection. `(show_gui)` asks a running GUI to open through its normal
+`begin_interaction`/`get_items` flow.
+
 Customize `lyric-result-width` (default 90) for editor results. Indentation
 aligns data and keyword/value lists under their opening parenthesis, uses two
 spaces for call bodies, and preserves raw block string contents. The result

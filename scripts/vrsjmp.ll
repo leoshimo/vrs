@@ -68,6 +68,59 @@
 (try (bind_srv :os_context))
 (bind_srv :stickies)
 
+(def pending_inputs '())
+
+(defn! pending_requests ()
+  "Drop abandoned requests. The waiting caller consumes these liveness messages."
+  (set pending_inputs (filter pending_inputs (fn (request)
+    (ok? (try (send (get request :owner)
+                    (list (get request :id) :pending nil))))))))
+
+(defn! input_request (id)
+  (def requests (filter (pending_requests) (fn (request) (eq? (get request :id) id))))
+  (if (empty? requests) (error "This input request has ended"))
+  (get requests 0))
+
+(defn! enqueue_input (id owner page)
+  "Store a page before publishing a wakeup; the GUI fetches it on opening."
+  (if (not? (eq? (get page 0) :push_page)) (error "Input needs a :push_page description"))
+  (if (not? (symbol? (get page :get_items))) (error "Input needs a page callback"))
+  (def args (get page :args))
+  (if (eq? args nil) (set args '()))
+  (if (not? (list? args)) (error "Page arguments must be a list"))
+  (def prompt (str (or! (get page :prompt) "Choose…")))
+  (def title (str (or! (get page :title) prompt)))
+  (def prepared (list :push_page :get_items (get page :get_items)
+                     :title title :prompt prompt
+                     :args (concat (list id) args)
+                     :on_cancel `(cancel_input ,id)))
+  (pending_requests)
+  (set pending_inputs (push pending_inputs (list :id id :owner owner :page prepared)))
+  (show_gui)
+  :ok)
+
+(defn! finish_input (id value)
+  "Return a value to the waiting evaluation; the selected form is not evaluated."
+  (def request (input_request id))
+  (set pending_inputs (filter pending_inputs (fn (request) (not? (eq? (get request :id) id)))))
+  (send (get request :owner) (list id :ok value))
+  :close)
+
+(defn! cancel_input (id)
+  (def requests (filter pending_inputs (fn (request) (eq? (get request :id) id))))
+  (set pending_inputs (filter pending_inputs (fn (request) (not? (eq? (get request :id) id)))))
+  (map requests (fn (request) (try (send (get request :owner) (list id :cancel nil)))))
+  :close)
+
+(defn! resume_input (id)
+  (get (input_request id) :page))
+
+(defn! pending_input_items (query)
+  (fuzzy_match query (map (pending_requests) (fn (request)
+    (list :title (get (get request :page) :title) :subtitle "Waiting for input"
+          :on_click `(resume_input ,(get request :id))
+          :actions (list (make_item "Cancel request" `(cancel_input ,(get request :id))))))) display))
+
 (defn! get_items (callback args query)
   "Render a named page using fixed argument values followed by the input text"
   (apply (eval callback) (push args query)))
@@ -79,19 +132,22 @@
 # TODO: Revisit the begin_interaction hook: separate immediate page restoration
 # from slower context enrichment.
 (defn! begin_interaction ()
-  "Capture context once and return the root page; ordinary on_click protocol"
+  "Return pending input, or capture context and return Home; ordinary on_click protocol"
   (set things_cache nil)
   (set codex_cache nil)
-  (def context (try (get_context)))
-  (+ (push_page 'root_items "Search commands…")
-     '(:title "Home")
-     (list :args (list (if (list? context) context '())))))
+  (def requests (pending_requests))
+  (if (not? (empty? requests)) (get (get requests 0) :page)
+    (let ((context (try (get_context))))
+      (+ (push_page 'root_items "Search commands…")
+         '(:title "Home")
+         (list :args (list (if (list? context) context '())))))))
 
 (defn! root_items (context query)
   "Retrieve the root command palette's final ordered items"
-  (if (and! (not? (eq? query "")) (eq? (get (split "-" query) 0) ""))
-    (task_items context query)
-    (command_items context query)))
+  (+ (pending_input_items query)
+     (if (and! (not? (eq? query "")) (eq? (get (split "-" query) 0) ""))
+       (task_items context query)
+       (command_items context query))))
 
 (defn! command_items (context query)
   (def candidates (+ (favorite_items)
@@ -123,6 +179,61 @@
 
 (defn! interactive_commands ()
   (filter (ls_env) (fn (name) (eq? (get (meta (eval name)) :interactive) true))))
+
+(defn! call_form (name arguments)
+  "Fill remaining positions with the function's actual parameter names."
+  (concat (list name) arguments
+          (map (slice (get (meta (eval name)) :args) (len arguments))
+               (fn (arg) (get arg :name)))))
+
+(defn! input_page (id callback args title prompt)
+  (input_request id)
+  (list :push_page :get_items callback :args (concat (list id) args)
+        :title title :prompt prompt :on_cancel `(cancel_input ,id)))
+
+(defn! function_items (id query)
+  "Search bound service methods; private helpers are not picker entries."
+  (input_request id)
+  (def names (filter (ls_env) (fn (name)
+    (def value (eval name))
+    (and! (lambda? value) (keyword? (get (meta value) :service))))))
+  (map (fuzzy_match query names (fn (name)
+           (list (display name) (or! (get (meta (eval name)) :doc) ""))))
+    (fn (name)
+      (def form (call_form name '()))
+      (list :title (display form)
+            :subtitle (get (meta (eval name)) :doc)
+            :on_click `(finish_input ,id ',form)
+            :actions (list
+              (make_item "Fill arguments" `(fill_call ,id ',name '())))))))
+
+(defn! fill_call (id name arguments)
+  "Use interactive completion providers to build source without executing it."
+  (def signature (get (meta (eval name)) :args))
+  (if (eq? (len arguments) (len signature))
+    (finish_input id (call_form name arguments))
+    (let ((arg (get signature (len arguments))))
+      (if (eq? (get arg :type) nil)
+        (error (format "No entity type for {}" (display (get arg :name)))))
+      (input_page id 'fill_call_items (list name arguments) (display name)
+                  (format "{} · {}" (display name) (display (get arg :name)))))))
+
+(defn! literal_form (value)
+  (if (or! (list? value) (symbol? value)) (list 'quote value) value))
+
+(defn! fill_call_value (id name arguments value)
+  (fill_call id name (push arguments (literal_form value))))
+
+(defn! fill_call_items (id name arguments query)
+  (input_request id)
+  (def arg (get (get (meta (eval name)) :args) (len arguments)))
+  (def type (get arg :type))
+  (if (empty? (get_entity_completions type))
+    (error (format "No completions configured for {}" (display type))))
+  (map (fuzzy_match query (argument_entities type) display) (fn (entity)
+    (+ (make_item (entity_title entity)
+         `(fill_call_value ,id ',name ',arguments ',entity))
+       (list :subtitle (get entity :app))))))
 
 (defn! command_title (name)
   (def metadata (meta (eval name)))
@@ -202,15 +313,7 @@
   (def type (get arg :type))
   (def providers (get_entity_completions type))
   (if (empty? providers) (error (format "No completions configured for {}" (display type))))
-  (def entities '())
-  (map providers (fn (provider)
-    (def found (try (apply (eval provider) '())))
-    (if (list? found)
-      (map found (fn (entity)
-        (when! (and! (list? entity)
-                    (eq? (get entity 0) type)
-                    (not? (contains? entities entity)))
-          (set entities (push entities entity))))))))
+  (def entities (argument_entities type))
   (map (fuzzy_match query entities display) (fn (entity)
     (+ (make_item (or! (get entity :title) (entity_title entity))
          `(continue_call ',name ',(push values entity)))
@@ -227,6 +330,20 @@
     (fn (name)
       (make_item (command_title name)
         `(continue_call ',name '(,entity))))))
+
+(defn! argument_entities (type)
+  "Shared argument choices for interactive execution and call construction."
+  (def providers (if (eq? type nil) '() (get_entity_completions type)))
+  (def entities '())
+  (map providers (fn (provider)
+    (def found (try (apply (eval provider) '())))
+    (if (list? found)
+      (map found (fn (entity)
+        (when! (and! (list? entity)
+                    (eq? (get entity 0) type)
+                    (not? (contains? entities entity)))
+          (set entities (push entities entity))))))))
+  entities)
 
 # TODO: Query should be rule-based? I.e. "Search DWIM" - if URL, if App Name, if Bundle ID, if location (?), if long, etc
 (defn! query_items (query)
@@ -612,4 +729,4 @@
     (if (eq? (get result 0) :push_page) result :close)
     :close))
 
-(spawn_srv! :vrsjmp :interface '(get_items on_click))
+(spawn_srv! :vrsjmp :interface '(get_items on_click enqueue_input))

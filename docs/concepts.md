@@ -374,6 +374,57 @@ Functions with more arguments get another selection page for each one.
 whose first argument has the same type tag, supplies that entity, and prompts
 for any remaining arguments.
 
+### Building a Call in the Editor
+
+Evaluate `(pick_call)` using Emacs's replace command, `C-u C-c C-e`. Vrsjmp
+searches bound service methods, using their parameter metadata for placeholders.
+Enter inserts a form such as:
+
+```lyric
+(move_window window destination)
+```
+
+These placeholders are ordinary variable names. Cmd-K → **Fill arguments**
+uses the same entity providers as `call_interactively`, but constructs a form
+instead of calling the selected function. Choose each argument in turn; the
+last selection returns the completed form directly:
+
+```lyric
+(move_window '(:os/window :id 7) '(:os/display :index 2 :title "Display 2"))
+```
+
+Selected lists and symbols are quoted so they remain literal values when the
+inserted call is eventually evaluated. Filling requires the same argument type
+annotations and completion providers as `call_interactively`. The function's
+documentation appears below its name in the search results.
+
+### Services Requesting GUI Input
+
+`(show_gui)` publishes `:show` on the `:vrsjmp` topic. The native GUI subscribes
+on the same connection it uses for queries. The signal asks it to show/focus;
+`begin_interaction` chooses the page and `get_items` supplies the content.
+Navigation history remains in the GUI.
+
+`pick_call` uses `(request_input PAGE)` to queue a page in the existing
+`:vrsjmp` service and wait in the calling process. The service stays available
+for queries while the caller waits. A page callback receives the request ID
+before its normal `:args`; its final action calls `(finish_input ID VALUE)`
+inside the service. No evaluation of the returned value is implied. Call
+`request_input` from an evaluation or worker process, since calling it inside a
+shared service's request handler would block that service while waiting.
+
+Opening chooses the oldest pending request. Pending requests are also exposed
+as Home items. Pub/sub does not replay missed notifications, so the service
+stores requests before publishing. Opening and reconnecting check them again;
+the queue lasts for the service's lifetime. Repeated signals preserve an
+already-visible input flow. Pub/sub does not launch a closed GUI application.
+
+Input pages have an `:on_cancel` command. Escape within a picker goes back;
+leaving it runs that command and causes the waiting evaluation to fail without
+replacing source. Hiding on blur preserves the request. Emacs C-g disconnects
+the caller and cancels its runtime evaluation; subsequent request checks remove
+the abandoned entry. See the TODO to revisit wakeup delivery and ownership.
+
 ## Introspection
 
 Inspect definitions, documentation, processes, and services from `vrsctl` or

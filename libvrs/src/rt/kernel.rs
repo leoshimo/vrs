@@ -312,10 +312,10 @@ mod tests {
 
         let exit = timeout(Duration::from_millis(5), hdl.join())
             .await
-            .expect("Should not timeout - process should exit for error")
+            .expect("Should not timeout - disconnect should cancel the process")
             .expect("Join should succeed");
 
-        assert_matches!(exit.status, Err(_));
+        assert_matches!(exit.status, Ok(ProcessResult::Cancelled));
         assert!(
             k.procs().await.unwrap().is_empty(),
             "Should terminate conn process for dropped conn"

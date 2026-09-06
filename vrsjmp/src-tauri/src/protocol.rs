@@ -31,6 +31,7 @@ pub struct Page {
     pub get_items: String,
     pub args: String,
     pub debounce_ms: u32,
+    pub on_cancel: Option<String>,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -196,6 +197,11 @@ pub fn action(value: Form) -> Result<Action> {
             get_items: callback.as_str().into(),
             args,
             debounce_ms,
+            on_cancel: field(values, "on_cancel")
+                .filter(|value| **value != Form::Nil)
+                .map(|command| {
+                    Form::List(vec![Form::keyword("on_click"), command.clone()]).to_string()
+                }),
         },
     })
 }

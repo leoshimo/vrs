@@ -1,5 +1,5 @@
 import { Navigation } from "./navigation.mjs";
-import { createOpening, createTransport } from "./transport.mjs";
+import { createShowHandler, createTransport } from "./transport.mjs";
 
 const { invoke } = window.__TAURI__.tauri;
 const input = document.querySelector("#input-field");
@@ -207,7 +207,13 @@ window.addEventListener("blur", () => {
     navigation.suspend();
     invoke("on_blur").catch(console.error);
 });
-const openPalette = createOpening(navigation, () => invoke("show"));
+const openPalette = createShowHandler(navigation, () => invoke("show"));
+await window.__TAURI__.event.listen("show-palette", () => {
+    openPalette().catch(console.error);
+});
+await window.__TAURI__.event.listen("vrs-connected", () => {
+    openPalette({ background: true }).catch(console.error);
+});
 await window.__TAURI__.event.listen("toggle-palette", () => {
     if (navigation.visible) navigation.close();
     else openPalette().catch(console.error);

@@ -119,12 +119,23 @@ impl Process {
         };
         self.locals.handle(proc_hdl.clone());
 
+        let connection = self.locals.term.clone();
         let mut fiber = self.prog.into_fiber(self.locals);
 
         procs.spawn(async move {
             // TODO: Implement ProcessResult::Disconnected when Error::ConnectionClosed is returned
             // TODO: Use cancel token instead of msg_rx
             let exit = tokio::select! {
+                biased;
+                _ = async {
+                    match connection {
+                        Some(connection) => connection.closed().await,
+                        None => std::future::pending::<()>().await,
+                    }
+                } => ProcessExit {
+                    id: self.id.clone(),
+                    status: Ok(ProcessResult::Cancelled),
+                },
                 res = lyric::run(&mut fiber) => {
                     match res {
                         Ok(v) => ProcessExit {
