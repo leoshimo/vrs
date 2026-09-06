@@ -385,6 +385,8 @@ mod tests {
             (defn open_note (id) :opened)
             (defn get_obsidian_files () '((:title "Design.md" :file "./projects/vrs/Design.md")))
             (defn open_obsidian_file (path) :opened)
+            (defn stickies_get () '((:title "Shopping list")))
+            (defn stickies_open (title) :opened)
             (defn get_running_apps () '((:os/app :pid 123 :title "Safari" :bundle_id "com.apple.Safari" :started_at "100")))
             (defn force_quit_app (app)
               "Force Quit" (interactive :os/app)
@@ -624,6 +626,12 @@ mod tests {
                 "obsidian_items",
                 "projects/vrs",
                 "Design.md",
+            ),
+            (
+                "Browse Stickies",
+                "stickies_items",
+                "Shopping",
+                "Shopping list",
             ),
         ] {
             let items = protocol::items(

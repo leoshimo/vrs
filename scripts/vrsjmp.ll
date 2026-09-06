@@ -95,7 +95,6 @@
 
 (defn command_items (context query)
   (def candidates (+ (favorite_items)
-     (stickies_items query)
      (scheduler_items query)
      (eden_items query)
      (rlist_items query)
@@ -393,14 +392,13 @@
     (make_item (get note :title) (list 'open_note (get note :id))))))
 
 (def stickies_get_cache '())
+(defn stickies_page ()
+  (set stickies_get_cache (stickies_get))
+  (+ (push_page 'stickies_items "Search Stickies…") '(:title "Stickies")))
+
 (defn stickies_items (query)
-  "(stickies_items) - Returns markup for Stickies"
-  (if (not? (contains? query "s:"))
-    '()
-      (begin
-       (if (eq? query "s:") (set stickies_get_cache (stickies_get)))
-       (map stickies_get_cache (fn (n) (list :title (format "s: {}" (get n :title))
-                                               :on_click (list 'stickies_open (get n :title))))))))
+  (map (fuzzy_match query stickies_get_cache display) (fn (note)
+    (make_item (get note :title) (list 'stickies_open (get note :title))))))
 
 (def obsidian_cache '())
 
@@ -547,6 +545,7 @@
          (make_item "VirtualBuddy" '(open_app "VirtualBuddy"))
          (make_item "VirtualBuddy - Shared" '(open_file "~/VirtualBuddy-Shared"))
          (make_item "Stickies" '(open_app "Stickies"))
+         (make_item "Browse Stickies" '(stickies_page))
          (make_item "Photos" '(open_app "Photos"))
 
          (make_item "Distill" '(open_app "Distill"))
