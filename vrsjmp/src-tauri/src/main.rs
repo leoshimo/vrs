@@ -365,6 +365,15 @@ mod tests {
               "Open Antinote Note"
               (interactive :antinote/note)
               (if (not? (eq? (get note :id) "note-1")) (error "Wrong note")))
+            (def tasks_added '())
+            (def things_reads 0)
+            (defn get_things_tasks ()
+              (set things_reads (+ things_reads 1))
+              '((:things/task :id "task-1" :title "Review deployment" :notes "Check staged rollout")))
+            (defn open_things_task (task)
+              (if (not? (eq? (get task :id) "task-1")) (error "Wrong task")))
+            (defn things_add (title notes)
+              (set tasks_added (push tasks_added (list title notes))) :created)
             (defn get_windows () '((:os/window :id 7 :app "Safari" :title "Documentation")))
             (defn focus_window (window) "Focus Window" (interactive :os/window) :focused)
             (defn get_displays () '((:os/display :id 42 :index 2 :title "Display 2")))
@@ -646,6 +655,174 @@ mod tests {
         }
         ask(&mut client, protocol::action_request(
             "(:on_click (if (not? (eq? (list antinote_reads) '(1))) (error \"Repeated source reads\")))"
+        ).unwrap()).await;
+        // Task capture strips only the leading marker and surrounding whitespace.
+        let safari_context = r#"(((:os/window :app "Safari" :title "Example Domain")
+          (:web/page :title "Example Domain" :url "https://example.test/")
+          (:text :value "Selection is not attached")))"#;
+        let capture = protocol::items(
+            ask(
+                &mut client,
+                protocol::query_request(
+                    "root_items",
+                    safari_context,
+                    "-  Review vrs-peer -- retry \"quotes\"  ",
+                )
+                .unwrap(),
+            )
+            .await,
+        )
+        .unwrap();
+        assert_eq!(capture.len(), 2);
+        assert_eq!(capture[0].title, "Add to Things Inbox");
+        assert_eq!(capture[1].title, "Add Safari Tab to Things");
+        assert_eq!(capture[1].subtitle.as_deref(), Some("Example Domain"));
+        assert_eq!(
+            capture[0].subtitle.as_deref(),
+            Some("Review vrs-peer -- retry \"quotes\"")
+        );
+        for item in &capture {
+            assert_eq!(
+                protocol::action(
+                    ask(
+                        &mut client,
+                        protocol::action_request(&item.on_click).unwrap()
+                    )
+                    .await
+                )
+                .unwrap(),
+                protocol::Action::Close
+            );
+        }
+        ask(
+            &mut client,
+            protocol::action_request(
+                r#"(:on_click
+          (if (not? (eq? tasks_added
+            '(("Review vrs-peer -- retry \"quotes\"" "")
+              ("Example Domain" "https://example.test/"))))
+            (error "Wrong task title or Safari URL")))"#,
+            )
+            .unwrap(),
+        )
+        .await;
+        let no_context = protocol::items(
+            ask(
+                &mut client,
+                protocol::query_request("root_items", "(())", "- buy milk").unwrap(),
+            )
+            .await,
+        )
+        .unwrap();
+        assert_eq!(no_context.len(), 1);
+        for query in ["- deployment", "- staged rollout"] {
+            let items = protocol::items(
+                ask(
+                    &mut client,
+                    protocol::query_request("root_items", "(())", query).unwrap(),
+                )
+                .await,
+            )
+            .unwrap();
+            assert_eq!(items.len(), 2);
+            assert_eq!(items[0].title, "Add to Things Inbox");
+            assert_eq!(items[1].title, "Review deployment");
+            assert_eq!(items[1].subtitle.as_deref(), Some("Check staged rollout"));
+            if query == "- staged rollout" {
+                assert!(items[1].subtitle_spans.iter().any(|span| span.matched));
+            } else {
+                assert!(items[1].subtitle_spans.is_empty());
+            }
+            assert_eq!(
+                protocol::action(
+                    ask(
+                        &mut client,
+                        protocol::action_request(&items[1].on_click).unwrap()
+                    )
+                    .await
+                )
+                .unwrap(),
+                protocol::Action::Close
+            );
+        }
+        ask(&mut client, protocol::action_request(
+            "(:on_click (if (not? (eq? (list things_reads (len tasks_added)) '(1 2))) (error \"Task search repeated reads or created a duplicate\")))"
+        ).unwrap()).await;
+        for context in [
+            r#"(((:os/window :app "Google Chrome") (:web/page :title "Example" :url "https://example.test/")))"#,
+            r#"(((:os/window :app "Safari")))"#,
+            r#"(((:web/page :title "Example" :url "https://example.test/")))"#,
+        ] {
+            let items = protocol::items(
+                ask(
+                    &mut client,
+                    protocol::query_request("root_items", context, "-").unwrap(),
+                )
+                .await,
+            )
+            .unwrap();
+            assert_eq!(
+                items.len(),
+                1,
+                "Only a captured Safari tab should be offered"
+            );
+        }
+        let empty = protocol::items(
+            ask(
+                &mut client,
+                protocol::query_request("root_items", "(())", "- \t ").unwrap(),
+            )
+            .await,
+        )
+        .unwrap();
+        assert_eq!(empty[0].subtitle, None);
+        assert!(request_once(
+            &mut client,
+            unused,
+            protocol::action_request(&empty[0].on_click).unwrap()
+        )
+        .await
+        .unwrap()
+        .contents
+        .is_err());
+        let tab_only = protocol::items(
+            ask(
+                &mut client,
+                protocol::query_request("root_items", safari_context, "-").unwrap(),
+            )
+            .await,
+        )
+        .unwrap();
+        assert_eq!(
+            protocol::action(
+                ask(
+                    &mut client,
+                    protocol::action_request(&tab_only[1].on_click).unwrap()
+                )
+                .await
+            )
+            .unwrap(),
+            protocol::Action::Close
+        );
+        let untitled = protocol::items(ask(&mut client,
+            protocol::query_request("root_items",
+              r#"(((:os/window :app "Safari") (:web/page :title " " :url "https://example.test/")))"#, "-").unwrap()).await).unwrap();
+        assert_eq!(
+            untitled[1].subtitle.as_deref(),
+            Some("https://example.test/")
+        );
+        ask(
+            &mut client,
+            protocol::action_request("(:on_click (begin_interaction))").unwrap(),
+        )
+        .await;
+        ask(
+            &mut client,
+            protocol::query_request("root_items", "(())", "- deployment").unwrap(),
+        )
+        .await;
+        ask(&mut client, protocol::action_request(
+            "(:on_click (if (not? (eq? things_reads 2)) (error \"Task cache did not refresh\")))"
         ).unwrap()).await;
     }
 }

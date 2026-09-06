@@ -4,7 +4,7 @@
 
 (bind_srv :os_notify)
 (bind_srv :chat)
-(bind_srv :todos)
+(bind_srv :things)
 (bind_srv :rlist)
 (bind_srv :os_cal)
 
@@ -32,7 +32,7 @@ Comment lines are marked by #
 
 The result should be a single S-expression wrapped within a (begin ...) form"
            (join "
-"                (help add_todo)
+"                (help things_add)
                  (help notify)
                  (help sleep)
                  (help add_rlist_active_tab)

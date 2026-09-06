@@ -52,7 +52,7 @@
 (bind_srv :nl_shell)
 (bind_srv :nl_scheduler)
 (bind_srv :os_screencap)
-(bind_srv :todos)
+(bind_srv :things)
 (bind_srv :os_display)
 (bind_srv :os_window)
 (bind_srv :os_maps)
@@ -80,6 +80,7 @@
 # from slower context enrichment.
 (defn begin_interaction ()
   "Capture context once and return the root page; ordinary on_click protocol"
+  (set things_cache nil)
   (def context (try (get_context)))
   (+ (push_page 'root_items "Search commands…")
      '(:title "Home")
@@ -87,8 +88,12 @@
 
 (defn root_items (context query)
   "Retrieve the root command palette's final ordered items"
+  (if (if (eq? query "") false (eq? (get (split "-" query) 0) ""))
+    (task_items context query)
+    (command_items context query)))
+
+(defn command_items (context query)
   (def candidates (+ (favorite_items)
-     (todo_items query)
      (notes_items query)
      (stickies_items query)
      (obsidian_items query)
@@ -237,8 +242,6 @@
                   (list 'open_url (format "http://perplexity.ai/?q={}&copilot=true" query)))
        (make_item "Search YT Music"
                   (list 'open_url (format "http://music.youtube.com/search?q={}" query)))
-       (make_item "Add Todo"
-                  (list 'add_todo query))
        (make_item "Open App"
                   (list 'open_app query))
        (make_item "Open URL"
@@ -277,13 +280,58 @@
        (make_item "Schedule - Today" '(schedule_the_day "today")))))
 
 
-(defn todo_items (query)
-  "(todo_items) - Retrieve todo items and create markup for it"
-  (if (not? (contains? query "t: "))
-    '()
-      (map (get_todos)
-           (fn (t) (list :title (format "t: Mark Done - {}" (get t :title))
-                         :on_click (list 'set_todos_done_by_id (get t :id)))))))
+(defn trim_text (text)
+  # Keep internal whitespace intact; trim only the edges without a subprocess.
+  (def result "")
+  (def pending "")
+  (map (split "" text) (fn (char)
+    (if (contains? '("" " " "\t" "\r" "\n") char)
+      (if (not? (eq? result "")) (set pending (str pending char)))
+      (begin (set result (str result pending char)) (set pending "")))))
+  result)
+
+(def things_cache nil)
+
+(defn task_items (context query)
+  (def index 0)
+  (def title (trim_text (apply join (+ '("-")
+    (filter (split "-" query) (fn (part)
+      (set index (+ index 1)) (not? (eq? index 1))))))))
+  (def create (if (eq? title "") '(error "Task title is empty")
+                 (list 'things_add title "")))
+  (+ (list (+ (make_item "Add to Things Inbox" create)
+              (list :subtitle (if (eq? title "") nil title))))
+     (safari_task_items context)
+     (matching_task_items title)))
+
+(defn matching_task_items (query)
+  (if (eq? query "") '()
+    (begin
+      # Read Things once per interaction; each subsequent keystroke stays local.
+      (if (eq? things_cache nil) (set things_cache (get_things_tasks)))
+      (map (fuzzy_match query things_cache (fn (task)
+               (list (get task :title) (get task :notes) (display task))))
+        (fn (task)
+          (def excerpt (match_excerpt query (get task :notes)))
+          (+ (make_item (get task :title) (list 'open_things_task (list 'quote task)))
+             (list :subtitle (if excerpt excerpt (get task :notes)) :aside "Things")))))))
+
+(defn safari_task_items (context)
+  # Use the captured origin, not whichever app is focused after opening jmp.
+  (def windows (filter context (fn (entity) (eq? (get entity 0) :os/window))))
+  (if (empty? windows) '()
+    (if (not? (eq? (get (get windows 0) :app) "Safari")) '()
+      (let ((pages (filter context (fn (entity)
+                     (if (eq? (get entity 0) :web/page)
+                       (if (get entity :url) (not? (eq? (get entity :url) "")) false)
+                       false)))))
+        (if (empty? pages) '()
+          (let ((page (get pages 0)))
+            (def url (get page :url))
+            (def title (if (get page :title) (trim_text (get page :title)) ""))
+            (if (eq? title "") (set title url))
+            (list (+ (make_item "Add Safari Tab to Things" (list 'things_add title url))
+                     (list :subtitle title)))))))))
 
 (defn feedbin_call (message)
   "Let transport errors reach the palette toast rather than masquerading as no results"
