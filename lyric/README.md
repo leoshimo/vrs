@@ -66,7 +66,7 @@ Use templates where showing the structure of generated code helps.
 
 ## Readable values
 
-`(pretty VALUE [WIDTH])` returns a formatted string (default width 80; explicit
+`(pretty VALUE [WIDTH])` returns a formatted string (default width 90; explicit
 widths must be positive integers). Small lists stay on one line. Larger lists
 wrap with indentation, keeping small keyword/value pairs together. Oversized
 nested values start below their keyword:

@@ -39,3 +39,6 @@ pub use types::SymbolId;
 pub use types::Val;
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// Default target width for human-readable values in Lyric and its clients.
+pub const DEFAULT_PRINT_WIDTH: usize = 90;

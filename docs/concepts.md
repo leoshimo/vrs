@@ -10,6 +10,152 @@ constructed, stored, sent to another process, or evaluated later.
 (eval command) # => 42
 ```
 
+Large results are displayed with indentation in the terminal and Emacs. Use
+`(pretty VALUE)` to get that display as a string; the default target width is 90
+columns, or pass a width such as `(pretty (ls_srv) 60)`.
+
+Compact output has no added line breaks. `vrsctl` uses it by default when piped,
+so scripts can keep treating each result as one line. Use `--format pretty`
+when piping to a reader such as `less`. Ordinary data can be printed and read
+back: `(read (pretty '(1 2 3)))` returns `(1 2 3)`. Printed functions and process
+handles describe runtime objects; reading those descriptions cannot recreate
+the original objects.
+
+## Quotation and Code Templates
+
+Quote (`'`) keeps an expression as data. `eval` executes it later:
+
+```lyric
+'(+ 40 2)        # => (+ 40 2)
+(eval '(+ 40 2)) # => 42
+```
+
+Backtick makes a template. Comma inserts one computed value; comma-at inserts
+the elements of a computed list:
+
+```lyric
+(def amount 40)
+(def command `(+ ,amount 2))
+command        # => (+ 40 2)
+(eval command) # => 42
+
+(def numbers '(10 20 12))
+`(+ ,@numbers) # => (+ 10 20 12)
+```
+
+This is how vrsjmp builds commands to store in an item's `:on_click` field.
+When a command should receive an entity as data, the generated source needs a
+quote around that entity:
+
+```lyric
+(def window '(:os/window :id 42))
+
+# In a normal call, the variable's value is passed directly:
+(focus_window window)
+
+# This template inserts the list as another expression to execute:
+`(focus_window ,window)
+# => (focus_window (:os/window :id 42))
+
+# Keep the inserted list as literal data in the later call:
+`(focus_window ',window)
+# => (focus_window '(:os/window :id 42))
+```
+
+The first generated form would try to call `:os/window` when evaluated. The
+second passes the window record. A window entity is an ordinary list, not a
+special object literal. An already evaluated function argument is not evaluated
+again; this distinction matters because a template constructs source for a
+future evaluation. Strings and numbers are already literal expressions, so
+`(open_url ,url)` inside a backtick template needs no extra quote around a URL
+string.
+
+## Macros
+
+A macro receives source forms and generates code that becomes part of the
+calling program. Define one with `defmacro` and invoke it with `!`:
+
+```lyric
+(defmacro unless (condition & body)
+  `(when! (not? ,condition) ,@body))
+
+(unless! false (+ 20 22)) # => 42
+(unless! true (error "should not run")) # => nil
+```
+
+Here `& body` collects the remaining expressions. An ordinary function receives
+already evaluated arguments; a macro receives their source. This lets a macro
+arrange for some expressions to be skipped, as in the second call above.
+
+Inspect the generated code with `macroexpand_1` or `macroexpand`:
+
+```lyric
+(macroexpand_1 '(unless! false (+ 20 22)))
+# => (when! (not? false) (+ 20 22))
+
+(macroexpand '(unless! false (+ 20 22)))
+# => (if (not? false) (begin (+ 20 22)) nil)
+```
+
+`macroexpand_1` performs one outer expansion. `macroexpand` keeps expanding while
+the result's outer expression is another macro call; it does not recursively
+expand every nested expression. Both return source data without running it.
+The quote is necessary because these inspection functions evaluate their
+arguments normally.
+
+For example, inspect the service macro with:
+
+```lyric
+(macroexpand_1 '(srv! :test :interface '()))
+```
+
+Without the outer quote, `srv!` runs first and enters its service loop. In
+Emacs, put point on or just after the closing parenthesis of
+`(srv! :test :interface '())` and press `C-c C-m`; the command adds the quote.
+`C-u C-c C-m` uses `macroexpand`. `C-g` cancels a waiting evaluation and
+terminates its client, leaving the source intact. Cancellation does not undo
+effects already performed. For custom macros, evaluate their definitions and
+an explicit expansion call together in a region: each editor command uses a
+fresh connection.
+
+Macros generate code in a separate environment. `for_syntax` defines helpers
+for that environment, rather than ordinary runtime functions:
+
+```lyric
+(for_syntax
+  (defn add_one_form (expression) `(+ ,expression 1)))
+
+(defmacro increment (expression) (add_one_form expression))
+(increment! 41) # => 42
+```
+
+`add_one_form` runs while generating the `(+ 41 1)` form. It cannot read the
+program's runtime variables or call running services; the code it generates
+can use them later. Macros capture the helpers present when defined. If you
+change a helper, reevaluate the macro definition too.
+
+`gensym` creates a fresh symbol for a variable introduced by generated code:
+
+```lyric
+(defmacro or_else (expression fallback)
+  (def temp (gensym "value"))
+  `(let ((,temp ,expression))
+     (if ,temp ,temp ,fallback)))
+
+(def value 42)
+(or_else! false value) # => 42
+```
+
+The generated temporary stores `expression` so it runs only once. If the macro
+had hardcoded its temporary's name as `value`, it would hide the caller's
+`value` in the fallback expression. `gensym` avoids that collision; Lyric does
+not automatically protect all generated names this way.
+
+Macro definitions belong to a process. Functions retain the expansions they
+were compiled with, so reevaluate a function after changing a macro it uses.
+VRS's `srv!` and `spawn_srv!` use macros to generate service control flow;
+`bind_srv` is an ordinary runtime function that discovers the live interface.
+
 ## Function Metadata
 
 Functions can declare the entity types their arguments accept with a leading
@@ -97,7 +243,7 @@ and can publish selected Lyric functions as its interface.
 
 ```lyric
 (defn echo (message) message)
-(spawn_srv :echo :interface '(echo) :overwrite)
+(spawn_srv! :echo :interface '(echo))
 
 (find_srv :echo)
 (info_srv :echo :interface) # => ((:echo message))

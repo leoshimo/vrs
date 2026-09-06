@@ -4,6 +4,60 @@
 (require 'lyric-mode)
 (require 'cl-lib)
 
+(ert-deftest lyric-evaluation-selects-the-form-at-a-closing-paren ()
+  (dolist (source '("(ls_srv)" "'((1 2) (3 4))" "`(a ,(get x 0))"
+                    "(srv! :test :interface '())"))
+    (with-temp-buffer
+      (insert source)
+      (lyric-mode)
+      (dolist (position (list (1- (point-max)) (point-max)))
+        (goto-char position)
+        (should (equal (lyric--last-sexp-source) source)))))
+  (with-temp-buffer
+    (insert "(begin (ls_srv))")
+    (lyric-mode)
+    (goto-char (- (point-max) 2))
+    (should (equal (lyric--last-sexp-source) "(ls_srv)"))
+    (forward-char)
+    (should (equal (lyric--last-sexp-source) "(begin (ls_srv))"))))
+
+(ert-deftest lyric-evaluation-process-keeps-stdout-and-stderr-separate ()
+  (with-temp-buffer
+    (insert "exact source: \"東京\"\n")
+    (let ((output (generate-new-buffer " *Lyric test output*"))
+          (errors (generate-new-buffer " *Lyric test errors*")))
+      (unwind-protect
+          (progn
+            (should (= 7 (lyric--run-region
+                          (point-min) (point-max)
+                          "sh -c 'cat; printf diagnostic >&2; exit 7'" output errors)))
+            (should (equal (with-current-buffer output (buffer-string))
+                           "exact source: \"東京\"\n"))
+            (should (equal (with-current-buffer errors (buffer-string)) "diagnostic")))
+        (kill-buffer output)
+        (kill-buffer errors)))))
+
+(ert-deftest lyric-evaluation-quit-kills-the-client-and-preserves-source ()
+  (with-temp-buffer
+    (insert "(srv! :test :interface '())")
+    (lyric-mode)
+    (goto-char (1- (point-max)))
+    (let ((lyric-vrsctl-command "sleep 30 #")
+          (make-real-process (symbol-function 'make-process))
+          child cancelled)
+      (cl-letf (((symbol-function 'make-process)
+                 (lambda (&rest args)
+                   (setq child (apply make-real-process args))))
+                ((symbol-function 'accept-process-output)
+                 (lambda (&rest _) (signal 'quit nil))))
+        (condition-case nil
+            (lyric-eval-last-sexp t)
+          (quit (setq cancelled t))))
+      (should cancelled)
+      (should child)
+      (should-not (process-live-p child))
+      (should (equal (buffer-string) "(srv! :test :interface '())")))))
+
 (ert-deftest lyric-evaluation-with-test-runtime ()
   "Optional end-to-end evaluation, enabled by the terminal test harness."
   (skip-unless (getenv "LYRIC_TEST_VRSCTL"))
@@ -17,6 +71,11 @@
       (with-current-buffer "*Lyric Result*"
         (should (equal (buffer-string) "((1 2)\n (3 4))\n")))
       (erase-buffer)
+      (insert "(list? (ls_srv))")
+      (goto-char (1- (point-max)))
+      (lyric-eval-last-sexp t)
+      (should (equal (buffer-string) "true"))
+      (erase-buffer)
       (insert "'((1 2) (3 4))")
       (lyric-eval-last-sexp t)
       (should (equal (buffer-string) "((1 2)\n (3 4))"))
@@ -26,7 +85,7 @@
       (should (equal (buffer-string) "\"one\\n\\\"two\\\"\""))
       (erase-buffer)
       (insert "(let ((window '(:id 7))) `(focus_window ',window))")
-      (let ((lyric-result-width 80)) (lyric-eval-last-sexp t))
+      (let ((lyric-result-width 90)) (lyric-eval-last-sexp t))
       (should (equal (buffer-string) "(focus_window '(:id 7))"))
       (erase-buffer)
       (insert "'(unquote @name)")
@@ -36,6 +95,35 @@
       (insert "(missing_function)")
       (should-error (lyric-eval-last-sexp t) :type 'user-error)
       (should (equal (buffer-string) "(missing_function)")))))
+
+(ert-deftest lyric-macroexpansion-and-quit-with-test-runtime ()
+  "Inspect a real service macro, then cancel an accidental server loop."
+  (skip-unless (getenv "LYRIC_TEST_VRSCTL"))
+  (let ((lyric-vrsctl-command (getenv "LYRIC_TEST_VRSCTL"))
+        timer cancelled)
+    (with-temp-buffer
+      (insert "(srv! :emacs_abort_probe :interface '())")
+      (lyric-mode)
+      (goto-char (1- (point-max)))
+      (lyric-macroexpand-last-sexp nil)
+      (with-current-buffer "*Lyric Result*"
+        (should (string-match-p "register" (buffer-string)))
+        (should (string-match-p "loop" (buffer-string))))
+      (unwind-protect
+          (progn
+            ;; The same quit flag is set by C-g while waiting for output.
+            (setq timer (run-at-time 0.1 nil (lambda () (setq quit-flag t))))
+            (condition-case nil
+                (lyric-eval-last-sexp t)
+              (quit (setq cancelled t))))
+        (when timer (cancel-timer timer)))
+      (should cancelled)
+      (should (equal (buffer-string) "(srv! :emacs_abort_probe :interface '())"))
+      (erase-buffer)
+      (insert "(+ 20 22)")
+      (goto-char (point-max))
+      (lyric-eval-last-sexp t)
+      (should (equal (buffer-string) "42")))))
 
 (ert-deftest lyric-mode-indents-data-and-calls ()
   (dolist (example
@@ -76,11 +164,11 @@
     (insert lyric-test--block-expression)
     (lyric-mode)
     (goto-char (point-max))
-    (cl-letf (((symbol-function 'shell-command-on-region)
+    (cl-letf (((symbol-function 'lyric--run-region)
                (lambda (start end command output &rest _)
                  (should (equal (buffer-substring-no-properties start end)
                                 lyric-test--block-expression))
-                 (should (string-match-p "--format pretty --width 80 --raw" command))
+                 (should (string-match-p "--format pretty --width 90 --raw" command))
                  (with-current-buffer output (insert "((1 2)\n (3 4))\n"))
                  0))
               ((symbol-function 'display-buffer) #'ignore))
@@ -96,17 +184,17 @@
     (with-temp-buffer
       (insert "(begin\n  (ls_srv))")
       (lyric-mode)
-      (goto-char (1- (point-max)))
-      (cl-letf (((symbol-function 'shell-command-on-region)
+      (goto-char (- (point-max) 2))
+      (cl-letf (((symbol-function 'lyric--run-region)
                  (lambda (_start _end command output &rest _)
-                   (should (string-match-p "--format pretty --width 80" command))
+                   (should (string-match-p "--format pretty --width 90" command))
                    (should-not (string-match-p "--raw" command))
                    (with-current-buffer output
                      (insert "((:name :echo\n  :node \"alpha\")\n (:name :clock))\n"))
                    0)))
         (if (eq command 'lyric-eval-last-sexp)
             (lyric-eval-last-sexp t)
-          (lyric-eval-region 10 (point) t)))
+          (lyric-eval-region 10 (1+ (point)) t)))
       (should (equal (buffer-string)
                      "(begin\n  ((:name :echo\n    :node \"alpha\")\n   (:name :clock)))")))))
 
@@ -115,7 +203,7 @@
     (insert "(missing)")
     (lyric-mode)
     (goto-char (point-max))
-    (cl-letf (((symbol-function 'shell-command-on-region)
+    (cl-letf (((symbol-function 'lyric--run-region)
                (lambda (_start _end _command output &rest _)
                  (with-current-buffer output (insert "not a result"))
                  1))
@@ -127,9 +215,9 @@
   (with-temp-buffer
     (insert "(pretty (ls_srv))")
     (lyric-mode)
-    (cl-letf (((symbol-function 'shell-command-on-region)
+    (cl-letf (((symbol-function 'lyric--run-region)
                (lambda (_start _end command _output &rest _)
-                 (should (string-match-p "--format editor --width 80 --raw" command))
+                 (should (string-match-p "--format editor --width 90 --raw" command))
                  0))
               ((symbol-function 'display-buffer) #'ignore))
       (lyric-eval-buffer t))))
@@ -275,7 +363,7 @@
     (insert "\"literal\"")
     (lyric-mode)
     (goto-char (point-max))
-    (cl-letf (((symbol-function 'shell-command-on-region)
+    (cl-letf (((symbol-function 'lyric--run-region)
                (lambda (start end command output &rest _)
                  (should (equal (buffer-substring-no-properties start end)
                                 "(macroexpand_1 (quote \"literal\"))"))

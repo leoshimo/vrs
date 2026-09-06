@@ -69,8 +69,11 @@ registry:
     (configure :nodes '("ssh://home-server")))
 ```
 
-Use `./scripts/serve.sh headless` on a node that should run the daemon and its
-services without launching the `vrsjmp` GUI.
+Use `./serve` (or `./scripts/serve.sh`) to start the runtime and GUI. It first
+installs the current `vrsctl` with `cargo install --path vrsctl --force`, so
+Emacs and script shebangs use the matching client. `./serve dev` installs a
+debug client for the debug runtime socket. Use `./serve headless` on a node
+that should run the daemon and its services without launching the GUI.
 
 Endpoints name their transport explicitly. Release builds use VRS port `8773`;
 debug builds use `8774`, keeping a persistent `serve.sh` runtime isolated from
@@ -228,8 +231,13 @@ Expansion has instruction, invocation, nesting, and value-size limits. The
 reader accepts source nesting up to 256 levels. Macro definitions are top-level
 forms; generated names require explicit `gensym`, without automatic hygiene.
 
-In Emacs, `C-c C-m` displays one expansion of the preceding form; a prefix
-argument repeats outer expansion. Each evaluation command uses its own
+In Emacs, `C-c C-m` displays one expansion of the form at its closing
+parenthesis or preceding point, adding the required quote automatically; a
+prefix argument repeats outer expansion. For example, use it on
+`(srv! :test :interface '())`, or evaluate
+`(macroexpand_1 '(srv! :test :interface '()))`. Without the quote, the service
+loop runs before the inspection function can be called. `C-g` cancels a waiting
+evaluation and terminates its client. Each evaluation command uses its own
 connection, so for custom macros evaluate their definitions and an explicit
 `macroexpand_1` call together in a region or file.
 
@@ -483,8 +491,8 @@ Results automatically use multiline formatting when stdout is a terminal,
 including the REPL, `--command`, script files/stdin, and subscriptions
 (`--subscribe`, `--follow`, `--followclear`). Lists that fit stay on one line;
 larger lists put each element on its own line. Keyword/value records such as
-those returned by `(ls_srv)` keep small pairs together. The width follows the
-terminal as it resizes, with an 80-column fallback. A nested value that is too
+those returned by `(ls_srv)` keep small pairs together. The default target width is
+90 columns in every output mode; use `--width` to choose another width. A nested value that is too
 large to fit after its keyword starts on the next line.
 
 ```sh
@@ -506,7 +514,7 @@ redirected stdin. Explicit files cannot be combined with commands/subscriptions.
 Formatting is also available inside Lyric:
 
 ```lyric
-(pretty (ls_srv))       # returns a string, default width 80
+(pretty (ls_srv))       # returns a string, default width 90
 (pretty (ls_srv) 60)    # positive integer width
 (read (pretty '(1 2 3))) # => (1 2 3)
 ```
@@ -529,7 +537,8 @@ editor-centric software development. It recognizes raw block strings and sends
 the exact source expression to `vrsctl`, so multiline scripts can be evaluated
 with `lyric-eval-last-sexp` without being read and rewritten as Emacs Lisp.
 
-- `C-c C-e` evaluates the preceding expression, including its quote prefix.
+- `C-c C-e` evaluates the expression at its closing parenthesis or preceding
+  point, including its quote prefix.
   Try `(ls_srv)` or `(pretty (ls_srv) 60)` to see readable results in the
   `*Lyric Result*` buffer. Top-level strings are displayed as text.
 - `C-c C-r` evaluates the region; `C-c C-c` evaluates the buffer.
@@ -538,8 +547,11 @@ with `lyric-eval-last-sexp` without being read and rewritten as Emacs Lisp.
   intact on evaluation errors. Lists are inserted as data representations;
   add a quote if you want to evaluate the inserted list as literal data.
 - `C-u C-c C-c` displays source with commented results.
+- `C-c C-m` inspects one macro expansion; `C-u C-c C-m` repeats outer expansion.
+- `C-g` aborts a waiting evaluation, terminates its client, and preserves the
+  source. Effects already performed are not undone.
 
-Customize `lyric-result-width` (default 80) for editor results. Indentation
+Customize `lyric-result-width` (default 90) for editor results. Indentation
 aligns data and keyword/value lists under their opening parenthesis, uses two
 spaces for call bodies, and preserves raw block string contents. The result
 buffer uses Lyric syntax highlighting and is read-only.
@@ -564,6 +576,7 @@ emacs -Q --batch -L /path/to/janet-mode -L emacs \
   -l lyric-mode-tests -f ert-run-tests-batch-and-exit
 ```
 
-The terminal harness uses a temporary socket, an ephemeral node port, and no
-init script. It checks command, file, stdin, REPL, and subscription output on
-pipes and pseudo-terminals, and keeps the user's runtime and REPL history intact.
+The terminal harness uses a temporary socket, an ephemeral node port, and the
+chat service as an init script without calling external commands. It checks
+startup, command, file, stdin, REPL, and subscription output on pipes and
+pseudo-terminals, and keeps the user's runtime and REPL history intact.

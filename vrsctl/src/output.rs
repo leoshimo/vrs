@@ -32,14 +32,7 @@ impl Output {
     }
 
     fn width(&self) -> usize {
-        // Query for each result so following subscriptions and the REPL resize.
-        self.width
-            .or_else(|| {
-                terminal_size::terminal_size_of(io::stdout())
-                    .map(|(terminal_size::Width(width), _)| usize::from(width))
-                    .filter(|width| *width > 0)
-            })
-            .unwrap_or(80)
+        self.width.unwrap_or(lyric::DEFAULT_PRINT_WIDTH)
     }
 
     pub(crate) fn render(&self, form: &Form) -> String {

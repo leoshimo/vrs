@@ -12,7 +12,7 @@
   :type 'string
   :group 'lyric)
 
-(defcustom lyric-result-width 80
+(defcustom lyric-result-width 90
   "Target column width for evaluated values."
   :type '(integer :tag "Columns")
   :group 'lyric)
@@ -169,16 +169,49 @@ raw block end with a literal quote without confusing Emacs sexp navigation."
             (syntax-ppss-flush-cache start)))))))
 
 (defun lyric--last-sexp-bounds ()
-  "Return the bounds of the Lyric expression preceding point.
+  "Return the bounds of the Lyric expression at a closing paren or before point.
 
 Unlike `pp-last-sexp', this preserves the exact source text, including raw
 block strings, rather than reading and printing it as Emacs Lisp."
   (save-excursion
+    (when (and (eq (char-after) ?\))
+               (not (nth 3 (syntax-ppss)))
+               (not (nth 4 (syntax-ppss))))
+      (forward-char))
     (skip-chars-backward " \t\r\n")
     (let ((end (point)))
       (backward-sexp)
       (goto-char (car (lyric--prefixes-before (point))))
       (cons (point) end))))
+
+(defun lyric--run-region (start end command output errors)
+  "Send START to END to COMMAND, collecting OUTPUT and ERRORS.
+Wait interruptibly; quitting terminates the client, including when it is
+waiting for a service loop.  The shell execs the client so it cannot be
+orphaned when Emacs deletes the process."
+  (let ((inhibit-quit nil)
+        (stderr (make-pipe-process :name "Lyric errors" :buffer errors
+                                   :noquery t :sentinel #'ignore))
+        process)
+    (unwind-protect
+        (progn
+          (setq process
+                (make-process :name "Lyric evaluation" :buffer output
+                              :command (list shell-file-name shell-command-switch
+                                             (concat "exec " command))
+                              :connection-type 'pipe :coding 'utf-8-unix
+                              :stderr stderr :noquery t :sentinel #'ignore))
+          (process-send-region process start end)
+          (process-send-eof process)
+          (while (process-live-p process)
+            (accept-process-output process 0.05))
+          ;; Drain final output from both pipes before inspecting the status.
+          (while (accept-process-output process 0.01))
+          (while (accept-process-output stderr 0.01))
+          (process-exit-status process))
+      (dolist (child (list process stderr))
+        (when (and child (process-live-p child))
+          (delete-process child))))))
 
 (defun lyric--last-sexp-source ()
   "Return the exact Lyric expression preceding point."
@@ -199,30 +232,33 @@ or when SOURCE-RESULT is non-nil."
                          lyric-result-width
                          (if (or replace source-result) "" " --raw"))))
     (unwind-protect
-        (let ((status (shell-command-on-region
-                       start end command output nil errors)))
-          (unless (equal status 0)
-            (display-buffer errors)
-            (user-error "Lyric evaluation failed (status %s); see *Lyric Errors*" status))
-          (let ((text (with-current-buffer output (buffer-string))))
-            (if replace
-                ;; Only remove vrsctl's final record separator. Do not trim
-                ;; whitespace belonging to a raw/opaque result.
-                (let ((text (string-remove-suffix "\n" text)))
-                  (atomic-change-group
-                    (delete-region start end)
-                    (goto-char start)
-                    (let ((begin (point)))
-                      (insert text)
-                      (indent-region begin (point)))))
-              (with-current-buffer (get-buffer-create "*Lyric Result*")
-                (let ((inhibit-read-only t))
-                  (erase-buffer)
-                  (insert text)
-                  (lyric-mode)
-                  (setq buffer-read-only t)
-                  (goto-char (point-min)))
-                (display-buffer (current-buffer))))))
+        (progn
+          (with-current-buffer errors
+            (let ((inhibit-read-only t)) (erase-buffer)))
+          (message "Evaluating Lyric (C-g to cancel)…")
+          (let ((status (lyric--run-region start end command output errors)))
+            (unless (equal status 0)
+              (display-buffer errors)
+              (user-error "Lyric evaluation failed (status %s); see *Lyric Errors*" status))
+            (let ((text (with-current-buffer output (buffer-string))))
+              (if replace
+                  ;; Only remove vrsctl's final record separator. Do not trim
+                  ;; whitespace belonging to a raw/opaque result.
+                  (let ((text (string-remove-suffix "\n" text)))
+                    (atomic-change-group
+                      (delete-region start end)
+                      (goto-char start)
+                      (let ((begin (point)))
+                        (insert text)
+                        (indent-region begin (point)))))
+                (with-current-buffer (get-buffer-create "*Lyric Result*")
+                  (let ((inhibit-read-only t))
+                    (erase-buffer)
+                    (insert text)
+                    (lyric-mode)
+                    (setq buffer-read-only t)
+                    (goto-char (point-min)))
+                  (display-buffer (current-buffer)))))))
       (kill-buffer output))))
 
 (defun lyric-eval-buffer (editor-format)
@@ -233,7 +269,7 @@ With prefix argument EDITOR-FORMAT, request editor-formatted output."
   (lyric--eval (point-min) (point-max) nil editor-format))
 
 (defun lyric-eval-last-sexp (replace)
-  "Evaluate the Lyric expression preceding point.
+  "Evaluate the Lyric expression at its closing paren or preceding point.
 
 With prefix argument REPLACE, replace the expression with its result."
   (interactive "P")
@@ -248,7 +284,7 @@ With prefix argument REPLACE, replace the region with its result."
   (lyric--eval start end replace))
 
 (defun lyric-macroexpand-last-sexp (repeat-outer)
-  "Display one expansion of the preceding Lyric form without running its result.
+  "Display one expansion of the Lyric form at or before point without running it.
 With prefix REPEAT-OUTER, expand the outermost call repeatedly.  This uses the
 macro namespace of the vrsctl connection; for custom definitions, evaluate a
 region containing both the definitions and an explicit macroexpand_1 call."
