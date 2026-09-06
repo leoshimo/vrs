@@ -57,6 +57,7 @@
 (bind_srv :os_window)
 (bind_srv :os_maps)
 (bind_srv :os_notes)
+(bind_srv :antinote)
 (bind_srv :obsidian)
 (bind_srv :eden)
 (bind_srv :youtube)
@@ -129,7 +130,7 @@
   # One row per command, not one row per captured object. Window commands live
   # on the Windows page; its secondary actions can fill additional arguments.
   (map (filter (interactive_commands) (fn (name)
-    (if (contains? '(focus_window move_window) name) false
+    (if (contains? '(focus_window move_window open_antinote_note) name) false
       (let ((args (get (meta (eval name)) :args)))
         (if (empty? args) true
           (if (not? (empty? (filter context (fn (entity) (accepts_context? name entity))))) true
@@ -382,6 +383,25 @@
                                                        (list 'open_url (get h :url))
                                                        (get h :domain_expansion)))))))
 
+(def antinote_cache '())
+
+(defn antinote_page ()
+  (set antinote_cache (get_antinote_notes))
+  (+ (push_page 'antinote_items "Search Antinote notes…")
+     '(:title "Antinote")))
+
+(defn antinote_items (query)
+  (map (fuzzy_match query antinote_cache display) (fn (note)
+    (def excerpt (match_excerpt query (get note :content)))
+    (+ (make_item (get note :title) (list 'open_antinote_note (list 'quote note)))
+       (list :subtitle (if excerpt excerpt (get note :modified))
+             :aside (if excerpt
+                      (if (get note :modified) (get (split " " (get note :modified)) 0) nil)
+                      nil)
+             :actions (list
+               (make_item "Copy Note" (list 'set_clipboard (get note :content)))
+               (make_item "Open Antinote" '(open_antinote))))))))
+
 (defn github_items (query)
   "(github_items QUERY) - Returns markup for github items"
   (if (not? (contains? query "gh:"))
@@ -460,7 +480,8 @@
          (make_item "Photos" '(open_app "Photos"))
 
          (make_item "Distill" '(open_app "Distill"))
-         (make_item "Antinote" '(open_app "Antinote"))
+         (make_item "Antinote" '(open_antinote))
+         (make_item "Browse Antinote" '(antinote_page))
          (make_item "Patina" '(open_app "Patina"))
 
          (make_item "Marketplace" '(open_url "https://www.facebook.com/marketplace"))

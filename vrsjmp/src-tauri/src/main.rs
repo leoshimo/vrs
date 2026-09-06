@@ -356,6 +356,15 @@ mod tests {
             (defn is_personal? () false)
             (defn feedbin_call (message) '((:title "Saved article" :url "https://example.test/")))
             (defn open_url (url) :opened)
+            (def antinote_reads 0)
+            (defn get_antinote_notes ()
+              (set antinote_reads (+ antinote_reads 1))
+              '((:antinote/note :id "note-1" :title "Meeting notes" :content "Meeting notes\nbody-only-needle" :modified "2026-09-05")))
+            (defn open_antinote () :opened)
+            (defn open_antinote_note (note)
+              "Open Antinote Note"
+              (interactive :antinote/note)
+              (if (not? (eq? (get note :id) "note-1")) (error "Wrong note")))
             (defn get_windows () '((:os/window :id 7 :app "Safari" :title "Documentation")))
             (defn focus_window (window) "Focus Window" (interactive :os/window) :focused)
             (defn get_displays () '((:os/display :id 42 :index 2 :title "Display 2")))
@@ -366,6 +375,7 @@ mod tests {
                 (error "Wrong window or destination")))
             (set_entity_completions :os/window 'get_windows)
             (set_entity_completions :os/display 'get_displays)
+            (set_entity_completions :antinote/note 'get_antinote_notes)
             (spawn_srv :vrsjmp :interface '(get_items on_click))
         "#,
             )
@@ -528,9 +538,15 @@ mod tests {
                 .contents
                 .unwrap()
         }
-        for (entry, callback, query, title) in
-            [("Windows", "call_items", "Safari", "Documentation")]
-        {
+        for (entry, callback, query, title) in [
+            (
+                "Browse Antinote",
+                "antinote_items",
+                "body-only-needle",
+                "Meeting notes",
+            ),
+            ("Windows", "call_items", "Safari", "Documentation"),
+        ] {
             let items = protocol::items(
                 ask(
                     &mut client,
@@ -562,6 +578,18 @@ mod tests {
                 )
                 .unwrap();
                 assert_eq!(results[0].title, title);
+                if entry == "Browse Antinote" {
+                    if query.is_empty() {
+                        assert!(results[0].subtitle_spans.is_empty());
+                        assert_eq!(results[0].subtitle.as_deref(), Some("2026-09-05"));
+                    } else {
+                        assert!(results[0]
+                            .subtitle_spans
+                            .iter()
+                            .any(|span| span.matched && span.text == "body-only-needle"));
+                        assert_eq!(results[0].aside.as_deref(), Some("2026-09-05"));
+                    }
+                }
                 if ["Browser History", "Browse Antinote", "Windows"].contains(&entry) {
                     assert!(!results[0].actions.is_empty());
                 }
@@ -616,5 +644,8 @@ mod tests {
                 }
             }
         }
+        ask(&mut client, protocol::action_request(
+            "(:on_click (if (not? (eq? (list antinote_reads) '(1))) (error \"Repeated source reads\")))"
+        ).unwrap()).await;
     }
 }
