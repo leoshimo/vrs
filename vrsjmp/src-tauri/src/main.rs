@@ -369,6 +369,8 @@ mod tests {
               "Open Antinote Note"
               (interactive :antinote/note)
               (if (not? (eq? (get note :id) "note-1")) (error "Wrong note")))
+            (defn get_obsidian_files () '((:title "Design.md" :file "./projects/vrs/Design.md")))
+            (defn open_obsidian_file (path) :opened)
             (defn get_running_apps () '((:os/app :pid 123 :title "Safari" :bundle_id "com.apple.Safari" :started_at "100")))
             (defn force_quit_app (app)
               "Force Quit" (interactive :os/app)
@@ -571,6 +573,12 @@ mod tests {
             ),
             ("Windows", "call_items", "Safari", "Documentation"),
             ("Force Quit", "call_items", "com.apple.Safari", "Safari"),
+            (
+                "Browse Obsidian",
+                "obsidian_items",
+                "projects/vrs",
+                "Design.md",
+            ),
         ] {
             let items = protocol::items(
                 ask(
