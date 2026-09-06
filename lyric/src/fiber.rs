@@ -259,6 +259,27 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
             Inst::PushConst(form) => {
                 self.stack.push(form);
             }
+            Inst::ListPush | Inst::ListExtend => {
+                let value = self.stack.pop().ok_or_else(|| {
+                    Error::UnexpectedStack("Missing list construction value".into())
+                })?;
+                let Some(Val::List(list)) = self.stack.last_mut() else {
+                    return Err(Error::UnexpectedStack(
+                        "Missing list construction destination".into(),
+                    ));
+                };
+                if matches!(inst, Inst::ListExtend) {
+                    let Val::List(values) = value else {
+                        return Err(Error::UnexpectedArguments(format!(
+                            "unquote-splicing expects a list, got {}",
+                            value
+                        )));
+                    };
+                    list.extend(values);
+                } else {
+                    list.push(value);
+                }
+            }
             Inst::DefSym(s) => {
                 let value = self.stack.last().ok_or(Error::UnexpectedStack(
                     "Stack should contain value to bind".to_string(),

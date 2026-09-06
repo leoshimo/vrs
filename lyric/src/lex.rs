@@ -15,6 +15,9 @@ pub enum Token {
     ParenLeft,
     ParenRight,
     Quote,
+    Quasiquote,
+    Unquote,
+    UnquoteSplicing,
 }
 
 impl std::fmt::Display for Token {
@@ -29,6 +32,9 @@ impl std::fmt::Display for Token {
             Token::ParenLeft => write!(f, "("),
             Token::ParenRight => write!(f, ")"),
             Token::Quote => write!(f, "'"),
+            Token::Quasiquote => write!(f, "`"),
+            Token::Unquote => write!(f, ","),
+            Token::UnquoteSplicing => write!(f, ",@"),
         }
     }
 }
@@ -82,6 +88,9 @@ impl Tokens<'_> {
             '(' => Ok(Token::ParenLeft),
             ')' => Ok(Token::ParenRight),
             '\'' => Ok(Token::Quote),
+            '`' => Ok(Token::Quasiquote),
+            ',' if self.inner.next_if_eq(&'@').is_some() => Ok(Token::UnquoteSplicing),
+            ',' => Ok(Token::Unquote),
             _ => Err(Error::IncompleteExpression(format!(
                 "Unexpected punctuation - {ch}"
             ))),
@@ -301,7 +310,7 @@ fn is_symbol_delimiter(ch: &char) -> bool {
 
 /// Return whether or not token is an interesting punctuation
 fn is_punct(ch: &char) -> bool {
-    *ch == '(' || *ch == ')' || *ch == '\''
+    matches!(ch, '(' | ')' | '\'' | '`' | ',')
 }
 
 #[cfg(test)]

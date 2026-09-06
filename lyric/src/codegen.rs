@@ -23,6 +23,10 @@ where
     MakeFunc,
     /// Call func by popping N forms and function object off stack, and pushing result
     CallFunc(usize),
+    /// Append TOS to the list immediately below it, leaving the list on stack.
+    ListPush,
+    /// Splice the elements of TOS into the list below it; TOS must be a list.
+    ListExtend,
     /// Pop the top of the stack
     PopTop,
     /// Jump forward N inst
@@ -57,6 +61,10 @@ pub fn compile<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Bytecode<T, L>> {
                     "lambda" => return compile_lambda(args),
                     "let" => return compile_let(args),
                     "quote" => return compile_quote(args),
+                    "quasiquote" => return crate::quasiquote::compile(args),
+                    "unquote" | "unquote-splicing" => {
+                        return Err(Error::InvalidExpression(format!("{s} outside quasiquote")))
+                    }
                     "set" => return compile_set(args),
                     "try" => return compile_try(args),
                     "eval" => return compile_eval(args),
@@ -517,6 +525,8 @@ impl<T: Extern, L: Locals> std::fmt::Display for Inst<T, L> {
             Inst::SetSym(s) => write!(f, "setsym {s}"),
             Inst::MakeFunc => write!(f, "makefn"),
             Inst::CallFunc(nargs) => write!(f, "callfn {nargs}"),
+            Inst::ListPush => write!(f, "listpush"),
+            Inst::ListExtend => write!(f, "listextend"),
             Inst::PopTop => write!(f, "poptop"),
             Inst::JumpFwd(o) => write!(f, "jmpfwd {o}"),
             Inst::JumpBck(o) => write!(f, "jmpbck {o}"),

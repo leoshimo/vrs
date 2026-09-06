@@ -3,6 +3,7 @@ mod error;
 mod lex;
 mod parse;
 mod pretty;
+mod quasiquote;
 mod run;
 
 pub mod builtin;
