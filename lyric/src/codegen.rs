@@ -73,8 +73,14 @@ pub fn compile<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Bytecode<T, L>> {
                     "yield" => return compile_yield(args),
                     "loop" => return compile_loop(args),
                     "match" => return compile_match(args),
-                    name if name.ends_with('!') => return Err(Error::Macro(format!("unprepared macro invocation {name}"))),
-                    "defmacro" | "for_syntax" => return Err(Error::Macro("phase definitions require source preparation".into())),
+                    name if name.ends_with('!') => {
+                        return Err(Error::Macro(format!("unprepared macro invocation {name}")))
+                    }
+                    "defmacro" | "for_syntax" => {
+                        return Err(Error::Macro(
+                            "phase definitions require source preparation".into(),
+                        ))
+                    }
                     _ => (),
                 }
             }
