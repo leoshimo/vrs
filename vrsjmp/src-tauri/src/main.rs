@@ -356,7 +356,11 @@ mod tests {
             (defn is_personal? () false)
             (defn feedbin_call (message) '((:title "Saved article" :url "https://example.test/")))
             (defn open_url (url) :opened)
+            (def history_reads 0)
             (def antinote_reads 0)
+            (defn refresh_safari_history () (set history_reads (+ history_reads 1)))
+            (defn get_safari_history ()
+              '((:title "History article" :url "https://history.example.test/" :visited "2026-09-05 12:00")))
             (defn get_antinote_notes ()
               (set antinote_reads (+ antinote_reads 1))
               '((:antinote/note :id "note-1" :title "Meeting notes" :content "Meeting notes\nbody-only-needle" :modified "2026-09-05")))
@@ -554,6 +558,12 @@ mod tests {
         }
         for (entry, callback, query, title) in [
             (
+                "Browser History",
+                "browser_history_items",
+                "history.example.test",
+                "History article",
+            ),
+            (
                 "Browse Antinote",
                 "antinote_items",
                 "body-only-needle",
@@ -660,7 +670,7 @@ mod tests {
             }
         }
         ask(&mut client, protocol::action_request(
-            "(:on_click (if (not? (eq? (list antinote_reads) '(1))) (error \"Repeated source reads\")))"
+            "(:on_click (if (not? (eq? (list history_reads antinote_reads) '(1 1))) (error \"Repeated source reads\")))"
         ).unwrap()).await;
         // Task capture strips only the leading marker and surrounding whitespace.
         let safari_context = r#"(((:os/window :app "Safari" :title "Example Domain")
