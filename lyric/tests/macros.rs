@@ -41,36 +41,65 @@ async fn nested_expression_positions_and_templates() {
             .unwrap(),
         Value::from_expr("(quote (no!))").unwrap()
     );
-    assert!(eval("(if false (missing!) nil)").await.is_err());
-    assert!(eval("(lambda () (defmacro no () nil))").await.is_err());
+    assert_eq!(eval("(if false (missing!) nil)").await.unwrap(), Value::Nil);
+    assert!(eval("(lambda () (defmacro no () nil))").await.is_ok());
 }
 
 #[tokio::test]
-async fn redefinition_is_compile_time_except_deferred_eval() {
+async fn redefinition_affects_existing_functions_at_the_next_call() {
     let code = "(begin (defmacro m () 1) (defn old () (m!)) (defn deferred () (try (m!))) (defmacro m () 2) (defn fresh () (m!)) (list (old) (fresh) (deferred) (eval '(m!))))";
     assert_eq!(
         eval(code).await.unwrap(),
-        Value::from_expr("(1 2 2 2)").unwrap()
+        Value::from_expr("(2 2 2 2)").unwrap()
     );
 }
 
 #[tokio::test]
-async fn helper_snapshots_are_explicit_and_immutable() {
-    let code = "(begin (for_syntax (defn helper () 1)) (defmacro m () (helper)) (for_syntax (defn helper () 2)) (def first (m!)) (defmacro m () (helper)) (list first (m!)))";
+async fn ordinary_helpers_and_captured_state_are_available() {
+    let code = "(begin (defn helper () 1) (defmacro m () (helper))
+      (defn helper () 2) (def first (m!)) (list first (m!)))";
     assert_eq!(
         eval(code).await.unwrap(),
-        Value::from_expr("(1 2)").unwrap()
+        Value::from_expr("(2 2)").unwrap()
     );
-    assert!(eval("(begin (def local 1) (defmacro m () local) (m!))")
+    assert_eq!(
+        eval("(begin (def local 1) (defmacro m () local) (m!))")
+            .await
+            .unwrap(),
+        Value::Int(1)
+    );
+    // The old wrapper remains compatible, but no longer creates a separate phase.
+    assert_eq!(
+        eval(
+            "(begin (for_syntax (def n 0) (defn bump () (set n (+ n 1))))
+      (defmacro m () (bump)) (list (m!) n))"
+        )
         .await
-        .is_err());
-    assert!(eval(
-        "(begin (for_syntax (def n 0) (defn bump () (set n (+ n 1)))) (defmacro m () (bump)) (m!))"
-    )
-    .await
-    .unwrap_err()
-    .to_string()
-    .contains("captured phase binding"));
+        .unwrap(),
+        Value::from_expr("(1 1)").unwrap()
+    );
+}
+
+#[tokio::test]
+async fn expansion_runs_at_each_executed_call_and_can_inspect_caller_locals() {
+    let source = "(begin
+      (def expansions 0)
+      (def name 10)
+      (defn helper () name)
+      (defmacro inspect (expr)
+        (set expansions (+ expansions 1))
+        (list 'quote (list (helper) (eval_caller expr))))
+      (defn run (name) (inspect! name))
+      (list expansions (run 20) (run 30) expansions))";
+    assert_eq!(
+        eval(source).await.unwrap(),
+        Value::from_expr("(0 (10 20) (10 30) 2)").unwrap()
+    );
+    assert!(eval("(eval_caller 'name)")
+        .await
+        .unwrap_err()
+        .to_string()
+        .contains("only available during macro expansion"));
 }
 
 #[tokio::test]
@@ -79,11 +108,9 @@ async fn failed_redefinition_is_atomic_and_errors_are_catchable() {
 }
 
 #[tokio::test]
-async fn validation_and_phase_effect_guards() {
+async fn macro_signature_and_source_result_validation() {
     for source in [
         "(begin (defmacro m () (lambda () 1)) (m!))",
-        "(begin (defmacro m () (yield 42)) (m!))",
-        "(begin (defmacro m () (dbg 42)) (m!))",
         "(begin (defmacro m (x & xs more) x) (m! 1))",
         "(begin (defmacro m (x) x) (m!))",
         "(begin (defmacro m (x) x) (m! 1 2))",
@@ -93,15 +120,17 @@ async fn validation_and_phase_effect_guards() {
 }
 
 #[tokio::test]
-async fn phase_environment_excludes_runtime_capabilities() {
-    for source in [
-        "(begin (def host dbg) (defmacro m () (apply host '(42))) (m!))",
-        "(begin (defmacro m () (eval '(dbg 42))) (m!))",
-        "(for_syntax (def printer dbg))",
-    ] {
-        let error = eval(source).await.unwrap_err().to_string();
-        assert!(error.contains("Undefined symbol"), "{source}: {error}");
-    }
+async fn runtime_effects_work_but_macro_inputs_remain_source_data() {
+    assert_eq!(
+        eval(
+            "(begin (def n 0) (defn effect () (set n (+ n 1)))
+      (defmacro m () (effect) '(set n 99))
+      (macroexpand_1 '(m!)) n)"
+        )
+        .await
+        .unwrap(),
+        Value::Int(1)
+    );
     let error = eval("(begin (defmacro identity (x) x) (macroexpand_1 (list 'identity! dbg)))")
         .await
         .unwrap_err()
@@ -109,8 +138,28 @@ async fn phase_environment_excludes_runtime_capabilities() {
     assert!(error.contains("expected source data"), "{error}");
 }
 
+#[test]
+fn transformers_suspend_and_resume_on_the_calling_fiber() {
+    let mut fiber: Fiber<Void, ()> = Fiber::from_expr(
+        "(begin
+      (defmacro m (expression) (yield :expanding) expression)
+      (let ((x 42)) (m! x)))",
+        Env::standard(),
+        (),
+    )
+    .unwrap();
+    assert_eq!(
+        fiber.start().unwrap(),
+        lyric::Signal::Yield(Value::keyword("expanding"))
+    );
+    assert_eq!(
+        fiber.resume(Ok(Value::Nil)).unwrap(),
+        lyric::Signal::Done(Value::Int(42))
+    );
+}
+
 #[tokio::test]
-async fn phase_native_aliases_and_compiler_metadata_work() {
+async fn expansion_native_aliases_and_compiler_metadata_work() {
     let source = "(begin
       (for_syntax
         (def mapper map)
@@ -124,14 +173,14 @@ async fn phase_native_aliases_and_compiler_metadata_work() {
 }
 
 #[tokio::test]
-async fn phase_native_allocation_limits_apply_through_aliases() {
+async fn expansion_native_allocation_limits_apply_through_aliases() {
     let grow_list = "(set xs (concat xs xs)) ".repeat(17);
     let source = format!(
         "(begin (defmacro m () (def xs '(0)) {grow_list}
           (apply map (list xs (fn (x) x)))) (m!))"
     );
     let error = eval(&source).await.unwrap_err().to_string();
-    assert!(error.contains("phase map size limit"), "{error}");
+    assert!(error.contains("expansion map size limit"), "{error}");
 
     let grow_string = "(set sep (str sep sep)) ".repeat(19);
     let source = format!(
@@ -139,7 +188,7 @@ async fn phase_native_allocation_limits_apply_through_aliases() {
           (apply join (list sep \"\" \"\"))) (m!))"
     );
     let error = eval(&source).await.unwrap_err().to_string();
-    assert!(error.contains("phase join size limit"), "{error}");
+    assert!(error.contains("expansion join size limit"), "{error}");
 }
 
 #[tokio::test]

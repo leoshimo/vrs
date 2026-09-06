@@ -11,6 +11,14 @@ where
 {
     /// Prepare and run one source unit in the current process macro namespace.
     Prepare(Val<T, L>),
+    /// Expand source on the stack; true stops after one outer invocation.
+    Expand(bool),
+    /// Check that a transformer returned bounded, readable source.
+    ValidateExpansion,
+    /// Register a lexical transformer in the process's macro namespace.
+    DefineMacro(Val<T, L>),
+    /// Evaluate source on the stack in the active macro invocation's caller scope.
+    EvalCaller,
     /// Push constant form onto stack
     PushConst(Val<T, L>),
     /// Push value bound to given symbol onto stack
@@ -74,13 +82,15 @@ pub fn compile<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Bytecode<T, L>> {
                     "loop" => return compile_loop(args),
                     "match" => return compile_match(args),
                     name if name.ends_with('!') => {
-                        return Err(Error::Macro(format!("unprepared macro invocation {name}")))
+                        return Ok(vec![
+                            Inst::PushConst(v.clone()),
+                            Inst::Expand(false),
+                            Inst::Eval(false),
+                        ])
                     }
-                    "defmacro" | "for_syntax" => {
-                        return Err(Error::Macro(
-                            "phase definitions require source preparation".into(),
-                        ))
-                    }
+                    "defmacro" => return Ok(vec![Inst::DefineMacro(v.clone())]),
+                    // Compatibility spelling; helpers are ordinary runtime definitions now.
+                    "for_syntax" => return compile_begin(args),
                     _ => (),
                 }
             }
@@ -482,6 +492,7 @@ fn compile_match<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T,
         "match expects at least one argument".to_string(),
     ))?;
 
+    let temporary = Val::symbol(&format!("match__{}", nanoid::nanoid!(16)));
     let cond_clauses: Vec<Val<T, L>> = clauses
         .iter()
         .map(|c| {
@@ -504,7 +515,7 @@ fn compile_match<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T,
                     Val::symbol("ok?"),
                     Val::List(vec![
                         Val::symbol("try"),
-                        Val::List(vec![Val::symbol("def"), pat, Val::symbol("_expr")]),
+                        Val::List(vec![Val::symbol("def"), pat, temporary.clone()]),
                     ]),
                 ]),
                 body,
@@ -514,7 +525,7 @@ fn compile_match<T: Extern, L: Locals>(args: &[Val<T, L>]) -> Result<Bytecode<T,
 
     let ast = Val::List(vec![
         Val::symbol("let"),
-        Val::List(vec![Val::List(vec![Val::symbol("_expr"), expr.clone()])]),
+        Val::List(vec![Val::List(vec![temporary.clone(), expr.clone()])]),
         Val::List(
             std::iter::once(Val::symbol("cond"))
                 .chain(cond_clauses.into_iter())
@@ -529,6 +540,10 @@ impl<T: Extern, L: Locals> std::fmt::Display for Inst<T, L> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Inst::Prepare(form) => write!(f, "prepare {form}"),
+            Inst::DefineMacro(form) => write!(f, "defmacro {form}"),
+            Inst::Expand(once) => write!(f, "expand once={once}"),
+            Inst::ValidateExpansion => write!(f, "validate_expansion"),
+            Inst::EvalCaller => write!(f, "eval_caller"),
             Inst::PushConst(c) => write!(f, "pushco {c}"),
             Inst::GetSym(s) => write!(f, "getsym {s}"),
             Inst::DefSym(s) => write!(f, "defsym {s}"),

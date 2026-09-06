@@ -135,7 +135,10 @@ impl Program {
         self
     }
 
-    pub fn macro_env(mut self, macros: lyric::macros::MacroEnv) -> Self {
+    pub fn macro_env(
+        mut self,
+        macros: lyric::macros::MacroEnv<crate::Extern, crate::Locals>,
+    ) -> Self {
         self.env.set_macro_env(macros);
         self
     }

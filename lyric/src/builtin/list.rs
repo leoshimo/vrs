@@ -105,7 +105,7 @@ pub fn map_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
         func: |fiber, args| match args {
             [Val::List(l), val] if val.is_callable() => {
                 if fiber.is_expanding() && l.len() > 100_000 {
-                    return Err(Error::Macro("phase map size limit exceeded".into()));
+                    return Err(Error::Macro("expansion map size limit exceeded".into()));
                 }
                 let mut bc = vec![Inst::GetSym(SymbolId::from("list"))];
                 for elem in l {

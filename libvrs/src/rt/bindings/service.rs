@@ -327,16 +327,14 @@ fn adapt_service(name: &str, args: &[Val]) -> Result<NativeFnOp> {
 /// into each process. No registry operations execute while loading definitions.
 pub(crate) fn install_service_library(env: &mut crate::Env) {
     use std::sync::OnceLock;
-    static LIBRARY: OnceLock<(lyric::macros::MacroEnv, Vec<(SymbolId, Val)>)> = OnceLock::new();
+    type Macros = lyric::macros::MacroEnv<crate::Extern, crate::Locals>;
+    static LIBRARY: OnceLock<(Macros, Vec<(SymbolId, Val)>)> = OnceLock::new();
     let (macros, definitions) = LIBRARY.get_or_init(|| {
-        let mut macros = lyric::macros::MacroEnv::default();
-        macros
-            .load(include_str!("../stdlib/service-macros.ll"))
-            .expect("standard service macros must load");
-        let forms = lyric::parse_script(include_str!("../stdlib/services.ll"))
-            .expect("standard service functions must parse");
+        let source = concat!(include_str!("../stdlib/service-macros.ll"), "\n", include_str!("../stdlib/services.ll"));
+        let forms = lyric::parse_script(source).expect("standard service library must parse");
         let names: Vec<_> = forms
             .iter()
+            .filter(|form| matches!(form, lyric::Form::List(items) if items.first() == Some(&lyric::Form::symbol("defn"))))
             .map(|form| match form {
                 lyric::Form::List(items) => match &items[1] {
                     lyric::Form::Symbol(name) => name.clone(),
@@ -373,6 +371,8 @@ pub(crate) fn install_service_library(env: &mut crate::Env) {
                 (name, value)
             })
             .collect();
+        let mut macros = root.macro_env();
+        macros.use_global_scope();
         (macros, definitions)
     });
     env.set_macro_env(macros.clone());

@@ -22,7 +22,6 @@ pub struct Fiber<T: Extern, L: Locals> {
     stack: Vec<Val<T, L>>,
     global: Arc<Mutex<Env<T, L>>>,
     locals: L,
-    phase_budget: Option<crate::macros::BudgetRef>,
 }
 
 /// The status of fiber
@@ -74,6 +73,14 @@ struct CallFrame<T: Extern, L: Locals> {
     /// Length of callframe of fiber to unwind to on error, if any
     unwind_cf_len: Option<usize>,
     expansion_budget: Option<crate::macros::BudgetRef>,
+    transformer: Option<Expansion<T, L>>,
+}
+
+/// Kept on the transformer frame, including across yields and async suspension.
+#[derive(Debug)]
+struct Expansion<T: Extern, L: Locals> {
+    caller: Arc<Mutex<Env<T, L>>>,
+    budget: crate::macros::BudgetRef,
 }
 
 impl<T: Extern, L: Locals> Fiber<T, L> {
@@ -91,7 +98,6 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
             )],
             global,
             locals,
-            phase_budget: None,
         }
     }
 
@@ -127,6 +133,12 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
             ));
         }
 
+        let val_result = val_result.and_then(|val| {
+            if self.is_expanding() {
+                crate::macros::check_expansion_value(&val)?;
+            }
+            Ok(val)
+        });
         let val = match val_result {
             Ok(val) => val,
             Err(e) => self.maybe_catch_err(e)?,
@@ -161,18 +173,22 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
         &mut self.locals
     }
 
-    pub(crate) fn expansion_budget(&self) -> crate::macros::BudgetRef {
-        self.phase_budget
-            .clone()
+    fn active_expansion(&self) -> Option<&Expansion<T, L>> {
+        self.cframes
+            .iter()
+            .rev()
+            .find_map(|frame| frame.transformer.as_ref())
+    }
+
+    fn expansion_budget(&self) -> crate::macros::BudgetRef {
+        self.active_expansion()
+            .map(|context| context.budget.clone())
+            .or_else(|| self.cf().expansion_budget.clone())
             .unwrap_or_else(crate::macros::budget)
     }
 
-    pub(crate) fn set_phase_budget(&mut self, budget: crate::macros::BudgetRef) {
-        self.phase_budget = Some(budget);
-    }
-
     pub(crate) fn is_expanding(&self) -> bool {
-        self.phase_budget.is_some()
+        self.active_expansion().is_some()
     }
 }
 
@@ -246,10 +262,10 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
 
     /// Run a single fetch-decode-execute cycle
     fn step(&mut self) -> Result<()> {
-        if let Some(budget) = &self.phase_budget {
-            crate::macros::tick(budget)?;
+        if let Some(expansion) = self.active_expansion() {
+            crate::macros::tick(&expansion.budget)?;
             if self.cframes.len() > 256 {
-                return Err(Error::Macro("phase call depth exceeded".into()));
+                return Err(Error::Macro("expansion call depth exceeded".into()));
             }
         }
         while self.cframes.len() > 1 && self.cf().at_return() {
@@ -280,22 +296,109 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
 
         match inst {
             Inst::Prepare(value) => {
-                let mut macros = self.global.lock().unwrap().macro_env();
-                let budget = self
-                    .phase_budget
-                    .clone()
-                    .or_else(|| self.cf().expansion_budget.clone())
-                    .unwrap_or_else(crate::macros::budget);
-                let code = macros.prepare(&value, &budget, self.phase_budget.is_some())?;
-                self.global.lock().unwrap().set_macro_env(macros);
-                let mut frame = CallFrame::from_bytecode(
+                let code = crate::compile(&value)?;
+                self.cframes.push(CallFrame::from_bytecode(
                     self.cur_env().clone(),
                     code,
                     self.stack.len(),
                     self.cf().unwind_cf_len,
-                );
-                frame.expansion_budget = Some(budget);
-                self.cframes.push(frame);
+                ));
+            }
+            Inst::DefineMacro(source) => {
+                let mut macros = self.global.lock().unwrap().macro_env();
+                let name = macros.define(&source, Some(self.cur_env().clone()))?;
+                self.global.lock().unwrap().set_macro_env(macros);
+                self.stack.push(Val::Symbol(name));
+            }
+            Inst::Expand(once) => {
+                let source = self
+                    .stack
+                    .last()
+                    .ok_or_else(|| Error::UnexpectedStack("missing macro source".into()))?;
+                if let Some(name) = crate::macros::head(source).filter(|name| name.ends_with('!')) {
+                    // Bounds apply to recursive expansion, not to the generated service loop.
+                    if self.cframes.len() > 256
+                        || self
+                            .cframes
+                            .iter()
+                            .filter(|f| f.transformer.is_some())
+                            .count()
+                            >= 64
+                    {
+                        return Err(Error::Macro("macro expansion depth exceeded".into()));
+                    }
+                    crate::macros::source_form(source)?;
+                    let definition = self.global.lock().unwrap().macro_env().get(name)?;
+                    let function = definition.function;
+                    let required = function.params.len() - usize::from(definition.rest);
+                    let args = &source.as_list()?[1..];
+                    if args.len() < required || (!definition.rest && args.len() != required) {
+                        return Err(Error::Macro(format!(
+                            "{name} expects {required}{} arguments, got {}",
+                            if definition.rest { " or more" } else { "" },
+                            args.len()
+                        )));
+                    }
+                    let mut values = args[..required].to_vec();
+                    if definition.rest {
+                        values.push(Val::List(args[required..].to_vec()));
+                    }
+                    let budget = self.expansion_budget();
+                    crate::macros::invocation(&budget)?;
+                    self.stack.pop();
+                    let caller = self.cur_env().clone();
+                    let mut env =
+                        Env::extend(&function.parent.unwrap_or_else(|| self.global.clone()));
+                    for (name, value) in function.params.into_iter().zip(values) {
+                        env.define(name, value);
+                    }
+                    let mut code = vec![Inst::ValidateExpansion];
+                    if !once {
+                        code.push(Inst::Expand(false));
+                    }
+                    let mut continuation = CallFrame::from_bytecode(
+                        caller.clone(),
+                        code,
+                        self.stack.len(),
+                        self.cf().unwind_cf_len,
+                    );
+                    continuation.expansion_budget = Some(budget.clone());
+                    let mut transformer = CallFrame::from_bytecode(
+                        Arc::new(Mutex::new(env)),
+                        function.code,
+                        self.stack.len(),
+                        self.cf().unwind_cf_len,
+                    );
+                    transformer.transformer = Some(Expansion { caller, budget });
+                    self.cframes.push(continuation);
+                    self.cframes.push(transformer);
+                }
+            }
+            Inst::ValidateExpansion => {
+                let value = self
+                    .stack
+                    .last()
+                    .ok_or_else(|| Error::UnexpectedStack("missing macro result".into()))?;
+                crate::macros::validate_result(value, &self.expansion_budget())?;
+            }
+            Inst::EvalCaller => {
+                let caller = self
+                    .active_expansion()
+                    .ok_or_else(|| {
+                        Error::Macro("eval_caller is only available during macro expansion".into())
+                    })?
+                    .caller
+                    .clone();
+                let value = self
+                    .stack
+                    .pop()
+                    .ok_or_else(|| Error::UnexpectedStack("missing caller expression".into()))?;
+                self.cframes.push(CallFrame::from_bytecode(
+                    caller,
+                    vec![Inst::Prepare(value)],
+                    self.stack.len(),
+                    self.cf().unwind_cf_len,
+                ));
             }
             Inst::PushConst(form) => {
                 self.stack.push(form);
@@ -320,8 +423,8 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                 } else {
                     list.push(value);
                 }
-                if self.phase_budget.is_some() {
-                    crate::macros::check_phase_value(self.stack.last().unwrap())?;
+                if self.is_expanding() {
+                    crate::macros::check_expansion_value(self.stack.last().unwrap())?;
                 }
             }
             Inst::DefSym(s) => {
@@ -331,11 +434,6 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                 if reserved_callable(&s, value) {
                     return Err(Error::Macro(
                         "callable names ending in ! are reserved for macros".into(),
-                    ));
-                }
-                if self.cur_env().lock().unwrap().frozen {
-                    return Err(Error::Macro(
-                        "cannot define a captured phase binding".into(),
                     ));
                 }
                 self.cur_env()
@@ -455,14 +553,14 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                     }
                     Some(Val::NativeFn(n)) => {
                         let args = args.collect::<Vec<_>>();
-                        if self.phase_budget.is_some() {
-                            crate::macros::check_phase_values(&args)?;
+                        if self.is_expanding() {
+                            crate::macros::check_expansion_values(&args)?;
                         }
                         let v = (n.func)(self, &args)?;
                         match v {
                             NativeFnOp::Return(v) => {
-                                if self.phase_budget.is_some() {
-                                    crate::macros::check_phase_value(&v)?;
+                                if self.is_expanding() {
+                                    crate::macros::check_expansion_value(&v)?;
                                 }
                                 self.stack.push(v);
                             }
@@ -499,11 +597,6 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                         }
                     }
                     Some(Val::NativeAsyncFn(fun)) => {
-                        if self.phase_budget.is_some() {
-                            return Err(Error::Macro(
-                                "async calls are unavailable during expansion".into(),
-                            ));
-                        }
                         // TODO: Hack - pass to parent scope via stack
                         self.stack.push(Val::List(args.collect::<Vec<_>>()));
                         self.stack.push(Val::NativeAsyncFn(fun));
@@ -555,9 +648,6 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                 }
             }
             Inst::YieldTop => {
-                if self.phase_budget.is_some() {
-                    return Err(Error::Macro("yield is unavailable during expansion".into()));
-                }
                 self.status = Status::Paused;
             }
         };
@@ -605,6 +695,7 @@ impl<T: Extern, L: Locals> CallFrame<T, L> {
             stack_len,
             unwind_cf_len,
             expansion_budget: None,
+            transformer: None,
         }
     }
 

@@ -165,6 +165,18 @@ class TerminalTests(unittest.TestCase):
         self.assertEqual(self.pipe("-c", "(list (err? (try (plus_one! 1))) (when! true 42))"),
                          "(true 42)\n")
 
+    def test_service_expansion_contains_direct_match_and_round_trips(self):
+        source = """(begin
+          (defn echo (x) x)
+          (def exports '(echo))
+          (def code (macroexpand_1 '(srv! :test :interface exports)))
+          (list (pretty code) (eq? code (read (pretty code))) (ls_srv)))"""
+        output = self.pipe("-c", source)
+        self.assertIn("((:echo x) (echo x))", output)
+        self.assertIn("(_ '(:err \\\"Unrecognized message\\\"))", output)
+        self.assertNotIn("service_dispatch", output)
+        self.assertNotIn(":test", output.split("true", 1)[1])
+
     def test_init_service_and_nested_service_macros(self):
         source = '''(begin
           (bind_srv :chat)
