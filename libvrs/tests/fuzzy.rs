@@ -69,6 +69,36 @@ async fn exact_fields_win_without_title_only_priority_or_duplicate_rows() {
 }
 
 #[tokio::test]
+async fn excerpts_preserve_text_and_graphemes_and_clip_around_matches() {
+    assert_eq!(
+        eval(r#"(match_excerpt "needle" "Title\n  <b>needle</b> & body")"#).await,
+        Val::from_expr(r#"("Title <b>" (:match "needle") "</b> & body")"#).unwrap()
+    );
+    assert_eq!(
+        eval("(match_excerpt \"cafe\" \"🧑‍💻 cafe\u{301} notes\")").await,
+        Val::from_expr("(\"🧑‍💻 \" (:match \"cafe\u{301}\") \" notes\")").unwrap()
+    );
+    for query in ["", "absent", "!absent"] {
+        assert_eq!(
+            eval(&format!("(match_excerpt {query:?} \"note\")")).await,
+            Val::Nil
+        );
+    }
+    let content = format!("{}needle{}", "x".repeat(200), "z".repeat(200));
+    let result = eval(&format!("(match_excerpt \"needle\" {content:?})")).await;
+    assert_eq!(
+        result,
+        Val::List(vec![
+            Val::string("…"),
+            Val::string(&"x".repeat(32)),
+            Val::from_expr("(:match \"needle\")").unwrap(),
+            Val::string(&"z".repeat(122)),
+            Val::string("…"),
+        ])
+    );
+}
+
+#[tokio::test]
 async fn apply_preserves_data_and_supports_async_functions() {
     assert_eq!(
         eval(r#"(apply list '(name (:os/window :id 7) (not_a_call)))"#).await,
