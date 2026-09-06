@@ -252,6 +252,50 @@
       (goto-char (point-max))
       (should (equal (lyric--last-sexp-source) source)))))
 
+(ert-deftest lyric-macroexpand-wraps-exact-source-without-evaluating-it ()
+  (dolist (repeat '(nil t))
+    (with-temp-buffer
+      (let ((source "(when! true\n  (notify \"literal ` ,@x\"))")
+            captured)
+        (insert source)
+        (lyric-mode)
+        (goto-char (point-max))
+        (cl-letf (((symbol-function 'lyric--eval)
+                   (lambda (start end replace &optional _editor source-result)
+                     (should-not replace)
+                     (should source-result)
+                     (setq captured (buffer-substring-no-properties start end)))))
+          (lyric-macroexpand-last-sexp repeat))
+        (should (equal captured (format "(%s (quote %s))"
+                                        (if repeat "macroexpand" "macroexpand_1") source)))
+        (should (equal (buffer-string) source))))))
+
+(ert-deftest lyric-macroexpand-preserves-string-literal-syntax ()
+  (with-temp-buffer
+    (insert "\"literal\"")
+    (lyric-mode)
+    (goto-char (point-max))
+    (cl-letf (((symbol-function 'shell-command-on-region)
+               (lambda (start end command output &rest _)
+                 (should (equal (buffer-substring-no-properties start end)
+                                "(macroexpand_1 (quote \"literal\"))"))
+                 (should-not (string-match-p "--raw" command))
+                 (with-current-buffer output (insert "\"literal\"\n"))
+                 0))
+              ((symbol-function 'display-buffer) #'ignore))
+      (lyric-macroexpand-last-sexp nil))
+    (should (equal (buffer-string) "\"literal\""))
+    (with-current-buffer "*Lyric Result*"
+      (should (equal (buffer-string) "\"literal\"\n")))))
+
+(ert-deftest lyric-indents-macro-definitions-and-marked-call-bodies ()
+  (with-temp-buffer
+    (insert "(defmacro when (test & body)\n`(if ,test (begin ,@body) nil))\n(when! true\n(notify \"hello\"))")
+    (lyric-mode)
+    (indent-region (point-min) (point-max))
+    (should (equal (buffer-string)
+                   "(defmacro when (test & body)\n  `(if ,test (begin ,@body) nil))\n(when! true\n  (notify \"hello\"))"))))
+
 (provide 'lyric-mode-tests)
 
 ;;; lyric-mode-tests.el ends here

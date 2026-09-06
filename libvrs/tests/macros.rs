@@ -75,6 +75,31 @@ async fn child_macro_namespace_is_a_snapshot_and_message_data_stays_data() {
 }
 
 #[tokio::test]
+async fn host_lambdas_without_lexical_parents_inherit_process_macros() {
+    let worker = Val::Lambda(vrs::Lambda {
+        metadata: vec![],
+        doc: None,
+        params: vec![],
+        parent: None,
+        code: lyric::compile(&value("(send (find_srv :macro_parent) (eval '(m!)))")).unwrap(),
+    });
+    let source = Val::List(vec![
+        Val::symbol("begin"),
+        value("(register :macro_parent)"),
+        value("(defmacro m () 42)"),
+        Val::List(vec![Val::symbol("spawn"), worker]),
+        value("(recv)"),
+    ]);
+    let rt = Runtime::new("test");
+    let handle = rt.run(Program::from_val(source).unwrap()).await.unwrap();
+    let result = tokio::time::timeout(std::time::Duration::from_secs(2), handle.join())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(result.status.unwrap(), ProcessResult::Done(Val::Int(42)));
+}
+
+#[tokio::test]
 async fn source_scripts_register_macros_in_order() {
     let rt = Runtime::new("test");
     let program =

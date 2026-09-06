@@ -202,7 +202,38 @@ true                              # booleans are `true` or `false`
 (help recv)        # see documentation via `help`
 ```
 
-TODO: Examples for fibers, coroutines, yielding, infinite iterators, macros
+**Macros transform source forms before execution.**
+
+```lisp
+(defmacro unless (test & body)
+  `(if ,test nil (begin ,@body)))
+
+(unless! false (+ 20 22)) # => 42
+(macroexpand_1 '(unless! false (+ 20 22)))
+# => (if false nil (begin (+ 20 22)))
+```
+
+The marker belongs to the macro name inside the list: `(unless! ...)`.
+`macroexpand_1` expands one outer call; `macroexpand` repeats outer expansion
+until the head is ordinary code. Both accept source data and return source data;
+quote the call to avoid running its arguments. `pretty` formats the returned
+form, and a separate `eval` runs it deliberately.
+
+Macros have a separate, constrained expansion environment. Put shared helper
+functions in a top-level `(for_syntax ...)` block; runtime locals and services
+are not accessible while expanding. Use `gensym` for introduced local names.
+Definitions are process-local. Compiled functions retain their expansions until
+reevaluated; deferred `try`/`eval` compile against the current macro definitions.
+Expansion has instruction, invocation, nesting, and value-size limits. The
+reader accepts source nesting up to 256 levels. Macro definitions are top-level
+forms; generated names require explicit `gensym`, without automatic hygiene.
+
+In Emacs, `C-c C-m` displays one expansion of the preceding form; a prefix
+argument repeats outer expansion. Each evaluation command uses its own
+connection, so for custom macros evaluate their definitions and an explicit
+`macroexpand_1` call together in a region or file.
+
+TODO: Examples for fibers, coroutines, yielding, infinite iterators
 
 See [Lyric quotation and code templates](lyric/README.md#quotation-and-code-templates)
 for nesting, literal arguments, and the distinction between insertion and splicing.
@@ -306,7 +337,7 @@ Services are long-running processes that:
 - process messages in mailbox, which may update internal state, and respond to message sender
 
 Processes (including services) can *bind* to another service, and communicate over message passing.
-There are convenience macros to help define message passing stubs between processes.
+The `srv!` and `spawn_srv!` macros generate service control flow. `bind_srv` is an ordinary runtime function: it discovers the live exported interface and installs message-passing stubs in the current process.
 
 ```lyric
 # `register` - register a process under name in service registry
@@ -323,15 +354,15 @@ There are convenience macros to help define message passing stubs between proces
 (defn pong (y) y)
 (register :service_c :interface '(ping pong) :overwrite)
 
-# `srv` is a macro to:
+# `srv!` is a macro to:
 # - Register process under a identifiable name in registry via `register`
 # - Start a service loop (covered under "message passing")
 (defn echo (msg) msg)
-(srv :echo :interface '(echo))
+(srv! :echo :interface '(echo))
 
-# `srv` is blocking - but often it is more convenient to fork into a new service
-# `spawn_srv` is a macro to expand into `srv` inside a `spawn` block:
-(spawn_srv :echo :interface '(echo))
+# `srv!` is blocking - but often it is more convenient to fork into a new service
+# `spawn_srv!` is a macro to expand into `srv!` inside a `spawn` block:
+(spawn_srv! :echo :interface '(echo))
 
 # `bind_srv` can be used to define matching message-passing stubs within another process to a service process:
 (bind_srv :echo)    # defines `(echo msg)` in current process, which messages `:echo` service
@@ -370,7 +401,7 @@ The runtime has built-in global pubsub mechanism.
   (publish :count count))
 
 # Serve a counter service, with `increment` as exported interface:
-(spawn_srv :counter :interface '(increment))
+(spawn_srv! :counter :interface '(increment))
 ```
 
 ### Example: System Appearance Service
@@ -407,7 +438,7 @@ The runtime has built-in global pubsub mechanism.
   (set_darkmode (not? (is_darkmode))))
 
 # Fork into service exporting `toggle_darkmode` as service
-(spawn_srv :system_appearance :interface '(toggle_darkmode))
+(spawn_srv! :system_appearance :interface '(toggle_darkmode))
 ```
 
 ---

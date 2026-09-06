@@ -319,12 +319,15 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                 } else {
                     list.push(value);
                 }
+                if self.phase_budget.is_some() {
+                    crate::macros::check_phase_value(self.stack.last().unwrap())?;
+                }
             }
             Inst::DefSym(s) => {
                 let value = self.stack.last().ok_or(Error::UnexpectedStack(
                     "Stack should contain value to bind".to_string(),
                 ))?;
-                if s.as_str().ends_with('!') && value.is_callable() {
+                if reserved_callable(&s, value) {
                     return Err(Error::Macro(
                         "callable names ending in ! are reserved for macros".into(),
                     ));
@@ -353,6 +356,11 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
 
                 let mut env = self.cur_env().lock().unwrap();
                 for (s, v) in m.into_iter() {
+                    if reserved_callable(&s, &v) {
+                        return Err(Error::Macro(
+                            "callable names ending in ! are reserved for macros".into(),
+                        ));
+                    }
                     env.define(s, v.clone());
                 }
             }
@@ -360,6 +368,11 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                 let value = self.stack.last().ok_or(Error::UnexpectedStack(
                     "Stack should contain value to bind".to_string(),
                 ))?;
+                if reserved_callable(&s, value) {
+                    return Err(Error::Macro(
+                        "callable names ending in ! are reserved for macros".into(),
+                    ));
+                }
                 self.cur_env().lock().unwrap().set(&s, value.clone())?
             }
             Inst::GetSym(s) => {
@@ -447,9 +460,18 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                                 "native operation is unavailable during expansion".into(),
                             ));
                         }
-                        let v = (n.func)(self, &args.collect::<Vec<_>>())?;
+                        let args = args.collect::<Vec<_>>();
+                        if self.phase_budget.is_some() {
+                            crate::macros::check_phase_native_args(&n, &args)?;
+                        }
+                        let v = (n.func)(self, &args)?;
                         match v {
-                            NativeFnOp::Return(v) => self.stack.push(v),
+                            NativeFnOp::Return(v) => {
+                                if self.phase_budget.is_some() {
+                                    crate::macros::check_phase_value(&v)?;
+                                }
+                                self.stack.push(v);
+                            }
                             NativeFnOp::Yield(v) => {
                                 self.stack.push(v);
                                 self.status = Status::Paused;
@@ -564,6 +586,14 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
     fn cf_mut(&mut self) -> &mut CallFrame<T, L> {
         self.cframes.last_mut().expect("Fiber has no callframes!")
     }
+}
+
+fn reserved_callable<T: Extern, L: Locals>(name: &crate::SymbolId, value: &Val<T, L>) -> bool {
+    name.as_str().ends_with('!')
+        && matches!(
+            value,
+            Val::Lambda(_) | Val::NativeFn(_) | Val::NativeAsyncFn(_)
+        )
 }
 
 impl<T: Extern, L: Locals> CallFrame<T, L> {

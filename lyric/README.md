@@ -96,3 +96,41 @@ Rust embedders can use `Form::to_pretty_string(width)` and
 API. `Display` and `(display ...)` stay compact, abbreviating quotation forms;
 wire serialization retains the same atoms-and-lists representation.
 `Form::RawString` is still verbatim display text, not a readable string literal.
+
+## User-defined macros
+
+```lisp
+(defmacro unless (test & body)
+  `(if ,test nil (begin ,@body)))
+(unless! false 42)
+(macroexpand_1 '(unless! false 42))
+# => (if false nil (begin 42))
+```
+
+`name!` marks invocation explicitly; macro arguments remain unevaluated forms.
+The optional final `& rest` parameter collects remaining source arguments.
+A transformer returns one source form, using `begin` for multiple expressions.
+`macroexpand_1` runs one outer transformer; `macroexpand` repeats only at the
+outermost position. Neither executes its returned program or walks quoted data.
+
+Define phase helpers in `(for_syntax (defn helper (...) ...))`. Their completed
+block is frozen, and each macro captures the helper revision present when it is
+defined. Runtime variables and host capabilities are unavailable in this phase.
+Local calculation is allowed; mutation of captured phase bindings is rejected.
+Use `(gensym "hint")` for fresh printable local names. This is a datum macro
+system, with no implicit qualification or automatic hygiene for free identifiers.
+
+Top-level definitions and evaluations run in order, including inside a top-level
+`begin`. A later compile error can follow earlier effects. Macros in lambda
+bodies expand when the function is compiled; redefining the macro requires
+reevaluating that function to change its expansion. `try` and explicit `eval`
+remain deferred compilation boundaries and use the current process namespace.
+No macros are transported with quoted source data; the evaluating process must
+have the needed definitions.
+
+Expansion allows up to 1,000,000 phase instructions, 10,000 macro invocations,
+1,000,000 accumulated output nodes, 256 outer expansions, and 64 nested
+transformer executions per budget. Intermediate phase values also have size
+bounds. Source nesting is limited to 256 levels, including in runtime `read`.
+Generated top-level sequences share their preparation budget; a later
+independent evaluation starts a fresh budget and can recover after an error.

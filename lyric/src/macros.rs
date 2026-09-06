@@ -254,6 +254,7 @@ impl MacroEnv {
         b: &BudgetRef,
         phase: bool,
     ) -> Result<Bytecode<T, L>> {
+        let original = value;
         self.state();
         let value = self.outer(value, b, false)?;
         match head(&value) {
@@ -278,7 +279,16 @@ impl MacroEnv {
                 self.helpers(&value, b)?;
                 Ok(vec![Inst::PushConst(Val::Nil)])
             }
-            _ => crate::compile(&self.expression(&value, b, 0)?),
+            _ => {
+                let expanded = self.expression(&value, b, 0)?;
+                crate::compile(&expanded).map_err(|error| {
+                    if &expanded != original {
+                        fail(format!("generated syntax for {original}: {error}"))
+                    } else {
+                        error
+                    }
+                })
+            }
         }
     }
 
@@ -310,7 +320,7 @@ impl MacroEnv {
             }
             let expanded = self
                 .invoke(&name[..name.len() - 1], &result, b)
-                .map_err(|error| fail(format!("{}: {error}", trace.join(" -> "))))?;
+                .map_err(|error| fail(format!("{} in {result}: {error}", trace.join(" -> "))))?;
             result = expanded;
             if once {
                 return Ok(result);
@@ -520,7 +530,59 @@ fn head<T: Extern, L: Locals>(value: &Val<T, L>) -> Option<&str> {
     }
 }
 pub fn source_form<T: Extern, L: Locals>(value: &Val<T, L>) -> Result<Form> {
+    check_phase_value(value)?;
     source_form_counted(value, 0, &mut 1_000_000, "source")
+}
+
+/// Bound intermediate phase data, before it can be repeatedly copied into a
+/// growing expansion. Runtime evaluation is unaffected by these phase limits.
+pub(crate) fn check_phase_value<T: Extern, L: Locals>(value: &Val<T, L>) -> Result<()> {
+    check_phase_values(std::slice::from_ref(value))
+}
+
+fn check_phase_values<T: Extern, L: Locals>(values: &[Val<T, L>]) -> Result<()> {
+    let mut pending: Vec<_> = values.iter().map(|value| (value, 0)).collect();
+    let mut nodes = 0usize;
+    let mut bytes = 0usize;
+    while let Some((value, depth)) = pending.pop() {
+        nodes += 1;
+        if nodes > 1_000_000 || depth > 256 {
+            return Err(fail("phase value size/depth limit exceeded"));
+        }
+        match value {
+            Val::String(s) => bytes = bytes.saturating_add(s.len()),
+            Val::Symbol(s) => bytes = bytes.saturating_add(s.as_str().len()),
+            Val::Keyword(k) => bytes = bytes.saturating_add(k.as_str().len()),
+            Val::List(items) => pending.extend(items.iter().map(|v| (v, depth + 1))),
+            _ => (),
+        }
+        if bytes > 1_000_000 {
+            return Err(fail("phase string size limit exceeded"));
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn check_phase_native_args<T: Extern, L: Locals>(
+    native: &NativeFn<T, L>,
+    args: &[Val<T, L>],
+) -> Result<()> {
+    check_phase_values(args)?;
+    if native.func as usize == crate::builtin::string::join_fn::<T, L>().func as usize {
+        if let Some(Val::String(separator)) = args.first() {
+            if separator.len().saturating_mul(args.len()) > 1_000_000 {
+                return Err(fail("phase join size limit exceeded"));
+            }
+        }
+    }
+    if native.func as usize == crate::builtin::list::map_fn::<T, L>().func as usize {
+        if let Some(Val::List(items)) = args.first() {
+            if items.len() > 100_000 {
+                return Err(fail("phase map size limit exceeded"));
+            }
+        }
+    }
+    Ok(())
 }
 fn source_form_counted<T: Extern, L: Locals>(
     value: &Val<T, L>,
@@ -620,7 +682,7 @@ pub(crate) fn bind_builtins<T: Extern, L: Locals>(env: &mut Env<T, L>) {
         .bind_native(SymbolId::from("symbol"),native("(symbol STRING-OR-KEYWORD)",|_,args|one(args,|v|match v {Val::String(s)=>Ok(Val::symbol(s)),Val::Keyword(k)=>Ok(Val::Symbol(k.clone().to_symbol())),_=>Err(fail("symbol expects a string or keyword"))})))
         .bind_native(SymbolId::from("keyword"),native("(keyword STRING-OR-SYMBOL)",|_,args|one(args,|v|match v {Val::String(s)=>Ok(Val::keyword(s)),Val::Symbol(s)=>Ok(Val::Keyword(s.clone().to_keyword())),_=>Err(fail("keyword expects a string or symbol"))})))
         .bind_native(SymbolId::from("concat"),native("(concat LIST ...) - Concatenate lists",|_,args| {
-            let mut result=vec![];for arg in args {result.extend_from_slice(arg.as_list()?);if result.len()>1_000_000{return Err(fail("list size limit exceeded"));}}
+            let mut result=vec![];for arg in args {result.extend_from_slice(arg.as_list()?);}
             Ok(NativeFnOp::Return(Val::List(result)))
         }))
         .bind_native(SymbolId::from("slice"),native("(slice LIST START) - List suffix at nonnegative index",|_,args| {

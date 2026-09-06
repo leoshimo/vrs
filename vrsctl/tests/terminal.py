@@ -137,6 +137,14 @@ class TerminalTests(unittest.TestCase):
         self.assertEqual(self.pipe("-c", f"(eq? (read (pretty {source} 8)) {source})"), "true\n")
         self.assertEqual(self.pipe("-c", "(let ((xs '(1 2))) `(a ,@xs))"), "(a 1 2)\n")
 
+    def test_macros_expand_as_data_and_work_across_file_requests(self):
+        self.assertEqual(self.pipe("-c", "(macroexpand_1 '(when! true (missing)))"),
+                         "(if true (begin (missing)) nil)\n")
+        source = "(defmacro plus_one (x) `(+ ,x 1))\n(plus_one! 41)\n"
+        self.assertEqual(self.pipe(source=source), "plus_one\n42\n")
+        self.assertEqual(self.pipe("-c", "(list (err? (try (plus_one! 1))) (when! true 42))"),
+                         "(true 42)\n")
+
     def test_subscriptions_once_follow_and_clear(self):
         for index, mode in enumerate([(), ("-f",), ("-F",)]):
             topic = f"format_test_{index}"
