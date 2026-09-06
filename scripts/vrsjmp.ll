@@ -76,8 +76,7 @@
   (list :push_page :get_items callback :prompt prompt))
 
 # TODO: Revisit the begin_interaction hook: separate immediate page restoration
-# from slower context enrichment, and expose context actions without reordering
-# the main results while the user is typing.
+# from slower context enrichment.
 (defn begin_interaction ()
   "Capture context once and return the root page; ordinary on_click protocol"
   (def context (try (get_context)))
@@ -87,8 +86,7 @@
 
 (defn root_items (context query)
   "Retrieve the root command palette's final ordered items"
-  (def candidates (+ (context_items context)
-     (favorite_items)
+  (def candidates (+ (favorite_items)
      (todo_items query)
      (notes_items query)
      (stickies_items query)
@@ -128,30 +126,34 @@
   (if (get metadata :doc) (get metadata :doc) (display name)))
 
 (defn interactive_items (context)
-  # A captured web page is already a complete Save command, not a picker.
+  # One row per command, with captured objects offered as secondary actions.
   (map (filter (interactive_commands) (fn (name)
-    (if (eq? name 'save_page)
-      (empty? (filter context (fn (entity) (accepts_context? name entity))))
-      true)))
+    (if (contains? '() name) false
+      (let ((args (get (meta (eval name)) :args)))
+        (if (empty? args) true
+          (if (not? (empty? (filter context (fn (entity) (accepts_context? name entity))))) true
+            (not? (empty? (get_entity_completions (get (get args 0) :type))))))))))
     (fn (name)
-      (make_item (if (eq? name 'save_page) "Save a Page to Read Later…" (command_title name))
-        (list 'call_interactively (list 'quote name))))))
+      (def matches (filter context (fn (entity) (accepts_context? name entity))))
+      (def choose (list 'call_interactively (list 'quote name)))
+      (+ (make_item (if (eq? name 'save_page)
+                       (if (empty? matches) "Save a Page to Read Later…" (command_title name))
+                       (command_title name))
+           (if (empty? matches) choose
+             (list 'continue_call (list 'quote name) (list 'quote (list (get matches 0))))))
+         (list :actions
+           (+ (map matches (fn (entity)
+                (make_item (entity_title entity)
+                  (list 'continue_call (list 'quote name) (list 'quote (list entity))))))
+              (let ((args (get (meta (eval name)) :args)))
+                (if (empty? args) '()
+                  (if (empty? (get_entity_completions (get (get args 0) :type))) '()
+                    (list (make_item "Choose…" choose)))))))))))
 
 (defn accepts_context? (name entity)
   (def args (get (meta (eval name)) :args))
   (if (empty? args) false
     (eq? (get (get args 0) :type) (get entity 0))))
-
-(defn context_items (context)
-  (def items '())
-  (def commands (interactive_commands))
-  (map context (fn (entity)
-    (map (filter commands (fn (name) (accepts_context? name entity)))
-      (fn (name)
-        (set items (push items
-          (make_item (format "{} — {}" (command_title name) (entity_title entity))
-            (list 'continue_call (list 'quote name) (list 'quote (list entity))))))))))
-  items)
 
 (defn save_page (page)
   "Save to Read Later"

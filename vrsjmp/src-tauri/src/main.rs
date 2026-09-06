@@ -472,7 +472,8 @@ mod tests {
         .contents
         .unwrap();
         let actions = protocol::items(response).unwrap();
-        assert_eq!(actions[0].title, "Save to Read Later — Example Domain");
+        assert_eq!(actions[0].title, "Save to Read Later");
+        assert_eq!(actions[0].actions[0].title, "Example Domain");
         assert!(!actions
             .iter()
             .any(|item| item.title == "Save a Page to Read Later…"));
