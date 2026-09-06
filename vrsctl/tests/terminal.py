@@ -1,7 +1,9 @@
 """Real CLI/PTY checks. Run after: cargo build -p vrsctl -p vrsd
 
-Uses a temporary socket, an ephemeral node port, and no init scripts. Does not
-connect to the user's runtime. Requires only Python's standard library (Unix).
+Uses a temporary socket, an ephemeral node port, and the chat service as its
+init script (no external commands run). Does not connect to the user's runtime.
+Set VRS_TEST_PROFILE=release to exercise optimized binaries.
+Requires only Python's standard library (Unix).
 """
 import errno
 import fcntl
@@ -20,7 +22,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BIN = ROOT / "target" / "debug"
+BIN = ROOT / "target" / os.environ.get("VRS_TEST_PROFILE", "debug")
 VALUE = "((:name :echo :node \"alpha\" :interface ((ping x) (pong y))) (:name :clock :interface ((now))))"
 EXPR = "'" + VALUE
 PRETTY = ('((:name :echo\n  :node "alpha"\n'
@@ -34,20 +36,25 @@ class TerminalTests(unittest.TestCase):
         # /tmp keeps the Unix socket below macOS's short path limit.
         cls.temp = tempfile.TemporaryDirectory(prefix="vrs-pretty-", dir="/tmp")
         cls.socket = str(Path(cls.temp.name) / "runtime.sock")
+        cls.log = tempfile.TemporaryFile(mode="w+")
         cls.daemon = subprocess.Popen(
-            [BIN / "vrsd", "--node", "format-test", "--node-port", "0", "--socket", cls.socket],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            [BIN / "vrsd", "--node", "format-test", "--node-port", "0", "--socket", cls.socket,
+             "--init", ROOT / "scripts" / "chat.ll"],
+            stdout=cls.log, stderr=cls.log)
         deadline = time.monotonic() + 10
         while not Path(cls.socket).exists():
             if cls.daemon.poll() is not None or time.monotonic() > deadline:
+                cls.log.seek(0)
+                output = cls.log.read()
                 cls.tearDownClass()
-                raise RuntimeError("Test daemon failed to start")
+                raise RuntimeError("Test daemon failed to start:\n" + output)
             time.sleep(0.02)
 
     @classmethod
     def tearDownClass(cls):
         cls.daemon.terminate()
         cls.daemon.wait(timeout=5)
+        cls.log.close()
         cls.temp.cleanup()
 
     def command(self, *args):
@@ -144,6 +151,14 @@ class TerminalTests(unittest.TestCase):
         self.assertEqual(self.pipe(source=source), "plus_one\n42\n")
         self.assertEqual(self.pipe("-c", "(list (err? (try (plus_one! 1))) (when! true 42))"),
                          "(true 42)\n")
+
+    def test_init_service_and_nested_service_macros(self):
+        source = '''(begin
+          (bind_srv :chat)
+          (spawn_chat :terminal_chat "test prompt")
+          (bind_srv :terminal_chat)
+          (get_messages))'''
+        self.assertEqual(self.pipe("-c", source), '((:system "test prompt"))\n')
 
     def test_subscriptions_once_follow_and_clear(self):
         for index, mode in enumerate([(), ("-f",), ("-F",)]):

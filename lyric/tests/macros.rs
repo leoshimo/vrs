@@ -93,6 +93,56 @@ async fn validation_and_phase_effect_guards() {
 }
 
 #[tokio::test]
+async fn phase_environment_excludes_runtime_capabilities() {
+    for source in [
+        "(begin (def host dbg) (defmacro m () (apply host '(42))) (m!))",
+        "(begin (defmacro m () (eval '(dbg 42))) (m!))",
+        "(for_syntax (def printer dbg))",
+    ] {
+        let error = eval(source).await.unwrap_err().to_string();
+        assert!(error.contains("Undefined symbol"), "{source}: {error}");
+    }
+    let error = eval("(begin (defmacro identity (x) x) (macroexpand_1 (list 'identity! dbg)))")
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("expected source data"), "{error}");
+}
+
+#[tokio::test]
+async fn phase_native_aliases_and_compiler_metadata_work() {
+    let source = "(begin
+      (for_syntax
+        (def mapper map)
+        (defn twice (x) (interactive :number) (+ x x)))
+      (defmacro doubled (& values) `(quote ,(apply mapper (list values twice))))
+      (doubled! 1 2 3))";
+    assert_eq!(
+        eval(source).await.unwrap(),
+        Value::from_expr("(2 4 6)").unwrap()
+    );
+}
+
+#[tokio::test]
+async fn phase_native_allocation_limits_apply_through_aliases() {
+    let grow_list = "(set xs (concat xs xs)) ".repeat(17);
+    let source = format!(
+        "(begin (defmacro m () (def xs '(0)) {grow_list}
+          (apply map (list xs (fn (x) x)))) (m!))"
+    );
+    let error = eval(&source).await.unwrap_err().to_string();
+    assert!(error.contains("phase map size limit"), "{error}");
+
+    let grow_string = "(set sep (str sep sep)) ".repeat(19);
+    let source = format!(
+        "(begin (defmacro m () (def sep \"x\") {grow_string}
+          (apply join (list sep \"\" \"\"))) (m!))"
+    );
+    let error = eval(&source).await.unwrap_err().to_string();
+    assert!(error.contains("phase join size limit"), "{error}");
+}
+
+#[tokio::test]
 async fn gensym_gives_single_evaluation_and_source_round_trip() {
     let code = "(begin (defmacro or_else (value fallback) (def temp (gensym \"value\")) `(let ((,temp ,value)) (if ,temp ,temp ,fallback))) (def n 0) (def expansion (macroexpand_1 '(or_else! (begin (set n (+ n 1)) n) (set n 99)))) (list (eval expansion) n (eq? expansion (read (pretty expansion))) (eq? (gensym) (gensym))))";
     assert_eq!(

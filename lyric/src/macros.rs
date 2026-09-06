@@ -107,6 +107,10 @@ const PHASE_NAMES: &[&str] = &[
 impl MacroEnv {
     fn state(&mut self) -> Arc<State> {
         if self.state.is_none() {
+            // This isolated environment is the phase capability boundary.
+            // source_form rejects runtime callables/externs before they can
+            // enter it. Do not identify permitted natives by function address:
+            // optimized generic functions can have multiple machine addresses.
             let mut helpers = Env::standard();
             helpers.retain_names(PHASE_NAMES);
             let helpers = Arc::new(Mutex::new(helpers));
@@ -540,7 +544,7 @@ pub(crate) fn check_phase_value<T: Extern, L: Locals>(value: &Val<T, L>) -> Resu
     check_phase_values(std::slice::from_ref(value))
 }
 
-fn check_phase_values<T: Extern, L: Locals>(values: &[Val<T, L>]) -> Result<()> {
+pub(crate) fn check_phase_values<T: Extern, L: Locals>(values: &[Val<T, L>]) -> Result<()> {
     let mut pending: Vec<_> = values.iter().map(|value| (value, 0)).collect();
     let mut nodes = 0usize;
     let mut bytes = 0usize;
@@ -563,27 +567,6 @@ fn check_phase_values<T: Extern, L: Locals>(values: &[Val<T, L>]) -> Result<()> 
     Ok(())
 }
 
-pub(crate) fn check_phase_native_args<T: Extern, L: Locals>(
-    native: &NativeFn<T, L>,
-    args: &[Val<T, L>],
-) -> Result<()> {
-    check_phase_values(args)?;
-    if native.func as usize == crate::builtin::string::join_fn::<T, L>().func as usize {
-        if let Some(Val::String(separator)) = args.first() {
-            if separator.len().saturating_mul(args.len()) > 1_000_000 {
-                return Err(fail("phase join size limit exceeded"));
-            }
-        }
-    }
-    if native.func as usize == crate::builtin::list::map_fn::<T, L>().func as usize {
-        if let Some(Val::List(items)) = args.first() {
-            if items.len() > 100_000 {
-                return Err(fail("phase map size limit exceeded"));
-            }
-        }
-    }
-    Ok(())
-}
 fn source_form_counted<T: Extern, L: Locals>(
     value: &Val<T, L>,
     depth: usize,
@@ -617,20 +600,6 @@ fn source_form_counted<T: Extern, L: Locals>(
             )))
         }
     })
-}
-
-pub(crate) fn phase_natives<T: Extern, L: Locals>() -> std::collections::HashSet<usize> {
-    let mut env: Env<T, L> = Env::standard();
-    env.retain_names(PHASE_NAMES);
-    let mut allowed: std::collections::HashSet<usize> = env
-        .iter()
-        .filter_map(|(_, value)| match value {
-            Val::NativeFn(n) => Some(n.func as usize),
-            _ => None,
-        })
-        .collect();
-    allowed.insert(crate::builtin::metadata::annotate_fn::<T, L>().func as usize);
-    allowed
 }
 
 fn native<T: Extern, L: Locals>(
