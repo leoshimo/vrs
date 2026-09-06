@@ -16,3 +16,4 @@ clap = { version = "4.5.20", features = ["cargo", "derive", "string"] }
 rustyline = { version = "14.0.0", features = ["derive"] }
 dirs = "5.0.1"
 clearscreen = "3.0.0"
+terminal_size = "0.4"

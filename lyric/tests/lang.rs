@@ -32,6 +32,54 @@ fn eval_expr(e: &str) -> Result<Val> {
 }
 
 #[test]
+fn pretty_is_a_composable_string_formatter() {
+    assert_eq!(
+        eval_expr("(pretty '((1 2) (3 4)) 10)").unwrap(),
+        Val::string("((1 2)\n (3 4))")
+    );
+    assert_eq!(
+        eval_expr("(pretty '(1 2 3))").unwrap(),
+        Val::string("(1 2 3)")
+    );
+    assert_eq!(
+        eval_expr("(display '((1 2) (3 4)))").unwrap(),
+        Val::string("((1 2) (3 4))")
+    );
+    assert_eq!(
+        eval_expr(
+            r#"(begin
+        (def value '(:name "日本語\n\"quoted\"" :items ((1 2) (3 4))))
+        (eq? (read (pretty value 10)) value))"#
+        )
+        .unwrap(),
+        Val::Bool(true)
+    );
+    assert!(eval_expr("(help pretty)")
+        .unwrap()
+        .as_string()
+        .unwrap()
+        .contains("WIDTH"));
+    assert_eq!(
+        eval_expr("(pretty (lambda (x) x))").unwrap(),
+        Val::string("<lambda (x)>")
+    );
+}
+
+#[test]
+fn pretty_rejects_invalid_arity_and_width() {
+    for source in [
+        "(pretty)",
+        "(pretty 1 0)",
+        "(pretty 1 -1)",
+        "(pretty 1 \"80\")",
+        "(pretty 1 nil)",
+        "(pretty 1 80 90)",
+    ] {
+        assert_matches!(eval_expr(source), Err(Error::UnexpectedArguments(_)));
+    }
+}
+
+#[test]
 fn interactive_is_metadata_not_executed_function_body() {
     let value = eval_expr(
         r#"(begin

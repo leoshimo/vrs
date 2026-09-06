@@ -32,6 +32,7 @@ pub(crate) use refs::ref_fn;
 pub(crate) use string::display_fn;
 pub(crate) use string::format_fn;
 pub(crate) use string::join_fn;
+pub(crate) use string::pretty_fn;
 pub(crate) use string::read_fn;
 pub(crate) use string::split_fn;
 pub(crate) use string::str_fn;

@@ -1,4 +1,5 @@
 //! Watches data over specified pubsub topic
+use crate::output::Output;
 use anyhow::{Context, Result};
 use vrs::Client;
 
@@ -11,7 +12,12 @@ pub(crate) struct Opts {
 }
 
 /// Watch specified topic, optionally following over many values.
-pub(crate) async fn run(client: &Client, topic: vrs::KeywordId, opts: Opts) -> Result<()> {
+pub(crate) async fn run(
+    client: &Client,
+    topic: vrs::KeywordId,
+    opts: Opts,
+    output: &Output,
+) -> Result<()> {
     let mut sub = client
         .subscribe(topic)
         .await
@@ -27,7 +33,7 @@ pub(crate) async fn run(client: &Client, topic: vrs::KeywordId, opts: Opts) -> R
             clearscreen::clear().with_context(|| "failed to clear screen")?;
         }
 
-        println!("{form}");
+        output.write(&mut std::io::stdout(), &form, "")?;
 
         if !opts.follow {
             break;

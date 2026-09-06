@@ -30,6 +30,23 @@ pub(crate) fn display_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     }
 }
 
+pub(crate) fn pretty_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
+    NativeFn {
+        metadata: vec![],
+        doc: "(pretty VALUE [WIDTH]) - Returns readable Lyric text as a string. WIDTH is a positive integer (default 80). Lists wrap and small keyword/value pairs stay together; oversized nested values start below their keyword. Atoms are never split. Serializable values round-trip through read; opaque runtime values keep their display notation. Use vrsctl --raw to display the returned text.".to_string(),
+        func: |_, args| {
+            let (value, width) = match args {
+                [value] => (value, 80),
+                [value, Val::Int(width)] if *width > 0 => (value, *width as usize),
+                _ => return Err(Error::UnexpectedArguments(
+                    "pretty expects a value and optional positive integer width".to_string(),
+                )),
+            };
+            Ok(NativeFnOp::Return(Val::String(value.to_pretty_string(width))))
+        },
+    }
+}
+
 pub(crate) fn join_fn<T: Extern, L: Locals>() -> NativeFn<T, L> {
     NativeFn {
         metadata: vec![],

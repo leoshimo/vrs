@@ -418,8 +418,14 @@ vrs> (open_url url)
 
 # Introspect runtime state:
 vrs> (ls_srv)
-((:name :launcher :pid <pid 28> :interface ((:get_items) (:add_item title cmd)))
- (:name :system_appearance :pid <pid 5> :interface ((:toggle_darkmode))))
+(:launcher
+ (:name :launcher
+  :pid <laptop:28>
+  :interface ((:get_items) (:add_item title cmd)))
+ :system_appearance
+ (:name :system_appearance
+  :pid <laptop:5>
+  :interface ((:toggle_darkmode))))
  
 # Bind and talk to services:
 vrs> (bind_srv :launcher)
@@ -431,6 +437,47 @@ vrs> (add_item "Hello" '(open_url "http://example.com"))
 `vrsctl` also offers convenient interfaces and tools to support scripting and
 debugging - see `vrsctl --help` for an overview of available commands.
 
+Results automatically use multiline formatting when stdout is a terminal,
+including the REPL, `--command`, script files/stdin, and subscriptions
+(`--subscribe`, `--follow`, `--followclear`). Lists that fit stay on one line;
+larger lists put each element on its own line. Keyword/value records such as
+those returned by `(ls_srv)` keep small pairs together. The width follows the
+terminal as it resizes, with an 80-column fallback. A nested value that is too
+large to fit after its keyword starts on the next line.
+
+```sh
+vrsctl -c '(ls_srv)'                       # readable terminal output
+vrsctl --width 60 -c '(ls_srv)'             # choose a target width
+vrsctl --format pretty -c '(ls_srv)' | less # readable even through a pipe
+vrsctl --format compact -c '(ls_srv)'       # force the old compact form
+vrsctl --raw -c '(pretty (ls_srv) 60)'      # display the formatter's string
+```
+
+Redirected stdout stays compact by default. `--format default` selects this
+terminal/pipe behavior explicitly. Strings remain quoted and escaped, including
+embedded newlines; `--raw` prints only top-level strings verbatim. It does not
+change nested strings. `--format editor` echoes source and prefixes every result
+line with a comment, so multiline results remain safe in a Lyric transcript.
+All output options apply to every input mode; subscriptions take priority over
+redirected stdin. Explicit files cannot be combined with commands/subscriptions.
+
+Formatting is also available inside Lyric:
+
+```lyric
+(pretty (ls_srv))       # returns a string, default width 80
+(pretty (ls_srv) 60)    # positive integer width
+(read (pretty '(1 2 3))) # => (1 2 3)
+```
+
+`pretty` returns text without printing or changing the value. `(display VALUE)`
+keeps its compact behavior. The pretty representation of serializable values
+can be parsed back with `read`; quote syntax and string escaping are preserved.
+Raw block source strings become ordinary escaped string literals when printed,
+preserving their decoded contents. Runtime-only values such as PIDs, references,
+and functions retain their existing opaque display notation and do not round-trip.
+Width is a target in display columns: atoms are never split, and a long string,
+keyword/value pair, or deep nesting can exceed it. Nothing is truncated.
+
 ### Emacs Integration
 
 An Emacs major mode is available at [`emacs/lyric-mode.el`](emacs/lyric-mode.el).
@@ -440,6 +487,41 @@ editor-centric software development. It recognizes raw block strings and sends
 the exact source expression to `vrsctl`, so multiline scripts can be evaluated
 with `lyric-eval-last-sexp` without being read and rewritten as Emacs Lisp.
 
+- `C-c C-e` evaluates the preceding expression, including its quote prefix.
+  Try `(ls_srv)` or `(pretty (ls_srv) 60)` to see readable results in the
+  `*Lyric Result*` buffer. Top-level strings are displayed as text.
+- `C-c C-r` evaluates the region; `C-c C-c` evaluates the buffer.
+- `C-u C-c C-e` and `C-u C-c C-r` replace source with the result and indent it
+  in context. Replacement preserves string quotes/escapes and leaves source
+  intact on evaluation errors. Lists are inserted as data representations;
+  add a quote if you want to evaluate the inserted list as literal data.
+- `C-u C-c C-c` displays source with commented results.
+
+Customize `lyric-result-width` (default 80) for editor results. Indentation
+aligns data and keyword/value lists under their opening parenthesis, uses two
+spaces for call bodies, and preserves raw block string contents. The result
+buffer uses Lyric syntax highlighting and is read-only.
+
 The mode currently depends on `janet-mode`. Add the `emacs` directory to
 `load-path`, require `lyric-mode`, and customize `lyric-vrsctl-command` when
 additional service bindings are needed.
+
+Use the updated `vrsctl` with this mode. CLI formatting works with an existing
+runtime; the new `(pretty ...)` built-in requires a runtime built with this change.
+
+Formatting checks can be run without contacting a live runtime:
+
+```sh
+cargo test --workspace
+cargo build -p vrsctl -p vrsd
+python3 vrsctl/tests/terminal.py
+# Include Emacs evaluation and indentation checks:
+JANET_MODE_DIR=/path/to/janet-mode python3 vrsctl/tests/terminal.py
+# Emacs unit tests alone (the runtime integration test is skipped):
+emacs -Q --batch -L /path/to/janet-mode -L emacs \
+  -l lyric-mode-tests -f ert-run-tests-batch-and-exit
+```
+
+The terminal harness uses a temporary socket, an ephemeral node port, and no
+init script. It checks command, file, stdin, REPL, and subscription output on
+pipes and pseudo-terminals, and keeps the user's runtime and REPL history intact.

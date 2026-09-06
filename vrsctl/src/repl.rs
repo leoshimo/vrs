@@ -1,18 +1,17 @@
 //! REPL for vrsctl
 use anyhow::Result;
 
-use lyric::Form;
 use std::path::PathBuf;
 use vrs::Client;
 
 use crate::editor::{self, Editor};
-use rustyline::{error::ReadlineError, ExternalPrinter};
+use crate::output::Output;
+use rustyline::error::ReadlineError;
 
 /// Entrypoint for running REPL.
 /// Returns Err if REPL terminated with error
-pub(crate) async fn run(client: &Client) -> Result<()> {
+pub(crate) async fn run(client: &Client, output: &Output) -> Result<()> {
     let mut rl = editor::editor()?;
-    let mut printer = rl.create_external_printer()?;
     let history = history_file();
 
     load_history(&mut rl, &history);
@@ -39,11 +38,11 @@ pub(crate) async fn run(client: &Client) -> Result<()> {
         // TODO: Interrupt request with ctrl-c?
         match client.request(f).await {
             Ok(resp) => match resp.contents {
-                // TODO: Bringup different formats for clients - e.g. REPL should use text format only
-                Ok(Form::RawString(s)) => {
-                    printer.print(format!("{s}\n"))?;
+                Ok(c) => {
+                    // readline has returned and restored the terminal. Results
+                    // are synchronous, so no external-printer queue is needed.
+                    output.write(&mut std::io::stdout(), &c, "")?;
                 }
-                Ok(c) => printer.print(format!("{c}\n"))?,
                 Err(e) => eprintln!("{}", e),
             },
             Err(e) => {
