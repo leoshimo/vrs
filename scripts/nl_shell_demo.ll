@@ -4,7 +4,7 @@
 
 (bind_srv :os_notify)
 (bind_srv :chat)
-(bind_srv :rlist)
+(bind_srv :jump_list)
 (bind_srv :os_cal)
 
 (def system_prompt
@@ -25,7 +25,7 @@ The result should be a single S-expression wrapped within a (begin ...) form"
 "                # DEMO:
                  # (help notify)
                  # (help sleep)
-                 # (help add_rlist_active_tab)
+                 # (help add_jump_list_active_tab)
                  # (help create_event)
 )))
 

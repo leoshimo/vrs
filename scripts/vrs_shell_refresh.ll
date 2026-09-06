@@ -5,7 +5,7 @@
     (try (kill (find_srv :vrs_shell_refresher)))
     (register :vrs_shell_refresher :overwrite)
 
-    (subscribe :rlist_event)
+    (subscribe :jump_list_event)
     (subscribe :things_event)
 
     (loop (recv)

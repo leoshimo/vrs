@@ -351,7 +351,6 @@ mod tests {
         forms.extend(
             lyric::parse_script(
                 r#"
-            (defn get_rlist () '())
             (defn local_items () '((:title "Project Website" :on_click (open_url "https://searchable.example.test"))))
             (defn is_personal? () false)
             (defn feedbin_call (message) '((:title "Saved article" :url "https://example.test/")))

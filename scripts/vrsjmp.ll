@@ -48,7 +48,6 @@
 (bind_srv :system_appearance)
 (bind_srv :os_browser)
 (bind_srv :os_notify)
-(bind_srv :rlist)
 (bind_srv :nl_shell)
 (bind_srv :nl_scheduler)
 (bind_srv :os_screencap)
@@ -60,7 +59,6 @@
 (bind_srv :os_notes)
 (bind_srv :antinote)
 (bind_srv :obsidian)
-(bind_srv :eden)
 (bind_srv :youtube)
 (bind_srv :cmd_macro)
 (bind_srv :safari_history)
@@ -96,15 +94,13 @@
 (defn command_items (context query)
   (def candidates (+ (favorite_items)
      (scheduler_items query)
-     (eden_items query)
-     (rlist_items query)
-     (youtube_items query)
      (macro_items query)
      (list (make_item "Read Later" '(read_later_page))
            (make_item "Browser History" '(browser_history_page))
            (make_item "Windows" '(call_interactively 'focus_window))
            (make_item_ex "Configure Display Resolution" '(display_page) 'd)
-           (make_item_ex "Browse GitHub PRs" '(github_page) 'gh))
+           (make_item_ex "Browse GitHub PRs" '(github_page) 'gh)
+           (make_item "Download YT Video" '(download_video_active_tab)))
      (interactive_items context)))
   # Rank all fields together: a weak title match must not outrank an app name.
   (+ (fuzzy_match query candidates (fn (item)
@@ -254,7 +250,6 @@
        )))
 
 (def resolutions_cache '())
-
 (defn display_page ()
   (set resolutions_cache (list_alternative_resolutions))
   (+ (push_page 'display_items "Search resolutions…") '(:title "Configure Display Resolution")))
@@ -275,7 +270,6 @@
 
 (defn scheduler_items (query)
   "Return item for scheduler commands"
-  # Only match if query contains win
   (if (not? (contains? query "schedule"))
         '()
       (list
@@ -382,7 +376,6 @@
                (make_item "Copy Title and URL" (list 'set_clipboard (str title "\n" url)))))))))
 
 (def notes_cache nil)
-
 (defn apple_notes_page ()
   (set notes_cache (get_notes))
   (+ (push_page 'apple_notes_items "Search Apple Notes…") '(:title "Apple Notes")))
@@ -401,7 +394,6 @@
     (make_item (get note :title) (list 'stickies_open (get note :title))))))
 
 (def obsidian_cache '())
-
 (defn obsidian_page ()
   (set obsidian_cache (get_obsidian_files))
   (+ (push_page 'obsidian_items "Search Obsidian files…") '(:title "Obsidian")))
@@ -411,26 +403,7 @@
     (+ (make_item (get note :title) (list 'open_obsidian_file (get note :file)))
        (list :subtitle (get note :file))))))
 
-(defn youtube_items (query)
-  "(youtube_items QUERY) - Returns markup for youtube items"
-  (if (not? (contains? query "yt:"))
-    (list
-     (make_item "Download YT Video" '(download_video_active_tab)))
-    (map (list_videos) (fn (n) (list :title (format "yt: {}" (get n :title))
-                                     :on_click (list 'open_file (get n :path)))))))
-
-(defn eden_items (query)
-  "(eden_items QUERY) - Returns markup for eden tabs"
-  (if (not? (contains? query "eden:"))
-    '()
-      (+
-       (list (make_item "eden: Ask AI" (list 'spawn (list 'fn '() (list 'eden_ai query)))))
-       (map (eden_list) (fn (e)
-           (list :title (format "eden: {}" (get e :title))
-                 :on_click (list 'eden_open (get e :id))))))))
-
 (def browser_history_cache '())
-
 (defn browser_history_page ()
   (refresh_safari_history)
   (set browser_history_cache (get_safari_history))
@@ -446,7 +419,6 @@
              :actions (entity_actions page))))))
 
 (def antinote_cache '())
-
 (defn antinote_page ()
   (set antinote_cache (get_antinote_notes))
   (+ (push_page 'antinote_items "Search Antinote notes…")
@@ -465,7 +437,6 @@
                (make_item "Open Antinote" '(open_antinote))))))))
 
 (def github_cache '())
-
 (defn github_page ()
   (refresh_pull_requests)
   (set github_cache (get_pull_requests))
@@ -490,18 +461,6 @@
         (make_item (format "macro: Start Recording - {}" query) (list 'start_macro_record query)))
       (make_item "macro: Clear Macros" '(clear_macros))
       ))))
-
-(defn rlist_items (query)
-  "(rlist_items QUERY) - Retrieve item markup for reading list"
-  (def items '())
-  (map (get_rlist) (lambda (it) (begin
-       (set items (push items (list :title (format "rl: Open {}" (get it :title))
-                                    :on_click (list 'open_url (get it :url)))))
-       # TODO: Plumb "modifiers" from clients?
-       (if (contains? query "rl:")
-         (set items (push items (list :title (format "rl: Remove {}" (get it :title))
-                                      :on_click (list 'remove_rlist (get it :id)))))))))
-  items)
 
 (defn favorite_items ()
   "Returns list of static vrsjmp items"
@@ -601,9 +560,8 @@
          (make_item "Show Desktop" '(show_desktop))
          (make_item "Toggle DND" '(toggle_do_not_disturb)))
 
-   # jump list
-   (list (make_item "Add to Jump List" '(add_rlist_active_tab))
-         (make_item "Clear Jump List" '(clear_rlist)))
+   # Demo-only jump list; not part of the everyday palette.
+   # (list (make_item "Add to Jump List" '(add_jump_list_active_tab)))
 
    # recording
    (list (make_item "Screen Capture" '(start_screencap)))
