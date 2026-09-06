@@ -365,6 +365,10 @@ mod tests {
               "Open Antinote Note"
               (interactive :antinote/note)
               (if (not? (eq? (get note :id) "note-1")) (error "Wrong note")))
+            (defn get_running_apps () '((:os/app :pid 123 :title "Safari" :bundle_id "com.apple.Safari" :started_at "100")))
+            (defn force_quit_app (app)
+              "Force Quit" (interactive :os/app)
+              (if (not? (eq? (get app :pid) 123)) (error "Wrong app")))
             (def tasks_added '())
             (def things_reads 0)
             (defn get_things_tasks ()
@@ -385,6 +389,7 @@ mod tests {
             (set_entity_completions :os/window 'get_windows)
             (set_entity_completions :os/display 'get_displays)
             (set_entity_completions :antinote/note 'get_antinote_notes)
+            (set_entity_completions :os/app 'get_running_apps)
             (spawn_srv :vrsjmp :interface '(get_items on_click))
         "#,
             )
@@ -555,6 +560,7 @@ mod tests {
                 "Meeting notes",
             ),
             ("Windows", "call_items", "Safari", "Documentation"),
+            ("Force Quit", "call_items", "com.apple.Safari", "Safari"),
         ] {
             let items = protocol::items(
                 ask(

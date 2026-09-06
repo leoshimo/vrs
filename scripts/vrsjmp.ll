@@ -53,6 +53,7 @@
 (bind_srv :nl_scheduler)
 (bind_srv :os_screencap)
 (bind_srv :things)
+(bind_srv :os_apps)
 (bind_srv :os_display)
 (bind_srv :os_window)
 (bind_srv :os_maps)
@@ -217,7 +218,9 @@
   (map (fuzzy_match query entities display) (fn (entity)
     (+ (make_item (if (get entity :title) (get entity :title) (entity_title entity))
          (list 'continue_call (list 'quote name) (list 'quote (push values entity))))
-       (list :subtitle (get entity :app)
+       (list :subtitle (if (eq? type :os/app)
+                         (get entity :bundle_id)
+                         (get entity :app))
              :aside (if (get entity :id) (str (get entity :id)) nil)
              :actions (+ (entity_actions entity)
                          (if (eq? type :os/window) (window_actions entity) '())))))))
@@ -248,8 +251,6 @@
                   (list 'open_url query))
        (make_item "Do It"
                   (list 'codegen_exec query))
-       (make_item "Force Quit"
-                  (list 'exec "pkill" query))
        (make_item "Search Amazon"
                   (list 'open_url (format "https://www.amazon.com/s?k={}" query)))
        )))
