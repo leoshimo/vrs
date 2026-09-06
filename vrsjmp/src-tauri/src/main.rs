@@ -358,7 +358,12 @@ mod tests {
             (defn open_url (url) :opened)
             (def history_reads 0)
             (def antinote_reads 0)
+            (def resolution_reads 0)
             (def pr_reads 0)
+            (defn list_alternative_resolutions ()
+              (set resolution_reads (+ resolution_reads 1)) '("2560x1440"))
+            (defn select_resolution (resolution)
+              (if (not? (eq? resolution "2560x1440")) (error "Wrong resolution")))
             (defn refresh_pull_requests () (set pr_reads (+ pr_reads 1)))
             (defn get_pull_requests ()
               '((:title "Fix launcher" :url "https://github.com/example/vrs/pull/42")))
@@ -562,7 +567,10 @@ mod tests {
                 .contents
                 .unwrap()
         }
-        for (query, title) in [("gh", "Browse GitHub PRs")] {
+        for (query, title) in [
+            ("d", "Configure Display Resolution"),
+            ("gh", "Browse GitHub PRs"),
+        ] {
             let results = protocol::items(
                 ask(
                     &mut client,
@@ -574,6 +582,12 @@ mod tests {
             assert_eq!(results[0].title, title);
         }
         for (entry, callback, query, title) in [
+            (
+                "Configure Display Resolution",
+                "display_items",
+                "1440",
+                "2560x1440",
+            ),
             (
                 "Browse GitHub PRs",
                 "github_items",
@@ -699,7 +713,7 @@ mod tests {
             }
         }
         ask(&mut client, protocol::action_request(
-            "(:on_click (if (not? (eq? (list history_reads antinote_reads pr_reads) '(1 1 1))) (error \"Repeated source reads\")))"
+            "(:on_click (if (not? (eq? (list history_reads antinote_reads resolution_reads pr_reads) '(1 1 1 1))) (error \"Repeated source reads\")))"
         ).unwrap()).await;
         // Task capture strips only the leading marker and surrounding whitespace.
         let safari_context = r#"(((:os/window :app "Safari" :title "Example Domain")
