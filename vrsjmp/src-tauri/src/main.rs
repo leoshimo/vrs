@@ -358,6 +358,7 @@ mod tests {
             (defn open_url (url) :opened)
             (def history_reads 0)
             (def antinote_reads 0)
+            (def notes_reads 0)
             (def resolution_reads 0)
             (def pr_reads 0)
             (defn list_alternative_resolutions ()
@@ -378,6 +379,10 @@ mod tests {
               "Open Antinote Note"
               (interactive :antinote/note)
               (if (not? (eq? (get note :id) "note-1")) (error "Wrong note")))
+            (defn get_notes ()
+              (set notes_reads (+ notes_reads 1))
+              '((:id "apple-note-1" :title "Apple Note")))
+            (defn open_note (id) :opened)
             (defn get_obsidian_files () '((:title "Design.md" :file "./projects/vrs/Design.md")))
             (defn open_obsidian_file (path) :opened)
             (defn get_running_apps () '((:os/app :pid 123 :title "Safari" :bundle_id "com.apple.Safari" :started_at "100")))
@@ -609,6 +614,12 @@ mod tests {
             ("Windows", "call_items", "Safari", "Documentation"),
             ("Force Quit", "call_items", "com.apple.Safari", "Safari"),
             (
+                "Browse Apple Notes",
+                "apple_notes_items",
+                "Apple",
+                "Apple Note",
+            ),
+            (
                 "Browse Obsidian",
                 "obsidian_items",
                 "projects/vrs",
@@ -713,8 +724,17 @@ mod tests {
             }
         }
         ask(&mut client, protocol::action_request(
-            "(:on_click (if (not? (eq? (list history_reads antinote_reads resolution_reads pr_reads) '(1 1 1 1))) (error \"Repeated source reads\")))"
+            "(:on_click (if (not? (eq? (list history_reads antinote_reads notes_reads resolution_reads pr_reads) '(1 1 1 1 1))) (error \"Repeated source reads\")))"
         ).unwrap()).await;
+        ask(
+            &mut client,
+            protocol::action_request("(:on_click (apple_notes_page))").unwrap(),
+        )
+        .await;
+        ask(&mut client, protocol::action_request(
+            "(:on_click (if (not? (eq? notes_reads 2)) (error \"Notes cache did not refresh\")))"
+        ).unwrap()).await;
+
         // Task capture strips only the leading marker and surrounding whitespace.
         let safari_context = r#"(((:os/window :app "Safari" :title "Example Domain")
           (:web/page :title "Example Domain" :url "https://example.test/")

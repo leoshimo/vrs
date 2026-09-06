@@ -95,7 +95,6 @@
 
 (defn command_items (context query)
   (def candidates (+ (favorite_items)
-     (notes_items query)
      (stickies_items query)
      (scheduler_items query)
      (eden_items query)
@@ -383,12 +382,15 @@
                (make_item "Copy URL" (list 'set_clipboard url))
                (make_item "Copy Title and URL" (list 'set_clipboard (str title "\n" url)))))))))
 
-(defn notes_items (query)
-  "(notes_items) - Returns markup for notes"
-  (if (not? (contains? query "n:"))
-    '()
-    (map (get_notes) (fn (n) (list :title (format "n: {}" (get n :title))
-                                   :on_click (list 'open_note (get n :id)))))))
+(def notes_cache nil)
+
+(defn apple_notes_page ()
+  (set notes_cache (get_notes))
+  (+ (push_page 'apple_notes_items "Search Apple Notes…") '(:title "Apple Notes")))
+
+(defn apple_notes_items (query)
+  (map (fuzzy_match query notes_cache display) (fn (note)
+    (make_item (get note :title) (list 'open_note (get note :id))))))
 
 (def stickies_get_cache '())
 (defn stickies_items (query)
@@ -519,6 +521,7 @@
          (make_item "Messages" '(open_app "Messages"))
          (make_item "YouTube Music" '(open_app "YouTube Music"))
          (make_item "Notes" '(open_app "Notes"))
+         (make_item "Browse Apple Notes" '(apple_notes_page))
          (make_item "Reminders" '(open_app "Reminders"))
          (make_item "Shortcuts" '(open_app "Shortcuts"))
          # (make_item "Mail" '(open_app "Spark"))
