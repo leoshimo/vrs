@@ -411,7 +411,7 @@ mod tests {
             (set_entity_completions :os/display 'get_displays)
             (set_entity_completions :antinote/note 'get_antinote_notes)
             (set_entity_completions :os/app 'get_running_apps)
-            (spawn_srv :vrsjmp :interface '(get_items on_click))
+            (spawn_srv! :vrsjmp :interface '(get_items on_click))
         "#,
             )
             .unwrap()

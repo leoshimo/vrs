@@ -51,7 +51,7 @@ To this end:
 `vrsd --init PATH` evaluates a script inside the runtime before accepting local
 clients. Unlike `load`/`fread`, `(run PATH)` evaluates all of a file's top-level
 forms with an implicit `begin`, in a fresh process, and waits for that process
-to finish. Services created by `spawn_srv` keep running.
+to finish. Services created by `spawn_srv!` keep running.
 
 Every daemon has an immutable string node name. It defaults to the machine's
 short hostname and can be set explicitly:

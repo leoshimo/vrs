@@ -96,8 +96,6 @@ pub enum NativeFnOp<T: Extern, L: Locals> {
     Exec(Bytecode<T, L>),
     /// Evaluate source at the process root (explicit runtime metaprogramming).
     EvalGlobal(Val<T, L>),
-    /// Evaluate source with already evaluated arguments in a fresh caller frame.
-    EvalIn(Val<T, L>, Vec<(SymbolId, Val<T, L>)>),
 }
 
 /// A native async function

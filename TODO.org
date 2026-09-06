@@ -111,8 +111,8 @@ Maybe also cover imports / exported interface and discoverability
 
 #+begin_src lyric
 # *** service-side
-(srv :launcher
-     :export '(get_favs, add_favs))
+(srv! :launcher
+      :interface '(get_favs add_favs))
 
 # *** client side (gets imports!)
 (bind_srv :launcher)
@@ -298,7 +298,7 @@ let echo_prog = r#" (begin
     (spawn (lambda () (begin
         (defn ping (msg) (list "pong" msg))
         (defn pong (msg) (list "ping" msg))
-        (srv :ping_pong :interface '(echo)))))
+        (srv! :ping_pong :interface '(echo)))))
     (list
         (call (find-srv :ping_pong) '(:ping "hi"))
         (call (find-srv :ping_pong) '(:pong "bye")))
@@ -374,8 +374,8 @@ pub(crate) fn call_fn() -> Lambda {
 }
 #+end_src
 
-** TODO Native Bindings w/ hand-rolled macos
-E.g. =srv= definition - =srv_fn=
+** DONE Replace native service syntax builders
+=srv!= and =spawn_srv!= are defined in Lyric; the native adapters are removed.
 
 * tooling
 ** TODO Inferior VRS Mode in Emacs

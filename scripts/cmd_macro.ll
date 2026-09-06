@@ -41,7 +41,7 @@
   (set macros (push macros recording))
   :ok)
 
-# TODO: Instead of child process + manual `call`, consider ergonomic hook for topics on `spawn_srv` macro?
+# TODO: Instead of child process + manual `call`, consider ergonomic hook for topics on `spawn_srv!` macro?
 (defn start_record_proc (name)
   "(start_record_proc NAME) - Start a process that is recording commands"
   (set record_pid

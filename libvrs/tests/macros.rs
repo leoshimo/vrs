@@ -180,6 +180,10 @@ async fn service_options_preserve_source_and_explicit_ready_presence() {
 #[tokio::test]
 async fn service_macro_option_errors_are_catchable_before_spawning() {
     for name in ["srv!", "spawn_srv!"] {
+        assert_eq!(
+            run(&format!("(err? (try ({name})))")).await,
+            Val::Bool(true)
+        );
         for options in [
             "",
             ":interface",
@@ -235,4 +239,12 @@ async fn macros_can_call_async_runtime_functions_and_catch_their_errors() {
       (list (ask!) (err? (try (fail!))) (when! true :recovered)))")
     .await;
     assert_eq!(result, value("(42 true :recovered)"));
+}
+
+#[tokio::test]
+async fn service_construction_has_no_legacy_function_bindings() {
+    assert_eq!(
+        run("(list (contains? (ls_env) 'srv) (contains? (ls_env) 'spawn_srv))").await,
+        value("(false false)")
+    );
 }

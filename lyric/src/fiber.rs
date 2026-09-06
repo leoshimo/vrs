@@ -562,18 +562,6 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                                     self.cf().unwind_cf_len,
                                 ))
                             }
-                            NativeFnOp::EvalIn(value, bindings) => {
-                                let mut env = Env::extend(self.cur_env());
-                                for (name, value) in bindings {
-                                    env.define(name, value);
-                                }
-                                self.cframes.push(CallFrame::from_bytecode(
-                                    Arc::new(Mutex::new(env)),
-                                    vec![Inst::Prepare(value)],
-                                    self.stack.len(),
-                                    self.cf().unwind_cf_len,
-                                ));
-                            }
                         }
                     }
                     Some(Val::NativeAsyncFn(fun)) => {

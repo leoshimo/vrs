@@ -235,13 +235,11 @@ pub fn proc_env() -> Env {
     }
 
     {
-        e.bind_native(SymbolId::from("srv"), bindings::srv_fn())
-            .bind_native(
-                SymbolId::from("import_entity_completions"),
-                bindings::import_entity_completions_fn(),
-            )
-            .bind_native_async(SymbolId::from("info_srv"), bindings::info_srv_fn())
-            .bind_native(SymbolId::from("spawn_srv"), bindings::spawn_srv_fn());
+        e.bind_native(
+            SymbolId::from("import_entity_completions"),
+            bindings::import_entity_completions_fn(),
+        )
+        .bind_native_async(SymbolId::from("info_srv"), bindings::info_srv_fn());
     }
 
     {
