@@ -23,9 +23,12 @@ impl<T: Extern, L: Locals> Default for MacroEnv<T, L> {
         let mut env = Self {
             definitions: HashMap::new(),
         };
-        let source = crate::parse("(defmacro when (test & body) \"Evaluate BODY when TEST is true.\" (list 'if test (concat '(begin) body) nil))").unwrap();
-        env.define(&Val::from(source), None)
-            .expect("standard macro must compile");
+        for source in crate::parse_script(include_str!("stdlib/macros.ll"))
+            .expect("standard macros must parse")
+        {
+            env.define(&Val::from(source), None)
+                .expect("standard macro must compile");
+        }
         env
     }
 }

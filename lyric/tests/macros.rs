@@ -274,3 +274,55 @@ async fn intermediate_values_and_reader_nesting_are_bounded() {
         .to_string()
         .contains("nesting"));
 }
+
+#[tokio::test]
+async fn boolean_macros_short_circuit_and_preserve_operand_values() {
+    for (source, expected) in [
+        ("(and!)", "true"),
+        ("(or!)", "nil"),
+        ("(and! :last)", ":last"),
+        ("(or! :last)", ":last"),
+        ("(and! true 3 \"yes\" '(last))", "(last)"),
+        ("(or! nil false 0 \"\" '() :last)", ":last"),
+        ("(or! false 0 \"\" '())", "()"),
+        ("(and! false (missing!))", "false"),
+        ("(or! true (missing!))", "true"),
+    ] {
+        assert_eq!(
+            eval(source).await.unwrap(),
+            Value::from_expr(expected).unwrap(),
+            "{source}"
+        );
+    }
+    for falsy in ["nil", "false", "0", "\"\"", "'()"] {
+        assert_eq!(
+            eval(&format!("(and! true {falsy} (error \"unreachable\"))"))
+                .await
+                .unwrap(),
+            eval(falsy).await.unwrap()
+        );
+    }
+    for name in ["and!", "or!"] {
+        assert!(eval(&format!("({name} :invalid-condition 42)"))
+            .await
+            .is_err());
+    }
+}
+
+#[tokio::test]
+async fn boolean_macros_evaluate_once_in_order_without_capturing_names() {
+    let source = "(begin
+      (def trace '())
+      (defn visit (value) (set trace (push trace value)) value)
+      (def value 42)
+      (def a (and! (visit 1) (visit 2) (visit 0) (visit 99)))
+      (def b (or! (visit false) (visit 3) (visit 99)))
+      (def c (or! false value))
+      (def d (and! true value))
+      (def expansion (macroexpand_1 '(or! (visit 5) (visit 6))))
+      (list a b c d trace (eval expansion) trace))";
+    assert_eq!(
+        eval(source).await.unwrap(),
+        Value::from_expr("(0 3 42 42 (1 2 0 false 3) 5 (1 2 0 false 3 5))").unwrap()
+    );
+}

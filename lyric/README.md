@@ -110,6 +110,12 @@ wire serialization retains the same atoms-and-lists representation.
 `name!` marks invocation explicitly; macro arguments remain unevaluated forms.
 The optional final `& rest` parameter collects remaining source arguments.
 A transformer returns one source form, using `begin` for multiple expressions.
+
+Standard macros include `when!`, `and!`, and `or!`. `and!` stops at the first
+false value; `or!` stops at the first true value, using the same conditions as
+`if`. Both return the last evaluated value, evaluate each operand at most once,
+and skip the remaining operands. `(and!)` returns `true`; `(or!)` returns `nil`.
+
 `macroexpand_1` runs one outer transformer; `macroexpand` repeats only at the
 outermost position. Neither executes its returned program or walks quoted data.
 

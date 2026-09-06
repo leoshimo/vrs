@@ -89,7 +89,7 @@
 
 (defn root_items (context query)
   "Retrieve the root command palette's final ordered items"
-  (if (if (eq? query "") false (eq? (get (split "-" query) 0) ""))
+  (if (and! (not? (eq? query "")) (eq? (get (split "-" query) 0) ""))
     (task_items context query)
     (command_items context query)))
 
@@ -126,7 +126,7 @@
 
 (defn command_title (name)
   (def metadata (meta (eval name)))
-  (if (get metadata :doc) (get metadata :doc) (display name)))
+  (or! (get metadata :doc) (display name)))
 
 (defn interactive_items (context)
   # One row per command, not one row per captured object. Window commands live
@@ -207,12 +207,12 @@
     (def found (try (apply (eval provider) '())))
     (if (list? found)
       (map found (fn (entity)
-        (if (list? entity)
-          (if (eq? (get entity 0) type)
-            (if (not? (contains? entities entity))
-              (set entities (push entities entity))))))))))
+        (when! (and! (list? entity)
+                    (eq? (get entity 0) type)
+                    (not? (contains? entities entity)))
+          (set entities (push entities entity))))))))
   (map (fuzzy_match query entities display) (fn (entity)
-    (+ (make_item (if (get entity :title) (get entity :title) (entity_title entity))
+    (+ (make_item (or! (get entity :title) (entity_title entity))
          `(continue_call ',name ',(push values entity)))
        (list :subtitle (if (eq? type :os/app)
                          (get entity :bundle_id)
