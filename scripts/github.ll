@@ -20,4 +20,4 @@
     (error (get result :stderr)))
   :ok)
 
-(spawn_srv :github :interface '(get_pull_requests refresh_pull_requests))
+(spawn_srv! :github :interface '(get_pull_requests refresh_pull_requests))

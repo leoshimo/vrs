@@ -19,4 +19,4 @@
   "(eden_ai QUERY) - Send a request to EDEN AI"
   (exec "eden" "ai" query))
 
-(spawn_srv :eden :interface '(eden_list eden_open eden_ai))
+(spawn_srv! :eden :interface '(eden_list eden_open eden_ai))

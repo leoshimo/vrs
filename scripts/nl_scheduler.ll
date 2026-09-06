@@ -48,4 +48,4 @@ If I have a interview with candidate, which may have titles like \"Intro Chat\",
              (notify "Encountered error :(" (format "{}" code)))))
   :ok)
 
-(spawn_srv :nl_scheduler :interface '(schedule_the_day))
+(spawn_srv! :nl_scheduler :interface '(schedule_the_day))

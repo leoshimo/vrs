@@ -128,7 +128,9 @@ impl<T: Extern, L: Locals> Env<T, L> {
     pub fn set(&mut self, symbol: &SymbolId, value: Val<T, L>) -> Result<(), Error> {
         if let Some(b) = self.bindings.get_mut(symbol) {
             if self.frozen {
-                return Err(Error::Macro(format!("cannot mutate captured phase binding {symbol}")));
+                return Err(Error::Macro(format!(
+                    "cannot mutate captured phase binding {symbol}"
+                )));
             }
             *b = value;
             return Ok(());
@@ -183,7 +185,10 @@ impl<T: Extern, L: Locals> Env<T, L> {
     }
 
     pub fn macro_env(&self) -> crate::macros::MacroEnv {
-        self.macros.clone().or_else(|| self.parent.as_ref().map(|p| p.lock().unwrap().macro_env())).unwrap_or_default()
+        self.macros
+            .clone()
+            .or_else(|| self.parent.as_ref().map(|p| p.lock().unwrap().macro_env()))
+            .unwrap_or_default()
     }
 
     pub fn set_macro_env(&mut self, macros: crate::macros::MacroEnv) {
@@ -191,7 +196,8 @@ impl<T: Extern, L: Locals> Env<T, L> {
     }
 
     pub(crate) fn retain_names(&mut self, names: &[&str]) {
-        self.bindings.retain(|name, _| names.contains(&name.as_str()));
+        self.bindings
+            .retain(|name, _| names.contains(&name.as_str()));
     }
 
     /// Freeze only phase environments, including local frames retained by closures.
@@ -199,14 +205,22 @@ impl<T: Extern, L: Locals> Env<T, L> {
         let mut pending = vec![root.clone()];
         let mut visited = std::collections::HashSet::new();
         while let Some(env) = pending.pop() {
-            if !visited.insert(Arc::as_ptr(&env) as usize) { continue; }
+            if !visited.insert(Arc::as_ptr(&env) as usize) {
+                continue;
+            }
             let mut env = env.lock().unwrap();
             env.frozen = true;
-            if let Some(parent) = &env.parent { pending.push(parent.clone()); }
+            if let Some(parent) = &env.parent {
+                pending.push(parent.clone());
+            }
             let mut values: Vec<_> = env.bindings.values().collect();
             while let Some(value) = values.pop() {
                 match value {
-                    Val::Lambda(lambda) => if let Some(parent) = &lambda.parent { pending.push(parent.clone()); },
+                    Val::Lambda(lambda) => {
+                        if let Some(parent) = &lambda.parent {
+                            pending.push(parent.clone());
+                        }
+                    }
                     Val::List(items) => values.extend(items),
                     _ => (),
                 }

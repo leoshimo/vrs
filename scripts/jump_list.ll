@@ -54,5 +54,5 @@
   (if (def (:title title :url url) (active_tab))
     (add_jump_list title url)))
 
-(spawn_srv :jump_list
+(spawn_srv! :jump_list
    :interface '(get_jump_list add_jump_list remove_jump_list clear_jump_list add_jump_list_active_tab))

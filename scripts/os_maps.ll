@@ -6,4 +6,4 @@
   "Start maps search for given query"
   (exec "open" (format "maps://?q={}" query)))
 
-(spawn_srv :os_maps :interface '(open_maps_search))
+(spawn_srv! :os_maps :interface '(open_maps_search))

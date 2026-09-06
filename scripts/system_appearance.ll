@@ -41,4 +41,4 @@
         "-e" "end if")
   :ok)
 
-(spawn_srv :system_appearance :interface '(toggle_darkmode toggle_color_filters toggle_quick_shade))
+(spawn_srv! :system_appearance :interface '(toggle_darkmode toggle_color_filters toggle_quick_shade))

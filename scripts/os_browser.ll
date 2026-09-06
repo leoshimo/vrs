@@ -52,4 +52,4 @@
   # (open_url (format "https://web.archive.org/web/*/{}" url))
   (open_url (format "https://archive.is/{}" url)))
 
-(spawn_srv :os_browser :interface '(active_tab active_tab_open_wayback active_tab_for_app browser_pages))
+(spawn_srv! :os_browser :interface '(active_tab active_tab_open_wayback active_tab_for_app browser_pages))

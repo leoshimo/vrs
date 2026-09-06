@@ -24,4 +24,4 @@
 (defn toggle_do_not_disturb ()
   (exec "shortcuts" "run" "do-not-disturb-toggle"))
 
-(spawn_srv :os_notify :interface '(notify toggle_do_not_disturb))
+(spawn_srv! :os_notify :interface '(notify toggle_do_not_disturb))

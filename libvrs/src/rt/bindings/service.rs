@@ -4,7 +4,7 @@
 use lyric::builtin::cond::is_true;
 use lyric::{compile, kwargs, parse, Error, KeywordId, Result, SymbolId};
 
-use crate::rt::program::{Extern, Fiber, Lambda, NativeAsyncFn, NativeFn, NativeFnOp, Val};
+use crate::rt::program::{Fiber, Lambda, NativeAsyncFn, NativeFn, NativeFnOp, Val};
 use crate::rt::registry::Registration;
 
 /// Binding for register
@@ -166,32 +166,6 @@ pub(crate) fn find_srv_fn() -> Lambda {
     }
 }
 
-// TODO: Rust macros for creating Vals - e.g. lambdas
-/// Binding for `bind_srv`
-pub(crate) fn bind_srv_fn() -> Lambda {
-    Lambda {
-        metadata: vec![],
-        doc: Some(
-            "(bind_srv SVC_NAME) - Binds to SVC_NAME in service registry, defining new symbols in current process space \
-             that communicate to SVC_NAME over message passing."
-                .to_string(),
-        ),
-        params: vec![SymbolId::from("srv_name")],
-        code: compile(
-            &parse(
-                "(begin
-                    (map (info_srv srv_name :interface_doc) (lambda (idoc)
-                        (def_bind_interface srv_name idoc)))
-                    (import_entity_completions srv_name (info_srv srv_name :entity_completions)))",
-            )
-            .unwrap()
-            .into(),
-        )
-        .unwrap(),
-        parent: None,
-    }
-}
-
 /// Binding for info_srv
 pub(crate) fn info_srv_fn() -> NativeAsyncFn {
     NativeAsyncFn {
@@ -274,70 +248,6 @@ async fn info_srv_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
     }
 }
 
-// TODO: This is a hack to workaround not having macros (yet)
-/// Binding for def_bind_interface
-pub(crate) fn def_bind_interface() -> NativeFn {
-    NativeFn {
-        metadata: vec![],
-        doc: "(def_bind_interface SVC_NAME INTERFACE_DOC) - Runtime internal use only. Shim for service bindings".to_string(),
-        func: |f, args| {
-            let (svc_name, interface_doc) =
-                match args {
-                    [Val::Keyword(svc_name), Val::List(idoc)] => (svc_name, idoc),
-                    _ => return Err(Error::UnexpectedArguments(
-                        "def_bind_interface expects a keyword for service and interface doc list it exposes"
-                            .to_string(),
-                    )),
-                };
-
-            let interface = kwargs::get(interface_doc, &KeywordId::from("interface"))
-                .ok_or(Error::UnexpectedArguments(
-                    "interface doc should have interface kwarg".to_string(),
-                ))?.to_list()?;
-            let doc = kwargs::get(interface_doc, &KeywordId::from("doc"))
-                .ok_or(Error::UnexpectedArguments(
-                    "interface doc should have doc kwarg".to_string(),
-                ))?
-                .as_string()?
-                .clone();
-
-            let (msg_name, args) = interface.split_first().ok_or(Error::UnexpectedArguments(
-                "interface list must contain at least one item".to_string(),
-            ))?;
-
-            let msg_name = match msg_name {
-                Val::Keyword(k) => Ok(k),
-                v => Err(Error::UnexpectedArguments(format!(
-                    "first element of interface item should be keyword - got {}",
-                    v
-                ))),
-            }?;
-
-            let arg_syms = args
-                .iter()
-                .cloned()
-                .map(|m| match m {
-                    Val::Symbol(sym) => Ok(sym),
-                    _ => Err(Error::UnexpectedArguments(
-                        "def_bind_interface expects a symbols after first keyword-argument"
-                            .to_string(),
-                    )),
-                })
-                .collect::<Result<Vec<_>>>()?;
-
-            let mut env = f.global_env().lock().unwrap();
-            let sym = msg_name.clone().to_symbol();
-            let mut stub = lambda_stub_for_interface(svc_name, arg_syms, msg_name, args, doc);
-            if let Some(Val::List(metadata)) = kwargs::get(interface_doc, &KeywordId::from("metadata")) {
-                stub.metadata = metadata.into_iter().map(lyric::Form::try_from).collect::<Result<_>>()?;
-            }
-            env.define(sym, Val::Lambda(stub));
-
-            Ok(NativeFnOp::Return(Val::List(interface.to_vec())))
-        },
-    }
-}
-
 pub(crate) fn import_entity_completions_fn() -> NativeFn {
     NativeFn {
         metadata: vec![],
@@ -374,210 +284,101 @@ pub(crate) fn import_entity_completions_fn() -> NativeFn {
     }
 }
 
-// TODO: Define as lisp macro
-/// Implementation of spawn_srv
-pub(crate) fn spawn_srv_fn() -> NativeFn {
-    NativeFn {
-        metadata: vec![],
-        doc: "(spawn_srv SVC_NAME [:interface INTERFACE]) - Spawn a separate process as service registered as SVC_NAME, \
-              optionally exporting interface INTERFACE.".to_string(),
-        func: spawn_srv_impl,
-    }
-}
-
-/// Implementation for (spawn_srv) that matches (srv)'s signature
-fn spawn_srv_impl(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
-    // Expand
-    //     (spawn_srv :SRV_NAME :interface '(sym_a sym_b))
-    // Into
-    //     (let ((__spawned_service
-    //              (spawn (lambda ()
-    //                (begin
-    //                  (try (kill (find_srv :SRV_NAME)))
-    //                  (srv :SRV_NAME :interface '(sym_a sym_b)
-    //                       :ready <parent-pid>))))))
-    //       (recv (list :service_ready __spawned_service))
-    //       __spawned_service)
-
-    let mut srv = vec![Val::symbol("srv")];
-    srv.push(args[0].clone());
-
-    if let Some(interfaces) = kwargs::get(args, &KeywordId::from("interface")) {
-        srv.push(Val::keyword("interface"));
-        srv.push(Val::List(vec![Val::symbol("quote"), interfaces.clone()]));
-    }
-    srv.push(Val::keyword("ready"));
-    srv.push(Val::Extern(Extern::ProcessId(f.locals().pid.clone())));
-
-    let kill_srv = Val::from_expr(&format!("(try (kill (find_srv {})))", args[0].clone())).unwrap();
-    let spawn = Val::List(vec![
-        Val::symbol("spawn"),
-        Val::List(vec![
-            Val::symbol("lambda"),
-            Val::List(vec![]),
-            Val::List(vec![Val::symbol("begin"), kill_srv, Val::List(srv)]),
-        ]),
-    ]);
-    let child = Val::symbol("__spawned_service");
-    let ast = Val::List(vec![
-        Val::symbol("let"),
-        Val::List(vec![Val::List(vec![child.clone(), spawn])]),
-        Val::List(vec![
-            Val::symbol("recv"),
-            Val::List(vec![
-                Val::symbol("list"),
-                Val::keyword("service_ready"),
-                child.clone(),
-            ]),
-        ]),
-        child,
-    ]);
-
-    let bc = compile(&ast)?;
-    Ok(NativeFnOp::Exec(bc))
-}
-
-/// Binding for `srv`
+/// Legacy evaluated-argument entry points use the same language macros. The
+/// temporary argument frame retains the caller's lexical service definitions.
 pub(crate) fn srv_fn() -> NativeFn {
+    service_adapter("srv!")
+}
+pub(crate) fn spawn_srv_fn() -> NativeFn {
+    service_adapter("spawn_srv!")
+}
+fn service_adapter(name: &'static str) -> NativeFn {
     NativeFn {
         metadata: vec![],
-        doc: "(srv SVC_NAME [:interface INTERFACE]) - Register current process as SVC_NAME, \
-              optionally exporting interface INTERFACE. This function blocks until service exits."
-            .to_string(),
-        func: srv_impl,
+        doc: format!("Legacy service call; prefer ({name} NAME :interface EXPR)"),
+        func: if name == "srv!" {
+            |_, args| adapt_service("srv!", args)
+        } else {
+            |_, args| adapt_service("spawn_srv!", args)
+        },
     }
 }
-
-// TODO: Define as lisp macro
-fn srv_impl(f: &mut Fiber, args: &[Val]) -> Result<NativeFnOp> {
-    // Expand
-    //     (srv :SRV_NAME :interface '(sym_a sym_b))
-    // to
-    //     (begin
-    //         (register :launcher :overwrite :interface '(sym_a sym_b))
-    //         (loop
-    //             (def (r src msg) (recv))
-    //             (def resp
-    //                 (try (match msg
-    //                     ((:sym_a arg1 arg2) (sym_a arg1 arg2))
-    //                     ((:sym_b) (sym_b))
-    //                     (_ '(:err "Unrecognized message")))))
-    //             (send src (list r resp))))
-
-    let name = args.first().ok_or(Error::UnexpectedArguments(
-        "First argument must be a value used to identify service".to_string(),
-    ))?;
-
-    let interface = kwargs::get(args, &KeywordId::from("interface")).ok_or(
-        Error::UnexpectedArguments("Missing :interface keyword argument".to_string()),
-    )?;
-    let symbols = match interface {
-        Val::List(ref symbols) => Ok(symbols),
-        _ => Err(Error::UnexpectedArguments(
-            ":interface keyword argument must be a list".to_string(),
-        )),
-    }?;
-    let symbols = symbols
-        .iter()
-        .map(|e| match e {
-            Val::Symbol(s) => Ok(s),
-            _ => Err(Error::UnexpectedArguments(
-                "Forms in :interface list should be symbols".to_string(),
-            )),
-        })
-        .collect::<Result<Vec<_>>>()?;
-
-    let mut match_form = vec![Val::symbol("match"), Val::symbol("msg")];
-
-    {
-        let env = f.cur_env().lock().unwrap();
-
-        for sym in symbols {
-            let val = env.get(sym).ok_or(Error::InvalidExpression(format!(
-                "No symbol bound to {}",
-                sym
-            )))?;
-            let lambda = match val {
-                Val::Lambda(l) => Ok(l),
-                _ => Err(Error::UnexpectedArguments(format!(
-                    "{} is not a lambda - found {}",
-                    sym, val
-                ))),
-            }?;
-            let pattern = lambda_interface(sym, &lambda);
-            match_form.push(Val::List(vec![pattern, lambda_call(sym, &lambda)]));
+fn adapt_service(name: &str, args: &[Val]) -> Result<NativeFnOp> {
+    if args.is_empty() {
+        return Err(Error::UnexpectedArguments(
+            "service name is required".into(),
+        ));
+    }
+    let mut call = vec![Val::symbol(name)];
+    let mut bindings = vec![];
+    for (index, value) in args.iter().enumerate() {
+        if index > 0 && index % 2 == 1 {
+            call.push(value.clone());
+        } else {
+            let symbol = SymbolId::from(format!("__lyric_service_arg_{}", nanoid::nanoid!()));
+            call.push(Val::Symbol(symbol.clone()));
+            bindings.push((symbol, value.clone()));
         }
     }
-    // catch-all
-    match_form.push(Val::List(vec![
-        Val::symbol("_"),
-        Val::List(vec![
-            Val::symbol("quote"),
-            Val::List(vec![
-                Val::keyword("err"),
-                Val::string("Unrecognized message"),
-            ]),
-        ]),
-    ]));
+    Ok(NativeFnOp::EvalIn(Val::List(call), bindings))
+}
 
-    let register_form = Val::List(vec![
-        Val::symbol("register"),
-        name.clone(),
-        Val::keyword("overwrite"),
-        Val::keyword("interface"),
-        Val::List(vec![Val::symbol("quote"), interface]),
-    ]);
-    let ready_form = kwargs::get(args, &KeywordId::from("ready")).map(|ready| {
-        Val::List(vec![
-            Val::symbol("send"),
-            ready.clone(),
-            Val::List(vec![
-                Val::symbol("list"),
-                Val::keyword("service_ready"),
-                Val::List(vec![Val::symbol("self")]),
-            ]),
-        ])
+/// Cache the standard source library, then install its global-lookup lambdas
+/// into each process. No registry operations execute while loading definitions.
+pub(crate) fn install_service_library(env: &mut crate::Env) {
+    use std::sync::OnceLock;
+    static LIBRARY: OnceLock<(lyric::macros::MacroEnv, Vec<(SymbolId, Val)>)> = OnceLock::new();
+    let (macros, definitions) = LIBRARY.get_or_init(|| {
+        let mut macros = lyric::macros::MacroEnv::default();
+        macros
+            .load(include_str!("../stdlib/service-macros.ll"))
+            .expect("standard service macros must load");
+        let forms = lyric::parse_script(include_str!("../stdlib/services.ll"))
+            .expect("standard service functions must parse");
+        let names: Vec<_> = forms
+            .iter()
+            .map(|form| match form {
+                lyric::Form::List(items) => match &items[1] {
+                    lyric::Form::Symbol(name) => name.clone(),
+                    _ => panic!("library definition needs a name"),
+                },
+                _ => panic!("library definition must be a list"),
+            })
+            .collect();
+        let body = Val::List(
+            std::iter::once(Val::symbol("begin"))
+                .chain(forms.into_iter().map(Val::from))
+                .collect(),
+        );
+        let mut fiber = Fiber::from_val(
+            &body,
+            crate::Env::standard(),
+            crate::Locals::new(crate::ProcessId::new("library", 0)),
+        )
+        .unwrap();
+        assert!(matches!(
+            fiber
+                .start()
+                .expect("service library definitions must evaluate"),
+            lyric::Signal::Done(_)
+        ));
+        let root = fiber.global_env().lock().unwrap();
+        let definitions = names
+            .into_iter()
+            .map(|name| {
+                let mut value = root.get(&name).expect("library definition must exist");
+                if let Val::Lambda(lambda) = &mut value {
+                    lambda.parent = None;
+                }
+                (name, value)
+            })
+            .collect();
+        (macros, definitions)
     });
-
-    // TODO: Rust macros plz
-    let service_loop = Val::List(vec![
-        Val::symbol("loop"),
-        // (def (r src msg) (recv))
-        Val::List(vec![
-            Val::symbol("def"),
-            Val::List(vec![
-                Val::symbol("r"),
-                Val::symbol("src"),
-                Val::symbol("msg"),
-            ]),
-            Val::List(vec![Val::symbol("recv")]),
-        ]),
-        // (def resp (try (match ...)))
-        Val::List(vec![
-            Val::symbol("def"),
-            Val::symbol("resp"),
-            Val::List(vec![Val::symbol("try"), Val::List(match_form)]),
-        ]),
-        // (send src (list r resp))
-        Val::List(vec![
-            Val::symbol("send"),
-            Val::symbol("src"),
-            Val::List(vec![
-                Val::symbol("list"),
-                Val::symbol("r"),
-                Val::symbol("resp"),
-            ]),
-        ]),
-    ]);
-    let mut body = vec![Val::symbol("begin"), register_form];
-    if let Some(ready_form) = ready_form {
-        body.push(ready_form);
+    env.set_macro_env(macros.clone());
+    for (name, value) in definitions {
+        env.define(name.clone(), value.clone());
     }
-    body.push(service_loop);
-    let ast = Val::List(body);
-
-    let bc = compile(&ast)?;
-    Ok(NativeFnOp::Exec(bc))
 }
 
 /// Generates interface for calling exported lambda
@@ -587,163 +388,4 @@ fn lambda_interface(symbol: &SymbolId, lambda: &Lambda) -> Val {
             .chain(lambda.params.iter().map(|v| Val::Symbol(v.clone())))
             .collect::<Vec<_>>(),
     )
-}
-
-/// Generates function call expression compatible with [lambda_interface]
-fn lambda_call(symbol: &SymbolId, lambda: &Lambda) -> Val {
-    //
-    Val::List(
-        std::iter::once(Val::Symbol(symbol.clone()))
-            .chain(lambda.params.iter().map(|v| Val::Symbol(v.clone())))
-            .collect::<Vec<_>>(),
-    )
-}
-
-/// Given a [lambda_interface] [Val], turns it into client-side =Lambda= definition
-fn lambda_stub_for_interface(
-    srv_name: &KeywordId,
-    params: Vec<SymbolId>,
-    msg_name: &KeywordId,
-    msg_args: &[Val],
-    doc: String,
-) -> Lambda {
-    // TODO: Need to do this hack since there's no splice in lists atm
-    let msg = [Val::symbol("list"), Val::Keyword(msg_name.clone())]
-        .into_iter()
-        .chain(msg_args.iter().cloned())
-        .collect::<Vec<_>>();
-    let ast =
-        parse(format!(r#"(call (find_srv {}) {})"#, srv_name, Val::List(msg)).as_str()).unwrap();
-    let code = compile(&ast.into()).unwrap();
-    Lambda {
-        metadata: vec![],
-        doc: Some(doc),
-        params,
-        code,
-        parent: None,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use lyric::Inst;
-
-    use crate::rt::bindings::service::lambda_stub_for_interface;
-
-    use super::*;
-
-    #[test]
-    fn lambda_interface_empty() {
-        let lambda = Lambda {
-            metadata: vec![],
-            doc: None,
-            params: vec![],
-            code: vec![Inst::PushConst(Val::Nil)],
-            parent: None,
-        };
-
-        assert_eq!(
-            lambda_interface(&SymbolId::from("hello"), &lambda),
-            v("(:hello)")
-        );
-    }
-
-    #[test]
-    fn lambda_interface_nonempty() {
-        let lambda = Lambda {
-            metadata: vec![],
-            doc: None,
-            params: vec![SymbolId::from("arg1"), SymbolId::from("arg2")],
-            code: vec![Inst::PushConst(Val::Nil)],
-            parent: None,
-        };
-
-        assert_eq!(
-            lambda_interface(&SymbolId::from("hello"), &lambda),
-            v("(:hello arg1 arg2)")
-        );
-    }
-
-    #[test]
-    fn lambda_call_empty() {
-        let lambda = Lambda {
-            metadata: vec![],
-            doc: None,
-            params: vec![],
-            code: vec![Inst::PushConst(Val::Nil)],
-            parent: None,
-        };
-
-        assert_eq!(lambda_call(&SymbolId::from("hello"), &lambda), v("(hello)"));
-    }
-
-    #[test]
-    fn lambda_call_nonempty() {
-        let lambda = Lambda {
-            metadata: vec![],
-            doc: None,
-            params: vec![SymbolId::from("arg1"), SymbolId::from("arg2")],
-            code: vec![Inst::PushConst(Val::Nil)],
-            parent: None,
-        };
-
-        assert_eq!(
-            lambda_call(&SymbolId::from("hello"), &lambda),
-            v("(hello arg1 arg2)")
-        );
-    }
-
-    #[test]
-    fn stub_for_interface() {
-        {
-            let srv_name = KeywordId::from("launcher");
-            let lambda = lambda_stub_for_interface(
-                &srv_name,
-                vec![],
-                &KeywordId::from("get_items"),
-                &[],
-                String::new(),
-            );
-            assert_eq!(
-                lambda,
-                Lambda {
-                    metadata: vec![],
-                    doc: None,
-                    params: vec![],
-                    code: compile(&v(r#"
-                        (call (find_srv :launcher) (list :get_items))
-                        "#))
-                    .unwrap(),
-                    parent: None
-                }
-            )
-        }
-        {
-            let srv_name = KeywordId::from("launcher");
-            let lambda = lambda_stub_for_interface(
-                &srv_name,
-                vec![SymbolId::from("title"), SymbolId::from("cmd")],
-                &KeywordId::from("add_item"),
-                &[Val::symbol("title"), Val::symbol("cmd")],
-                String::new(),
-            );
-            assert_eq!(
-                lambda,
-                Lambda {
-                    metadata: vec![],
-                    doc: None,
-                    params: vec![SymbolId::from("title"), SymbolId::from("cmd")],
-                    code: compile(&v(r#"
-                        (call (find_srv :launcher) (list :add_item title cmd))
-                        "#))
-                    .unwrap(),
-                    parent: None,
-                }
-            )
-        }
-    }
-
-    fn v(expr: &str) -> Val {
-        lyric::parse(expr).unwrap().into()
-    }
 }

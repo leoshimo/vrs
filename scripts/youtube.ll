@@ -51,4 +51,4 @@
 # - Spin up youtube servic
 # - Integrate with vrsjmp via service
 
-(spawn_srv :youtube :interface '(download_video download_video_active_tab list_videos))
+(spawn_srv! :youtube :interface '(download_video download_video_active_tab list_videos))

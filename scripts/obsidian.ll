@@ -35,4 +35,4 @@
   (if (not? (eq? (get result :exit) 0)) (error (get result :stderr)))
   (exec "open" (get (split "\n" (get result :stdout)) 0)))
 
-(spawn_srv :obsidian :interface '(get_obsidian_files open_obsidian_file))
+(spawn_srv! :obsidian :interface '(get_obsidian_files open_obsidian_file))

@@ -10,6 +10,6 @@
   (def title (get (decode :lines (get title_result :stdout)) 0))
   (list :title title :url url))
 
-(spawn_srv :os_browser :interface '(active_tab))
+(spawn_srv! :os_browser :interface '(active_tab))
 
 # DEMO: Test in REPL

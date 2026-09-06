@@ -33,4 +33,4 @@ Example output:
   (def interface_str (send_message request))
   (try (read interface_str)))
 
-(spawn_srv :interfacegen :interface '(interfacegen))
+(spawn_srv! :interfacegen :interface '(interfacegen))

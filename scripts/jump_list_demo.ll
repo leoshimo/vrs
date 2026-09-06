@@ -23,7 +23,7 @@
   :ok)
 
 # Fork service
-(spawn_srv :jump_list :interface '(get_jump_list add_jump_list clear_jump_list))
+(spawn_srv! :jump_list :interface '(get_jump_list add_jump_list clear_jump_list))
 
 
 
@@ -54,5 +54,5 @@
     # TODO: Fill Me!
 #   :ok)
 
-# (spawn_srv :jump_list :interface
+# (spawn_srv! :jump_list :interface
 #    '(get_jump_list add_jump_list clear_jump_list add_jump_list_active_tab))

@@ -31,4 +31,4 @@
     (error (str "Could not read Safari history: " (get result :stderr))))
   :ok)
 
-(spawn_srv :safari_history :interface '(get_safari_history refresh_safari_history))
+(spawn_srv! :safari_history :interface '(get_safari_history refresh_safari_history))

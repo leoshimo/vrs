@@ -42,10 +42,10 @@
              "(clear_messages) - Clear messages in session. This does not clear system prompt"
              (set msgs (list :system system_prompt)))
 
-           (spawn_srv chat_name :interface '(get_messages send_message clear_messages))
+           (spawn_srv! chat_name :interface '(get_messages send_message clear_messages))
            
            (send parent (list :spawned chat_name))))
   (recv (list :spawned chat_name)) # don't return until child is ready
   )
 
-(spawn_srv :chat :interface '(spawn_chat))
+(spawn_srv! :chat :interface '(spawn_chat))

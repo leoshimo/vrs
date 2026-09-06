@@ -48,4 +48,4 @@
   result)
 
 (set_entity_completions :os/app 'get_running_apps)
-(spawn_srv :os_apps :interface '(get_running_apps force_quit_app))
+(spawn_srv! :os_apps :interface '(get_running_apps force_quit_app))

@@ -10,4 +10,4 @@
   "(set_clipboard CONTENTS) - Set contents of clipboard"
   (exec "pbcopy" :stdin contents))
 
-(spawn_srv :os_clipboard :interface '(get_clipboard set_clipboard))
+(spawn_srv! :os_clipboard :interface '(get_clipboard set_clipboard))

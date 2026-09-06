@@ -48,4 +48,4 @@
   (publish :things_event (list :created task))
   task)
 
-(spawn_srv :things :interface '(things_add get_things_tasks open_things_task))
+(spawn_srv! :things :interface '(things_add get_things_tasks open_things_task))
