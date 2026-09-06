@@ -3,7 +3,7 @@
 use super::{Env, Inst};
 use crate::types::NativeAsyncCall;
 use crate::{
-    builtin::cond::is_true, compile, parse, Bytecode, Error, Extern, Lambda, Locals, NativeFnOp,
+    builtin::cond::is_true, parse, Bytecode, Error, Extern, Lambda, Locals, NativeFnOp,
     Pattern, Result, Val,
 };
 use std::sync::{Arc, Mutex};
@@ -22,6 +22,8 @@ pub struct Fiber<T: Extern, L: Locals> {
     stack: Vec<Val<T, L>>,
     global: Arc<Mutex<Env<T, L>>>,
     locals: L,
+    phase_budget: Option<crate::macros::BudgetRef>,
+    phase_natives: std::collections::HashSet<usize>,
 }
 
 /// The status of fiber
@@ -89,12 +91,14 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
             )],
             global,
             locals,
+            phase_budget: None,
+            phase_natives: Default::default(),
         }
     }
 
     /// Create a new fiber from value
     pub fn from_val(val: &Val<T, L>, env: Env<T, L>, locals: L) -> Result<Self> {
-        let bytecode = compile(val)?;
+        let bytecode = vec![Inst::Prepare(val.clone())];
         Ok(Fiber::from_bytecode(bytecode, env, locals))
     }
 
@@ -156,6 +160,20 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
     /// Mutable Local storage
     pub fn locals_mut(&mut self) -> &mut L {
         &mut self.locals
+    }
+
+    pub(crate) fn expansion_budget(&self) -> crate::macros::BudgetRef {
+        self.phase_budget.clone().unwrap_or_else(crate::macros::budget)
+    }
+
+    pub(crate) fn set_phase_budget(&mut self, budget: crate::macros::BudgetRef) {
+        self.phase_budget = Some(budget);
+        self.phase_natives = crate::macros::phase_natives::<T, L>();
+    }
+
+    /// Execute prepared source in the process root, rather than a helper's scope.
+    pub fn eval_global(&mut self, value: Val<T,L>) {
+        self.cframes.push(CallFrame::from_bytecode(self.global.clone(), vec![Inst::Prepare(value)], self.stack.len(), self.cf().unwind_cf_len));
     }
 }
 
@@ -229,6 +247,10 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
 
     /// Run a single fetch-decode-execute cycle
     fn step(&mut self) -> Result<()> {
+        if let Some(budget) = &self.phase_budget {
+            crate::macros::tick(budget)?;
+            if self.cframes.len() > 256 { return Err(Error::Macro("phase call depth exceeded".into())); }
+        }
         while self.cframes.len() > 1 && self.cf().at_return() {
             let cf = self.cframes.last().unwrap();
             if self.stack.len() != cf.stack_len + 1 {
@@ -256,6 +278,12 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
         self.cf_mut().ip += 1;
 
         match inst {
+            Inst::Prepare(value) => {
+                let mut macros = self.global.lock().unwrap().macro_env();
+                let code = macros.prepare(&value, &self.expansion_budget(), self.phase_budget.is_some())?;
+                self.global.lock().unwrap().set_macro_env(macros);
+                self.cframes.push(CallFrame::from_bytecode(self.cur_env().clone(), code, self.stack.len(), self.cf().unwind_cf_len));
+            }
             Inst::PushConst(form) => {
                 self.stack.push(form);
             }
@@ -284,6 +312,8 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                 let value = self.stack.last().ok_or(Error::UnexpectedStack(
                     "Stack should contain value to bind".to_string(),
                 ))?;
+                if s.as_str().ends_with('!') && value.is_callable() { return Err(Error::Macro("callable names ending in ! are reserved for macros".into())); }
+                if self.cur_env().lock().unwrap().frozen { return Err(Error::Macro("cannot define a captured phase binding".into())); }
                 self.cur_env()
                     .lock()
                     .unwrap()
@@ -390,6 +420,9 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                         ))
                     }
                     Some(Val::NativeFn(n)) => {
+                        if self.phase_budget.is_some() && !self.phase_natives.contains(&(n.func as usize)) {
+                            return Err(Error::Macro("native operation is unavailable during expansion".into()));
+                        }
                         let v = (n.func)(self, &args.collect::<Vec<_>>())?;
                         match v {
                             NativeFnOp::Return(v) => self.stack.push(v),
@@ -406,6 +439,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                         }
                     }
                     Some(Val::NativeAsyncFn(fun)) => {
+                        if self.phase_budget.is_some() { return Err(Error::Macro("async calls are unavailable during expansion".into())); }
                         // TODO: Hack - pass to parent scope via stack
                         self.stack.push(Val::List(args.collect::<Vec<_>>()));
                         self.stack.push(Val::NativeAsyncFn(fun));
@@ -431,7 +465,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                 let val = self.stack.pop().ok_or(Error::UnexpectedStack(
                     "Did not find form to eval on stack".to_string(),
                 ))?;
-                let bc = compile(&val)?;
+                let bc = vec![Inst::Prepare(val)];
                 self.cframes.push(CallFrame::from_bytecode(
                     Arc::clone(self.cur_env()),
                     bc,
@@ -456,7 +490,10 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                     self.cf_mut().ip += offset;
                 }
             }
-            Inst::YieldTop => self.status = Status::Paused,
+            Inst::YieldTop => {
+                if self.phase_budget.is_some() { return Err(Error::Macro("yield is unavailable during expansion".into())); }
+                self.status = Status::Paused;
+            }
         };
 
         Ok(())
