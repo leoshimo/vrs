@@ -44,6 +44,14 @@ Goal: Replicate Emacs-like Development Workflow to build VRS software
 E.g. Emacs Eval, SLIME-like workflows for molding Software
 
 * runtime
+** TODO Runtime hooks inspired by Ruby TracePoint
+
+Provide hooks for observing Lyric execution without editing the observed code.
+Explore call, return, and error events, with filters by function or process and
+hooks that can be enabled or disabled interactively. Use this for tracing,
+debugging, and live instrumentation; work out callback context, reentrancy,
+and overhead before choosing an API.
+
 ** DONE Conn-less Process Spawning
 Goal: Non-connection-backed =spawn= from =kernel.rs=
 
