@@ -6,9 +6,16 @@ use serde::Serialize;
 pub struct Item {
     pub title: String,
     pub subtitle: Option<String>,
+    pub subtitle_spans: Vec<TextSpan>,
     pub aside: Option<String>,
     pub actions: Vec<ItemCommand>,
     pub on_click: String,
+}
+
+#[derive(Debug, Serialize, PartialEq)]
+pub struct TextSpan {
+    pub text: String,
+    pub matched: bool,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -95,15 +102,43 @@ pub fn items(value: Form) -> Result<Vec<Item>> {
                 }
                 _ => bail!("Item actions must be a list"),
             };
+            let (subtitle, subtitle_spans) = subtitle(values)?;
             Ok(Item {
                 title: command.title,
-                subtitle: optional_text(values, "subtitle")?,
+                subtitle,
+                subtitle_spans,
                 aside: optional_text(values, "aside")?,
                 actions,
                 on_click: command.on_click,
             })
         })
         .collect()
+}
+
+// Existing strings still work. Rich subtitles are lists of strings and
+// (:match "text") spans, rendered only as text nodes by the client.
+fn subtitle(values: &[Form]) -> Result<(Option<String>, Vec<TextSpan>)> {
+    let Some(Form::List(parts)) = field(values, "subtitle") else {
+        return Ok((optional_text(values, "subtitle")?, vec![]));
+    };
+    let mut spans = vec![];
+    let mut plain = String::new();
+    for part in parts {
+        let (text, matched) = match part {
+            Form::String(text) => (text, false),
+            Form::List(pair) => match pair.as_slice() {
+                [Form::Keyword(tag), Form::String(text)] if tag.as_str() == "match" => (text, true),
+                _ => bail!("Expected (:match TEXT) in subtitle"),
+            },
+            _ => bail!("Expected text in subtitle"),
+        };
+        plain.push_str(text);
+        spans.push(TextSpan {
+            text: text.clone(),
+            matched,
+        });
+    }
+    Ok((Some(plain), spans))
 }
 
 fn optional_text(values: &[Form], name: &str) -> Result<Option<String>> {
@@ -209,11 +244,37 @@ mod tests {
         )
         .unwrap();
         assert_eq!(rows[0].subtitle.as_deref(), Some("example.test"));
+        assert!(rows[0].subtitle_spans.is_empty());
         assert_eq!(rows[0].actions[0].title, "Copy URL");
         assert!(action_request(&rows[0].actions[0].on_click).is_ok());
         assert!(
             items(Form::from_expr("((:title \"x\" :on_click (x) :actions (42)))").unwrap())
                 .is_err()
         );
+        let rows = items(
+            Form::from_expr(
+                r#"((:title "Note" :on_click (open_note)
+          :subtitle ("<script>" (:match "needle") "</script>")))"#,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(rows[0].subtitle.as_deref(), Some("<script>needle</script>"));
+        assert_eq!(
+            rows[0].subtitle_spans[1],
+            TextSpan {
+                text: "needle".into(),
+                matched: true
+            }
+        );
+        assert!(!rows[0].subtitle_spans[0].matched);
+        assert!(items(
+            Form::from_expr(
+                r#"((:title "Note" :on_click (open_note)
+          :subtitle ((:match 42))))"#
+            )
+            .unwrap()
+        )
+        .is_err());
     }
 }

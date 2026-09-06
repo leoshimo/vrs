@@ -69,6 +69,7 @@ button:focus-visible { outline: 1px solid var(--accent); outline-offset: -2px; }
 .item-copy { flex: 1; min-width: 0; }
 .item-title { display: block; font-size: 14px; line-height: 20px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .item-subtitle { display: block; font-size: 11px; line-height: 15px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); }
+.item-subtitle mark { background: transparent; color: var(--ink); font-weight: 600; }
 .item-aside { flex: none; max-width: 29%; font-size: 11px; line-height: 16px; color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: right; }
 .page-footer {
     display: flex; justify-content: space-between; align-items: center; gap: 12px;
@@ -85,13 +86,17 @@ kbd { font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(
 .action-header { padding: 8px 14px 10px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
 #action-title { font-size: 13px; line-height: 18px; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 #action-subtitle { margin-top: 4px; font-size: 11px; color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#action-filter { width: calc(100% - 28px); margin: 2px 14px 5px; padding: 5px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; outline: none; background: transparent; font-size: 13px; }
+#action-filter:focus { border-bottom-color: var(--accent); }
+#action-filter::placeholder { color: var(--muted); }
+#action-status { padding: 8px 14px; font-size: 12px; color: var(--muted); }
 #action-list button {
     display: block; width: 100%; height: 34px; text-align: left; padding: 0 14px;
     border: 0; border-radius: 0; background: transparent; font-size: 13px;
     /* The flat row highlight is the focus indicator, just like the main list. */
     outline: none;
 }
-#action-list button:focus { background: var(--selection); }
+#action-list button.action--focus { background: var(--selection); }
 #toast {
     position: absolute; z-index: 3; bottom: 44px; left: var(--gutter); right: var(--gutter);
     padding: 10px 12px; max-height: 90px; overflow: auto;
