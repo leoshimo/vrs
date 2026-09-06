@@ -47,6 +47,28 @@ async fn fuzzy_empty_query_preserves_order_and_errors_propagate() {
 }
 
 #[tokio::test]
+async fn exact_fields_win_without_title_only_priority_or_duplicate_rows() {
+    assert_eq!(
+        eval(r#"(fuzzy_match "" '(("a") ("b" "")) (fn (fields) fields))"#).await,
+        Val::from_expr(r#"(("a") ("b" ""))"#).unwrap()
+    );
+    assert_eq!(eval(r#"
+      (def items '((:title "Ghost in the machine" :app "Browser")
+                   (:title "Terminal" :app "Ghostty")
+                   (:title "Ghostty notes" :app "Notes")))
+      (fuzzy_match "ghostty" items (fn (item) (list (get item :title) (get item :app) (display item))))
+    "#).await.as_list().unwrap()[0], Val::from_expr(r#"(:title "Terminal" :app "Ghostty")"#).unwrap());
+    assert_eq!(
+        eval(
+            r#"(fuzzy_match "Read Later" '("Save a Page to Read Later…" "Read Later")
+          (fn (title) (list title title)))"#
+        )
+        .await,
+        Val::from_expr(r#"("Read Later" "Save a Page to Read Later…")"#).unwrap()
+    );
+}
+
+#[tokio::test]
 async fn apply_preserves_data_and_supports_async_functions() {
     assert_eq!(
         eval(r#"(apply list '(name (:os/window :id 7) (not_a_call)))"#).await,

@@ -18,9 +18,6 @@ use vrs::{Connection, Response};
 #[cfg(target_os = "macos")]
 use tauri::ActivationPolicy;
 
-#[cfg(target_os = "macos")]
-use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
-
 struct State {
     client: Client,
 }
@@ -212,8 +209,35 @@ fn main() -> Result<()> {
         .start()
         .with_context(|| "Failed to start vrs client")?;
 
+    let context = tauri::generate_context!();
+    #[cfg(target_os = "macos")]
+    let context = {
+        let mut context = context;
+        if let Some(window) = context
+            .config_mut()
+            .tauri
+            .windows
+            .iter_mut()
+            .find(|w| w.label == "main")
+        {
+            // AppKit owns the outline, clipping, and shadow as a single frame.
+            // Overlay content fills it without a separate titlebar surface.
+            window.decorations = true;
+            window.transparent = false;
+            window.title_bar_style = tauri::TitleBarStyle::Overlay;
+            window.hidden_title = true;
+        }
+        context
+    };
+
     tauri::Builder::default()
         .manage(State::new(client))
+        .on_page_load(|_window, _| {
+            #[cfg(target_os = "macos")]
+            if let Err(error) = setup_native_frame(&_window) {
+                error!("Failed to set up palette frame: {error}");
+            }
+        })
         .setup(|app| {
             // Tauri 1/tao dereferences a missing zoom button when maximizable is
             // false on a borderless macOS window (caught by debug Rust builds).
@@ -223,15 +247,6 @@ fn main() -> Result<()> {
 
             #[cfg(target_os = "macos")]
             app.set_activation_policy(ActivationPolicy::Accessory);
-
-            #[cfg(target_os = "macos")]
-            apply_vibrancy(
-                &window,
-                NSVisualEffectMaterial::HudWindow,
-                Some(NSVisualEffectState::Active),
-                Some(16.0),
-            )
-            .expect("Unsupported platform! 'apply_vibrancy' is only supported on macOS");
 
             let mut shortcuts = app.global_shortcut_manager();
 
@@ -257,9 +272,37 @@ fn main() -> Result<()> {
             hide,
             on_blur
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running tauri application");
 
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+#[allow(unexpected_cfgs)] // objc 0.2 macros refer to their historical cargo-clippy feature.
+fn setup_native_frame(window: &Window) -> Result<()> {
+    use cocoa::{
+        appkit::{NSWindow, NSWindowButton},
+        base::{id, YES},
+    };
+    use objc::{msg_send, sel, sel_impl};
+
+    // Keep the native frame but hide its traffic-light controls. The palette
+    // still closes with Escape or blur, not a conventional window close action.
+    unsafe {
+        let ns_window = window.ns_window()? as id;
+        for kind in [
+            NSWindowButton::NSWindowCloseButton,
+            NSWindowButton::NSWindowMiniaturizeButton,
+            NSWindowButton::NSWindowZoomButton,
+        ] {
+            let button = ns_window.standardWindowButton_(kind);
+            if !button.is_null() {
+                let _: () = msg_send![button, setHidden: YES];
+            }
+        }
+    }
+    window.eval("document.documentElement.classList.add('native-frame')")?;
     Ok(())
 }
 

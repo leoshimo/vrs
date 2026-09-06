@@ -154,6 +154,15 @@ test("errors leave the GUI usable and a later query can recover", async () => {
     assert.equal(t.closed(), 1);
 });
 
+test("a secondary action dispatches its own opaque command on the selected row", async () => {
+    const t = setup(); t.nav.open();
+    t.queries[0].resolve([{...item("Article"), actions: [item("Copy URL")]}]); await tick();
+    t.nav.activate(0, 0);
+    assert.equal(t.actions[0].form, "Copy URL");
+    t.actions[0].resolve({type: "close"}); await tick();
+    assert.equal(t.closed(), 1);
+});
+
 test("a failed query cannot re-enable stale actions from the previous query", async () => {
     const t = setup(); t.nav.open();
     t.queries[0].resolve([item("old action")]); await tick();
