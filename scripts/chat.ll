@@ -4,15 +4,15 @@
 
 (defn msgs_to_cogni_cmd (msgs)
   "(msgs_to_cogni_cmd MSGS) - Given a set of message s-exprs, return the cogni command for messages"
-  (def exec_cmd '(exec "cogni"))
+  (def args '())
 
   (map msgs (fn (m) (match m
-                      ((:system msg) (set exec_cmd (+ exec_cmd (list "-s" msg))))
-                      ((:user msg) (set exec_cmd (+ exec_cmd (list "-u" msg))))
-                      ((:assistant msg) (set exec_cmd (+ exec_cmd (list "-a" msg))))
+                      ((:system msg) (set args (+ args (list "-s" msg))))
+                      ((:user msg) (set args (+ args (list "-u" msg))))
+                      ((:assistant msg) (set args (+ args (list "-a" msg))))
                       (_ (error "Unrecognized message")))))
 
-  exec_cmd)
+  `(exec "cogni" ,@args))
 
 (defn run_llm (msgs)
   "(run_llm MSGS) - Given a set of message s-exprs, run the LLM to receive an assistant message"

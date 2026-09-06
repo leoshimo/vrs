@@ -26,16 +26,16 @@
   "Return a dynamic list of item for current query"
   (if (not? query) '() (list
        # DEMO: Integrate Do It
-       # (make_item "Do It" (list 'codegen_exec query))
-       (make_item "Search Perplexity" (list 'open_url (format "http://perplexity.ai/?q={}&copilot=true" query)))
-       (make_item "Search Google" (list 'open_url (format "http://google.com/search?q={}" query)))
+       # (make_item "Do It" `(codegen_exec ,query))
+       (make_item "Search Perplexity" `(open_url ,(format "http://perplexity.ai/?q={}&copilot=true" query)))
+       (make_item "Search Google" `(open_url ,(format "http://google.com/search?q={}" query)))
     )))
 
 (defn jump_list_items ()
   "(jump_list_items) - Retrieve item markup for jump list"
   (map (get_jump_list) (fn (b)
     (make_item (format "Jump List - {}" (get b :title))
-               (list 'open_url (get b :url))))))
+               `(open_url ,(get b :url))))))
 
 
 

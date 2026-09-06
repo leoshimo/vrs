@@ -137,16 +137,16 @@
             (not? (empty? (get_entity_completions (get (get args 0) :type))))))))))
     (fn (name)
       (def matches (filter context (fn (entity) (accepts_context? name entity))))
-      (def choose (list 'call_interactively (list 'quote name)))
+      (def choose `(call_interactively ',name))
       (+ (make_item (if (eq? name 'save_page)
                        (if (empty? matches) "Save a Page to Read Later…" (command_title name))
                        (command_title name))
            (if (empty? matches) choose
-             (list 'continue_call (list 'quote name) (list 'quote (list (get matches 0))))))
+             `(continue_call ',name '(,(get matches 0)))))
          (list :actions
            (+ (map matches (fn (entity)
                 (make_item (entity_title entity)
-                  (list 'continue_call (list 'quote name) (list 'quote (list entity))))))
+                  `(continue_call ',name '(,entity)))))
               (let ((args (get (meta (eval name)) :args)))
                 (if (empty? args) '()
                   (if (empty? (get_entity_completions (get (get args 0) :type))) '()
@@ -211,7 +211,7 @@
               (set entities (push entities entity))))))))))
   (map (fuzzy_match query entities display) (fn (entity)
     (+ (make_item (if (get entity :title) (get entity :title) (entity_title entity))
-         (list 'continue_call (list 'quote name) (list 'quote (push values entity))))
+         `(continue_call ',name ',(push values entity)))
        (list :subtitle (if (eq? type :os/app)
                          (get entity :bundle_id)
                          (get entity :app))
@@ -224,7 +224,7 @@
   (map (filter (interactive_commands) (fn (name) (accepts_context? name entity)))
     (fn (name)
       (make_item (command_title name)
-        (list 'continue_call (list 'quote name) (list 'quote (list entity)))))))
+        `(continue_call ',name '(,entity))))))
 
 # TODO: Query should be rule-based? I.e. "Search DWIM" - if URL, if App Name, if Bundle ID, if location (?), if long, etc
 (defn query_items (query)
@@ -232,21 +232,21 @@
   (if (not? query) '()
       (list
        (make_item "Search Google"
-                  (list 'open_url (format "http://google.com/search?q={}" query)))
+                  `(open_url ,(format "http://google.com/search?q={}" query)))
        (make_item "Search Maps"
-                  (list 'open_maps_search query))
+                  `(open_maps_search ,query))
        (make_item "Search Perplexity"
-                  (list 'open_url (format "http://perplexity.ai/?q={}&copilot=true" query)))
+                  `(open_url ,(format "http://perplexity.ai/?q={}&copilot=true" query)))
        (make_item "Search YT Music"
-                  (list 'open_url (format "http://music.youtube.com/search?q={}" query)))
+                  `(open_url ,(format "http://music.youtube.com/search?q={}" query)))
        (make_item "Open App"
-                  (list 'open_app query))
+                  `(open_app ,query))
        (make_item "Open URL"
-                  (list 'open_url query))
+                  `(open_url ,query))
        (make_item "Do It"
-                  (list 'codegen_exec query))
+                  `(codegen_exec ,query))
        (make_item "Search Amazon"
-                  (list 'open_url (format "https://www.amazon.com/s?k={}" query)))
+                  `(open_url ,(format "https://www.amazon.com/s?k={}" query)))
        )))
 
 (def resolutions_cache '())
@@ -256,7 +256,7 @@
 
 (defn display_items (query)
   (map (fuzzy_match query resolutions_cache str) (fn (resolution)
-    (make_item resolution (list 'select_resolution resolution)))))
+    (make_item resolution `(select_resolution ,resolution)))))
 
 (defn window_actions (window)
   "Apply existing layout commands to the chosen window, not the launcher"
@@ -266,7 +266,7 @@
          ("Bottom Left" window_bottom_left) ("Bottom Right" window_bottom_right))
     (fn (action)
       (make_item (get action 0)
-        (list 'begin (list 'focus_window (list 'quote window)) (list (get action 1)))))))
+        `(begin (focus_window ',window) (,(get action 1)))))))
 
 (defn scheduler_items (query)
   "Return item for scheduler commands"
@@ -295,7 +295,7 @@
     (filter (split "-" query) (fn (part)
       (set index (+ index 1)) (not? (eq? index 1))))))))
   (def create (if (eq? title "") '(error "Task title is empty")
-                 (list 'things_add title "")))
+                 `(things_add ,title "")))
   (+ (list (+ (make_item "Add to Things Inbox" create)
               (list :subtitle (if (eq? title "") nil title))))
      (safari_task_items context)
@@ -310,7 +310,7 @@
                (list (get task :title) (get task :notes) (display task))))
         (fn (task)
           (def excerpt (match_excerpt query (get task :notes)))
-          (+ (make_item (get task :title) (list 'open_things_task (list 'quote task)))
+          (+ (make_item (get task :title) `(open_things_task ',task))
              (list :subtitle (if excerpt excerpt (get task :notes)) :aside "Things")))))))
 
 (defn safari_task_items (context)
@@ -327,7 +327,7 @@
             (def url (get page :url))
             (def title (if (get page :title) (trim_text (get page :title)) ""))
             (if (eq? title "") (set title url))
-            (list (+ (make_item "Add Safari Tab to Things" (list 'things_add title url))
+            (list (+ (make_item "Add Safari Tab to Things" `(things_add ,title ,url))
                      (list :subtitle title)))))))))
 
 (defn feedbin_call (message)
@@ -367,13 +367,13 @@
     (def title (if (get entry :title) (get entry :title) url))
     (def host (get (split "/" url) 2))
     (def saved (get entry :created_at))
-    (+ (make_item title (list 'open_url url))
+    (+ (make_item title `(open_url ,url))
        (list :subtitle (str (if host host url)
                            (if saved (str " · Saved " (get (split "T" saved) 0)) ""))
              :actions (list
-               (make_item "Open in Browser" (list 'open_url url))
-               (make_item "Copy URL" (list 'set_clipboard url))
-               (make_item "Copy Title and URL" (list 'set_clipboard (str title "\n" url)))))))))
+               (make_item "Open in Browser" `(open_url ,url))
+               (make_item "Copy URL" `(set_clipboard ,url))
+               (make_item "Copy Title and URL" `(set_clipboard ,(str title "\n" url)))))))))
 
 (def notes_cache nil)
 (defn apple_notes_page ()
@@ -382,7 +382,7 @@
 
 (defn apple_notes_items (query)
   (map (fuzzy_match query notes_cache display) (fn (note)
-    (make_item (get note :title) (list 'open_note (get note :id))))))
+    (make_item (get note :title) `(open_note ,(get note :id))))))
 
 (def stickies_get_cache '())
 (defn stickies_page ()
@@ -391,7 +391,7 @@
 
 (defn stickies_items (query)
   (map (fuzzy_match query stickies_get_cache display) (fn (note)
-    (make_item (get note :title) (list 'stickies_open (get note :title))))))
+    (make_item (get note :title) `(stickies_open ,(get note :title))))))
 
 (def obsidian_cache '())
 (defn obsidian_page ()
@@ -400,7 +400,7 @@
 
 (defn obsidian_items (query)
   (map (fuzzy_match query obsidian_cache display) (fn (note)
-    (+ (make_item (get note :title) (list 'open_obsidian_file (get note :file)))
+    (+ (make_item (get note :title) `(open_obsidian_file ,(get note :file)))
        (list :subtitle (get note :file))))))
 
 (def browser_history_cache '())
@@ -414,7 +414,7 @@
   (map (fuzzy_match query browser_history_cache display) (fn (entry)
     (def url (get entry :url))
     (def page (list :web/page :title (get entry :title) :url url))
-    (+ (make_item (get entry :title) (list 'open_url url))
+    (+ (make_item (get entry :title) `(open_url ,url))
        (list :subtitle (get (split "/" url) 2) :aside (get entry :visited)
              :actions (entity_actions page))))))
 
@@ -427,13 +427,13 @@
 (defn antinote_items (query)
   (map (fuzzy_match query antinote_cache display) (fn (note)
     (def excerpt (match_excerpt query (get note :content)))
-    (+ (make_item (get note :title) (list 'open_antinote_note (list 'quote note)))
+    (+ (make_item (get note :title) `(open_antinote_note ',note))
        (list :subtitle (if excerpt excerpt (get note :modified))
              :aside (if excerpt
                       (if (get note :modified) (get (split " " (get note :modified)) 0) nil)
                       nil)
              :actions (list
-               (make_item "Copy Note" (list 'set_clipboard (get note :content)))
+               (make_item "Copy Note" `(set_clipboard ,(get note :content)))
                (make_item "Open Antinote" '(open_antinote))))))))
 
 (def github_cache '())
@@ -444,7 +444,7 @@
 
 (defn github_items (query)
   (map (fuzzy_match query github_cache display) (fn (pr)
-    (+ (make_item (get pr :title) (list 'open_url (get pr :url)))
+    (+ (make_item (get pr :title) `(open_url ,(get pr :url)))
        (list :subtitle (get pr :url))))))
 
 # TODO: Nice to have "prefix-drop" for these prefixed names
@@ -454,11 +454,11 @@
     '()
     (+
      (map (get_macros) (fn (m) (list :title (get m :name)
-                                     :on_click (list 'eval (get m :cmds)))))
+                                     :on_click `(eval ,(get m :cmds)))))
      (list
       (if (macro_is_recording)
         (make_item "macro: Stop Recording" '(end_macro_record))
-        (make_item (format "macro: Start Recording - {}" query) (list 'start_macro_record query)))
+        (make_item (format "macro: Start Recording - {}" query) `(start_macro_record ,query)))
       (make_item "macro: Clear Macros" '(clear_macros))
       ))))
 

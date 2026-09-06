@@ -67,6 +67,192 @@ fn prefixes_require_one_following_form() {
 }
 
 #[test]
+fn compact_pretty_and_serialized_forms_keep_identical_structure() {
+    for source in [
+        "`(call ',name ,value ,@args)",
+        "`(outer `(inner ,x ,,x))",
+        "(unquote @name)",
+        "(unquote-splicing @name)",
+        "'(unquote @name)",
+        "(quasiquote)",
+        "(unquote x y)",
+        "(unquote-splicing)",
+        r#"`(:title "quote\" comma, tick`" :args (,@xs))"#,
+    ] {
+        let form = lyric::parse(source).unwrap();
+        let value: Value = form.clone().into();
+        assert_eq!(lyric::parse(&form.to_string()).unwrap(), form);
+        assert_eq!(value.to_string(), form.to_string());
+        assert_eq!(
+            serde_json::from_str::<Form>(&serde_json::to_string(&form).unwrap()).unwrap(),
+            form
+        );
+        assert_eq!(Form::try_from(value.clone()).unwrap(), form);
+        for width in [1, 7, 20, 80, usize::MAX] {
+            let printed = form.to_pretty_string(width);
+            assert_eq!(
+                lyric::parse(&printed).unwrap(),
+                form,
+                "{source}, width {width}"
+            );
+            assert_eq!(value.to_pretty_string(width), printed);
+        }
+    }
+    assert_eq!(lyric::parse(", @name").unwrap().to_string(), ", @name");
+    assert_eq!(lyric::parse(",@name").unwrap().to_string(), ",@name");
+    assert_eq!(
+        lyric::parse("(quasiquote)").unwrap().to_string(),
+        "(quasiquote)"
+    );
+}
+
+#[test]
+fn pretty_indentation_treats_active_holes_as_code() {
+    assert_eq!(
+        lyric::parse("`(a ,(compute first second) (nested values))")
+            .unwrap()
+            .to_pretty_string(1),
+        "`(a\n  ,(compute\n     first\n     second)\n  (nested\n   values))"
+    );
+    // An outer quote keeps the whole template literal, including marker-shaped data.
+    assert_eq!(
+        lyric::parse("'`(a ,(compute first second))")
+            .unwrap()
+            .to_pretty_string(1),
+        "'`(a\n   ,(compute\n     first\n     second))"
+    );
+}
+
+#[test]
+fn launcher_templates_preserve_legacy_constructor_values() {
+    let fixture = "(def name 'focus_window)
+      (def entity '(:os/window :id 42 :payload (missing symbol)))
+      (def values '()) (def matches (list entity))
+      (def window entity) (def task entity) (def note entity)
+      (def action '(\"Split\" window_split))";
+    for (old, template) in [
+        (
+            "(list 'call_interactively (list 'quote name))",
+            "`(call_interactively ',name)",
+        ),
+        (
+            "(list 'continue_call (list 'quote name) (list 'quote (list (get matches 0))))",
+            "`(continue_call ',name '(,(get matches 0)))",
+        ),
+        (
+            "(list 'continue_call (list 'quote name) (list 'quote (list entity)))",
+            "`(continue_call ',name '(,entity))",
+        ),
+        (
+            "(list 'continue_call (list 'quote name) (list 'quote (push values entity)))",
+            "`(continue_call ',name ',(push values entity))",
+        ),
+        (
+            "(list 'begin (list 'focus_window (list 'quote window)) (list (get action 1)))",
+            "`(begin (focus_window ',window) (,(get action 1)))",
+        ),
+        (
+            "(list 'open_things_task (list 'quote task))",
+            "`(open_things_task ',task)",
+        ),
+        (
+            "(list 'open_antinote_note (list 'quote note))",
+            "`(open_antinote_note ',note)",
+        ),
+    ] {
+        assert_eq!(
+            eval(&format!("(begin {fixture} {old})")).unwrap(),
+            eval(&format!("(begin {fixture} {template})")).unwrap(),
+            "{template}"
+        );
+    }
+}
+
+fn script_functions(script: &str, names: &[&str], source: &str) -> Value {
+    let forms = lyric::parse_script(script).unwrap();
+    let selected: Vec<_> = forms
+        .into_iter()
+        .filter(|form| {
+            matches!(form, Form::List(items) if items.first() == Some(&Form::symbol("defn"))
+          && matches!(items.get(1), Some(Form::Symbol(name)) if names.contains(&name.as_str())))
+        })
+        .collect();
+    assert_eq!(selected.len(), names.len());
+    let mut body = vec![Value::symbol("begin")];
+    body.extend(selected.into_iter().map(Value::from));
+    body.push(Value::from_expr(source).unwrap());
+    let mut fiber = Fiber::from_val(&Value::List(body), Env::standard(), ()).unwrap();
+    match fiber.start().unwrap() {
+        Signal::Done(value) => value,
+        other => panic!("unexpected suspension: {other:?}"),
+    }
+}
+
+#[test]
+fn actual_window_actions_capture_data_and_run_in_click_order() {
+    let result = script_functions(
+        include_str!("../../scripts/vrsjmp.ll"),
+        &["make_item", "window_actions"],
+        "(begin
+          (def calls '())
+          (defn focus_window (window) (set calls (push calls window)))
+          (defn window_split () (set calls (push calls :split)))
+          (def items (window_actions '(:os/window :id 42 :payload (missing symbol))))
+          (def before calls)
+          (def command (get (get items 0) :on_click))
+          (eval command)
+          (list before calls command))",
+    );
+    assert_eq!(
+        result,
+        Value::from_expr(
+            "(() ((:os/window :id 42 :payload (missing symbol)) :split)
+      (begin (focus_window '(:os/window :id 42 :payload (missing symbol))) (window_split)))"
+        )
+        .unwrap()
+    );
+}
+
+#[test]
+fn actual_chat_template_splices_ordered_arguments_without_running_exec() {
+    let result = script_functions(
+        include_str!("../../scripts/chat.ll"),
+        &["msgs_to_cogni_cmd"],
+        r#"(msgs_to_cogni_cmd '((:system "rules") (:user "quotes\" , `") (:assistant "answer")))"#,
+    );
+    assert_eq!(
+        result,
+        Value::from_expr(r#"(exec "cogni" "-s" "rules" "-u" "quotes\" , `" "-a" "answer")"#)
+            .unwrap()
+    );
+    assert_eq!(
+        script_functions(
+            include_str!("../../scripts/chat.ll"),
+            &["msgs_to_cogni_cmd"],
+            "(msgs_to_cogni_cmd '())"
+        ),
+        Value::from_expr("(exec \"cogni\")").unwrap()
+    );
+}
+
+#[test]
+fn interface_demo_preserves_the_background_command_as_data() {
+    let result = script_functions(
+        include_str!("../../scripts/vrsjmp_interfacegen_demo.ll"),
+        &["root_items"],
+        r#"(begin
+          (defn fuzzy_match (query values key) values)
+          (def items '((:title "Wait" :on_click (notify "later"))))
+          (root_items ""))"#,
+    );
+    assert_eq!(
+        result,
+        Value::from_expr(r#"((:title "Wait" :on_click (run_in_background '(notify "later"))))"#)
+            .unwrap()
+    );
+}
+
+#[test]
 fn strings_and_comments_do_not_interpolate() {
     assert_value(
         r#"`("literal ,x ` ,@xs" """raw ,x ` ,@xs""")"#,

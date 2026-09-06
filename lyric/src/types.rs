@@ -365,11 +365,9 @@ where
             Val::String(s) => write!(f, "\"{}\"", escape_string(s)),
             Val::Keyword(k) => write!(f, "{}", k),
             Val::Symbol(s) => write!(f, "{}", s),
-            Val::List(l) => match &l[..] {
-                [quote, form] if quote == &Val::symbol("quote") => {
-                    write!(f, "'{}", form)
-                }
-                _ => write!(
+            Val::List(l) => match crate::pretty::abbreviation(l) {
+                Some((prefix, form)) => write!(f, "{prefix}{form}"),
+                None => write!(
                     f,
                     "({})",
                     l.iter()
@@ -406,11 +404,9 @@ impl std::fmt::Display for Form {
             Form::String(s) => write!(f, "\"{}\"", escape_string(s)),
             Form::Keyword(k) => write!(f, "{}", k),
             Form::Symbol(s) => write!(f, "{}", s),
-            Form::List(l) => match &l[..] {
-                [quote, form] if quote == &Form::Symbol(SymbolId::from("quote")) => {
-                    write!(f, "'{}", form)
-                }
-                _ => write!(
+            Form::List(l) => match crate::pretty::abbreviation(l) {
+                Some((prefix, form)) => write!(f, "{prefix}{form}"),
+                None => write!(
                     f,
                     "({})",
                     l.iter()
