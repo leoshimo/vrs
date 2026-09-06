@@ -2,7 +2,7 @@
 # macOS System Appearance Integration
 #
 
-(defn is_darkmode ()
+(defn! is_darkmode ()
   (def result (exec "osascript"
                     "-e" "tell application \"System Events\""
                     "-e" "tell appearance preferences"
@@ -11,7 +11,7 @@
                     "-e" "end tell"))
   (eq? (get (decode :lines (get result :stdout)) 0) "true"))
 
-(defn set_darkmode (dark)
+(defn! set_darkmode (dark)
   (exec "osascript"
         "-e" "on run argv"
         "-e" "tell application \"System Events\""
@@ -22,14 +22,14 @@
         "-e" "end run")
   :ok)
 
-(defn toggle_darkmode ()
+(defn! toggle_darkmode ()
   (set_darkmode (not? (is_darkmode))))
 
 # Depends on shortcuts
-(defn toggle_color_filters ()
+(defn! toggle_color_filters ()
   (exec "shortcuts" "run" "color-filters-toggle"))
 
-(defn toggle_quick_shade ()
+(defn! toggle_quick_shade ()
   (exec "osascript"
         "-e" "tell application \"System Events\""
         "-e" "set isRunning to (exists (processes where name is \"QuickShade\"))"

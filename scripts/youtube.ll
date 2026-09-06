@@ -8,7 +8,7 @@
 (def ytdlp_download_dir (shell_expand "~/Downloads/yt-dlp"))
 (def ytdlp_download_filename_template "%(uploader)s/%(title)s/%(title)s.%(ext)s")
 
-(defn download_video (url)
+(defn! download_video (url)
   "(download_video URL) - Downloads video at URL"
   (if (not? (contains? url "youtube"))
     (notify "Error" (format "{} is not a Youtube URL" url))
@@ -25,11 +25,11 @@
                 (notify "yt-dlp" (format "Error \n{}" (get result :stderr))))))
     :ok)))
 
-(defn download_video_active_tab ()
+(defn! download_video_active_tab ()
   "(download_video_active_tab) - Downloads video at current active tab"
   (download_video (get (active_tab) :url)))
 
-(defn list_videos ()
+(defn! list_videos ()
   "(list_videos) - List available youtube videos"
   (def result (exec "find" ytdlp_download_dir "-type" "f" "-name" "*.webm"))
   (if (eq? (get result :exit) 0)

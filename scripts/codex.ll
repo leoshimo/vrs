@@ -2,7 +2,7 @@
 # Read the desktop app's cached catalog (including remote hosts), never its logs.
 # TODO: Replace these private storage formats with a desktop API when available.
 
-(defn get_codex_threads ()
+(defn! get_codex_threads ()
   "Read recent Codex threads and their unread state from the desktop app"
   (def result (exec "bash" "-seuo" "pipefail" :stdin """
     codex_dir="${CODEX_HOME:-$HOME/.codex}"
@@ -46,7 +46,7 @@
   (map (decode :json (get result :stdout))
     (fn (thread) (+ '(:codex/thread) thread))))
 
-(defn open_codex_thread (thread)
+(defn! open_codex_thread (thread)
   "Open a thread in the Codex desktop app"
   (def result (exec "open" (get thread :url)))
   (if (not? (eq? (get result :exit) 0))

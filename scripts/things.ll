@@ -1,7 +1,7 @@
 #!/usr/bin/env vrsctl
 # Things owns persistence and sync. Arguments are data, never AppleScript source.
 
-(defn get_things_tasks ()
+(defn! get_things_tasks ()
   "(get_things_tasks) - Read open Things tasks for local search"
   (def result (exec "osascript" "-l" "JavaScript" "-" :stdin """
     const tasks = Application('Things3').toDos;
@@ -17,7 +17,7 @@
     (error (str "Could not read Things: " (get result :stderr))))
   (map (decode :json (get result :stdout)) (fn (task) (+ '(:things/task) task))))
 
-(defn open_things_task (task)
+(defn! open_things_task (task)
   "(open_things_task TASK) - Reveal an existing task in Things"
   (exec "osascript" "-" (get task :id) :stdin """
     on run argv
@@ -29,7 +29,7 @@
     end run
     """))
 
-(defn things_add (title notes)
+(defn! things_add (title notes)
   "(things_add TITLE NOTES) - Create a task in Things Inbox; use empty NOTES if none"
   (def result (exec "osascript" "-" title notes :stdin """
     on run argv

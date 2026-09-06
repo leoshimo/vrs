@@ -6,7 +6,7 @@ fn definitions(source: &str, names: Option<&[&str]>) -> Vec<Val> {
         .unwrap()
         .into_iter()
         .filter(|form| match form {
-            lyric::Form::List(values) if values.first() == Some(&lyric::Form::symbol("defn")) => {
+            lyric::Form::List(values) if values.first() == Some(&lyric::Form::symbol("defn!")) => {
                 names.is_none_or(|names| {
                     names
                         .iter()
@@ -32,7 +32,7 @@ async fn evaluate(codex_home: &std::path::Path, script: &str) -> Val {
         lyric::parse_script(&format!(
             r#"
             (def system_exec exec)
-            (defn exec (program flags mode option input)
+            (defn! exec (program flags mode option input)
               (system_exec "env" {env} program flags mode option input))
             (def codex_cache nil)
             {script}
@@ -100,14 +100,14 @@ async fn recent_threads_search_unread_and_open() {
         &dir,
         r#"
       (def rows (codex_items ""))
-      (defn exec (program flags mode option input) (error "Search must use the cache"))
+      (defn! exec (program flags mode option input) (error "Search must use the cache"))
       (def matches (list
         (map (codex_items "東京") (fn (row) (get row :title)))
         (map (codex_items "/work/vrs") (fn (row) (get row :title)))
         (map (codex_items "node") (fn (row) (get row :title)))
         (codex_items "'; DROP TABLE local_thread_catalog; --")))
       (def opened nil)
-      (defn exec (program url) (set opened (list program url)) '(:exit 0))
+      (defn! exec (program url) (set opened (list program url)) '(:exit 0))
       (eval (get (get rows 1) :on_click))
       (list (map rows (fn (row) (get row :title)))
             (map rows (fn (row) (contains? (get row :aside) "Unread")))

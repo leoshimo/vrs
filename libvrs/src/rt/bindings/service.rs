@@ -295,7 +295,7 @@ pub(crate) fn install_service_library(env: &mut crate::Env) {
         let forms = lyric::parse_script(source).expect("standard service library must parse");
         let names: Vec<_> = forms
             .iter()
-            .filter(|form| matches!(form, lyric::Form::List(items) if items.first() == Some(&lyric::Form::symbol("defn"))))
+            .filter(|form| matches!(form, lyric::Form::List(items) if items.first() == Some(&lyric::Form::symbol("defn!"))))
             .map(|form| match form {
                 lyric::Form::List(items) => match &items[1] {
                     lyric::Form::Symbol(name) => name.clone(),

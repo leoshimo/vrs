@@ -173,7 +173,7 @@ fn script_functions(script: &str, names: &[&str], source: &str) -> Value {
     let selected: Vec<_> = forms
         .into_iter()
         .filter(|form| {
-            matches!(form, Form::List(items) if items.first() == Some(&Form::symbol("defn"))
+            matches!(form, Form::List(items) if items.first() == Some(&Form::symbol("defn!"))
           && matches!(items.get(1), Some(Form::Symbol(name)) if names.contains(&name.as_str())))
         })
         .collect();
@@ -195,8 +195,8 @@ fn actual_window_actions_capture_data_and_run_in_click_order() {
         &["make_item", "window_actions"],
         "(begin
           (def calls '())
-          (defn focus_window (window) (set calls (push calls window)))
-          (defn window_split () (set calls (push calls :split)))
+          (defn! focus_window (window) (set calls (push calls window)))
+          (defn! window_split () (set calls (push calls :split)))
           (def items (window_actions '(:os/window :id 42 :payload (missing symbol))))
           (def before calls)
           (def command (get (get items 0) :on_click))
@@ -241,7 +241,7 @@ fn interface_demo_preserves_the_background_command_as_data() {
         include_str!("../../scripts/vrsjmp_interfacegen_demo.ll"),
         &["root_items"],
         r#"(begin
-          (defn fuzzy_match (query values key) values)
+          (defn! fuzzy_match (query values key) values)
           (def items '((:title "Wait" :on_click (notify "later"))))
           (root_items ""))"#,
     );
@@ -319,14 +319,14 @@ fn holes_run_once_in_lexical_order_and_template_code_runs_later() {
     assert_value(
         "(begin
       (def calls '())
-      (defn mark (x) (set calls (push calls x)) x)
+      (defn! mark (x) (set calls (push calls x)) x)
       (def code (let ((x 2)) `(mark ,(mark 1) (nested ,(mark x)) ,@(list (mark 3)))))
       (list calls code))",
         "((1 2 3) (mark 1 (nested 2) 3))",
     );
     assert_value(
         "(begin
-      (def calls '()) (defn mark (x) (set calls (push calls x)))
+      (def calls '()) (defn! mark (x) (set calls (push calls x)))
       (def code `(begin (mark ,1) (mark ,2)))
       (def before calls) (eval code) (list before calls))",
         "(() (1 2))",

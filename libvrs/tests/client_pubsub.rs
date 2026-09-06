@@ -11,7 +11,7 @@ async fn client_pubsub_from_service() {
     let prog = Program::from_expr(
         r#"(begin
         (def count 0)
-        (defn increment (n)
+        (defn! increment (n)
             (set count (+ count n))
             (publish :count count))
         (srv! :counter :interface '(increment)))
@@ -101,7 +101,7 @@ async fn client_pubsub_from_another_client_via_service() {
     let prog = Program::from_expr(
         r#"(begin
         (def count 0)
-        (defn increment (n)
+        (defn! increment (n)
             (set count (+ count n))
             (publish :count count))
         (srv! :counter :interface '(increment)))

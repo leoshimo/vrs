@@ -1,7 +1,7 @@
 #!/usr/bin/env vrsctl
 # Feedbin index and search service backed by feedbinctl.
 
-(defn decode_feedbin_result (result)
+(defn! decode_feedbin_result (result)
   (if (err? result)
     '()
     (if (eq? (get result :exit) 0)
@@ -9,40 +9,40 @@
         (if (ok? decoded) decoded '()))
       '())))
 
-(defn feedbin_entries (count)
+(defn! feedbin_entries (count)
   "(feedbin_entries COUNT) - Return the COUNT most recent indexed Feedbin entries"
   (decode_feedbin_result
     (try (exec "feedbinctl" "entries" "--limit" (display count)))))
 
-(defn feedbin_collections ()
+(defn! feedbin_collections ()
   "(feedbin_collections) - Return indexed Feedbin feeds and saved searches"
   (decode_feedbin_result (try (exec "feedbinctl" "collections"))))
 
-(defn feedbin_entries_from (collection count)
+(defn! feedbin_entries_from (collection count)
   "(feedbin_entries_from COLLECTION COUNT) - Return entries from feed:ID or saved-search:ID"
   (decode_feedbin_result
     (try (exec "feedbinctl" "entries"
                "--collection" collection
                "--limit" (display count)))))
 
-(defn feedbin_search (query count)
+(defn! feedbin_search (query count)
   "(feedbin_search QUERY COUNT) - Return up to COUNT indexed Feedbin entries matching QUERY"
   (decode_feedbin_result
     (try (exec "feedbinctl" "search" query "--limit" (display count)))))
 
-(defn feedbin_search_in (collection query count)
+(defn! feedbin_search_in (collection query count)
   "(feedbin_search_in COLLECTION QUERY COUNT) - Search within feed:ID or saved-search:ID"
   (decode_feedbin_result
     (try (exec "feedbinctl" "search" query
                "--collection" collection
                "--limit" (display count)))))
 
-(defn feedbin_saved_pages (count)
+(defn! feedbin_saved_pages (count)
   "(feedbin_saved_pages COUNT) - Return up to COUNT most recently saved Feedbin Pages"
   (decode_feedbin_result
     (try (exec "feedbinctl" "pages" "list" "--limit" (display count)))))
 
-(defn feedbin_save (url title)
+(defn! feedbin_save (url title)
   "(feedbin_save URL TITLE) - Save a URL to Feedbin Pages and return its entry"
   (decode_feedbin_result
     (try (exec "feedbinctl" "pages" "add" url "--title" title))))

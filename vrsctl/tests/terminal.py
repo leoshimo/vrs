@@ -167,7 +167,7 @@ class TerminalTests(unittest.TestCase):
 
     def test_service_expansion_contains_direct_match_and_round_trips(self):
         source = """(begin
-          (defn echo (x) x)
+          (defn! echo (x) x)
           (def exports '(echo))
           (def code (macroexpand_1 '(srv! :test :interface exports)))
           (list (pretty code) (eq? code (read (pretty code))) (ls_srv)))"""

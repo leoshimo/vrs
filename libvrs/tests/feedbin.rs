@@ -8,7 +8,7 @@ async fn saved_pages_passes_the_requested_limit_to_feedbinctl() {
         .into_iter()
         .filter(|form| {
             matches!(form, lyric::Form::List(values)
-                if values.first() == Some(&lyric::Form::symbol("defn")))
+                if values.first() == Some(&lyric::Form::symbol("defn!")))
         });
     let mut body = vec![Val::symbol("begin")];
     body.extend(definitions.map(Val::from));
@@ -16,7 +16,7 @@ async fn saved_pages_passes_the_requested_limit_to_feedbinctl() {
         lyric::parse_script(
             r#"
             (def invocations '())
-            (defn exec (program command operation flag count)
+            (defn! exec (program command operation flag count)
               (set invocations
                 (+ invocations (list (list program command operation flag count))))
               (list :exit 0 :stdout "[]"))

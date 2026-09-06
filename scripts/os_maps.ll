@@ -2,7 +2,7 @@
 # os_maps - Maps
 #
 
-(defn open_maps_search (query)
+(defn! open_maps_search (query)
   "Start maps search for given query"
   (exec "open" (format "maps://?q={}" query)))
 

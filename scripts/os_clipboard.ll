@@ -2,11 +2,11 @@
 # os_clipboard - OS Clipboard
 #
 
-(defn get_clipboard ()
+(defn! get_clipboard ()
   "(get_clipboard) - Get contents of clipboard"
   (get (exec "pbpaste") :stdout))
 
-(defn set_clipboard (contents)
+(defn! set_clipboard (contents)
   "(set_clipboard CONTENTS) - Set contents of clipboard"
   (exec "pbcopy" :stdin contents))
 

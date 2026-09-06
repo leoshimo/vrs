@@ -7,7 +7,7 @@ async fn srv_echo() {
     let rt = Runtime::new("test");
 
     let echo_prog = r#" (begin 
-        (defn echo (name) (list "got" name))
+        (defn! echo (name) (list "got" name))
         (srv! :echo :interface '(echo))
     )"#;
     let echo_srv = Program::from_expr(echo_prog).unwrap();
@@ -41,8 +41,8 @@ async fn srv_multi_interface() {
 
     let echo_prog = r#" (begin 
         (spawn (lambda () (begin
-            (defn ping (msg) (list "pong" msg))
-            (defn pong (msg) (list "ping" msg))
+            (defn! ping (msg) (list "pong" msg))
+            (defn! pong (msg) (list "ping" msg))
             (srv! :ping_pong :interface '(ping pong)))))
         (list
             (call (find_srv :ping_pong) '(:ping "hi"))
@@ -66,7 +66,7 @@ async fn srv_echo_invalid_msg() {
     let rt = Runtime::new("test");
 
     let echo_prog = r#" (begin 
-        (defn echo (name) (list "got" name))
+        (defn! echo (name) (list "got" name))
         (srv! :echo :interface '(echo))
     )"#;
     let echo_srv = Program::from_expr(echo_prog).unwrap();
@@ -90,7 +90,7 @@ async fn srv_echo_invalid_arg() {
     let rt = Runtime::new("test");
 
     let echo_prog = r#" (begin 
-        (defn echo (name) (list "got" name))
+        (defn! echo (name) (list "got" name))
         (srv! :echo :interface '(echo))
     )"#;
     let echo_srv = Program::from_expr(echo_prog).unwrap();
@@ -117,7 +117,7 @@ async fn spawn_echo_svc() {
     // Spawn + interact on same program
     let prog = r#"(begin
          (spawn (lambda () (begin
-            (defn echo (name) (list "got" name))
+            (defn! echo (name) (list "got" name))
             (srv! :echo :interface '(echo))
          )))
          (call (find_srv :echo) '(:echo "hello")))
@@ -137,7 +137,7 @@ async fn spawn_srv_returns_after_service_registration() {
     let rt = Runtime::new("test");
     let prog = Program::from_expr(
         r#"(begin
-            (defn ping () :pong)
+            (defn! ping () :pong)
             (def spawned (spawn_srv! :ready_probe :interface '(ping)))
             (list spawned (find_srv :ready_probe) (call spawned '(:ping))))"#,
     )

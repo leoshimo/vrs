@@ -7,22 +7,22 @@
 (bind_srv :os_screencap)
 (bind_srv :jump_list)
 
-(defn get_items (callback args query)
+(defn! get_items (callback args query)
   (apply (eval callback) (push args query)))
 
-(defn begin_interaction ()
+(defn! begin_interaction ()
   '(:push_page :get_items root_items :prompt "Search"))
 
-(defn root_items (query)
+(defn! root_items (query)
   "Retrieve items to display"
   (+ (fuzzy_match query (+ (favorite_items) (jump_list_items)) display)
      (query_items query)))
 
-(defn make_item (title command)
+(defn! make_item (title command)
   "Create an item with TITLE and COMMAND"
   (list :title title :on_click command))
 
-(defn query_items (query)
+(defn! query_items (query)
   "Return a dynamic list of item for current query"
   (if (not? query) '() (list
        # DEMO: Integrate Do It
@@ -31,7 +31,7 @@
        (make_item "Search Google" `(open_url ,(format "http://google.com/search?q={}" query)))
     )))
 
-(defn jump_list_items ()
+(defn! jump_list_items ()
   "(jump_list_items) - Retrieve item markup for jump list"
   (map (get_jump_list) (fn (b)
     (make_item (format "Jump List - {}" (get b :title))
@@ -65,7 +65,7 @@
 
 
 
-(defn favorite_items ()
+(defn! favorite_items ()
   "Returns list of static vrsjmp items"
   (list
    (make_item "Browser" '(open_app "Safari"))
@@ -86,7 +86,7 @@
    (make_item "Screen Capture" '(start_screencap))
    ))
 
-(defn on_click (item)
+(defn! on_click (item)
   "Handle an on_click payload from item"
   (def cmd (get item :on_click))
   (def result (eval cmd))

@@ -28,8 +28,8 @@ async fn list_services() {
 
     let srv_c = Program::from_expr(
         r#"(begin
-        (defn ping (x) x)
-        (defn pong (y) y)
+        (defn! ping (x) x)
+        (defn! pong (y) y)
         (register :service_c :interface '(ping pong))
         (recv)
     )"#,

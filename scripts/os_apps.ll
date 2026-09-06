@@ -1,7 +1,7 @@
 #!/usr/bin/env vrsctl
 # AppKit exposes user-facing applications without scraping System Events.
 
-(defn get_running_apps ()
+(defn! get_running_apps ()
   "List running applications as :os/app objects"
   (def result (exec "osascript" "-l" "JavaScript" :stdin """
     ObjC.import('AppKit');
@@ -24,7 +24,7 @@
     (error (str "Could not list running apps: " (get result :stderr))))
   (map (decode :json (get result :stdout)) (fn (app) (+ '(:os/app) app))))
 
-(defn force_quit_app (app)
+(defn! force_quit_app (app)
   "Force Quit"
   (interactive :os/app)
   (def result (exec "osascript" "-l" "JavaScript" "-"

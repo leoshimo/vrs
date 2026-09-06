@@ -316,7 +316,7 @@ mod tests {
         client
             .request(
                 lyric::parse(
-                    "(begin (defn ping (x) x) (register :format_example :interface '(ping)))",
+                    "(begin (defn! ping (x) x) (register :format_example :interface '(ping)))",
                 )
                 .unwrap(),
             )

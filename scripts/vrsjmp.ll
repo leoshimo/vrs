@@ -2,11 +2,11 @@
 # vrsjmp.ll - vrsjmp commandbar
 #
 
-(defn is_personal? ()
+(defn! is_personal? ()
   (eq? (get (decode :lines (get (exec "uname" "-n") :stdout)) 0)
        "shinjuku.local"))
 
-(defn open_xcode ()
+(defn! open_xcode ()
   "Open the active Xcode selected by xcode-select"
   (exec "bash" "-seuo" "pipefail"
         :stdin """
@@ -14,7 +14,7 @@
         open -a "$xcode_app"
         """))
 
-(defn toggle_desktop ()
+(defn! toggle_desktop ()
   "Toggle Finder desktop icon visibility"
   (exec "bash" "-seuo" "pipefail"
         :stdin """
@@ -29,7 +29,7 @@
         killall Finder
         """))
 
-(defn toggle_dock_autohide ()
+(defn! toggle_dock_autohide ()
   "Toggle automatic Dock hiding"
   (exec "bash" "-seuo" "pipefail"
         :stdin """
@@ -68,17 +68,17 @@
 (try (bind_srv :os_context))
 (bind_srv :stickies)
 
-(defn get_items (callback args query)
+(defn! get_items (callback args query)
   "Render a named page using fixed argument values followed by the input text"
   (apply (eval callback) (push args query)))
 
-(defn push_page (callback prompt)
+(defn! push_page (callback prompt)
   "Return an instruction to push a lazily rendered page in the GUI"
   (list :push_page :get_items callback :prompt prompt))
 
 # TODO: Revisit the begin_interaction hook: separate immediate page restoration
 # from slower context enrichment.
-(defn begin_interaction ()
+(defn! begin_interaction ()
   "Capture context once and return the root page; ordinary on_click protocol"
   (set things_cache nil)
   (set codex_cache nil)
@@ -87,13 +87,13 @@
      '(:title "Home")
      (list :args (list (if (list? context) context '())))))
 
-(defn root_items (context query)
+(defn! root_items (context query)
   "Retrieve the root command palette's final ordered items"
   (if (and! (not? (eq? query "")) (eq? (get (split "-" query) 0) ""))
     (task_items context query)
     (command_items context query)))
 
-(defn command_items (context query)
+(defn! command_items (context query)
   (def candidates (+ (favorite_items)
      (scheduler_items query)
      (macro_items query)
@@ -113,22 +113,22 @@
              (display item))))
      (query_items query)))
 
-(defn make_item (title command)
+(defn! make_item (title command)
   "Create an item with TITLE and COMMAND"
   (list :title title :on_click command))
 
-(defn make_item_ex (title command hints)
+(defn! make_item_ex (title command hints)
   "Create an item with TITLE and COMMAND and HINTS"
   (list :hints hints :title title :on_click command))
 
-(defn interactive_commands ()
+(defn! interactive_commands ()
   (filter (ls_env) (fn (name) (eq? (get (meta (eval name)) :interactive) true))))
 
-(defn command_title (name)
+(defn! command_title (name)
   (def metadata (meta (eval name)))
   (or! (get metadata :doc) (display name)))
 
-(defn interactive_items (context)
+(defn! interactive_items (context)
   # One row per command, not one row per captured object. Window commands live
   # on the Windows page; its secondary actions can fill additional arguments.
   (map (filter (interactive_commands) (fn (name)
@@ -154,32 +154,32 @@
                   (if (empty? (get_entity_completions (get (get args 0) :type))) '()
                     (list (make_item "Choose…" choose)))))))))))
 
-(defn accepts_context? (name entity)
+(defn! accepts_context? (name entity)
   (def args (get (meta (eval name)) :args))
   (if (empty? args) false
     (eq? (get (get args 0) :type) (get entity 0))))
 
-(defn save_page (page)
+(defn! save_page (page)
   "Save to Read Later"
   (interactive :web/page)
   (def result (feedbin_call (list :feedbin_save (get page :url) (get page :title))))
   (if (empty? result) (error "Feedbin did not save the page. Check its connection and authentication.") result))
 
-(defn copy_page_url (page)
+(defn! copy_page_url (page)
   "Copy Page URL"
   (interactive :web/page)
   (set_clipboard (get page :url)))
 
-(defn copy_selected_text (selection)
+(defn! copy_selected_text (selection)
   "Copy Selected Text"
   (interactive :text)
   (set_clipboard (get selection :value)))
 
-(defn call_interactively (name)
+(defn! call_interactively (name)
   "Fill a named command's required arguments using completion pages, then call it"
   (continue_call name '()))
 
-(defn continue_call (name values)
+(defn! continue_call (name values)
   (def signature (get (meta (eval name)) :args))
   (if (eq? (len values) (len signature))
     (apply (eval name) values)
@@ -191,13 +191,13 @@
             :title (command_title name)
             :prompt (format "{} · {}" (command_title name) (display (get arg :name)))))))
 
-(defn entity_title (entity)
+(defn! entity_title (entity)
   (if (get entity :title)
     (if (get entity :app) (format "{} — {}" (get entity :app) (get entity :title))
       (get entity :title))
     (display entity)))
 
-(defn call_items (name values query)
+(defn! call_items (name values query)
   (def arg (get (get (meta (eval name)) :args) (len values)))
   (def type (get arg :type))
   (def providers (get_entity_completions type))
@@ -221,7 +221,7 @@
              :actions (+ (entity_actions entity)
                          (if (eq? type :os/window) (window_actions entity) '())))))))
 
-(defn entity_actions (entity)
+(defn! entity_actions (entity)
   "Secondary actions come from the commands imported into this service"
   (map (filter (interactive_commands) (fn (name) (accepts_context? name entity)))
     (fn (name)
@@ -229,7 +229,7 @@
         `(continue_call ',name '(,entity))))))
 
 # TODO: Query should be rule-based? I.e. "Search DWIM" - if URL, if App Name, if Bundle ID, if location (?), if long, etc
-(defn query_items (query)
+(defn! query_items (query)
   "Return a dynamic list of item for current query"
   (if (not? query) '()
       (list
@@ -252,15 +252,15 @@
        )))
 
 (def resolutions_cache '())
-(defn display_page ()
+(defn! display_page ()
   (set resolutions_cache (list_alternative_resolutions))
   (+ (push_page 'display_items "Search resolutions…") '(:title "Configure Display Resolution")))
 
-(defn display_items (query)
+(defn! display_items (query)
   (map (fuzzy_match query resolutions_cache str) (fn (resolution)
     (make_item resolution `(select_resolution ,resolution)))))
 
-(defn window_actions (window)
+(defn! window_actions (window)
   "Apply existing layout commands to the chosen window, not the launcher"
   (map '(("Split" window_split) ("Fullscreen" window_fullscreen)
          ("Center" window_center) ("Left Half" window_left) ("Right Half" window_right)
@@ -270,7 +270,7 @@
       (make_item (get action 0)
         `(begin (focus_window ',window) (,(get action 1)))))))
 
-(defn scheduler_items (query)
+(defn! scheduler_items (query)
   "Return item for scheduler commands"
   (if (not? (contains? query "schedule"))
         '()
@@ -279,7 +279,7 @@
        (make_item "Schedule - Today" '(schedule_the_day "today")))))
 
 
-(defn trim_text (text)
+(defn! trim_text (text)
   # Keep internal whitespace intact; trim only the edges without a subprocess.
   (def result "")
   (def pending "")
@@ -291,7 +291,7 @@
 
 (def things_cache nil)
 
-(defn task_items (context query)
+(defn! task_items (context query)
   (def index 0)
   (def title (trim_text (apply join (+ '("-")
     (filter (split "-" query) (fn (part)
@@ -303,7 +303,7 @@
      (safari_task_items context)
      (matching_task_items title)))
 
-(defn matching_task_items (query)
+(defn! matching_task_items (query)
   (if (eq? query "") '()
     (begin
       # Read Things once per interaction; each subsequent keystroke stays local.
@@ -315,7 +315,7 @@
           (+ (make_item (get task :title) `(open_things_task ',task))
              (list :subtitle (if excerpt excerpt (get task :notes)) :aside "Things")))))))
 
-(defn safari_task_items (context)
+(defn! safari_task_items (context)
   # Use the captured origin, not whichever app is focused after opening jmp.
   (def windows (filter context (fn (entity) (eq? (get entity 0) :os/window))))
   (if (empty? windows) '()
@@ -332,15 +332,15 @@
             (list (+ (make_item "Add Safari Tab to Things" `(things_add ,title ,url))
                      (list :subtitle title)))))))))
 
-(defn feedbin_call (message)
+(defn! feedbin_call (message)
   "Let transport errors reach the palette toast rather than masquerading as no results"
   (call (find_srv :feedbin) message))
 
-(defn read_later_page ()
+(defn! read_later_page ()
   (+ (push_page 'read_later_items "Search saved pages…") '(:title "Read Later" :debounce_ms 200)))
 
 (def pages_collection_cache nil)
-(defn pages_collection ()
+(defn! pages_collection ()
   "Resolve the indexed Pages feed; never silently fall back to all feeds"
   (if (not? pages_collection_cache)
     (let ((pages (filter (feedbin_call '(:feedbin_collections))
@@ -355,7 +355,7 @@
         (set pages_collection_cache (str "feed:" (get (get pages 0) :id))))))
   pages_collection_cache)
 
-(defn read_later_items (query)
+(defn! read_later_items (query)
   "List recent saved pages or search the indexed Pages collection"
   (def entries
     (if (eq? query "")
@@ -378,29 +378,29 @@
                (make_item "Copy Title and URL" `(set_clipboard ,(str title "\n" url)))))))))
 
 (def notes_cache nil)
-(defn apple_notes_page ()
+(defn! apple_notes_page ()
   (set notes_cache (get_notes))
   (+ (push_page 'apple_notes_items "Search Apple Notes…") '(:title "Apple Notes")))
 
-(defn apple_notes_items (query)
+(defn! apple_notes_items (query)
   (map (fuzzy_match query notes_cache display) (fn (note)
     (make_item (get note :title) `(open_note ,(get note :id))))))
 
 (def stickies_get_cache '())
-(defn stickies_page ()
+(defn! stickies_page ()
   (set stickies_get_cache (stickies_get))
   (+ (push_page 'stickies_items "Search Stickies…") '(:title "Stickies")))
 
-(defn stickies_items (query)
+(defn! stickies_items (query)
   (map (fuzzy_match query stickies_get_cache display) (fn (note)
     (make_item (get note :title) `(stickies_open ,(get note :title))))))
 
 (def codex_cache nil)
-(defn codex_page ()
+(defn! codex_page ()
   (set codex_cache nil)
   (+ (push_page 'codex_items "Search Codex threads…") '(:title "Codex Threads")))
 
-(defn codex_items (query)
+(defn! codex_items (query)
   # One snapshot per page visit; keystrokes search metadata in memory.
   (if (eq? codex_cache nil) (set codex_cache (get_codex_threads)))
   (map (fuzzy_match query codex_cache (fn (thread)
@@ -418,23 +418,23 @@
                              (str (if (get thread :unread) " · " "") (get thread :modified)) "")))))))
 
 (def obsidian_cache '())
-(defn obsidian_page ()
+(defn! obsidian_page ()
   (set obsidian_cache (get_obsidian_files))
   (+ (push_page 'obsidian_items "Search Obsidian files…") '(:title "Obsidian")))
 
-(defn obsidian_items (query)
+(defn! obsidian_items (query)
   (map (fuzzy_match query obsidian_cache display) (fn (note)
     (+ (make_item (get note :title) `(open_obsidian_file ,(get note :file)))
        (list :subtitle (get note :file))))))
 
 (def browser_history_cache '())
-(defn browser_history_page ()
+(defn! browser_history_page ()
   (refresh_safari_history)
   (set browser_history_cache (get_safari_history))
   (+ (push_page 'browser_history_items "Search recent Safari history…")
      '(:title "Browser History")))
 
-(defn browser_history_items (query)
+(defn! browser_history_items (query)
   (map (fuzzy_match query browser_history_cache display) (fn (entry)
     (def url (get entry :url))
     (def page (list :web/page :title (get entry :title) :url url))
@@ -443,12 +443,12 @@
              :actions (entity_actions page))))))
 
 (def antinote_cache '())
-(defn antinote_page ()
+(defn! antinote_page ()
   (set antinote_cache (get_antinote_notes))
   (+ (push_page 'antinote_items "Search Antinote notes…")
      '(:title "Antinote")))
 
-(defn antinote_items (query)
+(defn! antinote_items (query)
   (map (fuzzy_match query antinote_cache display) (fn (note)
     (def excerpt (match_excerpt query (get note :content)))
     (+ (make_item (get note :title) `(open_antinote_note ',note))
@@ -461,18 +461,18 @@
                (make_item "Open Antinote" '(open_antinote))))))))
 
 (def github_cache '())
-(defn github_page ()
+(defn! github_page ()
   (refresh_pull_requests)
   (set github_cache (get_pull_requests))
   (+ (push_page 'github_items "Search pull requests…") '(:title "GitHub PRs")))
 
-(defn github_items (query)
+(defn! github_items (query)
   (map (fuzzy_match query github_cache display) (fn (pr)
     (+ (make_item (get pr :title) `(open_url ,(get pr :url)))
        (list :subtitle (get pr :url))))))
 
 # TODO: Nice to have "prefix-drop" for these prefixed names
-(defn macro_items (query)
+(defn! macro_items (query)
   "(macro_items QUERY) - Returns markup for macro items"
   (if (not? (contains? query "macro:"))
     '()
@@ -486,7 +486,7 @@
       (make_item "macro: Clear Macros" '(clear_macros))
       ))))
 
-(defn favorite_items ()
+(defn! favorite_items ()
   "Returns list of static vrsjmp items"
   (+
    # app launcher
@@ -592,12 +592,12 @@
    (list (make_item "Screen Capture" '(start_screencap)))
    ))
 
-(defn local_items ()
+(defn! local_items ()
   "Read set of local items if any"
   (def res (try (fread "~/vrsjmp_local.ll")))
   (if (ok? res) res '()))
 
-(defn on_click (item)
+(defn! on_click (item)
   "Handle an on_click payload from item"
   (def cmd (get item :on_click))
   (publish :cmd cmd)

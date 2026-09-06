@@ -32,12 +32,12 @@ The result should be a single S-expression wrapped within a (begin ...) form"
 (spawn_chat :nl_shell_chat system_prompt)
 (bind_srv :nl_shell_chat)
 
-(defn codegen (request)
+(defn! codegen (request)
   "(codegen REQUEST) - Generates an symbolic expression for a program to handle given user request"
   (def code_str (send_message request))
   (try (read code_str)))
 
-(defn codegen_exec (request)
+(defn! codegen_exec (request)
   "(codegen_exec REQUEST) - Generates an program to process user request then executes it"
   (notify "Working on your request" "thinking...")
   (spawn (fn ()

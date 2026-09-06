@@ -73,7 +73,7 @@ fn fiber_yielding() {
     let prog = r#"
         (begin
             (def x 0)
-            (defn yielding_add ()
+            (defn! yielding_add ()
                 (yield x)
                 (set x (+ x 1))
                 (yielding_add))
@@ -98,7 +98,7 @@ fn fiber_yielding_by_arg() {
     let prog = r#"
         (begin
             (def x 0)
-            (defn yielding_add ()
+            (defn! yielding_add ()
                 (set x (+ x (yield x)))
                 (yielding_add))
             (yielding_add)

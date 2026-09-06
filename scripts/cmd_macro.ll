@@ -8,26 +8,26 @@
 (def macros '())
 (def record_pid nil)
 
-(defn get_macros ()
+(defn! get_macros ()
   "(get_macros) - Returns list of macros"
   macros)
 
-(defn clear_macros ()
+(defn! clear_macros ()
   "(clear_macros) - Clear list of macros"
   (set macros '()))
 
-(defn start_macro_record (name)
+(defn! start_macro_record (name)
   "(start_macro_record NAME) - Starts recording the :cmd ran by user in macro called NAME"
   (if (macro_is_recording)
     (kill_record_proc))
   (start_record_proc name)
   :ok)
 
-(defn macro_is_recording ()
+(defn! macro_is_recording ()
   "(macro_is_recording) - Whether or not macro is currently being recorded"
   (not? (eq? record_pid nil)))
 
-(defn end_macro_record ()
+(defn! end_macro_record ()
   "(end_macro_record) - Ends current macro recording."
   (if (not? (macro_is_recording)) nil
       (begin
@@ -35,14 +35,14 @@
        (kill_record_proc)
        :ok)))
 
-(defn save_macro ()
+(defn! save_macro ()
   "(save_macro) - Save current macro stored in RECORDING"
   (def recording (call record_pid '(:get_recording)))
   (set macros (push macros recording))
   :ok)
 
 # TODO: Instead of child process + manual `call`, consider ergonomic hook for topics on `spawn_srv!` macro?
-(defn start_record_proc (name)
+(defn! start_record_proc (name)
   "(start_record_proc NAME) - Start a process that is recording commands"
   (set record_pid
        (spawn (fn ()
@@ -56,7 +56,7 @@
                                                 :cmds (push (get recording :cmds) cmd))))
                          ((r src (:get_recording)) (send src (list r recording))))))))))
 
-(defn kill_record_proc ()
+(defn! kill_record_proc ()
   "(kill_record_proc) - Kill process listening to commands"
   (kill record_pid)
   (set record_pid nil))

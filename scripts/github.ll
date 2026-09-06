@@ -6,11 +6,11 @@
 
 (def pull_requests '())
 
-(defn get_pull_requests ()
+(defn! get_pull_requests ()
   "(get_pull_requests) - Return your cached open pull requests across repositories"
   pull_requests)
 
-(defn refresh_pull_requests ()
+(defn! refresh_pull_requests ()
   "(refresh_pull_requests) - Fetch up to 100 open PRs authored by the signed-in gh user, most recently updated first"
   (def result (exec "gh" "search" "prs" "--author" "@me" "--state" "open"
                    "--sort" "updated" "--order" "desc" "--limit" "100"

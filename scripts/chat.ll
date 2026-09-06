@@ -2,7 +2,7 @@
 # chat.ll - Chat Dynamic Supervisor Service
 #
 
-(defn msgs_to_cogni_cmd (msgs)
+(defn! msgs_to_cogni_cmd (msgs)
   "(msgs_to_cogni_cmd MSGS) - Given a set of message s-exprs, return the cogni command for messages"
   (def args '())
 
@@ -14,31 +14,31 @@
 
   `(exec "cogni" ,@args))
 
-(defn run_llm (msgs)
+(defn! run_llm (msgs)
   "(run_llm MSGS) - Given a set of message s-exprs, run the LLM to receive an assistant message"
   (def result (eval (msgs_to_cogni_cmd msgs)))
   (if (eq? (get result :exit) 0)
     (get result :stdout)
     (error (get result :stderr))))
 
-(defn spawn_chat (chat_name system_prompt)
+(defn! spawn_chat (chat_name system_prompt)
   "(spawn_chat CHAT_NAME SYSTEM_PROMPT) - Spawn a new process registered as CHAT_NAME with SYSTEM_PROMPT for a new chat session"
   (def parent (self))
   (spawn (fn ()
            (def msgs (list (list :system system_prompt)))
 
-           (defn send_message (message)
+           (defn! send_message (message)
              "(send_message MESSAGE) - Send message to chat session then return new assistant message"
              (set msgs (push msgs (list :user message)))
              (def assistant_msg (run_llm msgs))
              (set msgs (push msgs (list :assistant assistant_msg)))
              assistant_msg)
 
-           (defn get_messages ()
+           (defn! get_messages ()
              "(get_messages) - Returns all messages in session"
              msgs)
 
-           (defn clear_messages ()
+           (defn! clear_messages ()
              "(clear_messages) - Clear messages in session. This does not clear system prompt"
              (set msgs (list :system system_prompt)))
 

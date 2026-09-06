@@ -95,11 +95,12 @@ impl<T: Extern, L: Locals> MacroEnv<T, L> {
         Ok(name.clone())
     }
     pub(crate) fn get(&self, name: &str) -> Result<Definition<T, L>> {
-        if name == "!" || name.ends_with("!!") {
-            return Err(fail(format!("invalid macro invocation {name}")));
-        }
+        let definition_name = name
+            .strip_suffix('!')
+            .filter(|name| !name.is_empty() && !name.ends_with('!'))
+            .ok_or_else(|| fail(format!("invalid macro invocation {name}")))?;
         self.definitions
-            .get(name.strip_suffix('!').unwrap_or(name))
+            .get(definition_name)
             .cloned()
             .ok_or_else(|| fail(format!("undefined macro {name}")))
     }
@@ -156,11 +157,6 @@ pub(crate) fn validate_result<T: Extern, L: Locals>(
         "macro result",
     )?;
     Ok(())
-}
-
-/// `defn` keeps its established spelling while using the ordinary macro machinery.
-pub(crate) fn is_invocation(name: &str) -> bool {
-    name == "defn" || name.ends_with('!')
 }
 
 pub(crate) fn head<T: Extern, L: Locals>(value: &Val<T, L>) -> Option<&str> {

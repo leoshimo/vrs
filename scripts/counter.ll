@@ -2,7 +2,7 @@
 
 (def count 0)
 
-(defn increment (n)
+(defn! increment (n)
   (set count (+ count n))
   (publish :count count))
 

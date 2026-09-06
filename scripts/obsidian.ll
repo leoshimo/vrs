@@ -2,7 +2,7 @@
 # obsidian.ll - Obsidian
 #
 
-(defn obsidian_vault_path ()
+(defn! obsidian_vault_path ()
   "Use the most recently opened vault from Obsidian's own configuration"
   (def result (exec "jq" "-r"
     "[.vaults[]] | sort_by(.ts) | reverse | (map(select(.open)) + .) | .[0].path // empty"
@@ -13,7 +13,7 @@
   (if (eq? path "") (error "Open a vault in Obsidian first"))
   path)
 
-(defn get_obsidian_files ()
+(defn! get_obsidian_files ()
   "(get_obsidian_files) - Get list of files in Obsidian"
   (def vault_path (obsidian_vault_path))
   (def result
@@ -28,7 +28,7 @@
          (fn (f) (list :title (get (split "/" f) -1) :file (str vault_path "/" f))))
     (error (str "Could not read Obsidian vault: " (get result :stderr)))))
 
-(defn open_obsidian_file (file)
+(defn! open_obsidian_file (file)
   "(open_obsidian_file FILE) - Opens given item in obsidian"
   (def result (exec "jq" "-nr" "--arg" "file" file
     "\"obsidian://open?\" + (if $file | startswith(\"/\") then \"path=\" else \"file=\" end) + ($file | @uri)"))

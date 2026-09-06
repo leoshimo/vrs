@@ -78,7 +78,7 @@ async fn spawn_env_lambda_isolated() {
         (def parent_pid (self))
 
         (def a_var :parent)
-        (defn set_var (val)
+        (defn! set_var (val)
             (set a_var val))
 
         (spawn (fn ()
@@ -108,7 +108,7 @@ async fn spawn_env_lambda_nested_isolated() {
     let prog = r#"(begin
         (def parent_pid (self))
 
-        (defn make_adder ()
+        (defn! make_adder ()
             (def val 0)
             (lambda (x) (set val (+ val x))))
 
