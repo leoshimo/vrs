@@ -356,6 +356,16 @@ mod tests {
             (defn is_personal? () false)
             (defn feedbin_call (message) '((:title "Saved article" :url "https://example.test/")))
             (defn open_url (url) :opened)
+            (defn get_windows () '((:os/window :id 7 :app "Safari" :title "Documentation")))
+            (defn focus_window (window) "Focus Window" (interactive :os/window) :focused)
+            (defn get_displays () '((:os/display :id 42 :index 2 :title "Display 2")))
+            (defn move_window (window destination)
+              "Move Window to Display"
+              (interactive :os/window :os/display)
+              (if (not? (eq? (list (get window :id) (get destination :index)) '(7 2)))
+                (error "Wrong window or destination")))
+            (set_entity_completions :os/window 'get_windows)
+            (set_entity_completions :os/display 'get_displays)
             (spawn_srv :vrsjmp :interface '(get_items on_click))
         "#,
             )
@@ -508,5 +518,103 @@ mod tests {
         .await
         .unwrap();
         assert!(response.contents.is_err());
+
+        // Exercise each new page through the real protocol, including searches
+        // on non-title fields and repeated input without repeating source reads.
+        async fn ask(client: &mut Option<vrs::Client>, request: Form) -> Form {
+            request_once(client, Path::new("/unused-palette-test.socket"), request)
+                .await
+                .unwrap()
+                .contents
+                .unwrap()
+        }
+        for (entry, callback, query, title) in
+            [("Windows", "call_items", "Safari", "Documentation")]
+        {
+            let items = protocol::items(
+                ask(
+                    &mut client,
+                    protocol::query_request("root_items", "(())", entry).unwrap(),
+                )
+                .await,
+            )
+            .unwrap();
+            assert_eq!(items[0].title, entry);
+            let protocol::Action::PushPage { page } = protocol::action(
+                ask(
+                    &mut client,
+                    protocol::action_request(&items[0].on_click).unwrap(),
+                )
+                .await,
+            )
+            .unwrap() else {
+                panic!()
+            };
+            assert_eq!(page.get_items, callback);
+            assert_eq!(page.debounce_ms, 0);
+            for query in ["", query] {
+                let results = protocol::items(
+                    ask(
+                        &mut client,
+                        protocol::query_request(&page.get_items, &page.args, query).unwrap(),
+                    )
+                    .await,
+                )
+                .unwrap();
+                assert_eq!(results[0].title, title);
+                if ["Browser History", "Browse Antinote", "Windows"].contains(&entry) {
+                    assert!(!results[0].actions.is_empty());
+                }
+                assert_eq!(
+                    protocol::action(
+                        ask(
+                            &mut client,
+                            protocol::action_request(&results[0].on_click).unwrap()
+                        )
+                        .await
+                    )
+                    .unwrap(),
+                    protocol::Action::Close
+                );
+                if entry == "Windows" {
+                    // Cmd-K supplies the window, then the next page fills argument 2.
+                    let move_action = results[0]
+                        .actions
+                        .iter()
+                        .find(|action| action.title == "Move Window to Display")
+                        .unwrap();
+                    let protocol::Action::PushPage { page } = protocol::action(
+                        ask(
+                            &mut client,
+                            protocol::action_request(&move_action.on_click).unwrap(),
+                        )
+                        .await,
+                    )
+                    .unwrap() else {
+                        panic!()
+                    };
+                    let displays = protocol::items(
+                        ask(
+                            &mut client,
+                            protocol::query_request(&page.get_items, &page.args, "").unwrap(),
+                        )
+                        .await,
+                    )
+                    .unwrap();
+                    assert_eq!(displays[0].title, "Display 2");
+                    assert_eq!(
+                        protocol::action(
+                            ask(
+                                &mut client,
+                                protocol::action_request(&displays[0].on_click).unwrap()
+                            )
+                            .await
+                        )
+                        .unwrap(),
+                        protocol::Action::Close
+                    );
+                }
+            }
+        }
     }
 }
