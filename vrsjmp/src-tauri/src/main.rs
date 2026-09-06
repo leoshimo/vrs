@@ -358,6 +358,10 @@ mod tests {
             (defn open_url (url) :opened)
             (def history_reads 0)
             (def antinote_reads 0)
+            (def pr_reads 0)
+            (defn refresh_pull_requests () (set pr_reads (+ pr_reads 1)))
+            (defn get_pull_requests ()
+              '((:title "Fix launcher" :url "https://github.com/example/vrs/pull/42")))
             (defn refresh_safari_history () (set history_reads (+ history_reads 1)))
             (defn get_safari_history ()
               '((:title "History article" :url "https://history.example.test/" :visited "2026-09-05 12:00")))
@@ -558,7 +562,24 @@ mod tests {
                 .contents
                 .unwrap()
         }
+        for (query, title) in [("gh", "Browse GitHub PRs")] {
+            let results = protocol::items(
+                ask(
+                    &mut client,
+                    protocol::query_request("root_items", "(())", query).unwrap(),
+                )
+                .await,
+            )
+            .unwrap();
+            assert_eq!(results[0].title, title);
+        }
         for (entry, callback, query, title) in [
+            (
+                "Browse GitHub PRs",
+                "github_items",
+                "pull/42",
+                "Fix launcher",
+            ),
             (
                 "Browser History",
                 "browser_history_items",
@@ -678,7 +699,7 @@ mod tests {
             }
         }
         ask(&mut client, protocol::action_request(
-            "(:on_click (if (not? (eq? (list history_reads antinote_reads) '(1 1))) (error \"Repeated source reads\")))"
+            "(:on_click (if (not? (eq? (list history_reads antinote_reads pr_reads) '(1 1 1))) (error \"Repeated source reads\")))"
         ).unwrap()).await;
         // Task capture strips only the leading marker and surrounding whitespace.
         let safari_context = r#"(((:os/window :app "Safari" :title "Example Domain")
