@@ -10,6 +10,14 @@ Current: Hypermedia Client and VRSJMP Command Bar Client
 - [X] Hypermedia Client Design
 - [X] VRSJMP Command Bar Client
 
+*** TODO Calendar / Agenda page
+
+Show upcoming events in vrsjmp, with filtering and actions to open an event,
+join its meeting, or open its location. Start read-only. Extend =eventkitcli=
+with JSON output (stable IDs, dates, calendar, location, and URLs), then adapt
+=os_cal.ll= to return structured entities for a lazy page. Keep event creation
+and natural-language scheduling separate.
+
 ** Runtime Core v0.2
 
 Goal: Build Core Runtime Features
