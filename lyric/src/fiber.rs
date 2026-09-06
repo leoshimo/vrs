@@ -315,7 +315,9 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                     .stack
                     .last()
                     .ok_or_else(|| Error::UnexpectedStack("missing macro source".into()))?;
-                if let Some(name) = crate::macros::head(source).filter(|name| name.ends_with('!')) {
+                if let Some(name) =
+                    crate::macros::head(source).filter(|name| crate::macros::is_invocation(name))
+                {
                     // Bounds apply to recursive expansion, not to the generated service loop.
                     if self.cframes.len() > 256
                         || self

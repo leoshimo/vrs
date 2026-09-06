@@ -99,7 +99,7 @@ impl<T: Extern, L: Locals> MacroEnv<T, L> {
             return Err(fail(format!("invalid macro invocation {name}")));
         }
         self.definitions
-            .get(&name[..name.len() - 1])
+            .get(name.strip_suffix('!').unwrap_or(name))
             .cloned()
             .ok_or_else(|| fail(format!("undefined macro {name}")))
     }
@@ -157,6 +157,12 @@ pub(crate) fn validate_result<T: Extern, L: Locals>(
     )?;
     Ok(())
 }
+
+/// `defn` keeps its established spelling while using the ordinary macro machinery.
+pub(crate) fn is_invocation(name: &str) -> bool {
+    name == "defn" || name.ends_with('!')
+}
+
 pub(crate) fn head<T: Extern, L: Locals>(value: &Val<T, L>) -> Option<&str> {
     match value {
         Val::List(items) => match items.first() {

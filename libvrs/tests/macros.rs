@@ -248,3 +248,18 @@ async fn service_construction_has_no_legacy_function_bindings() {
         value("(false false)")
     );
 }
+
+#[tokio::test]
+async fn plain_defn_uses_the_spawned_process_macro_namespace() {
+    let result = run("(begin
+      (defn original () 1)
+      (def parent (self))
+      (spawn (fn ()
+        (defmacro defn (name params & body) `(def ,name (fn ,params 42)))
+        (defn child_function () 2)
+        (send parent (list (original) (child_function)))))
+      (defn parent_function () 3)
+      (list (recv) (parent_function)))")
+    .await;
+    assert_eq!(result, value("((1 42) 3)"));
+}

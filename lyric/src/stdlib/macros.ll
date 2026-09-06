@@ -1,3 +1,7 @@
+(defmacro defn (name params & body)
+  "Define a named function, with optional documentation and interactive metadata."
+  `(def ,name (fn ,params ,@body)))
+
 (defmacro when (test & body)
   "Evaluate BODY when TEST is true."
   `(if ,test (begin ,@body) nil))

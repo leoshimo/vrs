@@ -111,6 +111,12 @@ wire serialization retains the same atoms-and-lists representation.
 The optional final `& rest` parameter collects remaining source arguments.
 A transformer returns one source form, using `begin` for multiple expressions.
 
+`defn` is the one macro whose `!` suffix is optional. Its standard definition
+expands `(defn NAME PARAMS BODY...)` to `(def NAME (fn PARAMS BODY...))`.
+Both expansion functions recognize the plain spelling. A nested definition is
+checked when execution reaches it. `(defmacro defn ...)` replaces it for subsequent
+definitions; existing function values are unchanged.
+
 Standard macros include `when!`, `and!`, and `or!`. `and!` stops at the first
 false value; `or!` stops at the first true value, using the same conditions as
 `if`. Both return the last evaluated value, evaluate each operand at most once,
