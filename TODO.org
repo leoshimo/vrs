@@ -44,6 +44,19 @@ Goal: Replicate Emacs-like Development Workflow to build VRS software
 E.g. Emacs Eval, SLIME-like workflows for molding Software
 
 * runtime
+** TODO Handle interruptions in Lyric control flow
+
+Let VRS code handle interruptions, run cleanup, and return to a service loop
+or prompt. Design the handler/cleanup syntax, propagation across calls, and
+behavior when an interruption is unhandled. Keep forced termination available.
+
+Use cases:
+- Emacs =C-g=: cancel the current evaluation while preserving the session's
+  earlier definitions, instead of disconnecting and killing its process.
+- Cancel a pending GUI interaction or service call and clean up outstanding work.
+- REPL =Ctrl-c=: leave a nested interaction and return to the prompt; see
+  [[*Controlling Terminal Mechanics for Connection]].
+
 ** TODO Runtime hooks inspired by Ruby TracePoint
 
 Provide hooks for observing Lyric execution without editing the observed code.
