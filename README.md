@@ -458,11 +458,11 @@ or add options such as service bindings.
   source. Effects already performed are not undone.
 
 Evaluate `(vrsjmp_browse_functions)` with `C-u C-c C-e` to open vrsjmp and insert a
-call. Search for a bound service method and press Enter to insert its form with
-argument names as placeholders. In the Cmd-K actions menu, choose **Fill arguments**
-to use the same completion providers as `call_interactively`, one page per argument. The
-last selection returns the form without executing it. Escape out of the picker
-cancels the evaluation and leaves the original expression intact.
+call. Search by function or service name; each row shows its service. Press Enter
+to insert its form with argument names as placeholders. In the Cmd-K actions menu,
+choose **Fill arguments** to select one value per argument, using the same choices
+as `call_interactively`. The last selection returns the form without executing it.
+Escape out of the picker cancels the evaluation and leaves the original expression intact.
 
 The GUI must be running for automatic opening. Requests remain in the
 `:vrsjmp` service if a wakeup is missed, and are checked again on opening or

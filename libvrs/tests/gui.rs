@@ -71,7 +71,7 @@ async fn picker_queues_a_page_and_returns_source_without_executing_it() {
         page,
         Form::from_expr(
             r#"(:push_page :get_items function_items :args ()
-        :title "Browse service functions" :prompt "Find a service function…")"#
+        :title "Browse service functions" :prompt "Search functions or services…")"#
         )
         .unwrap()
     );
