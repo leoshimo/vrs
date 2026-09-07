@@ -18,3 +18,8 @@ dirs = "5.0.1"
 clearscreen = "3.0.0"
 serde = { version = "1.0.210", features = ["derive"] }
 serde_json = "1.0.128"
+
+[dev-dependencies]
+assert_cmd = "2.2"
+expectrl = "0.9"
+tempfile = "3"

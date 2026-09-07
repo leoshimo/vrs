@@ -41,4 +41,4 @@ jobs:
     - name: Test release CLI startup and output
       run: |
         cargo build --release --locked --bin vrsd --bin vrsctl
-        VRS_TEST_PROFILE=release python3 vrsctl/tests/terminal.py
+        cargo test --release --locked -p vrsctl --test terminal

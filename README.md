@@ -495,8 +495,12 @@ tests when `emacs` is installed:
 
 ```sh
 cargo build --locked -p vrsctl -p vrsd
-python3 vrsctl/tests/terminal.py
+cargo test --locked -p vrsctl --test terminal
 ```
+
+Add `--release` to both commands to exercise optimized binaries. Build `vrsd`
+first because it belongs to a separate Cargo package; the tests use the daemon
+next to Cargo's `vrsctl` binary, including with a custom target directory.
 
 The terminal harness uses a temporary socket, an ephemeral node port, and an
 init fixture that starts a small in-memory service. It checks
