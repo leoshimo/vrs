@@ -532,17 +532,23 @@ keyword/value pair, or deep nesting can exceed it. Nothing is truncated.
 
 ### Emacs Integration
 
-An Emacs major mode is available at [`emacs/lyric-mode.el`](emacs/lyric-mode.el).
+[`emacs/vrs-mode.el`](emacs/vrs-mode.el) provides syntax highlighting,
+indentation, and evaluation for `.ll` files using built-in Emacs libraries.
+Add the repository's `emacs` directory to `load-path` and load the mode:
 
-It provides syntax highlighting and bindings useful for bottom-up, interactive,
-editor-centric software development. It recognizes raw block strings and sends
-the exact source expression to `vrsctl`, so multiline scripts can be evaluated
-with `lyric-eval-last-sexp` without being read and rewritten as Emacs Lisp.
+```elisp
+(add-to-list 'load-path "/path/to/vrs/emacs")
+(require 'vrs-mode)
+```
+
+Evaluation sends the source to `vrsctl` unchanged, including raw block strings
+and reader prefixes. Customize `vrs-vrsctl-command` to set the executable path
+or add options such as service bindings.
 
 - `C-c C-e` evaluates the expression at its closing parenthesis or preceding
   point, including its quote prefix.
   Try `(ls_srv)` or `(pretty (ls_srv) 60)` to see readable results in the
-  `*Lyric Result*` buffer. Top-level strings are displayed as text.
+  `*VRS Result*` buffer. Top-level strings are displayed as text.
 - `C-c C-r` evaluates the region; `C-c C-c` evaluates the buffer.
 - `C-u C-c C-e` and `C-u C-c C-r` replace source with the result and indent it
   in context. Replacement preserves string quotes/escapes and leaves source
@@ -565,32 +571,26 @@ The GUI must be running for automatic opening. Requests remain in the
 reconnection. `(show_gui)` asks a running GUI to open through its normal
 `begin_interaction`/`get_items` flow.
 
-Customize `lyric-result-width` (default 90) for editor results. Indentation
+Customize `vrs-result-width` (default 90) for editor results. Indentation
 aligns data and keyword/value lists under their opening parenthesis, uses two
 spaces for call bodies, and preserves raw block string contents. The result
 buffer uses Lyric syntax highlighting and is read-only.
 
-The mode currently depends on `janet-mode`. Add the `emacs` directory to
-`load-path`, require `lyric-mode`, and customize `lyric-vrsctl-command` when
-additional service bindings are needed.
-
-Use the updated `vrsctl` with this mode. CLI formatting works with an existing
-runtime; the new `(pretty ...)` built-in requires a runtime built with this change.
-
-Formatting checks can be run without contacting a live runtime:
+Run the Emacs tests without a runtime:
 
 ```sh
-cargo test --workspace
-cargo build -p vrsctl -p vrsd
-python3 vrsctl/tests/terminal.py
-# Include Emacs evaluation and indentation checks:
-JANET_MODE_DIR=/path/to/janet-mode python3 vrsctl/tests/terminal.py
-# Emacs unit tests alone (the runtime integration test is skipped):
-emacs -Q --batch -L /path/to/janet-mode -L emacs \
-  -l lyric-mode-tests -f ert-run-tests-batch-and-exit
+emacs -Q --batch -L emacs -l vrs-mode-tests -f ert-run-tests-batch-and-exit
 ```
 
-The terminal harness uses a temporary socket, an ephemeral node port, and the
-chat service as an init script without calling external commands. It checks
+The terminal harness starts a separate test runtime and includes Emacs evaluation
+tests when `emacs` is installed:
+
+```sh
+cargo build --locked -p vrsctl -p vrsd
+python3 vrsctl/tests/terminal.py
+```
+
+The terminal harness uses a temporary socket, an ephemeral node port, and an
+init fixture that starts a small in-memory service. It checks
 startup, command, file, stdin, REPL, and subscription output on pipes and
 pseudo-terminals, and keeps the user's runtime and REPL history intact.

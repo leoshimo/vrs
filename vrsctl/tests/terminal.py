@@ -1,7 +1,7 @@
 """Real CLI/PTY checks. Run after: cargo build -p vrsctl -p vrsd
 
-Uses a temporary socket, an ephemeral node port, and the chat service as its
-init script (no external commands run). Does not connect to the user's runtime.
+Uses a temporary socket, an ephemeral node port, and a small init fixture.
+Does not connect to the user's runtime.
 Set VRS_TEST_PROFILE=release to exercise optimized binaries.
 Requires only Python's standard library (Unix).
 """
@@ -13,6 +13,7 @@ import pty
 import re
 import select
 import shlex
+import shutil
 import struct
 import subprocess
 import tempfile
@@ -39,10 +40,16 @@ class TerminalTests(unittest.TestCase):
         # /tmp keeps the Unix socket below macOS's short path limit.
         cls.temp = tempfile.TemporaryDirectory(prefix="vrs-pretty-", dir="/tmp")
         cls.socket = str(Path(cls.temp.name) / "runtime.sock")
+        init = Path(cls.temp.name) / "init.ll"
+        init.write_text("""(defn! start_child (name value)
+  (defn! read_value () value)
+  (spawn_srv! name :interface '(read_value)))
+(spawn_srv! :test_factory :interface '(start_child))
+""")
         cls.log = tempfile.TemporaryFile(mode="w+")
         cls.daemon = subprocess.Popen(
             [BIN / "vrsd", "--node", "format-test", "--node-port", "0", "--socket", cls.socket,
-             "--init", ROOT / "scripts" / "chat.ll"],
+             "--init", init],
             stdout=cls.log, stderr=cls.log)
         deadline = time.monotonic() + 10
         while not Path(cls.socket).exists():
@@ -170,20 +177,21 @@ class TerminalTests(unittest.TestCase):
           (defn! echo (x) x)
           (def exports '(echo))
           (def code (macroexpand_1 '(srv! :test :interface exports)))
-          (list (pretty code) (eq? code (read (pretty code))) (ls_srv)))"""
+          (list (pretty code) (eq? code (read (pretty code)))
+                (contains? (ls_srv) :test)))"""
         output = self.pipe("-c", source)
         self.assertIn("((:echo x) (echo x))", output)
         self.assertIn("(_ '(:err \\\"Unrecognized message\\\"))", output)
         self.assertNotIn("service_dispatch", output)
-        self.assertNotIn(":test", output.split("true", 1)[1])
+        self.assertTrue(output.endswith(" true false)\n"), output)
 
     def test_init_service_and_nested_service_macros(self):
         source = '''(begin
-          (bind_srv :chat)
-          (spawn_chat :terminal_chat "test prompt")
-          (bind_srv :terminal_chat)
-          (get_messages))'''
-        self.assertEqual(self.pipe("-c", source), '((:system "test prompt"))\n')
+          (bind_srv :test_factory)
+          (start_child :test_child 42)
+          (bind_srv :test_child)
+          (read_value))'''
+        self.assertEqual(self.pipe("-c", source), '42\n')
 
     def test_subscriptions_once_follow_and_clear(self):
         for index, mode in enumerate([(), ("-f",), ("-F",)]):
@@ -206,13 +214,12 @@ class TerminalTests(unittest.TestCase):
             else:
                 self.assertEqual(proc.wait(timeout=5), 0)
 
-    @unittest.skipUnless(os.environ.get("JANET_MODE_DIR"), "Set JANET_MODE_DIR to include Emacs integration")
+    @unittest.skipUnless(shutil.which("emacs"), "Emacs is not installed")
     def test_emacs_evaluation_against_test_runtime(self):
         subprocess.run(
-            ["emacs", "-Q", "--batch", "-L", os.environ["JANET_MODE_DIR"],
-             "-L", str(ROOT / "emacs"), "-l", "lyric-mode-tests",
+            ["emacs", "-Q", "--batch", "-L", str(ROOT / "emacs"), "-l", "vrs-mode-tests",
              "-f", "ert-run-tests-batch-and-exit"],
-            env={**os.environ, "LYRIC_TEST_VRSCTL": shlex.join(self.command())},
+            env={**os.environ, "VRS_TEST_VRSCTL": shlex.join(self.command())},
             check=True, timeout=20)
 
 
