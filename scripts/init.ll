@@ -18,6 +18,7 @@
       (run "./scripts/os_notes.ll")
       (run "./scripts/antinote.ll")
       (run "./scripts/codex.ll")
+      (run "./scripts/tailscale.ll")
       (run "./scripts/obsidian.ll")
       (run "./scripts/os_display.ll")
       (run "./scripts/os_window.ll")
