@@ -60,7 +60,8 @@ for requests. Define exported functions before starting the service.
 
 ## Building a Call in the Editor
 
-Evaluate this with `C-u C-c C-e`:
+Run `M-x vrs-browse-functions` to insert a call at point. You can also evaluate
+this with `C-u C-c C-e`:
 
 ```lyric
 (vrsjmp_browse_functions)

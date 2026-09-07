@@ -457,8 +457,9 @@ or add options such as service bindings.
 - `C-g` aborts a waiting evaluation, terminates its client, and preserves the
   source. Effects already performed are not undone.
 
-Evaluate `(vrsjmp_browse_functions)` with `C-u C-c C-e` to open vrsjmp and insert a
-call. Search by function or service name; each row shows its service. Press Enter
+Run `M-x vrs-browse-functions` to open vrsjmp and insert a call at point. You can
+also evaluate `(vrsjmp_browse_functions)` with `C-u C-c C-e`. Search by function
+or service name; each row shows its service. Press Enter
 to insert its form with argument names as placeholders. In the Cmd-K actions menu,
 choose **Fill arguments** to select one value per argument, using the same choices
 as `call_interactively`. The last selection returns the form without executing it.

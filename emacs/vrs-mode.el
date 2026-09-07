@@ -316,6 +316,34 @@ With prefix argument REPLACE, replace the region with its result."
   (interactive "r\nP")
   (vrs--eval start end replace))
 
+(defun vrs-browse-functions ()
+  "Open vrsjmp to choose a service call and insert it at point.
+Press Enter in vrsjmp for argument placeholders, or use its Fill arguments
+action to choose values.  The selected call is not executed.  Cancelling
+with C-g or leaving the picker keeps the buffer unchanged."
+  (interactive)
+  (barf-if-buffer-read-only)
+  (let ((target (copy-marker (point) t))
+        (command vrs-vrsctl-command)
+        (width vrs-result-width))
+    (unwind-protect
+        (let ((text (with-temp-buffer
+                      (vrs-mode)
+                      (insert "(vrsjmp_browse_functions)")
+                      (let ((vrs-vrsctl-command command)
+                            (vrs-result-width width))
+                        (vrs--eval (point-min) (point-max) t))
+                      (buffer-string))))
+          (unless (marker-buffer target)
+            (user-error "The insertion buffer was closed"))
+          (with-current-buffer (marker-buffer target)
+            (goto-char target)
+            (atomic-change-group
+              (let ((start (point)))
+                (insert text)
+                (indent-region start (point))))))
+      (set-marker target nil))))
+
 (defun vrs-macroexpand-last-sexp (repeat-outer)
   "Display one expansion without executing the generated program.
 The macro body runs and can perform effects.  With prefix REPEAT-OUTER,
@@ -324,12 +352,14 @@ macro namespace of the vrsctl connection; for custom definitions, evaluate a
 region containing both the definitions and an explicit macroexpand_1 call."
   (interactive "P")
   (let ((source (vrs--last-sexp-source))
-        (vrs-vrsctl-command vrs-vrsctl-command)
-        (vrs-result-width vrs-result-width))
+        (command vrs-vrsctl-command)
+        (width vrs-result-width))
     (with-temp-buffer
       (insert (format "(%s (quote %s))"
                       (if repeat-outer "macroexpand" "macroexpand_1") source))
-      (vrs--eval (point-min) (point-max) nil nil t))))
+      (let ((vrs-vrsctl-command command)
+            (vrs-result-width width))
+        (vrs--eval (point-min) (point-max) nil nil t)))))
 
 (defvar vrs-mode-map
   (let ((map (make-sparse-keymap)))
