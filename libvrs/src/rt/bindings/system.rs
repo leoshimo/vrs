@@ -30,7 +30,7 @@ pub(crate) fn decode_fn() -> NativeFn {
 pub(crate) fn shell_expand_fn() -> NativeFn {
     NativeFn {
         metadata: vec![],
-        doc: "(shell_expand STRING) - Expand STRING using standard shell filename expansion."
+        doc: "(shell_expand STRING) - Expand a leading tilde to the user's home directory."
             .to_string(),
         func: |_, args| {
             let path = match args {
@@ -289,15 +289,23 @@ mod tests {
         }
     }
 
+    fn exec_fixture() -> Val {
+        // Cargo builds examples beside deps/ when running the package's tests.
+        let binary = std::env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("examples/exec-fixture");
+        Val::string(binary.to_str().unwrap())
+    }
+
     #[tokio::test]
     async fn exec_captures_exact_output_and_nonzero_exit() {
-        let value = exec_impl(vec![
-            Val::string("sh"),
-            Val::string("-c"),
-            Val::string("printf ' out\\n'; printf ' err\\n' >&2; exit 7"),
-        ])
-        .await
-        .unwrap();
+        let value = exec_impl(vec![exec_fixture(), Val::string("output")])
+            .await
+            .unwrap();
 
         assert_eq!(
             value,
@@ -315,9 +323,8 @@ mod tests {
     #[tokio::test]
     async fn exec_writes_string_to_stdin() {
         let value = exec_impl(vec![
-            Val::string("sh"),
-            Val::string("-c"),
-            Val::string("cat"),
+            exec_fixture(),
+            Val::string("stdin"),
             Val::keyword("stdin"),
             Val::string("line one\nline two\n"),
         ])

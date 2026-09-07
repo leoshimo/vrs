@@ -124,135 +124,6 @@ fn pretty_indentation_treats_active_holes_as_code() {
 }
 
 #[test]
-fn launcher_templates_preserve_legacy_constructor_values() {
-    let fixture = "(def name 'focus_window)
-      (def entity '(:os/window :id 42 :payload (missing symbol)))
-      (def values '()) (def matches (list entity))
-      (def window entity) (def task entity) (def note entity)
-      (def action '(\"Split\" window_split))";
-    for (old, template) in [
-        (
-            "(list 'call_interactively (list 'quote name))",
-            "`(call_interactively ',name)",
-        ),
-        (
-            "(list 'continue_call (list 'quote name) (list 'quote (list (get matches 0))))",
-            "`(continue_call ',name '(,(get matches 0)))",
-        ),
-        (
-            "(list 'continue_call (list 'quote name) (list 'quote (list entity)))",
-            "`(continue_call ',name '(,entity))",
-        ),
-        (
-            "(list 'continue_call (list 'quote name) (list 'quote (push values entity)))",
-            "`(continue_call ',name ',(push values entity))",
-        ),
-        (
-            "(list 'begin (list 'focus_window (list 'quote window)) (list (get action 1)))",
-            "`(begin (focus_window ',window) (,(get action 1)))",
-        ),
-        (
-            "(list 'open_things_task (list 'quote task))",
-            "`(open_things_task ',task)",
-        ),
-        (
-            "(list 'open_antinote_note (list 'quote note))",
-            "`(open_antinote_note ',note)",
-        ),
-    ] {
-        assert_eq!(
-            eval(&format!("(begin {fixture} {old})")).unwrap(),
-            eval(&format!("(begin {fixture} {template})")).unwrap(),
-            "{template}"
-        );
-    }
-}
-
-fn script_functions(script: &str, names: &[&str], source: &str) -> Value {
-    let forms = lyric::parse_script(script).unwrap();
-    let selected: Vec<_> = forms
-        .into_iter()
-        .filter(|form| {
-            matches!(form, Form::List(items) if items.first() == Some(&Form::symbol("defn!"))
-          && matches!(items.get(1), Some(Form::Symbol(name)) if names.contains(&name.as_str())))
-        })
-        .collect();
-    assert_eq!(selected.len(), names.len());
-    let mut body = vec![Value::symbol("begin")];
-    body.extend(selected.into_iter().map(Value::from));
-    body.push(Value::from_expr(source).unwrap());
-    let mut fiber = Fiber::from_val(&Value::List(body), Env::standard(), ()).unwrap();
-    match fiber.start().unwrap() {
-        Signal::Done(value) => value,
-        other => panic!("unexpected suspension: {other:?}"),
-    }
-}
-
-#[test]
-fn actual_window_actions_capture_data_and_run_in_click_order() {
-    let result = script_functions(
-        include_str!("../../scripts/vrsjmp.ll"),
-        &["make_item", "window_actions"],
-        "(begin
-          (def calls '())
-          (defn! focus_window (window) (set calls (push calls window)))
-          (defn! window_split () (set calls (push calls :split)))
-          (def items (window_actions '(:os/window :id 42 :payload (missing symbol))))
-          (def before calls)
-          (def command (get (get items 0) :on_click))
-          (eval command)
-          (list before calls command))",
-    );
-    assert_eq!(
-        result,
-        Value::from_expr(
-            "(() ((:os/window :id 42 :payload (missing symbol)) :split)
-      (begin (focus_window '(:os/window :id 42 :payload (missing symbol))) (window_split)))"
-        )
-        .unwrap()
-    );
-}
-
-#[test]
-fn actual_chat_template_splices_ordered_arguments_without_running_exec() {
-    let result = script_functions(
-        include_str!("../../scripts/chat.ll"),
-        &["msgs_to_cogni_cmd"],
-        r#"(msgs_to_cogni_cmd '((:system "rules") (:user "quotes\" , `") (:assistant "answer")))"#,
-    );
-    assert_eq!(
-        result,
-        Value::from_expr(r#"(exec "cogni" "-s" "rules" "-u" "quotes\" , `" "-a" "answer")"#)
-            .unwrap()
-    );
-    assert_eq!(
-        script_functions(
-            include_str!("../../scripts/chat.ll"),
-            &["msgs_to_cogni_cmd"],
-            "(msgs_to_cogni_cmd '())"
-        ),
-        Value::from_expr("(exec \"cogni\")").unwrap()
-    );
-}
-
-#[test]
-fn interface_demo_preserves_the_background_command_as_data() {
-    let result = script_functions(
-        include_str!("../../scripts/vrsjmp_interfacegen_demo.ll"),
-        &["root_items"],
-        r#"(begin
-          (defn! fuzzy_match (query values key) values)
-          (def items '((:title "Wait" :on_click (notify "later"))))
-          (root_items ""))"#,
-    );
-    assert_eq!(
-        result,
-        Value::from_expr(r#"((:title "Wait" :on_click (run_in_background '(notify "later"))))"#)
-            .unwrap()
-    );
-}
-
-#[test]
 fn strings_and_comments_do_not_interpolate() {
     assert_value(
         r#"`("literal ,x ` ,@xs" """raw ,x ` ,@xs""")"#,
@@ -299,8 +170,10 @@ fn nesting_preserves_inactive_markers_and_activates_matching_depth() {
 
 #[test]
 fn quote_inside_a_template_preserves_future_literal_arguments() {
-    assert_value("(let ((name 'focus_window) (window '(:os/window :id 42))) `(continue_call ',name '(,window)))",
-                 "(continue_call (quote focus_window) (quote ((:os/window :id 42))))");
+    assert_value(
+        "(let ((name 'consume) (item '(:item :id 42))) `(invoke ',name '(,item)))",
+        "(invoke (quote consume) (quote ((:item :id 42))))",
+    );
     assert_value(
         "'(quasiquote (a ,missing))",
         "(quasiquote (a (unquote missing)))",

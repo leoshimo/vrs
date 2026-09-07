@@ -24,3 +24,7 @@ unicode-segmentation = "1.12.0"
 [dev-dependencies]
 assert_matches = "1.5.0"
 tracing-test = "0.2.5"
+
+[[example]]
+name = "exec-fixture"
+path = "tests/support/exec_fixture.rs"

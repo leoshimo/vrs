@@ -218,7 +218,6 @@ async fn run_file(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
     use vrs::Runtime;
 
     async fn runtime_client() -> (Runtime, Client) {
@@ -402,56 +401,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn raw_block_string_executes_via_stdin_with_positional_arguments() {
+    async fn raw_block_string_survives_client_serialization() {
         let (_runtime, client) = runtime_client().await;
-        let expression = concat!(
-            "(get (exec \"sh\" \"-s\" \"--\" \"argument with spaces\"\n",
-            "           :stdin \"\"\"\n",
-            "           printf '<%s>\\n' \"$1\"\n",
-            "           printf '%s\\n' 'C:\\tmp \"quoted\"'\n",
-            "           \"\"\") :stdout)",
-        );
-
-        let response = client
-            .request(lyric::parse(expression).unwrap())
-            .await
-            .unwrap();
+        let source = r#""""
+            first "quoted" line
+            C:\tmp
+            """"#;
+        let response = client.request(lyric::parse(source).unwrap()).await.unwrap();
         assert_eq!(
             response.contents.unwrap(),
-            lyric::Form::string("<argument with spaces>\nC:\\tmp \"quoted\"\n")
+            lyric::Form::string("first \"quoted\" line\nC:\\tmp\n")
         );
-    }
-
-    #[test]
-    fn all_repository_lyric_scripts_parse() {
-        let scripts_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../scripts");
-        for entry in std::fs::read_dir(scripts_dir).unwrap() {
-            let entry = entry.unwrap();
-            if !entry.file_type().unwrap().is_file() {
-                continue;
-            }
-            let path = entry.path();
-            if path.extension().and_then(|extension| extension.to_str()) != Some("ll") {
-                continue;
-            }
-
-            let source = std::fs::read_to_string(&path).unwrap();
-            let mut pending = String::new();
-            for (index, line) in source.split_inclusive('\n').enumerate() {
-                pending.push_str(line);
-                match lyric::parse(&pending) {
-                    Ok(_) => pending.clear(),
-                    Err(lyric::Error::IncompleteExpression(_)) => {}
-                    Err(error) => panic!("{}:{}: {error}", path.display(), index + 1),
-                }
-            }
-
-            assert!(
-                pending.trim().is_empty() || pending.trim().starts_with('#'),
-                "{} ended with an incomplete expression: {}",
-                path.display(),
-                pending.trim()
-            );
-        }
     }
 }

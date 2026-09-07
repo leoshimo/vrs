@@ -20,13 +20,13 @@ async fn fuzzy_preserves_objects_and_stable_equal_labels() {
     assert_eq!(
         eval(
             r#"
-        (fuzzy_match "saf" '((:title "Safari" :id 1) (:title "Notes" :id 2)
-                            (:title "Safari" :id 3))
+        (fuzzy_match "alp" '((:title "Alpha" :id 1) (:title "Beta" :id 2)
+                            (:title "Alpha" :id 3))
                      (fn (item) (get item :title)))
     "#
         )
         .await,
-        Val::from_expr(r#"((:title "Safari" :id 1) (:title "Safari" :id 3))"#).unwrap()
+        Val::from_expr(r#"((:title "Alpha" :id 1) (:title "Alpha" :id 3))"#).unwrap()
     );
 }
 
