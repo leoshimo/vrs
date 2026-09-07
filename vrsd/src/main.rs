@@ -64,13 +64,15 @@ async fn main() -> Result<()> {
 }
 
 fn default_node_name() -> String {
-    std::process::Command::new("hostname")
-        .arg("-s")
-        .output()
+    nix::unistd::gethostname()
         .ok()
-        .filter(|output| output.status.success())
-        .and_then(|output| String::from_utf8(output.stdout).ok())
-        .map(|name| name.trim().to_ascii_lowercase())
+        .and_then(|name| name.into_string().ok())
+        .map(|name| {
+            name.split('.')
+                .next()
+                .unwrap_or_default()
+                .to_ascii_lowercase()
+        })
         .filter(|name| !name.is_empty())
         .unwrap_or_else(|| "local".to_string())
 }

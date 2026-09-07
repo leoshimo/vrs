@@ -4,6 +4,10 @@
 
 (def current_browser "Safari")
 
+(defn! open_url (url)
+  "Open a URL in the configured browser."
+  (exec "open" "-a" current_browser url))
+
 (defn! active_tab_safari ()
   "Retrieve the active tab info for Safari"
   (if (not? (eq? (get (exec "pgrep" "-ax" "Safari") :exit) 0))
@@ -52,4 +56,4 @@
   # (open_url (format "https://web.archive.org/web/*/{}" url))
   (open_url (format "https://archive.is/{}" url)))
 
-(spawn_srv! :os_browser :interface '(active_tab active_tab_open_wayback active_tab_for_app browser_pages))
+(spawn_srv! :os_browser :interface '(active_tab active_tab_open_wayback active_tab_for_app browser_pages open_url))
