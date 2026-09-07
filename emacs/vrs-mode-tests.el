@@ -196,6 +196,80 @@
       (vrs-eval-last-sexp t)
       (should (equal (buffer-string) "42")))))
 
+(ert-deftest vrs-daemon-terminal-quit-with-test-runtime ()
+  "Send actual C-g input through emacsclient, rather than setting quit-flag."
+  (skip-unless (getenv "VRS_TEST_VRSCTL"))
+  (skip-unless (executable-find "emacsclient"))
+  (let* ((directory (file-truename (make-temp-file "/tmp/vrs-emacs-" t)))
+         (socket (expand-file-name "server" directory))
+         (log (generate-new-buffer " *VRS daemon test*"))
+         (terminal (generate-new-buffer " *VRS terminal test*"))
+         (source "(srv! :emacs_terminal_abort_probe :interface '())")
+         (file (expand-file-name "probe.ll" directory))
+         (process-environment (cons "TERM=xterm-256color" process-environment))
+         daemon client)
+    (cl-labels
+        ((wait-for (predicate)
+           (let ((deadline (+ (float-time) 5)))
+             (while (and (not (funcall predicate)) (< (float-time) deadline))
+               (accept-process-output nil 0.05))
+             (ert-info ((concat (with-current-buffer log (buffer-string))
+                                (with-current-buffer terminal (buffer-string))))
+               (should (funcall predicate)))))
+         (terminal-contains (text)
+           (with-current-buffer terminal
+             (string-match-p (regexp-quote text) (buffer-string)))))
+      (unwind-protect
+          (progn
+            (setq daemon
+                  (make-process
+                   :name "VRS test Emacs daemon" :buffer log :noquery t
+                   :command
+                   (list (expand-file-name invocation-name invocation-directory)
+                         "-Q" (concat "--fg-daemon=" socket)
+                         "-l" (symbol-file 'vrs-mode)
+                         "--eval" (prin1-to-string
+                                     `(setq vrs-vrsctl-command ,(getenv "VRS_TEST_VRSCTL"))))))
+            (wait-for (lambda () (file-exists-p socket)))
+            (with-temp-file file (insert source))
+            (setq client
+                  (make-process
+                   :name "VRS test Emacs terminal" :buffer terminal :noquery t
+                   :connection-type 'pty
+                   :command
+                   (list (executable-find "emacsclient") "--socket-name" socket
+                         "--tty" "--create-frame" file)))
+            (set-process-window-size client 24 100)
+            (wait-for (lambda () (terminal-contains "(VRS)")))
+            (process-send-string client "\e>\C-c\C-e")
+            (wait-for (lambda () (terminal-contains "Evaluating VRS")))
+            ;; Earlier ordinary input must not prevent the quit being read.
+            (process-send-string client "x")
+            (accept-process-output nil 0.1)
+            (process-send-string client "\C-g")
+            (wait-for (lambda () (terminal-contains "Quit")))
+            (should (process-live-p client))
+            (with-temp-buffer
+              (should
+               (zerop
+                (call-process
+                 (executable-find "emacsclient") nil t nil "--socket-name" socket
+                 "--eval"
+                 (prin1-to-string
+                  `(with-current-buffer (find-buffer-visiting ,file)
+                     (list (hash-table-count vrs--sessions)
+                           (buffer-string)
+                           (with-temp-buffer
+                             (insert "(+ 20 22)") (vrs-mode)
+                             (vrs-eval-last-sexp t) (buffer-string))))))))
+              (goto-char (point-min))
+              (should (equal (read (current-buffer)) (list 0 source "42")))))
+        (dolist (process (list client daemon))
+          (when (and process (process-live-p process)) (delete-process process)))
+        (kill-buffer terminal)
+        (kill-buffer log)
+        (delete-directory directory t)))))
+
 (ert-deftest vrs-mode-indents-data-and-calls ()
   (dolist (example
            '(("((:name :echo\n:node \"alpha\"\n:interface ((ping\nx))))"
