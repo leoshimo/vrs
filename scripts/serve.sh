@@ -22,16 +22,16 @@ fi
 # Editor commands and script shebangs use the installed client. Match its
 # build profile to the daemon so they select the same default socket.
 if [ "$MODE" = "dev" ]; then
-    cargo install --path vrsctl --force --debug || exit $?
+    cargo install --locked --path vrsctl --force --debug || exit $?
 else
-    cargo install --path vrsctl --force || exit $?
+    cargo install --locked --path vrsctl --force || exit $?
 fi
 
 if [ "${TMUX:-}" ]; then
     tmux rename-window "vrs-srv-$MODE"
 fi
 
-cargo run $CARGO_ARGS --bin vrsd -- --init ./scripts/init.ll > "vrsd-$MODE.log" 2>&1 &
+cargo run --locked $CARGO_ARGS --bin vrsd -- --init ./scripts/init.ll > "vrsd-$MODE.log" 2>&1 &
 VRSD_PID=$!
 VRSJMP_PID=""
 
@@ -46,7 +46,7 @@ trap cleanup INT TERM EXIT
 # vrsd binds its client socket only after scripts/init.ll completes. Do not
 # launch the GUI until the daemon is accepting requests, and stop if
 # initialization fails.
-until cargo run $CARGO_ARGS --bin vrsctl -- --command ':healthcheck' >/dev/null 2>&1; do
+until cargo run --locked $CARGO_ARGS --bin vrsctl -- --command ':healthcheck' >/dev/null 2>&1; do
     if ! kill -0 "$VRSD_PID" 2>/dev/null; then
         wait "$VRSD_PID"
         VRSD_STATUS=$?
@@ -60,7 +60,7 @@ until cargo run $CARGO_ARGS --bin vrsctl -- --command ':healthcheck' >/dev/null 
 done
 
 if [ "$MODE" != "headless" ]; then
-    cargo run $CARGO_ARGS --bin vrsjmp &
+    cargo run --locked $CARGO_ARGS --bin vrsjmp &
     VRSJMP_PID=$!
     wait "$VRSD_PID" "$VRSJMP_PID"
 else

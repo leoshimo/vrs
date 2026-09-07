@@ -12,30 +12,33 @@ env:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    # Tauri 1 requires WebKitGTK 4.0, which Ubuntu 24.04 no longer packages.
+    runs-on: ubuntu-22.04
 
     steps:
     - uses: actions/checkout@v4
 
-    # From https://github.com/tauri-apps/tauri-action 
     - name: install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf sqlite3 jq
+        sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf emacs-nox
 
     - name: Format
-      run: cargo fmt --check
+      run: cargo fmt --all --check
+
+    - name: Clippy
+      run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
     - name: Build
-      run: cargo build --verbose
+      run: cargo build --workspace --locked
 
     - name: Test
-      run: cargo test --verbose
+      run: cargo test --workspace --locked
 
     - name: Test optimized runtime
-      run: cargo test --release -p lyric -p vrs -p vrsd
+      run: cargo test --release --locked -p lyric -p vrs -p vrsd
 
     - name: Test release CLI startup and output
       run: |
-        cargo build --release --bin vrsd --bin vrsctl
+        cargo build --release --locked --bin vrsd --bin vrsctl
         VRS_TEST_PROFILE=release python3 vrsctl/tests/terminal.py
