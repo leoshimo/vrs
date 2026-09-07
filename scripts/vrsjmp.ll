@@ -703,7 +703,7 @@
          # (make_item "Mail" '(open_app "Spark"))
          # (make_item "Mail" '(open_app "Mimestream"))
          (+ (make_item "Mail" '(open_url "https://mail.google.com")) '(:aside "mail.google.com"))
-         (make_item "Cal" '(open_app "Calendar"))
+         (make_item "Calendar" '(open_app "Calendar"))
          # (make_item "Cal" '(open_app "Notion Calendar"))
          (make_item "Find My" '(open_app "FindMy"))
          (make_item "Soulver" '(open_app "Soulver 3"))
