@@ -628,6 +628,123 @@ of developing software, e.g.:
 This extends into test and debug phases of programming - debugging and testing
 can be done via uniform, universal mechanisms without use of secondary tools or concepts.
 
+** Choosing live values while editing
+
+Proposal: let an expression open a chooser and return the selected value.
+The names below are provisional; these helpers are not implemented.
+
+#+begin_src lyric
+(vrsjmp_choose (get_windows))
+(vrsjmp_choose_field (active_tab))
+#+end_src
+
+The first shows the actual windows and returns one window record. The second
+shows fields such as =:title= and =:url=, with their current values, and returns
+the selected field's value. The two operations are explicit because both
+records and ordinary sequences use lists in Lyric.
+
+An Emacs command could evaluate the region or expression at point, show this
+chooser, then replace that source with the selected value. Evaluate once and
+select from that snapshot. Quote list and symbol values when inserting them as
+source; cancelling leaves the original expression intact.
+
+There are two useful editing operations:
+- Insert the current value: choosing =:url= yields ="https://example.org/article"=.
+- Insert an accessor: the same choice yields =(get (active_tab) :url)=, which
+  fetches the active tab's URL each time it runs.
+
+The first captures a fact; the second builds a program by inspecting a concrete
+example. For lists, an index means a position, not a permanent identity: window
+number two may be a different window later. Keep value insertion as the initial
+operation and consider accessor generation separately. Building an accessor
+requires the original source and the selected key or index; the returned value
+alone cannot tell the editor where it came from.
+
+This can build on =request_input=: the caller waits while a known chooser
+callback in =:vrsjmp= renders the supplied data and returns a selection. It does
+not need to send a new callback definition from the editor on every request.
+
+** A running program asks for a decision
+
+Demo proposal: a worker files a batch of saved web pages into project folders.
+Its =route_capture= function is bound from a small =:capture_policy= service.
+The first pages succeed; one page has no matching rule. The worker asks where
+it belongs and waits, retaining the current page and the remaining batch.
+
+The following is an application sketch. =route_capture= and =file_capture= are
+demo functions to write; =vrsjmp_choose= is the proposed chooser above. Bind the
+policy service and retrieve =captures= before starting the worker.
+
+#+begin_src lyric
+(defn! destination_for (item)
+  (def destination (route_capture item))
+  (if destination destination
+    (match (vrsjmp_choose '(:inbox :research :skip :retry))
+      (:retry (destination_for item))
+      (answer answer))))
+
+(def worker
+  (spawn (fn ()
+    (map captures (fn (item)
+      (def destination (destination_for item))
+      (if (not? (eq? destination :skip))
+        (file_capture item destination)))))))
+#+end_src
+
+Choosing =:research= answers only this occurrence. Alternatively, leave the
+worker waiting, edit the policy in Emacs to recognize =arxiv.org=, and reload
+the policy service. Choose =:retry=: the worker calls =route_capture= again,
+now reaches the replacement service, and continues the same batch. Later pages
+use the new rule too. The worker's PID stays the same; the policy service's
+PID changes. Editing a definition only in the editor session would not update
+the worker's separate environment.
+
+The policy call returns before the input wait, so replacing that service does
+not abandon an in-flight call. The spawned worker leaves Emacs free for editing.
+For this demo, cancelling the question ends the worker; =:skip= skips one item.
+
+This is ordinary function calls, local variables, and a loop waiting for a
+value. It needs no separate workflow language. The wait is intentional: this
+does not imply that arbitrary errors already offer resumable stack frames, or
+that the batch survives a daemon restart.
+
+A second scenario uses the same mechanism for a broken importer: show the
+unexpected source record, inspect it with the field chooser, fix the extraction
+service, then retry only that record. Keep the question before the write so
+retrying the decision does not repeat already-completed writes.
+
+** Teaching an extractor by selecting browser fields
+
+Demo proposal, requiring a browser bridge that can inspect the DOM and let the
+user select elements. Current =os_browser= offers tab information and opening
+URLs; it cannot pick page elements.
+
+Open a local events page with repeated event cards. From Emacs, ask to create
+an extractor. In the browser, select one card, click its title, date, and link,
+and name those fields. Preview the extracted records for all cards, then check
+a second page before accepting the generated function. Keep browser objects in
+the browser; return field descriptions and extracted values to VRS. Resolve
+relative links against the page URL.
+
+For a controlled fixture, the generated function might look like this;
+=browser_extract= would be a new bridge function:
+
+#+begin_src lyric
+(defn! venue_events ()
+  (browser_extract
+    "http://localhost:8080/events"
+    '(:each ".event"
+      :title (:text "h2")
+      :date (:attribute "time" "datetime")
+      :url (:attribute "a" "href"))))
+#+end_src
+
+The selectors come from the inspected page, and the preview exposes mistakes
+such as selecting only the first card. The result is a function to evaluate in
+Emacs, combine with calendar functions, or expose in vrsjmp. Page redesigns can
+break it. Retaining the generator alongside the source could make revisiting
+those choices easier; see [[file:docs/ai.md][AI and VRS]] for that separate proposal.
+
 ** Idea: Data, Functions, and Interactive Runtime
 - The shape of data implies certain functions can be applied to access or mutate it.
 - System should support querying set of available functions for given shape of data
@@ -664,18 +781,8 @@ can be done via uniform, universal mechanisms without use of secondary tools or 
 
 * VRS and Agents
 
-VRS's design naturally complements automation and agents:
-- Agents can be modelled as programs that write themselves in real-time
-- Agents use all capability available to programs (zero integration cost)
-- Agents can use processes to:
-   - accumulate complex state in isolation
-   - work in parallel, and in tandem, concurrently with other processes
-   - await indefinitely, for scheudling, user input, external event, 
-   - execute durably
-- Agent's error scenarios leverage full error handling of runtime - stack
-  frames, error catching, supervision trees - to restart, or trigger user intervention
-- Runtime provides virtual, isolated, sandbox execution
-- User Interfaces can be interacted by programs - including agents (Hypermedia)[
+[[file:docs/ai.md][AI and VRS]] collects the agent-specific design notes, existing experiments,
+and proposals for generated source, interactive decisions, and live debugging.
 
 * References
 

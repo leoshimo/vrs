@@ -46,6 +46,10 @@ To this end:
 - `vrsctl`: A thin CLI client over `libvrs`
 - `vrsjmp`: A GUI launch bar client
 
+See [Core Concepts](docs/concepts.md) for using the system,
+[Design](DESIGN.org) for proposals, and [AI and VRS](docs/ai.md) for the
+AI-related experiments and design notes.
+
 ## Init scripts and nodes
 
 `vrsd --init PATH` evaluates a script inside the runtime before accepting local
