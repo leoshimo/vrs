@@ -16,7 +16,7 @@
     (if (eq? (get response 1) :ok) (get response 2)
       (error "GUI input cancelled"))))
 
-(defn! pick_call ()
-  "(pick_call) - Find a bound service method in vrsjmp and return its call form, optionally filling arguments. Does not execute the selected call."
+(defn! vrsjmp_browse_functions ()
+  "(vrsjmp_browse_functions) - Open vrsjmp to browse bound service functions and return a call form, optionally filling arguments. Does not execute the selected call."
   (request_input '(:push_page :get_items function_items :args ()
-                  :title "Insert a call" :prompt "Find a service function…")))
+                  :title "Browse service functions" :prompt "Find a service function…")))

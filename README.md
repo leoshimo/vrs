@@ -457,10 +457,10 @@ or add options such as service bindings.
 - `C-g` aborts a waiting evaluation, terminates its client, and preserves the
   source. Effects already performed are not undone.
 
-Evaluate `(pick_call)` with `C-u C-c C-e` to insert a call using vrsjmp. Search
-for a bound service method and press Enter to insert its form with argument names as
-placeholders. In the Cmd-K actions menu, choose **Fill arguments** to use the
-same completion providers as `call_interactively`, one page per argument. The
+Evaluate `(vrsjmp_browse_functions)` with `C-u C-c C-e` to open vrsjmp and insert a
+call. Search for a bound service method and press Enter to insert its form with
+argument names as placeholders. In the Cmd-K actions menu, choose **Fill arguments**
+to use the same completion providers as `call_interactively`, one page per argument. The
 last selection returns the form without executing it. Escape out of the picker
 cancels the evaluation and leaves the original expression intact.
 

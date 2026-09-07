@@ -380,8 +380,9 @@ for any remaining arguments.
 
 ### Building a Call in the Editor
 
-Evaluate `(pick_call)` using Emacs's replace command, `C-u C-c C-e`. Vrsjmp
-searches bound service methods, using their parameter metadata for placeholders.
+Evaluate `(vrsjmp_browse_functions)` using Emacs's replace command, `C-u C-c C-e`.
+This opens vrsjmp to search bound service methods, using their parameter metadata
+for placeholders.
 Enter inserts a form such as:
 
 ```lyric
@@ -409,7 +410,7 @@ on the same connection it uses for queries. The signal asks it to show/focus;
 `begin_interaction` chooses the page and `get_items` supplies the content.
 Navigation history remains in the GUI.
 
-`pick_call` uses `(request_input PAGE)` to queue a page in the existing
+`vrsjmp_browse_functions` uses `(request_input PAGE)` to queue a page in the existing
 `:vrsjmp` service and wait in the calling process. The service stays available
 for queries while the caller waits. A page callback receives the request ID
 before its normal `:args`; its final action calls `(finish_input ID VALUE)`

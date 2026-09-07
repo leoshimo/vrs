@@ -58,7 +58,7 @@ async fn picker_queues_a_page_and_returns_source_without_executing_it() {
     let (caller, _) = connect(&runtime).await;
     let result = tokio::spawn(async move {
         caller
-            .request(Form::from_expr("(pick_call)").unwrap())
+            .request(Form::from_expr("(vrsjmp_browse_functions)").unwrap())
             .await
             .unwrap()
             .contents
@@ -71,7 +71,7 @@ async fn picker_queues_a_page_and_returns_source_without_executing_it() {
         page,
         Form::from_expr(
             r#"(:push_page :get_items function_items :args ()
-        :title "Insert a call" :prompt "Find a service function…")"#
+        :title "Browse service functions" :prompt "Find a service function…")"#
         )
         .unwrap()
     );
@@ -122,7 +122,7 @@ async fn disconnect_ends_a_process_waiting_for_gui_input() {
     let request_client = caller.clone();
     let result = tokio::spawn(async move {
         request_client
-            .request(Form::from_expr("(pick_call)").unwrap())
+            .request(Form::from_expr("(vrsjmp_browse_functions)").unwrap())
             .await
     });
     timeout(Duration::from_secs(3), queued.recv())
