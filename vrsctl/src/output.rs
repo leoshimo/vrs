@@ -2,7 +2,8 @@
 use lyric::Form;
 use std::io::{self, IsTerminal, Write};
 
-#[derive(clap::ValueEnum, Debug, Clone, Copy, PartialEq)]
+#[derive(clap::ValueEnum, serde::Deserialize, Debug, Clone, Copy, PartialEq)]
+#[serde(rename_all = "lowercase")]
 pub(crate) enum Format {
     #[clap(help = "Pretty on terminal stdout, compact when redirected")]
     Default,
