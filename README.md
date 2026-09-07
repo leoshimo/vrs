@@ -49,7 +49,7 @@ To this end:
 ## Init scripts and nodes
 
 `vrsd --init PATH` evaluates a script inside the runtime before accepting local
-clients. Unlike `load`/`fread`, `(run PATH)` evaluates all of a file's top-level
+clients. Unlike `fread`, `(run PATH)` evaluates all of a file's top-level
 forms with an implicit `begin`, in a fresh process, and waits for that process
 to finish. Services created by `spawn_srv!` keep running.
 
@@ -137,7 +137,7 @@ The runtime runs software written in Lyric lang:
 42                                # integers
 :my_keyword                       # keywords start with colon (:)
 true                              # booleans are `true` or `false`
-(list msg var_number var_keyword) # create new lists with `list` function
+(list msg 42 :my_keyword)          # create a list of values
 '("a" "b" "c")                    # quote expression with '
 
 # Function declarations use `defn!`
@@ -160,10 +160,10 @@ true                              # booleans are `true` or `false`
 (get item :subtitle)   # => "My Subtitle"
 
 # Functions (Lambdas) are first class
-(defn! apply (x fn)
-    (fn x))
-(apply 41 (lambda (x) (+ x 1)))        # => 41
-(map '(1 2 3) (lambda (x) (+ x x))     # => '(2, 4, 6)
+(defn! with_value (x f)
+    (f x))
+(with_value 41 (lambda (x) (+ x 1)))  # => 42
+(map '(1 2 3) (lambda (x) (+ x x)))   # => (2 4 6)
 
 # Conditionals with `if` - equality with `eq?`
 (if (eq? msg "Hello")
@@ -182,7 +182,7 @@ true                              # booleans are `true` or `false`
 (def result '(:ok "Successful data"))
 (match result
     ((:ok msg) msg)
-    ((:err err) (:err err))
+    ((:err err) (list :err err))
     (_ '(:err "Unrecognized result")))
 
 # Destructuring bindings can be used to pattern match against forms:
@@ -205,7 +205,7 @@ true                              # booleans are `true` or `false`
 (help recv)        # see documentation via `help`
 ```
 
-**Macros transform source forms before execution.**
+**Macros receive source forms and return code.**
 
 ```lisp
 (defmacro unless (test & body)
@@ -224,14 +224,14 @@ until the head is ordinary code. Both accept source data and return source data;
 quote the call to avoid running its arguments. `pretty` formats the returned
 form, and a separate `eval` runs it deliberately.
 
-Macros have a separate, constrained expansion environment. Put shared helper
-functions in a top-level `(for_syntax ...)` block; runtime locals and services
-are not accessible while expanding. Use `gensym` for introduced local names.
-Definitions are process-local. Compiled functions retain their expansions until
-reevaluated; deferred `try`/`eval` compile against the current macro definitions.
-Expansion has instruction, invocation, nesting, and value-size limits. The
-reader accepts source nesting up to 256 levels. Macro definitions are top-level
-forms; generated names require explicit `gensym`, without automatic hygiene.
+Macros expand each time execution reaches a call. They use their definition's
+lexical scope and can call ordinary helpers or perform I/O. Redefining a macro
+affects subsequent calls, including calls inside existing functions.
+`macroexpand_1` and `macroexpand` run the transformer, including its side effects,
+but leave the generated code unevaluated.
+
+See [Lyric macros](lyric/README.md#user-defined-macros) for scope, generated
+names, and expansion limits.
 
 In Emacs, `C-c C-m` displays one expansion of the form at its closing
 parenthesis or preceding point, adding the required quote automatically; a
@@ -243,53 +243,18 @@ evaluation and terminates its client. Each evaluation command uses its own
 connection, so for custom macros evaluate their definitions and an explicit
 `macroexpand_1` call together in a region or file.
 
-TODO: Examples for fibers, coroutines, yielding, infinite iterators
-
 See [Lyric quotation and code templates](lyric/README.md#quotation-and-code-templates)
 for nesting, literal arguments, and the distinction between insertion and splicing.
 
 ### Process
 
-In VRS, software runs as *processes* running Lyric lang.
+Each VRS process runs a Lyric fiber in a Tokio task, with its own environment
+and mailbox. Async operations such as `recv` and `sleep` suspend the task while
+waiting. CPU-bound Lyric code is not preempted and can occupy a worker thread.
 
-These processes are implemented as [green threads](https://en.wikipedia.org/wiki/Green_thread),
-and are lightweight compared to OS processes. Processes are scheduled on
-multiple cores using nonblocking IO.
-
-Each process has a single logical thread of execution. CPU-bound and IO-bound
-work is transparent at process level, but the runtime schedules work such that a
-IO or CPU-bound work do not block cores.
-
-While processes are preemptively scheduled, each process can create fibers,
-which can be used for cooperative multitasking, coroutines, infinite generators,
-etc within a single process.
-
-Millions of processes can run on a single machine, without a single process
-halting the system altogether.
-
-The low cost of processes allows it to serve as a single abstraction to simplify
-typical event-based, callback-based, or scheduling idioms used in building
-software.
-
-For example, annual jobs can be represented as a infinite looping program that
-sleeps for a year:
-
-```lyric
-(loop (sleep (duration :years 1))
-      (do_a_thing))
-```
-
-And user flows can be represented sequentially, without blocking the "main thread":
-
-```lyric
-(def query (prompt "Enter search term: ")) # block on user response
-(def items (search_items query))           # network-bound query
-(def selection (select items))             # block on user selection
-```
-
-Processes run in isolated environments from one another - symbols bound in one
-process cannot be seen by another process.  The only method for communicating
-between process is via *message passing*, covered below.
+Processes communicate through messages. Spawned processes copy their bindings;
+closure environments can still share mutable state, so this is not complete
+memory isolation.
 
 ```lyric
 # See list of running processes in runtime
@@ -305,8 +270,6 @@ between process is via *message passing*, covered below.
 ```
 
 ### Message Passing
-
-Processes are isolated - and communicate through message-passing.
 
 Each process has a dedicated mailbox that it can poll to receive messages:
 
@@ -338,49 +301,30 @@ Each process has a dedicated mailbox that it can poll to receive messages:
     (send parent_pid :hello_from_child)))
 ```
 
-VRS / Lyric's approach to concurrent systems is [CSP](https://en.wikipedia.org/wiki/Communicating_sequential_processes).
-
 ### Services - Registry, Discovery, Binding
 
-Services are long-running processes that:
-- are discoverable via name in service registry
-- process messages in mailbox, which may update internal state, and respond to message sender
-
-Processes (including services) can *bind* to another service, and communicate over message passing.
-The `srv!` and `spawn_srv!` macros generate service control flow. `bind_srv` is an ordinary runtime function: it discovers the live exported interface and installs message-passing stubs in the current process.
+A service is a process registered under a name, with an exported interface.
+`spawn_srv!` starts a child service and waits for registration:
 
 ```lyric
-# `register` - register a process under name in service registry
-(register :echo)
-
-# `ls_srv` - Can list all services running within runtime
-(ls_srv)         # => ((:name :echo :pid <pid XX>))
-
-# `find_srv` - Get PID for registered processes
-(find_srv :echo) # => <pid XX>
-
-# Register has options to overwrite and expose interfaces (as function names)
-(defn! ping (x) x)
-(defn! pong (y) y)
-(register :service_c :interface '(ping pong) :overwrite)
-
-# `srv!` is a macro to:
-# - Register process under a identifiable name in registry via `register`
-# - Start a service loop (covered under "message passing")
-(defn! echo (msg) msg)
-(srv! :echo :interface '(echo))
-
-# `srv!` is blocking - but often it is more convenient to fork into a new service
-# `spawn_srv!` is a macro to expand into `srv!` inside a `spawn` block:
+(defn! echo (message) message)
 (spawn_srv! :echo :interface '(echo))
 
-# `bind_srv` can be used to define matching message-passing stubs within another process to a service process:
-(bind_srv :echo)    # defines `(echo msg)` in current process, which messages `:echo` service
+(find_srv :echo)           # process ID, including its node
+(info_srv :echo :interface) # => ((:echo message))
+(ls_srv)                  # service names and their registration records
+
+(bind_srv :echo)
+(echo "hello")            # => "hello"
 ```
+
+`bind_srv` installs message-passing stubs in the calling process. `srv!` serves
+requests in the current process instead of spawning a child. See
+[Services](docs/concepts.md#services) for interface metadata and binding rules.
 
 ### PubSub
 
-The runtime has built-in global pubsub mechanism.
+Topics broadcast messages to subscribers on the same runtime node.
 
 ```lyric
 # Subscribe to :my_topic
@@ -416,40 +360,8 @@ The runtime has built-in global pubsub mechanism.
 
 ### Example: System Appearance Service
 
-```lyic
-#!/usr/bin/env vrsctl
-# macOS System Appearance Integration
-#
-
-# Get system appearance state
-(defn! is_darkmode ()
-  (def result (exec "osascript"
-                    "-e" "tell application \"System Events\""
-                    "-e" "tell appearance preferences"
-                    "-e" "return dark mode"
-                    "-e" "end tell"
-                    "-e" "end tell"))
-  (eq? (get (decode :lines (get result :stdout)) 0) "true"))
-
-# Set system appearance state
-(defn! set_darkmode (dark)
-  (exec "osascript"
-        "-e" "on run argv"
-        "-e" "tell application \"System Events\""
-        "-e" "tell appearance preferences"
-        "-e" (if dark "set dark mode to true" "set dark mode to false")
-        "-e" "end tell"
-        "-e" "end tell"
-        "-e" "end run")
-  :ok)
-
-# Toggle current state
-(defn! toggle_darkmode ()
-  (set_darkmode (not? (is_darkmode))))
-
-# Fork into service exporting `toggle_darkmode` as service
-(spawn_srv! :system_appearance :interface '(toggle_darkmode))
-```
+[scripts/system_appearance.ll](scripts/system_appearance.ll) wraps macOS
+appearance settings with `exec` and exports `toggle_darkmode` as a service.
 
 ---
 
@@ -462,28 +374,14 @@ The runtime has built-in global pubsub mechanism.
 ```shell
 $ vrsctl
 
-# Experiment with lyric:
-vrs> (def url "https://github.com/leoshimo/vrs")
-"https://github.com/leoshimo/vrs"
-vrs> (open_url url)
-(:ok "")
+vrs> (+ 20 22)
+42
 
-# Introspect runtime state:
-vrs> (ls_srv)
-(:launcher
- (:name :launcher
-  :pid <laptop:28>
-  :interface ((:get_items) (:add_item title cmd)))
- :system_appearance
- (:name :system_appearance
-  :pid <laptop:5>
-  :interface ((:toggle_darkmode))))
- 
-# Bind and talk to services:
-vrs> (bind_srv :launcher)
-((:get_items) (:add_item title cmd))
-vrs> (add_item "Hello" '(open_url "http://example.com"))
-:ok
+vrs> (defn! echo (x) x)
+vrs> (spawn_srv! :echo :interface '(echo))
+vrs> (bind_srv :echo)
+vrs> (echo "hello")
+"hello"
 ```
 
 `vrsctl` also offers convenient interfaces and tools to support scripting and
@@ -501,7 +399,7 @@ large to fit after its keyword starts on the next line.
 vrsctl -c '(ls_srv)'                       # readable terminal output
 vrsctl --width 60 -c '(ls_srv)'             # choose a target width
 vrsctl --format pretty -c '(ls_srv)' | less # readable even through a pipe
-vrsctl --format compact -c '(ls_srv)'       # force the old compact form
+vrsctl --format compact -c '(ls_srv)'       # force compact output
 vrsctl --raw -c '(pretty (ls_srv) 60)'      # display the formatter's string
 ```
 
