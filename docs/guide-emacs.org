@@ -1,9 +1,9 @@
 #+TITLE: Working in Emacs
 #+OPTIONS: toc:2 num:nil
 
-Evaluate Lyric in a running VRS, keep values in your source, and use those
-values to build or execute the next call. This guide covers the Emacs workflow;
-the examples use a small notebook service you define below.
+Use VRS's Emacs integration for interactive development: evaluate code in a
+running system, choose live values, and turn them into calls you can edit or
+execute.
 
 * Start in scratch.ll
 
