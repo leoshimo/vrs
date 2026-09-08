@@ -521,6 +521,8 @@ request resets its session; effects already performed cannot be undone.
 These helpers require a daemon built from this version of VRS; rebuild and restart
 your chosen runtime after updating. The earlier
 `vrs-browse-functions-minibuffer` name remains an alias for `vrs-browse-functions`.
+For hands-on checks, follow the [manual test guide](emacs/chooser-manual-tests.md),
+which starts a separate runtime with harmless fixture services.
 
 A choice can also happen in another app and return to the waiting editor.
 Vrsjmp's **Browse Functions** opens the service-function list for execution.
