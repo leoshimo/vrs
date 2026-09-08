@@ -255,8 +255,17 @@ let echo_prog = r#" (begin
 )"#;
 
 #+end_src
-** TODO Hot Reload / Auto Restart
-Goal: When runtime crashes, auto restart
+** TODO Heart process for VRS updates and restarts
+
+Implement an external =heart= process to manage the =vrsd= lifecycle: install
+updates, start the configured version with the right init script and settings,
+and restart it after crashes or missed heartbeats. Persist the selected version
+across restarts. Activate updates when ready and retain the last working version
+for rollback if startup or health checks fail.
+
+References: [[https://www.erlang.org/docs/17/man/heart][Erlang heart]] for runtime
+monitoring and [[https://nerves-project.org/][Nerves]] for deployment and updates
+in the Elixir ecosystem.
 
 ** TODO Demo: Timeline + Capture + Todo + Notes
 Quickly capture notes, todos, thoughts, tasks
