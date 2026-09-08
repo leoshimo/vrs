@@ -656,7 +656,7 @@
     '()
     (+
      (map (get_macros) (fn (m) `(:title ,(get m :name)
-                                 :on_click (eval ,(get m :cmds)))))
+                                 :on_click ,(get m :cmds))))
      (list
       (if (macro_is_recording)
         (make_item "macro: Stop Recording" '(end_macro_record))

@@ -170,9 +170,9 @@ async fn service_options_preserve_source_and_explicit_ready_presence() {
     assert_eq!(
         result,
         value(
-            "((:interface (exports) :ready nil :has_ready false)
-      (:interface '() :ready nil :has_ready true)
-      (:interface '() :ready nil :has_ready true))"
+            "((:interface (exports) :topics '() :ready nil :has_ready false)
+      (:interface '() :topics '() :ready nil :has_ready true)
+      (:interface '() :topics '() :ready nil :has_ready true))"
         )
     );
 }
@@ -227,6 +227,67 @@ async fn generated_patterns_do_not_capture_handler_names_or_match_temporary() {
         (call target '(:wild 1 2))))")
     .await;
     assert_eq!(result, value("(42 43 :ok)"));
+}
+
+#[tokio::test]
+async fn topic_declarations_fail_before_spawning_or_evaluating_service_name() {
+    for name in ["srv!", "spawn_srv!"] {
+        for topics in [
+            "nil",
+            "42",
+            "'(:changed)",
+            "'((:changed))",
+            "'((:changed handler extra))",
+            "'((topic handler))",
+            "'((:changed 42))",
+            "'((:changed missing))",
+            "'((:changed constant))",
+            "'((:changed zero))",
+            "'((:changed two))",
+            "'((:changed handler) (:changed handler))",
+        ] {
+            let result = run(&format!(
+                r#"(begin
+              (def effects 0)
+              (defn! handler (data) data)
+              (defn! zero () nil)
+              (defn! two (a b) nil)
+              (def constant 42)
+              (def failed (err? (try ({name} (set effects 1)
+                :interface '() :topics {topics}))))
+              (list failed effects (ls_srv)))"#
+            ))
+            .await;
+            assert_eq!(result, value("(true 0 ())"), "{name} {topics}");
+        }
+        for options in [":topics", ":topics '() :topics '()"] {
+            assert_eq!(
+                run(&format!(
+                    "(err? (try ({name} :bad :interface '() {options})))"
+                ))
+                .await,
+                Val::Bool(true)
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn topic_expansion_is_inspectable_without_subscribing() {
+    let result = run(r#"(begin
+      (defn! event (data) data)
+      (def expansion (macroexpand_1 '(srv! :listener
+        :interface '() :topics '((:changed event)))))
+      (publish :changed 42)
+      (list expansion (ls_srv) (ls_msgs)))"#)
+    .await;
+    let parts = result.as_list().unwrap();
+    let source = parts[0].to_string();
+    assert!(source.contains("(subscribe :changed)"), "{source}");
+    assert!(source.contains("(:topic_updated :changed "), "{source}");
+    assert!(source.contains("(try (event "), "{source}");
+    assert_eq!(parts[1], value("()"));
+    assert_eq!(parts[2], value("()"));
 }
 
 #[tokio::test]
