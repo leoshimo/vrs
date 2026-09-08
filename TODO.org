@@ -179,6 +179,11 @@ indexing are periodic jobs assigned to the always-on node. The conditional
 startup currently written by hand in =scripts/init.ll= should eventually be
 expressed through this model.
 
+Consider a host-targeted operation to install/start a script or service on a
+connected machine. Keep this distinct from =configure :nodes=, which establishes
+connections. Settle source transfer, working directory, runtime compatibility,
+persistence, and host-bound dependencies before choosing syntax.
+
 ** TODO Cross-node pub/sub
 
 Publications and subscriptions currently use the local runtime's pub/sub
@@ -340,6 +345,11 @@ updates, start the configured version with the right init script and settings,
 and restart it after crashes or missed heartbeats. Persist the selected version
 across restarts. Activate updates when ready and retain the last working version
 for rollback if startup or health checks fail.
+
+Allow callers to kick off a =respawn= of =vrsd= through a service function call.
+Explore making =heart= look like a special remote VRS node, exposing lifecycle
+operations through ordinary service calls while remaining outside the daemon
+it manages.
 
 References: [[https://www.erlang.org/docs/17/man/heart][Erlang heart]] for runtime
 monitoring and [[https://nerves-project.org/][Nerves]] for deployment and updates
