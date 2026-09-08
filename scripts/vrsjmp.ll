@@ -157,6 +157,7 @@
      (list (make_item "Read Later" '(read_later_page))
            (make_item "Browse Functions" '(browse_functions_page))
            (make_item "Browser History" '(browser_history_page))
+           (make_item "iCloud Tabs" '(cloud_tabs_page))
            (make_item "Tailscale" '(tailscale_page))
            (make_item "Windows" '(call_interactively 'focus_window))
            (make_item_ex "Configure Display Resolution" '(display_page) 'd)
@@ -621,6 +622,26 @@
   (map (fuzzy_match query obsidian_cache display) (fn (note)
     (+ (make_item (get note :title) `(open_obsidian_file ,(get note :file)))
        (list :subtitle (get note :file))))))
+
+(def cloud_tabs_cache '())
+(defn! cloud_tabs_page ()
+  (set cloud_tabs_cache (cloud_tabs))
+  (+ (push_page 'cloud_tab_items "Search Safari tabs by title, URL, or device…")
+     '(:title "iCloud Tabs")))
+
+(defn! cloud_tab_items (query)
+  "Filter the page snapshot without changing its last-viewed ordering."
+  (def tabs (if (eq? query "") cloud_tabs_cache
+    (filter cloud_tabs_cache (fn (tab)
+      (not? (empty? (fuzzy_match query (list tab) (fn (tab)
+        (list (get tab :title) (get tab :url) (get tab :device))))))))))
+  (map tabs (fn (tab)
+    (def url (get tab :url))
+    (+ (make_item (get tab :title) `(open_url ,url))
+       (list :subtitle url :aside (get tab :device)
+             :actions (+ (list (make_item "Open in Browser" `(open_url ,url))
+                              (make_item "Copy URL" `(set_clipboard ,url)))
+                         (entity_actions tab)))))))
 
 (def browser_history_cache '())
 (defn! browser_history_page ()

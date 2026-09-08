@@ -41,6 +41,36 @@
     ("Google Chrome" (active_tab_chrome))
     (_ nil)))
 
+(defn! read_safari_cloud_tabs (path)
+  "Read Safari's synced tab cache, newest last-viewed time first; unknown times sort last."
+  (def result
+    (exec "sqlite3" "-readonly" "-json" "-cmd" ".timeout 1000" path
+      "SELECT t.tab_uuid AS id, t.device_uuid AS device_id,
+              coalesce(d.device_name, 'Unknown device') AS device,
+              coalesce(nullif(trim(t.title), ''), t.url) AS title, t.url,
+              CASE WHEN t.last_viewed_time > 0
+                   THEN strftime('%Y-%m-%dT%H:%M:%fZ',
+                                 t.last_viewed_time + 978307200, 'unixepoch')
+                   ELSE NULL END AS last_viewed_at
+         FROM cloud_tabs t
+         LEFT JOIN cloud_tab_devices d ON d.device_uuid = t.device_uuid
+        WHERE length(trim(t.url)) > 0
+        ORDER BY CASE WHEN t.last_viewed_time > 0 THEN t.last_viewed_time END DESC,
+                 t.device_uuid, t.tab_uuid"))
+  (if (not? (eq? (get result :exit) 0))
+    (error (str "Could not read Safari iCloud tabs: " (get result :stderr))))
+  (if (eq? (get result :stdout) "") '()
+    (map (decode :json (get result :stdout)) (fn (tab) (+ '(:web/page) tab)))))
+
+(defn! cloud_tabs ()
+  "(cloud_tabs) - Safari only: read iCloud tabs from this Mac's synced cache, ordered by last viewed (UTC), newest first. Returns :web/page values with id, device_id, device, title, url, and last_viewed_at (nil if unknown). Reading does not force iCloud sync."
+  (if (not? (eq? current_browser "Safari"))
+    (error "Cloud tabs are currently supported only for Safari"))
+  (def path (shell_expand "~/Library/Containers/com.apple.Safari/Data/Library/Safari/CloudTabs.db"))
+  (if (not? (eq? (get (exec "test" "-e" path) :exit) 0))
+    (set path (shell_expand "~/Library/Safari/CloudTabs.db")))
+  (read_safari_cloud_tabs path))
+
 (defn! browser_pages ()
   "Offer the active browser page as a completion candidate"
   (def tab (try (active_tab)))
@@ -56,4 +86,4 @@
   # (open_url (format "https://web.archive.org/web/*/{}" url))
   (open_url (format "https://archive.is/{}" url)))
 
-(spawn_srv! :os_browser :interface '(active_tab active_tab_open_wayback active_tab_for_app browser_pages open_url))
+(spawn_srv! :os_browser :interface '(active_tab active_tab_open_wayback active_tab_for_app browser_pages open_url cloud_tabs))
