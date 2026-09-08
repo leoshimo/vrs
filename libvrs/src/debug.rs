@@ -15,6 +15,9 @@ use std::{
 
 pub const TOPIC: &str = "dbg";
 pub const CAPACITY: usize = 512;
+// Leave ample room beneath the connection codec's 8 MiB frame limit for
+// snapshot fields and the response envelope, including JSON escaping.
+const WIRE_BUDGET: usize = 4 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Record {
@@ -39,7 +42,8 @@ impl Snapshot {
 struct History {
     cursor: u64,
     evicted: u64,
-    records: VecDeque<Record>,
+    records: VecDeque<(Record, usize)>,
+    wire_bytes: usize,
 }
 #[derive(Debug)]
 struct Inner {
@@ -74,7 +78,11 @@ impl Store {
             cursor: history.cursor,
             evicted: history.evicted,
             dropped: self.0.dropped.load(Ordering::Relaxed),
-            records: history.records.iter().cloned().collect(),
+            records: history
+                .records
+                .iter()
+                .map(|(record, _)| record.clone())
+                .collect(),
         }
     }
 }
@@ -85,33 +93,52 @@ struct ProcessObserver {
 }
 impl Observer for ProcessObserver {
     fn observe(&self, event: Event) {
+        let mut record = Record {
+            sequence: 0,
+            process: self.process.clone(),
+            event,
+        };
+        let mut form = to_form(serde_json::to_value(&record).expect("debug record serializes"));
+        // Measure the actual Form encoding, rather than the smaller viewer JSON.
+        // The margin covers replacing sequence=0 with any 64-bit decimal value.
+        let wire_bytes = serde_json::to_vec(&form)
+            .expect("debug form serializes")
+            .len()
+            + 32;
         let Ok(mut history) = self.store.0.history.try_lock() else {
             self.store.0.dropped.fetch_add(1, Ordering::Relaxed);
             return;
         };
         history.cursor += 1;
-        let record = Record {
-            sequence: history.cursor,
-            process: self.process.clone(),
-            event,
-        };
-        if let Some(old) = history
+        record.sequence = history.cursor;
+        if let Some(index) = history
             .records
-            .iter_mut()
-            .find(|old| old.event.id == record.event.id)
+            .iter()
+            .position(|(old, _)| old.event.id == record.event.id)
         {
-            *old = record.clone();
+            history.wire_bytes -= history.records[index].1;
+            history.records[index] = (record.clone(), wire_bytes);
         } else {
-            if history.records.len() == CAPACITY {
-                history.records.pop_front();
+            history.records.push_back((record.clone(), wire_bytes));
+        }
+        history.wire_bytes += wire_bytes;
+        while history.records.len() > CAPACITY || history.wire_bytes > WIRE_BUDGET {
+            if let Some((_, bytes)) = history.records.pop_front() {
+                history.wire_bytes -= bytes;
                 history.evicted += 1;
             }
-            history.records.push_back(record.clone());
         }
         drop(history);
-        // A full publication queue only loses a notification: the snapshot
-        // still contains the record. Viewers reconcile with that snapshot.
-        let form = to_form(serde_json::to_value(&record).expect("debug record serializes"));
+        if let Form::List(fields) = &mut form {
+            for pair in fields.chunks_exact_mut(2) {
+                if pair[0] == Form::keyword("sequence") {
+                    pair[1] = to_form(record.sequence.into());
+                    break;
+                }
+            }
+        }
+        // A full publication queue only loses a notification: snapshots repair
+        // missed updates without making the observed program await the broker.
         let _ = self
             .store
             .0
@@ -327,5 +354,36 @@ mod tests {
         let _held = store.0.history.lock().unwrap();
         observer.observe(s.records[0].event.clone());
         assert_eq!(store.0.dropped.load(Ordering::Relaxed), 1);
+    }
+    #[tokio::test]
+    async fn large_escaped_values_stay_below_the_connection_frame_limit() {
+        let store = Store::new(crate::rt::pubsub::PubSub::spawn());
+        let observer = store.observer("large-values".into());
+        for i in 0..CAPACITY {
+            observer.observe(Event {
+                id: i.to_string(),
+                parent: None,
+                run: i.to_string(),
+                kind: "call".into(),
+                site: lyric::source::SourceSite::synthetic("(many_values)".into()),
+                arguments: vec![
+                    lyric::debug::Preview {
+                        text: "\"".repeat(1024),
+                        truncated: true
+                    };
+                    16
+                ],
+                arguments_truncated: false,
+                result: None,
+                status: "returned".into(),
+                elapsed_us: 1,
+                started_ms: 0,
+            });
+        }
+        let snapshot = store.snapshot();
+        assert!(snapshot.evicted > 0);
+        assert!(snapshot.records.len() < CAPACITY);
+        let form = to_form(serde_json::to_value(snapshot).unwrap());
+        assert!(serde_json::to_vec(&form).unwrap().len() < WIRE_BUDGET + 4096);
     }
 }
