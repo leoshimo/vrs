@@ -32,6 +32,22 @@ you evaluate it again.
 during evaluation. `C-g` also clears them when cancelling a blocked evaluation.
 Neither undoes actions already performed or stops services you spawned.
 
+## Source-embedded debug tools
+
+Leave a useful observation beside the code with `dbg!`:
+
+```lyric
+(dbg! (map '(2 3) (fn (x) (+ x x))))
+```
+
+The block returns its ordinary result. Inspect its calls, actual arguments,
+results, and source locations with `vrsctl dbg` or `vrsctl dbg --web`. Both
+viewers can follow new observations or inspect previous invocations, including
+nested callbacks. `C-g` still cancels the whole editor evaluation.
+
+See [Source-embedded debug tools](source-embedded-debug-tools.md) for the execution
+contract, source-transcript filters, browser workflow, and pub/sub data interface.
+
 ## Services
 
 Services expose functions that other programs can call. Find them with:
