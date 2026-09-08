@@ -530,25 +530,10 @@ request resets its session; effects already performed cannot be undone.
 These helpers require a daemon built from this version of VRS; rebuild and restart
 your chosen runtime after updating. The earlier
 `vrs-browse-functions-minibuffer` name remains an alias for `vrs-browse-functions`.
-The [Emacs walkthrough](emacs/chooser-manual-tests.md) is a standalone editor demo
-and manual check guide. Paste its setup into `scratch.ll` to choose values and
-fields, build or execute actions from literals and calls, inspect a transcript,
-and bring a GUI choice back into source.
-
-The clients share ordinary Lyric helpers in
-[`commands.ll`](libvrs/src/rt/stdlib/commands.ll): function discovery, call
-placeholders, literal quoting, entity-type matching, argument completion,
-and command execution. Record field extraction in
-[`gui.ll`](libvrs/src/rt/stdlib/gui.ll) is also used by both. The small
-[`editor.ll`](libvrs/src/rt/stdlib/editor.ll) adapter packages these results as
-lists and source strings, so Emacs does not interpret Lyric values as Emacs Lisp.
-[`vrs-choose.el`](emacs/vrs-choose.el) handles completion, prompt order, assembling
-the selected source strings into a call, and safe buffer replacement; vrsjmp's
-Lyric code handles GUI pages. Function discovery runs against each client's
-bindings, and filtering uses its own UI. The GUI's **Fill arguments** path for
-returning a call currently requires typed completion providers; Emacs can also
-accept unevaluated source. Sharing those helpers does not require either client
-to use the other's prompt or navigation flow.
+The dedicated [Working in Emacs guide](emacs/guide.org) covers these interactions
+in Org format, with all example definitions inline. Paste its setup into
+`scratch.ll` to choose values and fields, build or execute actions from literals
+and calls, inspect a transcript, and bring a GUI choice back into source.
 
 A choice can also happen in another app and return to the waiting editor.
 Vrsjmp's **Browse Functions** opens the service-function list for execution.
