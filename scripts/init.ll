@@ -5,7 +5,8 @@
 (if (eq? (node_name) "minato")
     (begin
       (run "./scripts/feedbin.ll")
-      (run "./scripts/oura.ll"))
+      (run "./scripts/oura.ll")
+      (run "./scripts/ditoo.ll"))
     (begin
       (configure :nodes '("ssh://minato"))
       (run "./scripts/chat.ll")
