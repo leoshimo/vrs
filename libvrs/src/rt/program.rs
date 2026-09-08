@@ -271,10 +271,13 @@ pub fn proc_env() -> Env {
 
     {
         e.bind_native_async(SymbolId::from("configure"), bindings::configure_fn());
+        e.bind_native_async(SymbolId::from("eval_remote"), bindings::eval_remote_fn());
+        e.bind_native_async(SymbolId::from("wait_srv"), bindings::wait_srv_fn());
     }
 
     {
         e.bind_native_async(SymbolId::from("fread"), bindings::fread_fn())
+            .bind_native_async(SymbolId::from("read_script"), bindings::read_script_fn())
             .bind_native_async(SymbolId::from("fdump"), bindings::fdump_fn())
             .bind_native_async(SymbolId::from("run"), bindings::run_script_fn());
     }

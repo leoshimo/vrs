@@ -57,6 +57,22 @@ pub(crate) fn run_script_fn() -> NativeAsyncFn {
     }
 }
 
+pub(crate) fn read_script_fn() -> NativeAsyncFn {
+    NativeAsyncFn {
+        metadata: vec![],
+        doc: "(read_script PATH) - Read this node's file as a begin form without executing it; suitable for eval_remote.".into(),
+        func: |_, args| Box::new(async move {
+            let [Val::String(path)] = args.as_slice() else {
+                return Err(Error::UnexpectedArguments("read_script expects one string path".into()));
+            };
+            let path = shellexpand::tilde(path).to_string();
+            let source = tokio::fs::read_to_string(&path).await.map_err(|e| Error::Runtime(format!("Failed to read script {path} - {e}")))?;
+            let forms = lyric::parse_source(&source, &path, 1, 1)?;
+            Ok(Val::List(std::iter::once(Val::symbol("begin")).chain(forms.into_iter().map(Val::from)).collect()))
+        }),
+    }
+}
+
 async fn run_script_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
     let path = match &args[..] {
         [Val::String(s)] => shellexpand::tilde(s).to_string(),

@@ -127,6 +127,79 @@ async fn wait_for_value(client: &Client, expression: &str, expected: &Form, fail
 }
 
 #[tokio::test]
+async fn remote_requests_fail_on_disconnect_and_new_sessions_work_after_restart() {
+    let dir = TestDir::new();
+    let alpha_socket = dir.join("a.socket");
+    let beta_socket = dir.join("b.socket");
+    let alpha_init = dir.join("a.ll");
+    let beta_init = dir.join("b.ll");
+    let (alpha_port, beta_port) = node_ports();
+    std::fs::write(
+        &alpha_init,
+        format!("(configure :nodes '(\"tcp://127.0.0.1:{beta_port}\"))"),
+    )
+    .unwrap();
+    std::fs::write(
+        &beta_init,
+        "(begin (defn! readiness () :ready) (spawn_srv! :readiness :interface '(readiness)))",
+    )
+    .unwrap();
+    let _alpha = spawn_vrsd("alpha", alpha_port, &alpha_socket, &alpha_init);
+    let mut beta = spawn_vrsd("beta", beta_port, &beta_socket, &beta_init);
+    let caller = connect_client(&alpha_socket).await;
+    wait_for_value(
+        &caller,
+        "(ok? (try (find_srv :readiness)))",
+        &Form::Bool(true),
+        "peer never connected",
+    )
+    .await;
+    let editor = connect_client(&alpha_socket).await;
+    editor.select_node("beta").await.unwrap().contents.unwrap();
+    let blocked = connect_client(&alpha_socket).await;
+    let request = tokio::spawn(async move {
+        blocked
+            .request(
+                Form::from_expr("(remote! \"beta\" (register :pending_remote_eval) (recv))")
+                    .unwrap(),
+            )
+            .await
+    });
+    caller
+        .request(Form::from_expr("(wait_srv :pending_remote_eval :timeout 3)").unwrap())
+        .await
+        .unwrap()
+        .contents
+        .unwrap();
+    beta.0.kill().await.unwrap();
+    beta.0.wait().await.unwrap();
+    let failed = timeout(Duration::from_secs(4), request)
+        .await
+        .expect("disconnected request hung")
+        .unwrap()
+        .unwrap();
+    assert!(failed
+        .contents
+        .unwrap_err()
+        .to_string()
+        .contains("outcome is unknown"));
+    timeout(Duration::from_secs(4), editor.closed())
+        .await
+        .expect("remote session stayed open after disconnect");
+    let _restarted = spawn_vrsd("beta", beta_port, &beta_socket, &beta_init);
+    wait_for_value(
+        &caller,
+        "(remote! \"beta\" (node_name))",
+        &Form::string("beta"),
+        "remote eval did not reconnect",
+    )
+    .await;
+    // New runtime revision starts at one; old link revisions must not suppress it.
+    let result = caller.request(Form::from_expr("(begin (remote! \"beta\" (defn! after_restart () :ok) (spawn_srv! :after_restart :interface '(after_restart))) (bind_srv :after_restart) (after_restart))").unwrap()).await.unwrap().contents.unwrap();
+    assert_eq!(result, Form::keyword("ok"));
+}
+
+#[tokio::test]
 async fn configured_node_reconnects_and_routes_service_calls() {
     let test_dir = TestDir::new();
     let alpha_socket = test_dir.join("alpha.socket");

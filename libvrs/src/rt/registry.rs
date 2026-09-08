@@ -3,7 +3,7 @@
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::sync::{broadcast, mpsc, oneshot, watch};
 
 use lyric::{Form, KeywordId};
 use tracing::error;
@@ -17,6 +17,7 @@ use super::ProcessId;
 pub struct Registry {
     tx: mpsc::Sender<Cmd>,
     events: broadcast::Sender<RegistryEvent>,
+    changed: watch::Sender<()>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -33,8 +34,29 @@ pub(crate) struct ServiceDescription {
 
 #[derive(Debug, Clone)]
 pub(crate) enum RegistryEvent {
-    Up(ServiceDescription),
-    Down { name: KeywordId, pid: ProcessId },
+    Up {
+        revision: u64,
+        service: ServiceDescription,
+    },
+    Down {
+        revision: u64,
+        name: KeywordId,
+        pid: ProcessId,
+    },
+}
+
+/// A checkpoint of this node's own registrations, taken by the registry actor.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct Snapshot {
+    pub revision: u64,
+    pub services: Vec<ServiceDescription>,
+}
+
+#[derive(Debug)]
+pub(crate) enum RemoteChange {
+    Snapshot(Snapshot),
+    Up(u64, ServiceDescription),
+    Down(u64, KeywordId, ProcessId),
 }
 
 #[derive(Debug)]
@@ -44,6 +66,8 @@ struct RegistryTask {
     events: broadcast::Sender<RegistryEvent>,
     node_name: String,
     observed: u64,
+    local_revision: u64,
+    remote_revisions: HashMap<String, u64>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -77,16 +101,29 @@ impl Registry {
     pub(crate) fn spawn_named(node_name: String) -> Registry {
         let (tx, mut rx) = mpsc::channel(32);
         let (events, _) = broadcast::channel(64);
+        let (changed, _) = watch::channel(());
+        let task_changed = changed.clone();
         let weak_tx = tx.downgrade();
         let task_events = events.clone();
         let task_node_name = node_name.clone();
         tokio::spawn(async move {
             let mut registry = RegistryTask::new(weak_tx, task_node_name, task_events);
             while let Some(cmd) = rx.recv().await {
-                registry.handle_cmd(cmd).await
+                let changes = !matches!(
+                    &cmd,
+                    Cmd::Lookup(..) | Cmd::GetAll(..) | Cmd::Checkpoint(..)
+                );
+                registry.handle_cmd(cmd).await;
+                if changes {
+                    task_changed.send_replace(());
+                }
             }
         });
-        Registry { tx, events }
+        Registry {
+            tx,
+            events,
+            changed,
+        }
     }
 
     pub async fn register(&self, registration: Registration, proc: ProcessHandle) -> Result<()> {
@@ -120,26 +157,47 @@ impl Registry {
         self.events.subscribe()
     }
 
-    pub(crate) async fn local_snapshot(&self) -> Result<Vec<ServiceDescription>> {
-        let (resp_tx, resp_rx) = oneshot::channel();
-        self.tx
-            .send(Cmd::LocalSnapshot(resp_tx))
-            .await
-            .map_err(|_| Error::NoMessageReceiver("registry task is dead".to_string()))?;
-        resp_rx.await?
-    }
-
-    pub(crate) async fn replace_remote(
+    pub(crate) async fn wait_for(
         &self,
-        node: String,
-        services: Vec<ServiceDescription>,
-    ) -> Result<()> {
-        self.tx
-            .send(Cmd::ReplaceRemote(node, services))
-            .await
-            .map_err(|_| Error::NoMessageReceiver("registry task is dead".to_string()))
+        name: KeywordId,
+        pid: Option<ProcessId>,
+    ) -> Result<ProcessId> {
+        // Subscribe before checking to avoid missing a registration between them.
+        let mut changed = self.changed.subscribe();
+        loop {
+            if let Some(entry) = self.lookup(name.clone()).await? {
+                if pid.as_ref().is_none_or(|pid| *pid == entry.pid()) {
+                    return Ok(entry.pid());
+                }
+            }
+            changed
+                .changed()
+                .await
+                .map_err(|_| Error::RegistryError("registry stopped while waiting".into()))?;
+        }
     }
 
+    pub(crate) async fn checkpoint(&self) -> Result<Snapshot> {
+        let (tx, rx) = oneshot::channel();
+        self.tx
+            .send(Cmd::Checkpoint(tx))
+            .await
+            .map_err(|_| Error::ConnectionClosed)?;
+        rx.await?
+    }
+
+    /// Acknowledges application, not just enqueueing. Node-link replacement
+    /// clears the revision so counters from different runtime instances never mix.
+    pub(crate) async fn apply_remote(&self, node: String, change: RemoteChange) -> Result<()> {
+        let (tx, rx) = oneshot::channel();
+        self.tx
+            .send(Cmd::ApplyRemote(node, change, tx))
+            .await
+            .map_err(|_| Error::ConnectionClosed)?;
+        rx.await?
+    }
+
+    #[cfg(test)]
     pub(crate) async fn remote_up(&self, service: ServiceDescription) -> Result<()> {
         self.tx
             .send(Cmd::RemoteUp(service))
@@ -147,6 +205,7 @@ impl Registry {
             .map_err(|_| Error::NoMessageReceiver("registry task is dead".to_string()))
     }
 
+    #[cfg(test)]
     pub(crate) async fn remote_down(
         &self,
         node: String,
@@ -185,6 +244,8 @@ impl RegistryTask {
             events,
             node_name,
             observed: 0,
+            local_revision: 0,
+            remote_revisions: HashMap::new(),
         }
     }
 
@@ -199,6 +260,24 @@ impl RegistryTask {
 
     async fn handle_cmd(&mut self, cmd: Cmd) {
         match cmd {
+            Cmd::Checkpoint(tx) => {
+                let mut entries: Vec<_> = self
+                    .entries
+                    .values()
+                    .flatten()
+                    .filter(|e| e.is_local())
+                    .collect();
+                entries.sort_by_key(|e| e.observed);
+                let services: Result<Vec<_>> =
+                    entries.into_iter().map(Entry::description).collect();
+                let _ = tx.send(services.map(|services| Snapshot {
+                    revision: self.local_revision,
+                    services,
+                }));
+            }
+            Cmd::ApplyRemote(node, change, tx) => {
+                let _ = tx.send(self.apply_remote_change(node, change));
+            }
             Cmd::Register(registration, proc, resp_tx) => {
                 let _ = resp_tx.send(self.handle_register(registration, proc));
             }
@@ -220,25 +299,9 @@ impl RegistryTask {
                     .collect();
                 let _ = resp_tx.send(all);
             }
-            Cmd::LocalSnapshot(resp_tx) => {
-                let snapshot = self
-                    .entries
-                    .values()
-                    .flatten()
-                    .filter(|entry| entry.is_local())
-                    .map(|entry| entry.description())
-                    .collect();
-                let _ = resp_tx.send(snapshot);
-            }
-            Cmd::ReplaceRemote(node, services) => {
-                self.remove_node(&node);
-                for service in services {
-                    if service.pid.node() == node {
-                        self.handle_remote_up(service);
-                    }
-                }
-            }
+            #[cfg(test)]
             Cmd::RemoteUp(service) => self.handle_remote_up(service),
+            #[cfg(test)]
             Cmd::RemoteDown { node, name, pid } => self.remove_remote(&node, &name, &pid),
             Cmd::RemoveNode(node) => self.remove_node(&node),
         }
@@ -263,6 +326,7 @@ impl RegistryTask {
         }
 
         let entry = Entry::local(registration, handle.clone(), self.next_observed());
+        self.local_revision += 1;
         let entry_id = entry.id.clone();
         let on_exit = handle.join();
         let weak_tx = self.weak_tx.clone();
@@ -274,7 +338,10 @@ impl RegistryTask {
         });
 
         if let Ok(description) = entry.description() {
-            let _ = self.events.send(RegistryEvent::Up(description));
+            let _ = self.events.send(RegistryEvent::Up {
+                revision: self.local_revision,
+                service: description,
+            });
         }
         self.entries.entry(keyword).or_default().push(entry);
         Ok(())
@@ -292,7 +359,9 @@ impl RegistryTask {
         }
         match removed {
             Some(entry) => {
+                self.local_revision += 1;
                 let _ = self.events.send(RegistryEvent::Down {
+                    revision: self.local_revision,
                     name: keyword,
                     pid: entry.pid(),
                 });
@@ -314,6 +383,60 @@ impl RegistryTask {
         entries.push(entry);
     }
 
+    fn apply_remote_change(&mut self, node: String, change: RemoteChange) -> Result<()> {
+        let revision = match &change {
+            RemoteChange::Snapshot(s) => s.revision,
+            RemoteChange::Up(r, _) | RemoteChange::Down(r, _, _) => *r,
+        };
+        if self
+            .remote_revisions
+            .get(&node)
+            .is_some_and(|old| *old >= revision)
+        {
+            return Ok(());
+        }
+        match change {
+            RemoteChange::Snapshot(snapshot) => {
+                // Reconcile rather than republish unchanged entries: refreshing
+                // one node must not change which other node wins a shared name.
+                self.entries.retain(|name, entries| {
+                    entries.retain(|e| {
+                        !e.is_remote_on(&node)
+                            || snapshot
+                                .services
+                                .iter()
+                                .any(|s| s.name == *name && s.pid == e.pid())
+                    });
+                    !entries.is_empty()
+                });
+                for service in snapshot.services {
+                    if service.pid.node() != node {
+                        continue;
+                    }
+                    let unchanged = self.entries.get(&service.name).is_some_and(|entries| {
+                        entries.iter().any(|e| {
+                            e.is_remote_on(&node) && e.description().ok().as_ref() == Some(&service)
+                        })
+                    });
+                    if !unchanged {
+                        self.handle_remote_up(service);
+                    }
+                }
+            }
+            RemoteChange::Up(_, service) => {
+                if service.pid.node() != node {
+                    return Err(Error::RegistryError(
+                        "foreign service in node update".into(),
+                    ));
+                }
+                self.handle_remote_up(service);
+            }
+            RemoteChange::Down(_, name, pid) => self.remove_remote(&node, &name, &pid),
+        }
+        self.remote_revisions.insert(node, revision);
+        Ok(())
+    }
+
     fn remove_remote(&mut self, node: &str, name: &KeywordId, pid: &ProcessId) {
         if let Some(entries) = self.entries.get_mut(name) {
             entries.retain(|entry| !entry.matches_remote(node, pid));
@@ -324,6 +447,7 @@ impl RegistryTask {
     }
 
     fn remove_node(&mut self, node: &str) {
+        self.remote_revisions.remove(node);
         self.entries.retain(|_, entries| {
             entries.retain(|entry| entry.node() != node || entry.is_local());
             !entries.is_empty()
@@ -489,13 +613,15 @@ impl Registration {
 }
 
 enum Cmd {
+    Checkpoint(oneshot::Sender<Result<Snapshot>>),
+    ApplyRemote(String, RemoteChange, oneshot::Sender<Result<()>>),
     Register(Registration, ProcessHandle, oneshot::Sender<Result<()>>),
     Lookup(KeywordId, oneshot::Sender<Option<Entry>>),
     NotifyExit(KeywordId, EntryId, Result<ProcessExit>),
     GetAll(oneshot::Sender<Vec<Entry>>),
-    LocalSnapshot(oneshot::Sender<Result<Vec<ServiceDescription>>>),
-    ReplaceRemote(String, Vec<ServiceDescription>),
+    #[cfg(test)]
     RemoteUp(ServiceDescription),
+    #[cfg(test)]
     RemoteDown {
         node: String,
         name: KeywordId,
@@ -508,6 +634,123 @@ enum Cmd {
 mod tests {
     use super::*;
     use crate::{rt::kernel, Program};
+
+    fn description(name: &str, id: usize) -> ServiceDescription {
+        ServiceDescription {
+            name: name.into(),
+            pid: ProcessId::new("beta", id),
+            interface: vec![],
+            docs: HashMap::new(),
+            metadata: HashMap::new(),
+            entity_completions: Default::default(),
+        }
+    }
+
+    #[tokio::test]
+    async fn versioned_checkpoint_prevents_stale_updates_and_resets_on_new_link() {
+        let registry = Registry::spawn_named("alpha".into());
+        registry
+            .apply_remote(
+                "beta".into(),
+                RemoteChange::Snapshot(Snapshot {
+                    revision: 5,
+                    services: vec![description("probe", 2)],
+                }),
+            )
+            .await
+            .unwrap();
+        registry
+            .apply_remote("beta".into(), RemoteChange::Up(4, description("probe", 1)))
+            .await
+            .unwrap();
+        assert_eq!(
+            registry
+                .lookup("probe".into())
+                .await
+                .unwrap()
+                .unwrap()
+                .pid(),
+            ProcessId::new("beta", 2)
+        );
+        registry
+            .apply_remote(
+                "beta".into(),
+                RemoteChange::Down(6, "probe".into(), ProcessId::new("beta", 2)),
+            )
+            .await
+            .unwrap();
+        registry
+            .apply_remote(
+                "beta".into(),
+                RemoteChange::Snapshot(Snapshot {
+                    revision: 5,
+                    services: vec![description("probe", 2)],
+                }),
+            )
+            .await
+            .unwrap();
+        assert!(registry.lookup("probe".into()).await.unwrap().is_none());
+        registry.remove_node("beta".into()).await.unwrap();
+        registry
+            .apply_remote(
+                "beta".into(),
+                RemoteChange::Snapshot(Snapshot {
+                    revision: 1,
+                    services: vec![description("probe", 1)],
+                }),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            registry
+                .lookup("probe".into())
+                .await
+                .unwrap()
+                .unwrap()
+                .pid(),
+            ProcessId::new("beta", 1)
+        );
+    }
+
+    #[tokio::test]
+    async fn checkpoint_refresh_does_not_republish_unchanged_service_over_another_node() {
+        let registry = Registry::spawn_named("alpha".into());
+        registry
+            .apply_remote(
+                "beta".into(),
+                RemoteChange::Snapshot(Snapshot {
+                    revision: 1,
+                    services: vec![description("shared", 1)],
+                }),
+            )
+            .await
+            .unwrap();
+        let mut other = description("shared", 8);
+        other.pid = ProcessId::new("gamma", 8);
+        registry
+            .apply_remote("gamma".into(), RemoteChange::Up(1, other))
+            .await
+            .unwrap();
+        registry
+            .apply_remote(
+                "beta".into(),
+                RemoteChange::Snapshot(Snapshot {
+                    revision: 2,
+                    services: vec![description("shared", 1), description("unrelated", 2)],
+                }),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            registry
+                .lookup("shared".into())
+                .await
+                .unwrap()
+                .unwrap()
+                .pid(),
+            ProcessId::new("gamma", 8)
+        );
+    }
 
     #[tokio::test]
     async fn remote_registration_replaces_service_from_same_node() {

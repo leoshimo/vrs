@@ -14,15 +14,18 @@ use tracing::{debug, error, info, warn};
 
 use super::kernel::WeakKernelHandle;
 use super::program::{Extern, Val};
-use super::registry::{Registry, RegistryEvent, ServiceDescription};
+use super::registry::{Registry, RegistryEvent, RemoteChange, ServiceDescription, Snapshot};
+use super::remote::{RemoteMessage, RemoteSessions};
 use super::runtime::DEFAULT_NODE_PORT;
 use crate::{Error, Result};
 
 use super::ProcessId;
 
 static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
+static NEXT_REMOTE_ID: AtomicU64 = AtomicU64::new(1);
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(15);
+const NODE_PROTOCOL_VERSION: u32 = 2;
 
 #[derive(Debug, Clone)]
 pub(crate) struct PeerHandle {
@@ -34,6 +37,21 @@ pub(crate) struct PeerManager;
 
 #[derive(Debug)]
 pub(crate) enum ManagerCmd {
+    Eval {
+        node: String,
+        id: u64,
+        code: WireVal,
+        response: oneshot::Sender<Result<Val>>,
+    },
+    CancelEval {
+        node: String,
+        id: u64,
+    },
+    Open {
+        node: String,
+        id: u64,
+        response: oneshot::Sender<Result<crate::Connection>>,
+    },
     Listen {
         port: u16,
         response: oneshot::Sender<Result<()>>,
@@ -93,19 +111,25 @@ struct NodeLink {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-enum PeerMessage {
+pub(super) enum PeerMessage {
+    Remote(RemoteMessage),
     Hello {
         node: String,
+        #[serde(default)]
+        protocol: u32,
     },
     Heartbeat,
     RegistrySnapshot {
+        revision: u64,
         services: Vec<ServiceDescription>,
     },
     RegistryUp {
+        revision: u64,
         // Function metadata can be sizeable; keep all queued messages compact.
         service: Box<ServiceDescription>,
     },
     RegistryDown {
+        revision: u64,
         name: lyric::KeywordId,
         pid: ProcessId,
     },
@@ -116,7 +140,7 @@ enum PeerMessage {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-enum WireVal {
+pub(crate) enum WireVal {
     Nil,
     Bool(bool),
     Int(i32),
@@ -130,6 +154,40 @@ enum WireVal {
 }
 
 impl PeerHandle {
+    pub(crate) async fn eval(&self, node: String, code: Val) -> Result<Val> {
+        let code = WireVal::from_val(code)?;
+        let id = NEXT_REMOTE_ID.fetch_add(1, Ordering::Relaxed);
+        let (response, result) = oneshot::channel();
+        let _cancel = CancelEvaluation {
+            tx: self.tx.clone(),
+            node: node.clone(),
+            id,
+        };
+        self.tx
+            .send(ManagerCmd::Eval {
+                node,
+                id,
+                code,
+                response,
+            })
+            .await
+            .map_err(|_| Error::ConnectionClosed)?;
+        result.await.map_err(|_| {
+            Error::EvaluationError(lyric::Error::Runtime(
+                "node disconnected; remote evaluation outcome is unknown".into(),
+            ))
+        })?
+    }
+
+    pub(crate) async fn open(&self, node: String) -> Result<crate::Connection> {
+        let id = NEXT_REMOTE_ID.fetch_add(1, Ordering::Relaxed);
+        let (response, result) = oneshot::channel();
+        self.tx
+            .send(ManagerCmd::Open { node, id, response })
+            .await
+            .map_err(|_| Error::ConnectionClosed)?;
+        result.await.map_err(|_| Error::ConnectionClosed)?
+    }
     pub(crate) fn channel() -> (Self, mpsc::Receiver<ManagerCmd>) {
         let (tx, rx) = mpsc::channel(64);
         (Self { tx }, rx)
@@ -169,6 +227,22 @@ impl PeerHandle {
     }
 }
 
+struct CancelEvaluation {
+    tx: mpsc::Sender<ManagerCmd>,
+    node: String,
+    id: u64,
+}
+impl Drop for CancelEvaluation {
+    fn drop(&mut self) {
+        let tx = self.tx.clone();
+        let node = self.node.clone();
+        let id = self.id;
+        tokio::spawn(async move {
+            let _ = tx.send(ManagerCmd::CancelEval { node, id }).await;
+        });
+    }
+}
+
 impl PartialEq for PeerHandle {
     fn eq(&self, other: &Self) -> bool {
         std::ptr::eq(&self.tx, &other.tx)
@@ -187,12 +261,29 @@ impl PeerManager {
         tokio::spawn(async move {
             let mut desired = HashSet::new();
             let mut sessions: HashMap<String, ActiveSession> = HashMap::new();
+            let mut remote = RemoteSessions::default();
             let mut registry_events = registry.subscribe();
             let mut listening_on = None;
 
             loop {
                 tokio::select! {
                     Some(command) = commands.recv() => match command {
+                        ManagerCmd::Eval { node, id, code, response } => {
+                            if let Some(session) = sessions.get(&node) {
+                                remote.start_eval(session.id, &session.tx, id, code, response).await;
+                            } else {
+                                let _ = response.send(Err(Error::NoMessageReceiver(format!("node {node} is not connected"))));
+                            }
+                        }
+                        ManagerCmd::CancelEval { node, id } => {
+                            if let Some(session) = sessions.get(&node) { remote.cancel_eval(session.id, &session.tx, id).await; }
+                        }
+                        ManagerCmd::Open { node, id, response } => {
+                            let result = if let Some(session) = sessions.get(&node) {
+                                remote.open(session.id, session.tx.clone(), id, registry.clone()).await
+                            } else { Err(Error::NoMessageReceiver(format!("node {node} is not connected"))) };
+                            let _ = response.send(result);
+                        }
                         ManagerCmd::Listen { port, response } => {
                             if let Some(active_port) = listening_on {
                                 let result = if active_port == port {
@@ -264,15 +355,15 @@ impl PeerManager {
                         }
                     },
                     event = registry_events.recv() => match event {
-                        Ok(RegistryEvent::Up(service)) => {
-                            broadcast(&sessions, PeerMessage::RegistryUp { service: Box::new(service) }).await;
+                        Ok(RegistryEvent::Up { revision, service }) => {
+                            broadcast(&sessions, PeerMessage::RegistryUp { revision, service: Box::new(service) }).await;
                         }
-                        Ok(RegistryEvent::Down { name, pid }) => {
-                            broadcast(&sessions, PeerMessage::RegistryDown { name, pid }).await;
+                        Ok(RegistryEvent::Down { revision, name, pid }) => {
+                            broadcast(&sessions, PeerMessage::RegistryDown { revision, name, pid }).await;
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
-                            if let Ok(services) = registry.local_snapshot().await {
-                                broadcast(&sessions, PeerMessage::RegistrySnapshot { services }).await;
+                            if let Ok(Snapshot { revision, services }) = registry.checkpoint().await {
+                                broadcast(&sessions, PeerMessage::RegistrySnapshot { revision, services }).await;
                             }
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
@@ -290,6 +381,8 @@ impl PeerManager {
                                     continue;
                                 }
                                 if let Some(active) = sessions.remove(&node) {
+                                    remote.disconnect(active.id);
+                                    let _ = registry.remove_node(node.clone()).await;
                                     let _ = active.shutdown.send(());
                                 }
                             }
@@ -300,8 +393,8 @@ impl PeerManager {
                                 tx: tx.clone(),
                                 shutdown,
                             });
-                            if let Ok(services) = registry.local_snapshot().await {
-                                let _ = tx.send(PeerMessage::RegistrySnapshot { services }).await;
+                            if let Ok(Snapshot { revision, services }) = registry.checkpoint().await {
+                                let _ = tx.send(PeerMessage::RegistrySnapshot { revision, services }).await;
                             }
                         }
                         SessionEvent::Incoming { id, node, message } => {
@@ -309,14 +402,23 @@ impl PeerManager {
                                 continue;
                             }
                             match message {
-                                PeerMessage::RegistrySnapshot { services } => {
-                                    let _ = registry.replace_remote(node, services).await;
+                                PeerMessage::Remote(message) => {
+                                    let tx = sessions.get(&node).unwrap().tx.clone();
+                                    if let Err(error) = remote.incoming(id, &node, tx, message, &registry, &kernel).await {
+                                        warn!("remote request from {node} failed: {error}");
+                                        remote.disconnect(id);
+                                        sessions.remove(&node);
+                                        let _ = registry.remove_node(node).await;
+                                    }
                                 }
-                                PeerMessage::RegistryUp { service } if service.pid.node() == node => {
-                                    let _ = registry.remote_up(*service).await;
+                                PeerMessage::RegistrySnapshot { revision, services } => {
+                                    let _ = registry.apply_remote(node, RemoteChange::Snapshot(Snapshot { revision, services })).await;
                                 }
-                                PeerMessage::RegistryDown { name, pid } if pid.node() == node => {
-                                    let _ = registry.remote_down(node, name, pid).await;
+                                PeerMessage::RegistryUp { revision, service } if service.pid.node() == node => {
+                                    let _ = registry.apply_remote(node, RemoteChange::Up(revision, *service)).await;
+                                }
+                                PeerMessage::RegistryDown { revision, name, pid } if pid.node() == node => {
+                                    let _ = registry.apply_remote(node, RemoteChange::Down(revision, name, pid)).await;
                                 }
                                 PeerMessage::Deliver { pid, contents } => match contents.into_val() {
                                     Ok(contents) => {
@@ -339,6 +441,7 @@ impl PeerManager {
                         SessionEvent::Disconnected { id, node } => {
                             if sessions.get(&node).is_some_and(|active| active.id == id) {
                                 info!("node disconnected: {node}");
+                                remote.disconnect(id);
                                 sessions.remove(&node);
                                 let _ = registry.remove_node(node).await;
                             }
@@ -557,7 +660,10 @@ async fn run_session_with_heartbeat<R, W>(
     W: AsyncWrite + Unpin,
 {
     let id = NEXT_SESSION_ID.fetch_add(1, Ordering::Relaxed);
-    let hello = PeerMessage::Hello { node: local_node };
+    let hello = PeerMessage::Hello {
+        node: local_node,
+        protocol: NODE_PROTOCOL_VERSION,
+    };
     if write_message(&mut write, &hello).await.is_err() {
         return;
     }
@@ -579,7 +685,11 @@ async fn run_session_with_heartbeat<R, W>(
                 Ok(Some(line)) => {
                     match serde_json::from_str::<PeerMessage>(&line) {
                         Ok(message) => match message {
-                            PeerMessage::Hello { node } if remote_node.is_none() && valid_node_name(&node) => {
+                            PeerMessage::Hello { node, protocol } if remote_node.is_none() && valid_node_name(&node) => {
+                                if protocol != NODE_PROTOCOL_VERSION {
+                                    warn!("node {node} uses incompatible protocol {protocol}; expected {NODE_PROTOCOL_VERSION}");
+                                    break;
+                                }
                                 silence.as_mut().reset(tokio::time::Instant::now() + heartbeat_timeout);
                                 remote_node = Some(node.clone());
                                 if events.send(SessionEvent::Connected {
@@ -647,7 +757,7 @@ async fn write_message<W: AsyncWrite + Unpin>(
 }
 
 impl WireVal {
-    fn from_val(value: Val) -> Result<Self> {
+    pub(super) fn from_val(value: Val) -> Result<Self> {
         Ok(match value {
             Val::Nil => Self::Nil,
             Val::Bool(value) => Self::Bool(value),
@@ -676,7 +786,7 @@ impl WireVal {
         })
     }
 
-    fn into_val(self) -> Result<Val> {
+    pub(super) fn into_val(self) -> Result<Val> {
         Ok(match self {
             Self::Nil => Val::Nil,
             Self::Bool(value) => Val::Bool(value),
@@ -789,12 +899,13 @@ mod tests {
         let hello = remote_lines.next_line().await.unwrap().unwrap();
         assert!(matches!(
             serde_json::from_str::<PeerMessage>(&hello).unwrap(),
-            PeerMessage::Hello { node } if node == "alpha"
+            PeerMessage::Hello { node, .. } if node == "alpha"
         ));
         write_message(
             &mut remote_write,
             &PeerMessage::Hello {
                 node: "beta".to_string(),
+                protocol: NODE_PROTOCOL_VERSION,
             },
         )
         .await

@@ -9,6 +9,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tracing::{error, info};
 
+use super::peer::PeerHandle;
 use super::program::{Form, KeywordId};
 use super::pubsub::PubSubHandle;
 
@@ -24,6 +25,10 @@ pub struct Term {
     read_req_queue: VecDeque<oneshot::Sender<Request>>,
     pubsub: PubSubHandle,
     active_subs: HashMap<KeywordId, JoinHandle<()>>,
+    node: String,
+    peers: Option<PeerHandle>,
+    remote: Option<Connection>,
+    first_request: bool,
 }
 
 /// Handle to [Term]
@@ -74,7 +79,17 @@ impl Drop for Term {
 
 impl Term {
     /// Create a new terminal connection
+    #[cfg(test)]
     pub(crate) fn spawn(conn: Connection, pubsub: PubSubHandle) -> TermHandle {
+        Self::spawn_on_node(conn, pubsub, "test".into(), None)
+    }
+
+    pub(crate) fn spawn_on_node(
+        conn: Connection,
+        pubsub: PubSubHandle,
+        node: String,
+        peers: Option<PeerHandle>,
+    ) -> TermHandle {
         let (tx, rx) = mpsc::channel(32);
         let t = Term {
             tx: tx.downgrade(),
@@ -84,6 +99,10 @@ impl Term {
             read_req_queue: Default::default(),
             pubsub,
             active_subs: Default::default(),
+            node,
+            peers,
+            remote: None,
+            first_request: true,
         };
         tokio::spawn(async move {
             if let Err(e) = t.run().await {
@@ -96,6 +115,22 @@ impl Term {
     /// Run the term task
     async fn run(mut self) -> Result<()> {
         loop {
+            if let Some(mut remote) = self.remote.take() {
+                // Preserve the entire client protocol, including source origins
+                // and subscriptions. Dropping either end closes the remote REPL.
+                loop {
+                    tokio::select! {
+                        message = self.conn.recv() => {
+                            let Some(Ok(message)) = message else { return Ok(()); };
+                            remote.send(&message).await.map_err(|e| Error::IOError(e.to_string()))?;
+                        }
+                        message = remote.recv() => {
+                            let Some(Ok(message)) = message else { return Ok(()); };
+                            self.conn.send(&message).await.map_err(|e| Error::IOError(e.to_string()))?;
+                        }
+                    }
+                }
+            }
             tokio::select! {
                 msg = Term::read_msg(&mut self.conn) => {
                     self.handle_conn_msg(msg?).await?;
@@ -142,6 +177,39 @@ impl Term {
     async fn handle_conn_msg(&mut self, msg: Message) -> Result<()> {
         match msg {
             Message::Request(req) => {
+                if let Form::List(parts) = &req.contents {
+                    if matches!(parts.first(), Some(Form::Keyword(key)) if key.as_str() == "vrs/node")
+                    {
+                        let result = match parts.as_slice() {
+                            [_, Form::String(node)] if self.first_request => {
+                                if node == &self.node { Ok(Form::keyword("ok")) }
+                                else if let Some(peers) = &self.peers {
+                                    peers.open(node.clone()).await.map(|connection| {
+                                        self.remote = Some(connection);
+                                        Form::keyword("ok")
+                                    })
+                                } else { Err(Error::NoKernel) }
+                            }
+                            _ => Err(Error::EvaluationError(lyric::Error::Runtime("select_node requires a node string and must be the first client request".into()))),
+                        };
+                        if result.is_ok() {
+                            self.first_request = false;
+                        }
+                        self.conn
+                            .send_resp(Response {
+                                req_id: req.id,
+                                contents: result.map_err(|e| {
+                                    crate::connection::Error::EvaluationError(
+                                        lyric::Error::Runtime(e.to_string()),
+                                    )
+                                }),
+                            })
+                            .await
+                            .map_err(|e| Error::IOError(e.to_string()))?;
+                        return Ok(());
+                    }
+                }
+                self.first_request = false;
                 if let Some(tx) = self.read_req_queue.pop_front() {
                     let _ = tx.send(req);
                 } else {

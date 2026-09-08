@@ -330,6 +330,8 @@ pub(crate) fn install_service_library(env: &mut crate::Env) {
     static LIBRARY: OnceLock<(Macros, Vec<(SymbolId, Val)>)> = OnceLock::new();
     let (macros, definitions) = LIBRARY.get_or_init(|| {
         let source = concat!(
+            include_str!("../stdlib/remote.ll"),
+            "\n",
             include_str!("../stdlib/service-macros.ll"),
             "\n",
             include_str!("../stdlib/services.ll"),
