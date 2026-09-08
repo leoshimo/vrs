@@ -195,6 +195,23 @@
   (list :push_page :get_items callback :args (concat (list id) args)
         :title title :prompt prompt :on_cancel `(cancel_input ,id)))
 
+(defn! choice_label (value)
+  (def label (try (str (if (list? value) (entity_title value) value))))
+  (if (or! (err? label) (eq? label "")) (display value) label))
+
+(defn! choose_items (id choices mode query)
+  (input_request id)
+  (def fields (eq? mode :fields))
+  (def rows (map choices (fn (choice)
+    (def value (if fields (get choice 1) choice))
+    (def title (if fields (display (get choice 0)) (choice_label value)))
+    (def detail (if (list? value) (display value) (choice_label value)))
+    (list :title title
+          :subtitle (if (eq? title detail) "" detail)
+          :on_click `(finish_input ,id ',value)))))
+  (fuzzy_match query rows (fn (row)
+    (list (get row :title) (get row :subtitle)))))
+
 (defn! service_functions (query)
   "Search bound service methods by name, documentation, or service."
   (def names (filter (ls_env) (fn (name)

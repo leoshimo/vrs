@@ -15,14 +15,6 @@ events.
 Revisit delivery/acknowledgments, reconnection, multiple GUI clients, and whether
 pending input should become a more general work service after using this flow.
 
-*** TODO Choose a value from a list or record
-
-Let a program pass a list to vrsjmp and wait for the selected element. For a
-record, show keys with their values and return the value of the selected key.
-Reuse =request_input=; distinguish list selection from field selection explicitly.
-Keep the original values associated with rows, including duplicate labels.
-See [[file:DESIGN.org::*Choosing live values while editing][chooser examples]].
-
 *** TODO Service-driven loading, pagination, and partial results
 
 The client already loads pages asynchronously and shows a loading indicator.
@@ -32,14 +24,11 @@ Define what happens when the query changes, the user leaves, or the service ends
 late updates must not change a different page. Start with a slow search returning
 its first results before the full search finishes.
 
-*** TODO Explore the GUI client hosting a service
+*** TODO Device-local actions in hypermedia clients
 
-Could a GUI expose functions such as showing its window and updating a page,
-implemented by native GUI bindings, through ordinary VRS calls and messages?
-Prefer one client identity and connection. Work out how calls reach the UI
-thread, how requests are handled while another call waits, and what closing the
-client does to pending interactions. Distinguish this from embedding a whole
-runtime node. Revisit targeting when several GUI clients are connected.
+A page served to an iPhone should be able to call =open_url= on that iPhone.
+Explore client-native bindings or a client-owned service to expose device
+capabilities through ordinary functions. Remote access to the client is optional.
 
 *** TODO Calendar / Agenda page
 
@@ -83,9 +72,15 @@ Use cases:
 - REPL =Ctrl-c=: leave a nested interaction and return to the prompt; see
   [[*Controlling Terminal Mechanics for Connection]].
 
-Related demo: [[file:DESIGN.org::*A running program asks for a decision][a running program asks for a decision]].
 An explicit input wait can use current messages; resuming an arbitrary failed
 call or editing a suspended frame needs separate runtime support.
+
+** TODO Per-process responder chains for function calls
+
+Explore an ordered chain of handlers per process, beyond last-write-wins
+registration and binding. An iPhone could handle =open_url= locally; a worker
+could prefer a particular browser service. Decide how handlers decline a call
+and how the chain composes with existing function lookup and service bindings.
 
 ** TODO Runtime hooks inspired by Ruby TracePoint
 

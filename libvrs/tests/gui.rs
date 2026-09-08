@@ -22,20 +22,37 @@ async fn evaluate(client: &Client, source: &str) -> Form {
 
 async fn fixture() -> (Runtime, Arc<Client>) {
     let runtime = Runtime::new("gui-test");
+    // Exercise the real value-picker callback without loading OS services.
+    let callbacks = lyric::parse_script(include_str!("../../scripts/vrsjmp.ll"))
+        .unwrap()
+        .into_iter()
+        .filter(|form| matches!(form, Form::List(items)
+            if items.first() == Some(&Form::symbol("defn!"))
+                && matches!(items.get(1), Some(Form::Symbol(name))
+                    if ["choice_label", "choose_items", "entity_title", "on_click"].contains(&name.as_str()))))
+        .map(|form| form.to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
     runtime
         .run(
-            Program::from_script(
-                r#"
+            Program::from_script(&format!(
+                r#"{callbacks}
         (def pending nil)
         (defn! enqueue_input (id owner page)
-          (set pending (list id owner))
+          (set pending (list id owner page))
           (publish :queued page)
           :ok)
         (defn! finish (status value)
           (send (get pending 1) (list (get pending 0) status value)))
-        (spawn_srv! :vrsjmp :interface '(enqueue_input finish))
+        (defn! input_request (id) pending)
+        (defn! finish_input (id value) (finish :ok value) :close)
+        (defn! choice_rows (query)
+          (def page (get pending 2))
+          (apply (eval (get page :get_items))
+                 (concat (list (get pending 0)) (get page :args) (list query))))
+        (spawn_srv! :vrsjmp :interface '(enqueue_input finish choice_rows on_click))
     "#,
-            )
+            ))
             .unwrap(),
         )
         .await
@@ -48,6 +65,99 @@ async fn fixture() -> (Runtime, Arc<Client>) {
     let (client, _) = connect(&runtime).await;
     evaluate(&client, "(bind_srv :vrsjmp)").await;
     (runtime, client)
+}
+
+#[tokio::test]
+async fn chooser_preserves_values_and_duplicate_labels_after_search() {
+    let (runtime, service) = fixture().await;
+    let mut queued = service.subscribe(KeywordId::from("queued")).await.unwrap();
+    evaluate(&service, "nil").await;
+    let cases = [
+        (
+            r#"(vrsjmp_choose '((:title "Same" :id 1) (:title "Same" :id 2)))"#,
+            "Same",
+            1,
+            r#"(:title "Same" :id 2)"#,
+        ),
+        ("(vrsjmp_choose '(:red :green))", "green", 0, ":green"),
+        (
+            "(vrsjmp_choose '(nil false (undefined_function :argument) hello))",
+            "undefined_function",
+            0,
+            "(undefined_function :argument)",
+        ),
+        ("(vrsjmp_choose '(nil false hello))", "nil", 0, "nil"),
+        ("(vrsjmp_choose '(nil false hello))", "false", 0, "false"),
+        ("(vrsjmp_choose '(nil false hello))", "hello", 0, "hello"),
+        (
+            r#"(vrsjmp_choose '("a\n\"b\"" ""))"#,
+            "",
+            0,
+            r#""a\n\"b\"""#,
+        ),
+        (r#"(vrsjmp_choose '("a" ""))"#, "", 1, r#""""#),
+        ("(vrsjmp_choose '(1 ()))", "", 1, "()"),
+        (
+            r#"(vrsjmp_choose_field '(:title "Example" :url "https://example.org"))"#,
+            "url",
+            0,
+            r#""https://example.org""#,
+        ),
+        (
+            "(vrsjmp_choose_field '(:example/item :nested (undefined_function) :enabled false))",
+            "nested",
+            0,
+            "(undefined_function)",
+        ),
+        ("(vrsjmp_choose_field '(:empty nil))", "empty", 0, "nil"),
+    ];
+    for (source, query, index, expected) in cases {
+        let (caller, _) = connect(&runtime).await;
+        let result = tokio::spawn(async move {
+            caller
+                .request(Form::from_expr(source).unwrap())
+                .await
+                .unwrap()
+                .contents
+        });
+        timeout(Duration::from_secs(3), queued.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        let Form::List(rows) = evaluate(&service, &format!("(choice_rows {query:?})")).await else {
+            panic!("expected chooser rows");
+        };
+        // Round-trip the selected row through the client, as the GUI does.
+        evaluate(&service, &format!("(on_click '{})", rows[index])).await;
+        assert_eq!(
+            timeout(Duration::from_secs(3), result)
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap(),
+            Form::from_expr(expected).unwrap(),
+            "{source}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn empty_or_malformed_choices_fail_before_requesting_input() {
+    let (_runtime, service) = fixture().await;
+    for source in [
+        "(vrsjmp_choose 1)",
+        "(vrsjmp_choose '())",
+        "(vrsjmp_choose_field '())",
+        "(vrsjmp_choose_field 1)",
+        "(vrsjmp_choose_field '(1 2))",
+        "(vrsjmp_choose_field '(:key 1 :missing))",
+    ] {
+        assert_eq!(
+            evaluate(&service, &format!("(err? (try {source}))")).await,
+            Form::Bool(true),
+            "{source}"
+        );
+    }
 }
 
 #[tokio::test]

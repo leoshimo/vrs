@@ -46,9 +46,8 @@ To this end:
 - `vrsctl`: A thin CLI client over `libvrs`
 - `vrsjmp`: A GUI launch bar client
 
-See [Core Concepts](docs/concepts.md) for using the system,
-[Design](DESIGN.org) for proposals, and [AI and VRS](docs/ai.md) for the
-AI-related experiments and design notes.
+[Core Concepts](docs/concepts.md) · [Demos](docs/demos.md) ·
+[Design Notes](DESIGN.org) · [AI and VRS](docs/ai.md)
 
 ## Init scripts and nodes
 
