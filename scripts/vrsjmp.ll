@@ -181,23 +181,10 @@
   "Create an item with TITLE and COMMAND and HINTS"
   (list :hints hints :title title :on_click command))
 
-(defn! interactive_commands ()
-  (filter (ls_env) (fn (name) (eq? (get (meta (eval name)) :interactive) true))))
-
-(defn! call_form (name arguments)
-  "Fill remaining positions with the function's actual parameter names."
-  (concat (list name) arguments
-          (map (slice (get (meta (eval name)) :args) (len arguments))
-               (fn (arg) (get arg :name)))))
-
 (defn! input_page (id callback args title prompt)
   (input_request id)
   (list :push_page :get_items callback :args (concat (list id) args)
         :title title :prompt prompt :on_cancel `(cancel_input ,id)))
-
-(defn! choice_label (value)
-  (def label (try (str (if (list? value) (entity_title value) value))))
-  (if (or! (err? label) (eq? label "")) (display value) label))
 
 (defn! choose_items (id choices mode query)
   (input_request id)
@@ -211,16 +198,6 @@
           :on_click `(finish_input ,id ',value)))))
   (fuzzy_match query rows (fn (row)
     (list (get row :title) (get row :subtitle)))))
-
-(defn! service_functions (query)
-  "Search bound service methods by name, documentation, or service."
-  (def names (filter (ls_env) (fn (name)
-    (def value (eval name))
-    (and! (lambda? value) (keyword? (get (meta value) :service))))))
-  (fuzzy_match query names (fn (name)
-    (def metadata (meta (eval name)))
-    (list (display name) (or! (get metadata :doc) "")
-          (display (get metadata :service))))))
 
 (defn! function_item (name)
   (def metadata (meta (eval name)))
@@ -259,9 +236,6 @@
       (input_page id 'fill_call_items (list name arguments) (display name)
                   (format "{} · {}" (display name) (display (get arg :name)))))))
 
-(defn! literal_form (value)
-  (if (or! (list? value) (symbol? value)) (list 'quote value) value))
-
 (defn! fill_call_value (id name arguments value)
   (fill_call id name (push arguments (literal_form value))))
 
@@ -275,10 +249,6 @@
     (+ (make_item (entity_title entity)
          `(fill_call_value ,id ',name ',arguments ',entity))
        (list :subtitle (get entity :app))))))
-
-(defn! command_title (name)
-  (def metadata (meta (eval name)))
-  (or! (get metadata :doc) (display name)))
 
 (defn! interactive_items (context)
   # One row per command, not one row per captured object. Window commands live
@@ -305,11 +275,6 @@
                 (if (empty? args) '()
                   (if (empty? (get_entity_completions (get (get args 0) :type))) '()
                     (list (make_item "Choose…" choose)))))))))))
-
-(defn! accepts_context? (name entity)
-  (def args (get (meta (eval name)) :args))
-  (if (empty? args) false
-    (eq? (get (get args 0) :type) (get entity 0))))
 
 (defn! save_page (page)
   "Save to Read Later"
@@ -348,12 +313,6 @@
 (defn! call_expression (name values source)
   (continue_call name (push values (eval (read source)))))
 
-(defn! entity_title (entity)
-  (if (get entity :title)
-    (if (get entity :app) (format "{} — {}" (get entity :app) (get entity :title))
-      (get entity :title))
-    (display entity)))
-
 (defn! call_items (name values query)
   (def arg (get (get (meta (eval name)) :args) (len values)))
   (def type (get arg :type))
@@ -377,20 +336,6 @@
     (fn (name)
       (make_item (command_title name)
         `(continue_call ',name '(,entity))))))
-
-(defn! argument_entities (type)
-  "Shared argument choices for interactive execution and call construction."
-  (def providers (if (eq? type nil) '() (get_entity_completions type)))
-  (def entities '())
-  (map providers (fn (provider)
-    (def found (try (apply (eval provider) '())))
-    (if (list? found)
-      (map found (fn (entity)
-        (when! (and! (list? entity)
-                    (eq? (get entity 0) type)
-                    (not? (contains? entities entity)))
-          (set entities (push entities entity))))))))
-  entities)
 
 # TODO: Query should be rule-based? I.e. "Search DWIM" - if URL, if App Name, if Bundle ID, if location (?), if long, etc
 (defn! query_items (query)
@@ -833,14 +778,7 @@
 (defn! on_click (item)
   "Handle an on_click payload from item"
   (def cmd (get item :on_click))
-  (publish :cmd cmd)
-  (def result (eval cmd))
-  # `exec` returns exit status as data. A failed shell action should be a toast,
-  # not a successful close just because evaluating the expression succeeded.
-  (if (list? result)
-    (if (not? (eq? (get result :exit) nil))
-      (if (not? (eq? (get result :exit) 0))
-        (error (str "Command failed: " (get result :stderr))))))
+  (def result (vrs/execute_command cmd))
   (if (list? result)
     (if (eq? (get result 0) :push_page) result :close)
     :close))

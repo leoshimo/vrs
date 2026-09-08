@@ -29,7 +29,7 @@ async fn fixture() -> (Runtime, Arc<Client>) {
         .filter(|form| matches!(form, Form::List(items)
             if items.first() == Some(&Form::symbol("defn!"))
                 && matches!(items.get(1), Some(Form::Symbol(name))
-                    if ["choice_label", "choose_items", "entity_title", "on_click"].contains(&name.as_str()))))
+                    if ["choose_items", "function_item", "function_items", "make_item", "on_click"].contains(&name.as_str()))))
         .map(|form| form.to_string())
         .collect::<Vec<_>>()
         .join("\n");
@@ -37,6 +37,9 @@ async fn fixture() -> (Runtime, Arc<Client>) {
         .run(
             Program::from_script(&format!(
                 r#"{callbacks}
+        (defn! gui_echo (value) "Fixture call" (error "must not execute while browsing"))
+        (spawn_srv! :gui_fixture :interface '(gui_echo))
+        (bind_srv :gui_fixture)
         (def pending nil)
         (defn! enqueue_input (id owner page)
           (set pending (list id owner page))
@@ -194,6 +197,41 @@ async fn picker_queues_a_page_and_returns_source_without_executing_it() {
             .unwrap()
             .unwrap(),
         Form::from_expr("(undefined_function :argument)").unwrap()
+    );
+}
+
+#[tokio::test]
+async fn gui_function_browser_uses_shared_metadata_and_returns_a_placeholder_call() {
+    let (runtime, service) = fixture().await;
+    let mut queued = service.subscribe(KeywordId::from("queued")).await.unwrap();
+    evaluate(&service, "nil").await;
+    let (caller, _) = connect(&runtime).await;
+    let result = tokio::spawn(async move {
+        caller
+            .request(Form::from_expr("(vrsjmp_browse_functions)").unwrap())
+            .await
+            .unwrap()
+            .contents
+    });
+    timeout(Duration::from_secs(3), queued.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let Form::List(rows) = evaluate(&service, r#"(choice_rows "gui_echo")"#).await else {
+        panic!("expected function rows");
+    };
+    assert_eq!(rows.len(), 1);
+    assert!(rows[0].to_string().contains("Fixture call"));
+    assert!(rows[0].to_string().contains(":gui_fixture"));
+    // If this invoked gui_echo rather than returning its form, it would fail.
+    evaluate(&service, &format!("(on_click '{})", rows[0])).await;
+    assert_eq!(
+        timeout(Duration::from_secs(3), result)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap(),
+        Form::from_expr("(gui_echo value)").unwrap()
     );
 }
 
