@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 mod client;
 mod connection;
+pub mod debug;
 mod rt;
 
 pub use connection::{Connection, Request, Response};

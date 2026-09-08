@@ -2,7 +2,7 @@ mod bindings;
 mod error;
 mod kernel;
 pub mod program;
-mod pubsub;
+pub(crate) mod pubsub;
 mod registry;
 mod runtime;
 mod term;

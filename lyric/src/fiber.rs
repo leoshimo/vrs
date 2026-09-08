@@ -22,6 +22,7 @@ pub struct Fiber<T: Extern, L: Locals> {
     stack: Vec<Val<T, L>>,
     global: Arc<Mutex<Env<T, L>>>,
     locals: L,
+    observer: Option<Arc<dyn crate::debug::Observer>>,
 }
 
 /// The status of fiber
@@ -74,6 +75,7 @@ struct CallFrame<T: Extern, L: Locals> {
     unwind_cf_len: Option<usize>,
     expansion_budget: Option<crate::macros::BudgetRef>,
     transformer: Option<Expansion<T, L>>,
+    trace: Option<crate::debug::Trace>,
 }
 
 /// Kept on the transformer frame, including across yields and async suspension.
@@ -99,6 +101,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
             )],
             global,
             locals,
+            observer: None,
         }
     }
 
@@ -112,6 +115,18 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
     pub fn from_expr(expr: &str, env: Env<T, L>, locals: L) -> Result<Self> {
         let val: Val<T, L> = parse(expr)?.into();
         Fiber::from_val(&val, env, locals)
+    }
+
+    /// Attach a host-owned observation sink. Recording is active only in dbg! scopes.
+    pub fn set_observer(&mut self, observer: Arc<dyn crate::debug::Observer>) {
+        self.observer = Some(observer);
+    }
+
+    fn trace(&self) -> Option<&crate::debug::Trace> {
+        self.cframes
+            .iter()
+            .rev()
+            .find_map(|frame| frame.trace.as_ref())
     }
 
     // TODO: Safeguard start / resume via typestate pat?
@@ -247,6 +262,20 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
     /// Catch the error as a `Val::Error` or propagate as `Result::Err` depending on state of callframe
     /// after encounting an error during `Fiber::step` result or `Fiber::resume` resume value
     fn maybe_catch_err(&mut self, e: Error) -> Result<Val<T, L>> {
+        // Finish every observation being unwound, including async calls. A
+        // protected error inside a scope leaves the enclosing scope active.
+        let boundary = self.cf().unwind_cf_len.unwrap_or(0);
+        for frame in self.cframes[boundary..].iter_mut().rev() {
+            if let Some(trace) = frame.trace.as_mut() {
+                trace.finish(
+                    "error",
+                    Some(crate::debug::Preview {
+                        text: crate::debug::clipped(&e.to_string(), 1024),
+                        truncated: e.to_string().len() > 1024,
+                    }),
+                );
+            }
+        }
         // Catch unwind or exit w/ error
         let unwind_len = match self.cf().unwind_cf_len {
             None => {
@@ -275,7 +304,10 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                 // tracing::debug!("panic {:?}", self);
                 panic!("Unexpected state during execution - all function are expected to have stack effect of 1. Was {}", cf.stack_len + 1);
             }
-            let frame = self.cframes.pop().unwrap();
+            let mut frame = self.cframes.pop().unwrap();
+            if let Some(trace) = frame.trace.as_mut() {
+                trace.finish("returned", self.stack.last().map(crate::debug::preview));
+            }
             if let Some(origin) = frame.transformer.and_then(|t| t.origin) {
                 if let Some(value) = self.stack.last_mut() {
                     crate::source::expansion_origin(value, &origin);
@@ -300,7 +332,79 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
 
         self.cf_mut().ip += 1;
 
+        // A tiny continuation frame owns the complete call lifetime, including
+        // native Exec, yields and async suspension. Internal VM calls are plain
+        // CallFunc instructions and do not create extra observations.
+        let observation = match &inst {
+            Inst::CallAt(n, site) if self.trace().is_some() => Some((*n, site.clone(), "call")),
+            Inst::CallCallback(n) if self.trace().is_some() => {
+                let function = self.stack.get(self.stack.len().saturating_sub(n + 1));
+                let site = function
+                    .and_then(|f| match f {
+                        Val::Lambda(l) => l.code.first().and_then(|i| match i {
+                            Inst::FunctionSource(s) => Some(s.clone()),
+                            _ => None,
+                        }),
+                        _ => None,
+                    })
+                    .unwrap_or_else(|| {
+                        crate::source::SourceSite::synthetic(
+                            function
+                                .map(crate::debug::preview)
+                                .map(|p| p.text)
+                                .unwrap_or_else(|| "<callback>".into()),
+                        )
+                    });
+                Some((*n, site, "callback"))
+            }
+            _ => None,
+        };
+        if let Some((n, site, kind)) = observation.filter(|_| !self.is_expanding()) {
+            if let Some(observer) = self.observer.clone() {
+                let base = self
+                    .stack
+                    .len()
+                    .checked_sub(n + 1)
+                    .ok_or_else(|| Error::UnexpectedStack("missing call arguments".into()))?;
+                let trace = crate::debug::Trace::start(
+                    observer,
+                    self.trace(),
+                    kind,
+                    site,
+                    &self.stack[base + 1..],
+                );
+                let mut frame = CallFrame::from_bytecode(
+                    self.cur_env().clone(),
+                    vec![Inst::CallFunc(n)],
+                    base,
+                    self.cf().unwind_cf_len,
+                );
+                frame.trace = Some(trace);
+                self.cframes.push(frame);
+                return Ok(());
+            }
+        }
         match inst {
+            Inst::DebugScope(code, site) => {
+                let mut frame = CallFrame::from_bytecode(
+                    self.cur_env().clone(),
+                    code,
+                    self.stack.len(),
+                    self.cf().unwind_cf_len,
+                );
+                if !self.is_expanding() {
+                    if let Some(observer) = self.observer.clone() {
+                        frame.trace = Some(crate::debug::Trace::start(
+                            observer,
+                            self.trace(),
+                            "scope",
+                            site,
+                            &[] as &[Val<T, L>],
+                        ));
+                    }
+                }
+                self.cframes.push(frame);
+            }
             Inst::Prepare(value) => {
                 let code = crate::compile(&value)?;
                 self.cframes.push(CallFrame::from_bytecode(
@@ -523,7 +627,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                 }));
             }
             Inst::FunctionSource(_) => (),
-            Inst::CallFunc(nargs) | Inst::CallAt(nargs, _) => {
+            Inst::CallFunc(nargs) | Inst::CallAt(nargs, _) | Inst::CallCallback(nargs) => {
                 let mut args = vec![];
                 for _ in 0..nargs {
                     let v = self.stack.pop().ok_or(Error::UnexpectedStack(
@@ -693,6 +797,7 @@ impl<T: Extern, L: Locals> CallFrame<T, L> {
             unwind_cf_len,
             expansion_budget: None,
             transformer: None,
+            trace: None,
         }
     }
 

@@ -44,6 +44,10 @@ struct Topic {
 
 #[derive(Debug)]
 enum Cmd {
+    TryPublish {
+        topic: KeywordId,
+        val: Val,
+    },
     Subscribe {
         topic: KeywordId,
         resp_tx: oneshot::Sender<Result<Subscription>>,
@@ -60,6 +64,17 @@ enum Cmd {
 }
 
 impl PubSubHandle {
+    /// Best-effort publication from synchronous observation hooks. Never wait
+    /// for the broker or a subscriber; callers decide how to recover from loss.
+    pub(crate) fn try_publish(&self, topic: &KeywordId, val: Val) -> bool {
+        self.tx
+            .try_send(Cmd::TryPublish {
+                topic: topic.clone(),
+                val,
+            })
+            .is_ok()
+    }
+
     /// Establish a subscription for given handle
     pub(crate) async fn subscribe(&self, topic: &KeywordId) -> Result<Subscription> {
         info!("subscribe {topic}");
@@ -119,6 +134,9 @@ impl PubSub {
             let mut pubsub = PubSub::default();
             while let Some(cmd) = rx.recv().await {
                 match cmd {
+                    Cmd::TryPublish { topic, val } => {
+                        let _ = pubsub.handle_publish(topic, val);
+                    }
                     Cmd::Subscribe { topic, resp_tx } => {
                         let res = pubsub.handle_subscribe(topic);
                         let _ = resp_tx.send(res);

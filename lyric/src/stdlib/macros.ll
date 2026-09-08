@@ -21,3 +21,7 @@
       (let ((value (gensym "value")))
         `(let ((,value ,(get expressions 0)))
            (if ,value ,value (or! ,@(slice expressions 1))))))))
+
+(defmacro dbg (& body)
+  "Observe calls while BODY runs; return the final value with normal scope and error behavior."
+  `(__debug_scope ,@body))

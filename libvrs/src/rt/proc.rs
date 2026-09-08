@@ -91,6 +91,11 @@ impl Process {
         self
     }
 
+    pub(crate) fn debug(mut self, debug: crate::debug::Store) -> Self {
+        self.locals.debug = Some(debug);
+        self
+    }
+
     /// Set pubsub handle for process
     pub(crate) fn pubsub(mut self, pubsub: PubSubHandle) -> Self {
         self.locals.pubsub(pubsub);

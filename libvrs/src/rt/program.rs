@@ -68,6 +68,7 @@ pub enum Extern {
 pub struct Locals {
     /// Id of process owning fiber
     pub(crate) pid: ProcessId,
+    pub(crate) debug: Option<crate::debug::Store>,
     /// Stable name of the runtime node hosting this process.
     pub(crate) node_name: String,
     /// Handle to kernel process
@@ -100,13 +101,18 @@ impl Program {
     }
 
     pub fn from_expr(expr: &str) -> Result<Self> {
-        let val: Val = lyric::parse(expr)?.into();
-        Self::from_val(val)
+        lyric::parse(expr)?; // preserve the single-expression contract
+        Self::from_source(expr, "<eval>")
     }
 
     /// Create a program from a script containing multiple top-level forms.
     pub fn from_script(script: &str) -> Result<Self> {
-        let forms = lyric::parse_script(script)?;
+        Self::from_source(script, "<script>")
+    }
+
+    /// Compile a script with a file or buffer identity for source observations.
+    pub fn from_source(script: &str, file: &str) -> Result<Self> {
+        let forms = lyric::parse_source(script, file, 1, 1)?;
         let body = std::iter::once(Val::symbol("begin"))
             .chain(forms.into_iter().map(Val::from))
             .collect();
@@ -144,7 +150,15 @@ impl Program {
     }
 
     pub fn into_fiber(self, locals: Locals) -> Fiber {
-        Fiber::from_bytecode(self.code, self.env, locals)
+        let observer = locals
+            .debug
+            .as_ref()
+            .map(|store| store.observer(locals.pid.to_string()));
+        let mut fiber = Fiber::from_bytecode(self.code, self.env, locals);
+        if let Some(observer) = observer {
+            fiber.set_observer(observer);
+        }
+        fiber
     }
 }
 
@@ -165,6 +179,7 @@ impl Locals {
     pub(crate) fn new(pid: ProcessId) -> Self {
         Self {
             pid,
+            debug: None,
             node_name: "local".to_string(),
             kernel: None,
             registry: None,
@@ -221,6 +236,7 @@ impl PartialEq for Program {
 /// Create new environment for process programs
 pub fn proc_env() -> Env {
     let mut e = Env::standard();
+    e.bind_native(SymbolId::from("dbg_history"), crate::debug::history_fn());
     e.bind_native(SymbolId::from("fuzzy_match"), bindings::fuzzy_match_fn());
     e.bind_native(
         SymbolId::from("match_excerpt"),
