@@ -182,6 +182,7 @@ export class Navigation {
         const primary = frame?.items[index];
         const item = actionIndex === null ? primary : primary?.actions?.[actionIndex];
         if (!item || frame.loading || this.action || !this.visible) return;
+        frame.selected = index;
         const request = { frame, obsolete: false };
         this.action = request;
         frame.error = "";
