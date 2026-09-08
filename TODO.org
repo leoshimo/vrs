@@ -38,6 +38,40 @@ with JSON output (stable IDs, dates, calendar, location, and URLs), then adapt
 =os_cal.ll= to return structured entities for a lazy page. Keep event creation
 and natural-language scheduling separate.
 
+** TODO Personal Timeline service
+
+Record a chronology of meaningful interactions across devices through a VRS
+service. Instrument supported clients and programs: following several links,
+reading a page, or working with an entity should leave enough context to return
+to it later. Group related activity into sessions that can collapse in the UI.
+Revisit a session, select an item, and use the VRS actions currently available
+for that entity. This is a shared service, with mobile as one possible view.
+
+Start with navigation through a few web pages and resuming one from another
+device. Work out stable entity references, event capture, grouping, and what
+resuming means for each activity. Keep recording separate from explicitly
+saving an item. This extends the earlier Timeline + Capture demo idea toward
+instrumented activity, rather than requiring manual additions to every moment.
+
+** TODO Gizmo / Editable Data Environment (working name)
+
+Explore a separate text-oriented hypermedia environment integrated with VRS.
+Start from an editable buffer: recognize shapes of data in ordinary text and
+associate them with entities, computations, reusable views, and available
+actions. Keep authored text distinct from generated annotations and results.
+Let structure and behavior be added gradually rather than requiring users to
+author a whole application or arrange a dashboard first.
+
+For example, write a travel outline with places and dates; recognize those
+references, obtain data through VRS services, and attach useful views or actions
+where they are needed. Investigate reusable view definitions matched to data
+shapes, complementing entity-based action discovery. Naming remains open
+(Gizmo / EDEN / CDEN); treat this as a larger project, separate from the first
+iOS client.
+
+References: [[https://www.inkandswitch.com/embark/][Ink & Switch Embark]] and
+[[https://www.inkandswitch.com/potluck/][Potluck]].
+
 ** Runtime Core v0.2
 
 Goal: Build Core Runtime Features
