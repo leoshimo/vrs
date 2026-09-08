@@ -21,7 +21,11 @@ where
     loop {
         match res {
             Signal::Done(v) => return Ok(v),
-            Signal::Yield(_) => return Err(Error::UnexpectedTopLevelYield),
+            Signal::Yield(_) => {
+                let error = Error::UnexpectedTopLevelYield;
+                f.fail_observations(&error);
+                return Err(error);
+            }
             Signal::Await(call) => {
                 // TODO: Should errors in fut properly update `Fiber::state`?
                 // TODO: Jiggle code between fiber::run and run::run

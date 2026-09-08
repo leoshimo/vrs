@@ -314,6 +314,25 @@ mod tests {
         assert!(generated.site.generated);
     }
 
+    #[tokio::test]
+    async fn rejected_top_level_yield_is_an_error_in_the_recording() {
+        let (mut f, events) = fiber("(dbg! (yield 1) (error \"must not run\"))");
+        assert_eq!(
+            crate::run(&mut f).await.unwrap_err(),
+            crate::Error::UnexpectedTopLevelYield
+        );
+        let events = events.0.lock().unwrap();
+        assert_eq!(events.iter().filter(|e| e.status == "error").count(), 1);
+        assert!(events
+            .last()
+            .unwrap()
+            .result
+            .as_ref()
+            .unwrap()
+            .text
+            .contains("yield"));
+    }
+
     #[test]
     fn large_values_are_bounded_without_dumping_closure_environments() {
         let value = Value::List(vec![Value::string(&"東京".repeat(10000)); 100]);
