@@ -173,7 +173,7 @@ Accept keyword/value records and tagged entities; use native completion."
           (if arguments (concat " " (string-join arguments " ")) "") ")"))
 
 ;;;###autoload
-(defun vrs-browse-functions-minibuffer (fill)
+(defun vrs-browse-functions (&optional fill)
   "Insert a bound service call using native completion; do not execute it.
 By default insert argument names as placeholders.  With prefix FILL, choose
 arguments using entity completion providers, or enter unevaluated Lyric source."

@@ -50,10 +50,10 @@ Bind a service to use its functions:
 (help focus_window)
 ```
 
-In vrsjmp, open **Browse Functions** to search bound service functions. Each
-row shows its service. Enter runs the function, asking for arguments first
-when needed. Choose from available completions, or enter a Lyric expression
-such as `"hello"`, `42`, or `'(:key "value")` when no provider is available.
+In Emacs, `C-c C-b` (`vrs-browse-functions`) searches the functions bound in
+your session by name, signature, service, and documentation. It inserts a call;
+`C-u C-c C-b` fills arguments through completions or typed Lyric expressions.
+Evaluate the inserted call when you want to run it.
 
 To create a service, define its functions and list the ones to expose:
 
@@ -71,34 +71,39 @@ for requests. Define exported functions before starting the service.
 
 ## Building a Call in the Editor
 
-Run `M-x vrs-browse-functions` to insert a call at point. You can also evaluate
-this with `C-u C-c C-e`:
-
-```lyric
-(vrsjmp_browse_functions)
-```
-
-Vrsjmp opens a browser of the service functions bound in
-[scripts/vrsjmp.ll](../scripts/vrsjmp.ll). Search by function or service name.
-Each row shows its service on the right and documentation below the call.
-
-Press Enter to insert a call with argument names as placeholders:
+Run `C-c C-b` (`vrs-browse-functions`) to choose a bound service function in
+Emacs. Press Enter to insert a call with argument names as placeholders:
 
 ```lyric
 (move_window window destination)
 ```
 
-Replace the placeholders yourself, or use **Cmd-K → Fill arguments** to choose
-values in vrsjmp. The last choice returns a completed call:
+Use `C-u C-c C-b` to fill arguments before insertion. Choose live values from
+[entity completion providers](#entities-and-completions), or enter a Lyric
+expression when no choices are available. The result is ordinary source:
 
 ```lyric
 (move_window '(:os/window :id 7) '(:os/display :index 2 :title "Display 2"))
 ```
 
-This inserts code; evaluate it when you want to run it. Filling arguments
-requires [argument types and completion providers](#entities-and-completions).
-Escape goes back; leaving the picker cancels without replacing your source.
-Keep the vrsjmp app running so the picker can open.
+The selected function is not executed. Entered argument expressions are parsed
+without evaluation; completion providers run when their choices are requested.
+`C-g` cancels without inserting a partial call.
+
+You can also begin with a value. On an expression such as `(get_windows)`, use
+`C-c C-v` (`vrs-choose-value`) to choose an entity and retain it as a literal.
+Then `C-c C-a` (`vrs-act-on-value`) discovers an action for that entity, fills
+remaining arguments, and replaces the entity expression with the call.
+`M-x vrs-execute-action` instead runs the selected action and publishes it to
+`:cmd` for recording. `vrs-choose-field` selects a field from a record.
+
+The choice can happen in vrsjmp and still return to the editor: run
+`M-x vrsjmp-browse-functions`, or evaluate `(vrsjmp_browse_functions)` with
+`C-u C-c C-e`. The GUI uses the functions bound in its own service; Enter returns
+a call with placeholders, and **Cmd-K → Fill arguments** fills it first.
+The editor retains the returned call as source. Keep vrsjmp running for this
+path; the Emacs commands work without it. Within vrsjmp itself, the
+**Browse Functions** entry collects arguments and executes the selected call.
 
 ## Quotation and Templates
 

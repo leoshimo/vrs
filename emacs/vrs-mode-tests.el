@@ -477,7 +477,7 @@
       (goto-char (point-max))
       (should (equal (vrs--last-sexp-source) source)))))
 
-(ert-deftest vrs-browse-functions-inserts-at-point-with-buffer-settings ()
+(ert-deftest vrsjmp-browse-functions-inserts-at-point-with-buffer-settings ()
   (with-temp-buffer
     (insert "(begin\n  \n  :after)")
     (vrs-mode)
@@ -495,11 +495,11 @@
                  (with-current-buffer output
                    (insert "(focus_window\n  '(:os/window :id 7 :title \"東京\"))\n"))
                  0)))
-      (vrs-browse-functions))
+      (vrsjmp-browse-functions))
     (should (equal (buffer-string)
                    "(begin\n  (focus_window\n    '(:os/window :id 7 :title \"東京\"))\n  :after)"))))
 
-(ert-deftest vrs-browse-functions-preserves-source-on-error-or-quit ()
+(ert-deftest vrsjmp-browse-functions-preserves-source-on-error-or-quit ()
   (dolist (status '(1 quit))
     (with-temp-buffer
       (insert "(begin\n  \n  :after)")
@@ -514,9 +514,9 @@
                   ((symbol-function 'display-buffer) #'ignore))
           (if (eq status 'quit)
               (should (condition-case nil
-                          (progn (vrs-browse-functions) nil)
+                          (progn (vrsjmp-browse-functions) nil)
                         (quit t)))
-            (should-error (vrs-browse-functions) :type 'user-error)))
+            (should-error (vrsjmp-browse-functions) :type 'user-error)))
         (should (equal (buffer-string) source))
         (should (= (point) position))))))
 
