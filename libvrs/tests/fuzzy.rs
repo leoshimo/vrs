@@ -16,6 +16,34 @@ async fn eval(source: &str) -> Val {
 }
 
 #[tokio::test]
+async fn default_keys_match_display_and_preserve_original_values() {
+    for query in ["", "alpha", "7", "missing"] {
+        let source = format!(
+            r#"(def items '(alpha "alpha" 7 (:title "Alpha" :id 7) (unbound alpha)))
+               (eq? (fuzzy_match "{query}" items)
+                    (fuzzy_match "{query}" items display))"#
+        );
+        assert_eq!(eval(&source).await, Val::Bool(true));
+    }
+    assert_eq!(eval(r#"(fuzzy_match "" '())"#).await, Val::List(vec![]));
+    assert_eq!(
+        eval(r#"(fuzzy_match "alpha" '((:title "Alpha" :id 1) (:title "Beta" :id 2)))"#).await,
+        Val::from_expr(r#"((:title "Alpha" :id 1))"#).unwrap()
+    );
+    for source in [
+        r#"(fuzzy_match "a")"#,
+        r#"(fuzzy_match 1 '())"#,
+        r#"(fuzzy_match "a" 1)"#,
+        r#"(fuzzy_match "a" '() display display)"#,
+    ] {
+        assert_eq!(
+            eval(&format!("(err? (try {source}))")).await,
+            Val::Bool(true)
+        );
+    }
+}
+
+#[tokio::test]
 async fn fuzzy_preserves_objects_and_stable_equal_labels() {
     assert_eq!(
         eval(

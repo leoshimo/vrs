@@ -43,9 +43,9 @@
     """))
   (if (not? (eq? (get result :exit) 0))
     (error (str "Could not add to Things: " (get result :stderr))))
-  (def task (list :things/task :id (get (split "\n" (get result :stdout)) 0)
-                 :title title :notes notes))
-  (publish :things_event (list :created task))
+  (def task `(:things/task :id ,(get (split "\n" (get result :stdout)) 0)
+             :title ,title :notes ,notes))
+  (publish :things_event `(:created ,task))
   task)
 
 (spawn_srv! :things :interface '(things_add get_things_tasks open_things_task))

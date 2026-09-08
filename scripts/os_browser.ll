@@ -17,7 +17,7 @@
      (def title_result (exec "osascript" "-e" "tell application \"Safari\" to return name of front document"))
      (def url (get (decode :lines (get url_result :stdout)) 0))
      (def title (get (decode :lines (get title_result :stdout)) 0))
-     (list :title title :url url))))
+     `(:title ,title :url ,url))))
 
 (defn! active_tab_chrome ()
   "Retrieve the active tab info for Chrome"
@@ -25,7 +25,7 @@
   (def title_result (exec "osascript" "-e" "tell application \"Google Chrome\" to return title of active tab of front window"))
   (def url (get (decode :lines (get url_result :stdout)) 0))
   (def title (get (decode :lines (get title_result :stdout)) 0))
-  (list :title title :url url))
+  `(:title ,title :url ,url))
 
 (defn! active_tab ()
   "(active_tab) Retrieve the current URL of active browser window"

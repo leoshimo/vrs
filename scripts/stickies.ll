@@ -18,7 +18,7 @@
           """))
   (if (eq? (get result :exit) 0)
     (map (decode :lines (get result :stdout))
-         (fn (title) (list :title title)))
+         (fn (title) `(:title ,title)))
     '()))
 
 (defn! stickies_open (name)

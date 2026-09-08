@@ -12,14 +12,14 @@
 
 (defn! add_jump_list (title url)
   "(add_jump_list TITLE URL) - Add item with TITLE and URL to jump list"
-  (set jump_list (push jump_list (list :jump_list :title title :url url)))
-  (publish :jump_list_event (list :updated_jump_list jump_list))
+  (set jump_list (push jump_list `(:jump_list :title ,title :url ,url)))
+  (publish :jump_list_event `(:updated_jump_list ,jump_list))
   :ok)
 
 (defn! clear_jump_list ()
   "(clear_jump_list) - Clear all jump list items"
   (set jump_list '())
-  (publish :jump_list_event (list :updated_jump_list jump_list))
+  (publish :jump_list_event `(:updated_jump_list ,jump_list))
   :ok)
 
 # Fork service

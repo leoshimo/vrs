@@ -37,8 +37,8 @@
          (fn (path)
            (begin
             (def parts (split "/" path))
-            (list :title (format "{} - {}" (get parts -3) (get parts -2))
-                  :path path))))
+            `(:title ,(format "{} - {}" (get parts -3) (get parts -2))
+              :path ,path))))
     '()))
 
 # TODO: Write about iterative dev experience? Took ~15m?

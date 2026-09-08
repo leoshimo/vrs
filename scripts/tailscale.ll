@@ -120,9 +120,9 @@
     ((empty? endpoints) "No web endpoints reported")
     ((empty? pages) "No web endpoints responded")
     (true (str (len pages) " web endpoint" (if (eq? (len pages) 1) "" "s")))))
-  (list :devices (get data :devices) :pages pages :summary summary
-        :collection_enabled (get data :collection_enabled)
-        :reported_tcp_endpoints (len endpoints) :warning warning))
+  `(:devices ,(get data :devices) :pages ,pages :summary ,summary
+    :collection_enabled ,(get data :collection_enabled)
+    :reported_tcp_endpoints ,(len endpoints) :warning ,warning))
 
 (defn! get_tailscale_devices ()
   "Get Tailscale devices and their IPv4, IPv6, MagicDNS, and online status"

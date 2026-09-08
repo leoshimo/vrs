@@ -67,14 +67,14 @@
     (context_window)))
   (if (not? (list? window)) '()
     (begin
-      (def objects (list (list :os/window :id (get window :id)
-                              :app (get window :app) :title (get window :title))))
+      (def objects (list `(:os/window :id ,(get window :id)
+                          :app ,(get window :app) :title ,(get window :title))))
       (def tab (try (active_tab_for_app (get window :app))))
       (if (list? tab)
         (if (get tab :url) (set objects (push objects (+ '(:web/page) tab)))))
       (def selection (selected_text (get window :app)))
       (if (not? (empty? selection))
-        (set objects (push objects (list :text :title "Selected Text" :value selection))))
+        (set objects (push objects `(:text :title "Selected Text" :value ,selection))))
       objects)))
 
 (defn! get_context ()

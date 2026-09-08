@@ -10,9 +10,9 @@
                  (fn (window)
                    (if (eq? (get window :title) "vrsjmp") false
                      (get window :is-visible))))
-         (fn (window) (list :os/window :id (get window :id)
-                            :app (get window :app)
-                            :title (get window :title))))
+         (fn (window) `(:os/window :id ,(get window :id)
+                        :app ,(get window :app)
+                        :title ,(get window :title))))
     '()))
 
 (defn! focus_window (window)

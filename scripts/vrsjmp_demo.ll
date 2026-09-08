@@ -17,12 +17,12 @@
 
 (defn! root_items (query)
   "Retrieve items to display"
-  (+ (fuzzy_match query (+ (favorite_items) (jump_list_items)) display)
+  (+ (fuzzy_match query (+ (favorite_items) (jump_list_items)))
      (query_items query)))
 
 (defn! make_item (title command)
   "Create an item with TITLE and COMMAND"
-  (list :title title :on_click command))
+  `(:title ,title :on_click ,command))
 
 (defn! query_items (query)
   "Return a dynamic list of item for current query"

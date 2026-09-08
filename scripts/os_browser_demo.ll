@@ -8,7 +8,7 @@
   (def title_result (exec "osascript" "-e" "tell application \"Safari\" to return name of front document"))
   (def url (get (decode :lines (get url_result :stdout)) 0))
   (def title (get (decode :lines (get title_result :stdout)) 0))
-  (list :title title :url url))
+  `(:title ,title :url ,url))
 
 (spawn_srv! :os_browser :interface '(active_tab))
 

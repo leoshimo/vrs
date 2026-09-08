@@ -56,16 +56,16 @@
     (fn ()
       (try (kill (find_srv :feedbin_indexer)))
       (register :feedbin_indexer :overwrite)
-      (send parent (list :feedbin_indexer_ready (self)))
+      (send parent `(:feedbin_indexer_ready ,(self)))
       (loop
         (let ((result (try (exec "feedbinctl" "index"))))
           (if (err? result)
-            (dbg (list :feedbin_index :error result))
+            (dbg `(:feedbin_index :error ,result))
             (if (eq? (get result :exit) 0)
-              (dbg (list :feedbin_index :ok (get result :stdout)))
-              (dbg (list :feedbin_index :error (get result :stderr))))))
+              (dbg `(:feedbin_index :ok ,(get result :stdout)))
+              (dbg `(:feedbin_index :error ,(get result :stderr))))))
         (sleep 900)))))
-(recv (list :feedbin_indexer_ready indexer))
+(recv `(:feedbin_indexer_ready ,indexer))
 
 (spawn_srv! :feedbin
   :interface '(feedbin_collections
