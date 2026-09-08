@@ -150,19 +150,12 @@ hooks that can be enabled or disabled interactively. Use this for tracing,
 debugging, and live instrumentation; work out callback context, reentrancy,
 and overhead before choosing an API.
 
-** TODO Pub/sub and event handlers in services
+** DONE Pub/sub topic handlers in services
 
-Let services register handlers for topic updates and other asynchronous messages
-alongside their callable interface. Currently, =subscribe= delivers
-=(:topic_updated TOPIC DATA)= to the current process's mailbox, but =srv!= only
-dispatches request/reply calls.
-
-Use [[file:scripts/cmd_macro.ll][command macro recording]] as the starting example:
-it spawns a separate subscriber with a handwritten =recv= / =match= loop and
-manually implements =:get_recording= calls. The script already suggests topic
-hooks on =spawn_srv!=. Explore handlers that run in the service process and can
-update its state alongside ordinary calls. Work out subscription readiness and
-cleanup, enabling/disabling recording, and handler errors before choosing syntax.
+=srv!= and =spawn_srv!= accept =:topics '((:topic handler))=. Handlers receive
+the published value and share the service's state and message loop.
+[[file:scripts/cmd_macro.ll][Command recording]] uses this directly. See
+[[file:docs/service-events.md][service events]] for readiness, cleanup, and delivery semantics.
 
 ** TODO System-wide Job Configuration and Node Affinity
 
@@ -280,6 +273,16 @@ Give VRs capability to see (web pages, screen), Hear (user, text) and prompt for
 input (text, voice, selection)
 ** TODO Sqlite IO for S-Expressions
 * lyric lang
+** TODO Explore RAII handles and resource lifetimes
+
+Revisit resource handles with automatic cleanup for subscriptions, event hooks,
+timers, file/socket handles, and streaming child-process IO. Decide how ownership
+relates to explicit close, scope exit, errors/interruption, and process exit.
+Account for copied handles, closures retaining environments, reference cycles,
+and handles crossing process boundaries. Use command recording as one example
+of a resource whose lifetime spans several service calls. Defer this broader
+design; it is not a prerequisite for service topic handlers.
+
 ** TODO [#A] BUG: Lambdas can be used to break process isolation
 
 A process can send a lambda (which captures its environment) to another process
