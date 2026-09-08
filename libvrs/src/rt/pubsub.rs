@@ -135,6 +135,9 @@ impl PubSub {
             while let Some(cmd) = rx.recv().await {
                 match cmd {
                     Cmd::TryPublish { topic, val } => {
+                        // Optional observation logging happens on the broker,
+                        // never inside the synchronous VM hook.
+                        tracing::debug!(target: "vrs::observations", %topic, %val);
                         let _ = pubsub.handle_publish(topic, val);
                     }
                     Cmd::Subscribe { topic, resp_tx } => {

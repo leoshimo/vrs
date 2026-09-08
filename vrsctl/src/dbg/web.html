@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VRS dbg</title><link rel="stylesheet" href="style.css"><script src="app.js" defer></script></head>
+<body><main>
+<header><h1>vrs <span>dbg</span></h1><span id="connection" role="status">Connecting…</span><span class="spacer"></span><button id="pause">Pause view</button><button id="export">Export JSON</button></header>
+<form id="filters"><label>File<input name="file" placeholder="path contains…"></label><label>Source location<input name="at" placeholder="file:line[:column]"></label><label>Expression<input name="expr" placeholder="(map…"></label><label>Run<input name="run" placeholder="ID prefix"></label><label>Call<input name="call" placeholder="ID prefix"></label><button type="reset">Reset</button></form>
+<nav><label>Group by <select id="group"><option value="run">Run</option><option value="source">Source location</option></select></label><label><input type="checkbox" id="all"> Expand nested calls</label><label><input type="checkbox" id="details"> Show values</label><span class="spacer"></span><span id="count"></span></nav>
+<p id="notice" role="status"></p><div id="recording"></div><footer>Evaluate <code>(dbg! …)</code> to record calls. Click source to inspect values; click a location to see its history. <span id="cli"></span></footer>
+</main></body></html>

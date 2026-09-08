@@ -231,6 +231,9 @@ mod tests {
         let events = events.0.lock().unwrap();
         let completed: Vec<_> = events.iter().filter(|e| e.status == "returned").collect();
         assert_eq!(completed.iter().filter(|e| e.kind == "scope").count(), 1);
+        let scope = completed.iter().find(|e| e.kind == "scope").unwrap();
+        assert!(!scope.site.generated);
+        assert!(scope.site.expression.starts_with("(dbg!"));
         let map = completed
             .iter()
             .find(|e| e.site.form == "(map '(2 3) twice)")
@@ -297,6 +300,18 @@ mod tests {
             Fiber::<void::Void, ()>::from_expr("(begin (dbg! (def x 42)) x)", Env::standard(), ())
                 .unwrap();
         assert_eq!(crate::run(&mut f).await.unwrap(), Value::Int(42));
+    }
+
+    #[tokio::test]
+    async fn user_macro_generated_calls_keep_invocation_origin() {
+        let (mut f, events) = fiber("(defmacro plus_one (x) `(+ ,x 1))\n(dbg! (plus_one! 4))");
+        assert_eq!(crate::run(&mut f).await.unwrap(), Value::Int(5));
+        let events = events.0.lock().unwrap();
+        let generated = events.iter().find(|e| e.site.form == "(+ 4 1)").unwrap();
+        assert_eq!(generated.site.file, "example.ll");
+        assert_eq!(generated.site.line, 2);
+        assert_eq!(generated.site.expression, "(plus_one! 4)");
+        assert!(generated.site.generated);
     }
 
     #[test]

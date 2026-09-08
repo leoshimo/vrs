@@ -28,15 +28,18 @@ pub(crate) async fn run(client: &Client, output: &Output) -> Result<()> {
                 break;
             }
         };
-        let f = match lyric::parse(&line) {
-            Ok(f) => f,
+        match lyric::parse(&line) {
+            Ok(_) => (),
             Err(e) => {
                 eprintln!("{}", e);
                 continue;
             }
         };
         // TODO: Interrupt request with ctrl-c?
-        match client.request(f).await {
+        match client
+            .request(lyric::source::request(&line, "<repl>", 1, 1))
+            .await
+        {
             Ok(resp) => match resp.contents {
                 Ok(c) => {
                     // readline has returned and restored the terminal. Results

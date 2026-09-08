@@ -1,3 +1,4 @@
+mod dbg;
 mod editor;
 mod output;
 mod repl;
@@ -37,6 +38,16 @@ async fn main() -> Result<()> {
     let client = Client::new(conn);
 
     let run = async {
+        if let Some(dbg) = args.subcommand_matches("dbg") {
+            return dbg::run(
+                &client,
+                dbg,
+                args.get_one::<NonZeroUsize>("width")
+                    .map(|n| n.get())
+                    .unwrap_or(100),
+            )
+            .await;
+        }
         if let Some(name) = args.get_one::<String>("name") {
             let reg_req = Form::from_expr(&format!("(register :{})", name))
                 .with_context(|| "Invalid name to register client process")?;
@@ -90,7 +101,15 @@ async fn main() -> Result<()> {
                 args.get_one::<String>("file")
                     .expect("file has a default value"),
             )? {
-                Some(file) => run_file(&client, &output, file, &mut stdout).await,
+                Some(file) => {
+                    let name = args.get_one::<String>("file").unwrap();
+                    let origin = if name == "-" {
+                        "<stdin>".into()
+                    } else {
+                        std::fs::canonicalize(name)?.to_string_lossy().into_owned()
+                    };
+                    run_file_at(&client, &output, file, &mut stdout, &origin, 1, 1).await
+                }
                 None => repl::run(&client, &output).await,
             }
         }
@@ -106,6 +125,7 @@ async fn main() -> Result<()> {
 /// The clap CLI interface
 fn cli() -> clap::Command {
     command!()
+        .subcommand(dbg::command())
         .arg(arg!(file: [FILE] "If present, executes contents of FILE")
              .default_value("-")
              .conflicts_with_all(["command", "subscribe", "session"]))
@@ -125,14 +145,14 @@ fn cli() -> clap::Command {
              .value_parser(EnumValueParser::<Format>::new())
         )
         .arg(arg!(width: --width <COLUMNS> "Target width for pretty/editor output (default 90); atoms may exceed it")
-             .value_parser(clap::value_parser!(NonZeroUsize)))
+             .global(true).value_parser(clap::value_parser!(NonZeroUsize)))
         .arg(arg!(raw: --raw "Print top-level strings verbatim; nested strings remain quoted"))
         .arg(arg!(name: -n --name <NAME> "Registers client process for this connection as NAME"))
         .arg(arg!(bind_service: -b --bind <NAME> "Binds client process to service named NAME")
              .action(ArgAction::Append))
         .arg(
             arg!(socket: -S --socket <SOCKET> "Path to unix socket for vrsd")
-                .default_value(vrs::runtime_socket().into_os_string()),
+                .default_value(vrs::runtime_socket().into_os_string()).global(true),
         )
 }
 
@@ -158,8 +178,10 @@ async fn run_cmd(
     output: &Output,
     writer: &mut impl Write,
 ) -> Result<()> {
-    let f = lyric::parse(cmd)?;
-    let resp = client.request(f).await?;
+    lyric::parse(cmd)?;
+    let resp = client
+        .request(lyric::source::request(cmd, "<command>", 1, 1))
+        .await?;
     match resp.contents {
         Ok(c) => {
             output.write(writer, &c, cmd)?;
@@ -169,16 +191,31 @@ async fn run_cmd(
     }
 }
 
-/// Run a script file
+/// Test helper for source without a named origin.
+#[cfg(test)]
 async fn run_file(
     client: &Client,
     output: &Output,
     file: Box<dyn Read>,
     writer: &mut impl Write,
 ) -> Result<()> {
+    run_file_at(client, output, file, writer, "<stdin>", 1, 1).await
+}
+
+async fn run_file_at(
+    client: &Client,
+    output: &Output,
+    file: Box<dyn Read>,
+    writer: &mut impl Write,
+    origin: &str,
+    first_line: usize,
+    first_column: usize,
+) -> Result<()> {
     let mut f = BufReader::new(file);
     let mut line = String::new();
-    let mut lineno = 0;
+    let mut lineno = first_line - 1;
+    let mut source_line = first_line;
+    let mut source_column = first_column;
     loop {
         match f.read_line(&mut line) {
             Ok(0) => break,
@@ -188,8 +225,8 @@ async fn run_file(
 
         lineno += 1;
 
-        let f = match lyric::parse(&line) {
-            Ok(f) => f,
+        match lyric::parse(&line) {
+            Ok(_) => (),
             Err(lyric::Error::IncompleteExpression(_)) => {
                 continue;
             }
@@ -198,12 +235,21 @@ async fn run_file(
             }
         };
 
-        let resp = client.request(f).await?;
+        let resp = client
+            .request(lyric::source::request(
+                &line,
+                origin,
+                source_line,
+                source_column,
+            ))
+            .await?;
         match resp.contents {
             Ok(c) => output.write(writer, &c, &line)?,
             Err(e) => return Err(anyhow::anyhow!("{e}")),
         }
         line.clear();
+        source_line = lineno + 1;
+        source_column = 1;
     }
 
     if !line.trim().is_empty() && !line.trim().starts_with('#') {
@@ -234,6 +280,31 @@ mod tests {
 
     #[test]
     fn cli_accepts_output_options_in_all_modes_and_validates_width() {
+        for args in [
+            vec!["vrsctl", "--socket", "/tmp/vrs.sock", "dbg", "--once"],
+            vec![
+                "vrsctl",
+                "dbg",
+                "--socket",
+                "/tmp/vrs.sock",
+                "--all",
+                "--details",
+            ],
+            vec![
+                "vrsctl",
+                "--width",
+                "120",
+                "dbg",
+                "--web",
+                "--file",
+                "example.ll",
+            ],
+        ] {
+            assert_eq!(
+                cli().try_get_matches_from(args).unwrap().subcommand_name(),
+                Some("dbg")
+            );
+        }
         for mode in [
             vec![],
             vec!["-c", "(ls_srv)"],
