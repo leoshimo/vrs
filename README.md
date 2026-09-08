@@ -451,12 +451,16 @@ or add options such as service bindings.
   point, including its quote prefix.
   Try `(ls_srv)` or `(pretty (ls_srv) 60)` to see readable results in the
   `*VRS Result*` buffer. Top-level strings are displayed as text.
-- `C-c C-r` evaluates the region; `C-c C-c` evaluates the buffer.
+- `C-c C-r` evaluates the region; `C-c C-c` evaluates the buffer. Both currently
+  display only the last top-level result, evaluating the source as an implicit
+  `begin` in the persistent session.
 - `C-u C-c C-e` and `C-u C-c C-r` replace source with the result and indent it
   in context. Replacement preserves string quotes/escapes and leaves source
   intact on evaluation errors. Lists are inserted as data representations;
   add a quote if you want to evaluate the inserted list as literal data.
-- `C-u C-c C-c` displays source with commented results.
+- `C-u C-c C-c` evaluates the buffer expression by expression and displays source
+  with commented results: `(+ 1 2)` followed by `# => 3`, then `(+ 3 4)` followed
+  by `# => 7`. Use this for a scratch-buffer transcript.
 - `C-c C-m` inspects one macro expansion; `C-u C-c C-m` repeats outer expansion.
 - `M-x vrs-reset-session` starts a fresh connection and clears its definitions.
 - `C-g` aborts a waiting evaluation and clears its session, preserving source.
@@ -505,6 +509,10 @@ as vrsjmp. For example, evaluate this harmless definition:
 On `'(:os/process :pid 20)`, `C-c C-a` offers **Read PID** and constructs
 `(process_pid '(:os/process :pid 20))`. On the same entity,
 `M-x vrs-execute-action` runs the selected action and displays `20`.
+Both commands also work directly on an expression that returns the entity, such
+as `(get '((:os/process :pid 20)) 0)`. There is no need to retain a literal
+first: the expression is evaluated once before choosing the action. Execution
+keeps that expression in place; construction replaces it with the complete call.
 
 Argument filling uses the session's `get_entity_completions` providers. If no
 choices are available, enter a Lyric expression such as `"hello"`, `42`, or
@@ -521,8 +529,25 @@ request resets its session; effects already performed cannot be undone.
 These helpers require a daemon built from this version of VRS; rebuild and restart
 your chosen runtime after updating. The earlier
 `vrs-browse-functions-minibuffer` name remains an alias for `vrs-browse-functions`.
-For hands-on checks, follow the [manual test guide](emacs/chooser-manual-tests.md),
-which starts a separate runtime with harmless fixture services.
+The [Emacs walkthrough](emacs/chooser-manual-tests.md) is a standalone editor demo
+and manual check guide. Paste its setup into `scratch.ll` to choose values and
+fields, build or execute actions from literals and calls, inspect a transcript,
+and bring a GUI choice back into source.
+
+The clients share ordinary Lyric helpers in
+[`commands.ll`](libvrs/src/rt/stdlib/commands.ll): function discovery, call
+placeholders, labels, literal quoting, entity-type matching, argument completion,
+and command execution. Record field extraction in
+[`gui.ll`](libvrs/src/rt/stdlib/gui.ll) is also used by both. The small
+[`editor.ll`](libvrs/src/rt/stdlib/editor.ll) adapter packages these results as
+lists and source strings, so Emacs does not interpret Lyric values as Emacs Lisp.
+[`vrs-choose.el`](emacs/vrs-choose.el) handles completion, prompt order, assembling
+the selected source strings into a call, and safe buffer replacement; vrsjmp's
+Lyric code handles GUI pages. Function discovery runs against each client's
+bindings, and filtering uses its own UI. The GUI's **Fill arguments** path for
+returning a call currently requires typed completion providers; Emacs can also
+accept unevaluated source. Sharing those helpers does not require either client
+to use the other's prompt or navigation flow.
 
 A choice can also happen in another app and return to the waiting editor.
 Vrsjmp's **Browse Functions** opens the service-function list for execution.

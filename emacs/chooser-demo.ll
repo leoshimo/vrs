@@ -1,13 +1,13 @@
-# Harmless fixture for chooser-manual-tests.md. All action effects stay in memory.
+# In-memory service for the Emacs walkthrough in chooser-manual-tests.md.
 (def demo_history '())
 
 (defn! demo_items ()
-  '((:demo/item :title "Same" :id 1 :note "first" :tags (alpha beta))
-    (:demo/item :title "Same" :id 2 :note "line\n\"quoted\"" :tags (gamma delta))))
+  '((:demo/item :title "Blue notebook" :id 1 :note "first" :tags (alpha beta))
+    (:demo/item :title "Green notebook" :id 2 :note "line\n\"quoted\"" :tags (gamma delta))))
 
 (defn! demo_places ()
-  '((:demo/place :title "Here" :id 10)
-    (:demo/place :title "There" :id 20)))
+  '((:demo/place :title "Desk" :id 10)
+    (:demo/place :title "Backpack" :id 20)))
 
 (defn! demo_move (item place)
   "Move demo item"
