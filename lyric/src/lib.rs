@@ -6,6 +6,7 @@ mod parse;
 mod pretty;
 mod quasiquote;
 mod run;
+pub mod source;
 
 pub mod builtin;
 pub mod env;
@@ -24,6 +25,7 @@ pub use fiber::Signal;
 pub use fiber::Status;
 pub use parse::parse;
 pub use parse::parse_script;
+pub use parse::parse_source;
 pub use pmatch::Pattern;
 pub use run::run;
 pub use types::Bytecode;

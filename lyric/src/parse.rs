@@ -28,6 +28,73 @@ pub fn parse_script(expr: &str) -> Result<Vec<Form>> {
     Ok(forms)
 }
 
+/// Parse a source unit while retaining exact call locations. Symbol identity,
+/// quotation, and Form serialization remain unchanged.
+pub fn parse_source(text: &str, file: &str, line: usize, column: usize) -> Result<Vec<Form>> {
+    let mut forms = parse_script(text)?;
+    let tokens = crate::lex::lex_spanned(text)?;
+    let mut index = 0;
+    let mut starts = vec![0];
+    starts.extend(text.match_indices('\n').map(|(i, _)| i + 1));
+    fn locate(
+        form: &mut Form,
+        tokens: &[(Token, usize, usize)],
+        index: &mut usize,
+        text: &str,
+        file: &str,
+        line: usize,
+        column: usize,
+        starts: &[usize],
+    ) {
+        let start = tokens[*index].1;
+        match &tokens[*index].0 {
+            Token::ParenLeft => {
+                *index += 1;
+                if let Form::List(items) = form {
+                    for item in items {
+                        locate(item, tokens, index, text, file, line, column, starts);
+                    }
+                }
+                *index += 1;
+            }
+            Token::Quote | Token::Quasiquote | Token::Unquote | Token::UnquoteSplicing => {
+                *index += 1;
+                if let Form::List(items) = form {
+                    locate(
+                        &mut items[1],
+                        tokens,
+                        index,
+                        text,
+                        file,
+                        line,
+                        column,
+                        starts,
+                    );
+                }
+            }
+            _ => *index += 1,
+        }
+        let end = tokens[*index - 1].2;
+        if matches!(form, Form::List(_)) {
+            let row = starts.partition_point(|offset| *offset <= start) - 1;
+            let col = text[starts[row]..start].chars().count() + if row == 0 { column } else { 1 };
+            let site = crate::source::SourceSite {
+                file: file.into(),
+                line: line + row,
+                column: col,
+                expression: text[start..end].into(),
+                form: form.to_string(),
+                generated: false,
+            };
+            crate::source::attach(form, site);
+        }
+    }
+    for form in &mut forms {
+        locate(form, &tokens, &mut index, text, file, line, column, &starts);
+    }
+    Ok(forms)
+}
+
 /// Parse single expression into a form. Returns result of tuple of parsed form and remaining tokens
 fn parse_form<I>(tokens: &mut Peekable<I>) -> Result<Form>
 where

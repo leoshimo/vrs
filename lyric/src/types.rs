@@ -135,8 +135,32 @@ type NativeAsyncFnSig<T, L> =
 type ValFuture<'a, T, L> = Box<dyn Future<Output = Result<Val<T, L>>> + 'a + Send>;
 
 /// Identifier for Symbol
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct SymbolId(String);
+#[derive(Debug, Clone)]
+pub struct SymbolId {
+    name: String,
+    pub(crate) sources: Vec<Arc<crate::source::SourceSite>>,
+}
+impl PartialEq for SymbolId {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+impl Eq for SymbolId {}
+impl std::hash::Hash for SymbolId {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.name.hash(h);
+    }
+}
+impl Serialize for SymbolId {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> std::result::Result<S::Ok, S::Error> {
+        self.name.serialize(s)
+    }
+}
+impl<'de> Deserialize<'de> for SymbolId {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
+        Ok(String::deserialize(d)?.into())
+    }
+}
 
 /// Identifier for Keywords
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -291,12 +315,12 @@ impl<T: Extern, L: Locals> Val<T, L> {
 impl SymbolId {
     /// Returns inner ID as string slice
     pub fn as_str(&self) -> &str {
-        &self.0
+        &self.name
     }
 
     /// Returns symbol as keyword
     pub fn to_keyword(self) -> KeywordId {
-        KeywordId::from(self.0)
+        KeywordId::from(self.name)
     }
 }
 
@@ -424,7 +448,7 @@ impl std::fmt::Display for Form {
 
 impl std::fmt::Display for SymbolId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.name)
     }
 }
 
@@ -499,13 +523,16 @@ impl<T: Extern, L: Locals> TryFrom<Val<T, L>> for Form {
 
 impl From<String> for SymbolId {
     fn from(value: String) -> Self {
-        Self(value)
+        Self {
+            name: value,
+            sources: vec![],
+        }
     }
 }
 
 impl From<&str> for SymbolId {
     fn from(value: &str) -> Self {
-        Self(value.to_string())
+        value.to_string().into()
     }
 }
 
