@@ -93,6 +93,11 @@ Goal: Replicate Emacs-like Development Workflow to build VRS software
 E.g. Emacs Eval, SLIME-like workflows for molding Software
 
 * runtime
+** TODO Add streaming interfaces
+
+Expose incremental I/O and API event streams to Lyric. Look at
+[[https://github.com/clj-commons/aleph][Aleph]] for inspiration.
+
 ** TODO Handle interruptions in Lyric control flow
 
 Let VRS code handle interruptions, run cleanup, and return to a service loop
@@ -137,6 +142,20 @@ hooks that can be enabled or disabled interactively. Use this for tracing,
 debugging, and live instrumentation; work out callback context, reentrancy,
 and overhead before choosing an API.
 
+** TODO Pub/sub and event handlers in services
+
+Let services register handlers for topic updates and other asynchronous messages
+alongside their callable interface. Currently, =subscribe= delivers
+=(:topic_updated TOPIC DATA)= to the current process's mailbox, but =srv!= only
+dispatches request/reply calls.
+
+Use [[file:scripts/cmd_macro.ll][command macro recording]] as the starting example:
+it spawns a separate subscriber with a handwritten =recv= / =match= loop and
+manually implements =:get_recording= calls. The script already suggests topic
+hooks on =spawn_srv!=. Explore handlers that run in the service process and can
+update its state alongside ordinary calls. Work out subscription readiness and
+cleanup, enabling/disabling recording, and handler errors before choosing syntax.
+
 ** TODO System-wide Job Configuration and Node Affinity
 
 Goal: Manage processes and services more like =launchd=: declare the desired
@@ -159,6 +178,18 @@ Examples: =:os_browser= is tied to an interactive Mac, while Feedbin and Oura
 indexing are periodic jobs assigned to the always-on node. The conditional
 startup currently written by hand in =scripts/init.ll= should eventually be
 expressed through this model.
+
+** TODO Cross-node pub/sub
+
+Publications and subscriptions currently use the local runtime's pub/sub
+instance. The peer protocol propagates service registrations and addressed
+process messages, but does not forward topics. This is missing functionality,
+not a confirmed regression.
+
+Design explicit cross-node topic forwarding, including event identity,
+duplicate/loop prevention, and disconnect/reconnect behavior. A concrete first
+example: complete a todo on one machine and react to its event on another.
+Until then, a local subscriber can call a remote service or send it a message.
 
 ** TODO Hypermedia Client
 Goal: Build CLI Hypermedia Client over VRS
