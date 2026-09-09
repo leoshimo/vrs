@@ -11,6 +11,7 @@ use tokio::{
 pub async fn run(client: &Client, filter: Filter, all: bool) -> Result<()> {
     let mut subscription = client.subscribe(vrs::debug::TOPIC.into()).await?;
     let state = Arc::new(RwLock::new(snapshot(client).await?));
+    let after = state.read().unwrap().cursor;
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let address = listener.local_addr()?;
     let token = serde_json::to_value(lyric::Ref::unique())?
@@ -19,7 +20,7 @@ pub async fn run(client: &Client, filter: Filter, all: bool) -> Result<()> {
         .to_owned();
     let root = format!("/{token}/");
     let url = format!("http://{address}{root}");
-    eprintln!("VRS dbg: {url}\nPress Ctrl-C to stop the viewer.");
+    eprintln!("{url}");
     {
         let opener = if cfg!(target_os = "macos") {
             "open"
@@ -30,7 +31,7 @@ pub async fn run(client: &Client, filter: Filter, all: bool) -> Result<()> {
             eprintln!("Could not open browser: {error}. Open the URL above.");
         }
     }
-    let config = serde_json::json!({"filter":filter.query,"all":all});
+    let config = serde_json::json!({"filter":filter.query,"all":all,"after":after});
     let collector = async {
         loop {
             tokio::select! { _=subscription.recv()=>(), _=tokio::time::sleep(Duration::from_millis(250))=>() }
@@ -152,14 +153,32 @@ async fn serve(
                 }
             };
             let snapshot = state.read().unwrap().clone();
-            (
-                "application/json",
-                serde_json::to_vec(&{
-                    let mut selection = filter.select(&snapshot, now_ms());
-                    selection.snapshot = snapshot; // Inspectors remain stable when the query changes.
-                    selection
-                })?,
-            )
+            let after = config["after"].as_u64().unwrap_or(0);
+            let by_id: HashMap<_, _> = snapshot
+                .records
+                .iter()
+                .map(|r| (r.event.id.as_str(), r))
+                .collect();
+            let labels: HashMap<_, _> = snapshot
+                .records
+                .iter()
+                .map(|r| {
+                    let parent = r
+                        .event
+                        .parent
+                        .as_deref()
+                        .and_then(|id| by_id.get(id).copied());
+                    (&r.event.id, transcript::call_label(r, parent))
+                })
+                .collect();
+            let mut selection = filter.select(&snapshot, now_ms());
+            selection
+                .matches
+                .retain(|id| by_id.get(id.as_str()).is_some_and(|r| r.sequence > after));
+            selection.snapshot = snapshot.clone(); // Inspectors keep context when the query changes.
+            let mut payload = serde_json::to_value(selection)?;
+            payload["labels"] = serde_json::to_value(labels)?;
+            ("application/json", serde_json::to_vec(&payload)?)
         }
         _ => return response(&mut stream, "404 Not Found", "text/plain", b"Not found").await,
     };

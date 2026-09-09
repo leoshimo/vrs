@@ -254,15 +254,16 @@ fn dbg_views_share_real_recording_filters_and_editor_source_origins() -> Result<
     let source = "(defn! twice (x) (+ x x))\n(dbg! (map '(2 3) twice))";
     let request =
         serde_json::json!({"source":source,"file":"/tmp/observe.ll","line":20,"column":1});
-    runtime.pipe_input(&["--session"], Some(&format!("{request}\n")));
     let mut transcript = runtime.terminal(&["dbg", "--all", "--width", "200"], false, 200)?;
+    thread::sleep(Duration::from_millis(200));
+    runtime.pipe_input(&["--session"], Some(&format!("{request}\n")));
     transcript.expect("# arg 1: 2")?;
-    transcript.expect("invoke (fn (x) (+ x x))  # => 4")?;
+    transcript.expect("twice  # => 4")?;
     transcript.expect("# arg 1: 3")?;
     transcript.expect("(map '(2 3) twice)  # => (4 6)  [observe.ll:21:7 · ")?;
     transcript.expect("ms]")?;
     transcript.expect("# arg 2: (fn (x) (+ x x))")?;
-    transcript.expect("# evaluation 1 returned (4 6)")?;
+    transcript.expect("# run 1 returned (4 6)")?;
     transcript.assert_alive()?;
     transcript
         .session
@@ -271,12 +272,14 @@ fn dbg_views_share_real_recording_filters_and_editor_source_origins() -> Result<
     transcript.success()?;
 
     let mut filtered =
-        runtime.terminal(&["dbg", "--filter", "file::observe.ll:20:18"], false, 160)?;
+        runtime.terminal(&["dbg", "--filter", "file:observe.ll:20:18"], false, 160)?;
+    thread::sleep(Duration::from_millis(200));
+    runtime.pipe_input(&["--session"], Some(&format!("{request}\n")));
     filtered.expect("(+ x x)  # => 4  [observe.ll:20:18 · ")?;
     filtered.expect("ms]")?;
     filtered.expect("(+ x x)  # => 6  [observe.ll:20:18 · ")?;
     filtered.expect("ms]")?;
-    filtered.expect("# evaluation 1 returned (4 6)")?;
+    filtered.expect("# run 1 returned (4 6)")?;
     filtered
         .session
         .get_process_mut()
@@ -289,7 +292,7 @@ fn dbg_views_share_real_recording_filters_and_editor_source_origins() -> Result<
 fn dbg_stream_orders_pending_completion_and_evaluation_result() -> Result<()> {
     let runtime = TestRuntime::new()?;
     let mut viewer = runtime.terminal(&["dbg", "--width", "200"], false, 200)?;
-    viewer.expect("Following dbg! calls.")?;
+    thread::sleep(Duration::from_millis(200));
     let mut command = runtime.command(&["-c", "(dbg! (sleep 1) (+ 20 22))"]);
     let worker = thread::spawn(move || command.output().unwrap());
     viewer.expect("(sleep 1)  # running…")?;
@@ -297,7 +300,7 @@ fn dbg_stream_orders_pending_completion_and_evaluation_result() -> Result<()> {
     viewer.expect("(sleep 1)  # => :ok")?;
     viewer.expect("wait 1")?;
     viewer.expect("(+ 20 22)  # => 42")?;
-    viewer.expect("# evaluation 1 returned 42")?;
+    viewer.expect("# run 1 returned 42")?;
     ensure!(worker.join().unwrap().status.success());
     viewer
         .session
