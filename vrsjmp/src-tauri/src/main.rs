@@ -183,18 +183,10 @@ async fn dispatch(
 }
 
 #[tauri::command]
-async fn begin_interaction(state: tauri::State<'_, State>) -> Result<protocol::Action, String> {
+async fn root_page(state: tauri::State<'_, State>) -> Result<protocol::Action, String> {
     // The service chooses Home or a pending input page before the window opens.
-    let result = async {
-        protocol::action(
-            evaluate(
-                &state,
-                protocol::action_request("(:on_click (begin_interaction))")?,
-            )
-            .await?,
-        )
-    }
-    .await;
+    let result =
+        async { protocol::action(evaluate(&state, protocol::root_request()).await?) }.await;
     result.map_err(|error: anyhow::Error| error.to_string())
 }
 
@@ -289,12 +281,7 @@ fn main() -> Result<()> {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            set_query,
-            dispatch,
-            begin_interaction,
-            show,
-            hide,
-            on_blur
+            set_query, dispatch, root_page, show, hide, on_blur
         ])
         .run(context)
         .expect("error while running tauri application");

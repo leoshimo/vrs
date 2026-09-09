@@ -94,8 +94,16 @@ async fn gui_bridge_uses_one_connection_for_queries_and_wakeups_and_resubscribes
         (defn! get_items (callback args query)
           (if (eq? query "fail") (error "query failed"))
           (list (list :title query :on_click :close)))
-        (defn! on_click (item) (get item :on_click))
-        (spawn_srv! :vrsjmp :interface '(get_items on_click))
+        (def clicks 0)
+        (defn! root_page ()
+          '(:push_page :get_items items :args ("request-1" (:object :id 7))
+            :title "Choose" :prompt "Find an item"
+            :on_cancel (cancel_input "request-1")))
+        (defn! click_count () clicks)
+        (defn! on_click (item)
+          (set clicks (+ clicks 1))
+          (get item :on_click))
+        (spawn_srv! :vrsjmp :interface '(root_page get_items on_click click_count))
     "#,
             )
             .unwrap(),
@@ -107,6 +115,26 @@ async fn gui_bridge_uses_one_connection_for_queries_and_wakeups_and_resubscribes
         .unwrap()
         .status
         .unwrap();
+    let response = bridge.request(protocol::root_request()).await.unwrap();
+    let protocol::Action::PushPage { page } = protocol::action(response.contents.unwrap()).unwrap()
+    else {
+        panic!("root request must return a page")
+    };
+    assert_eq!(page.get_items, "items");
+    assert_eq!(page.args, "(\"request-1\" (:object :id 7))");
+    assert_eq!(
+        page.on_cancel.as_deref(),
+        Some("(:on_click (cancel_input \"request-1\"))")
+    );
+    assert_eq!(
+        bridge
+            .request(protocol::service_request("click_count", vec![]))
+            .await
+            .unwrap()
+            .contents
+            .unwrap(),
+        Form::Int(0)
+    );
     let failed = bridge
         .request(protocol::query_request("items", "()", "fail").unwrap())
         .await

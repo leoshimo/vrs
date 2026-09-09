@@ -287,7 +287,23 @@ providers exported by a service. To inspect a function or its choices:
 The type annotation guides the picker; it does not reject other values when
 you call the function directly.
 
+Given an entity, `entity_functions` returns bound function names whose first
+`interactive` argument matches its leading tag. It runs neither those functions
+nor completion providers. Emacs action selection and vrsjmp's Cmd-K menu use
+this same query:
+
+```lyric
+(entity_functions '(:os/window :id 7))
+# => (focus_window) # Other bound window actions may also appear.
+```
+
 ## Pages and Actions in Vrsjmp
+
+The GUI and terminal client call the exported `root_page` function to open an
+interaction. It returns Home or a pending chooser's page description directly;
+opening is not routed through `on_click` or recorded as a `:cmd` action. The
+page names its item callback, arguments, and any cancellation action. A small
+launcher exports `root_page`, `get_items`, and `on_click`.
 
 To add a page, define an item function in
 [scripts/vrsjmp.ll](../scripts/vrsjmp.ll). It takes the search text and returns

@@ -43,10 +43,7 @@
   (map (service_interface_functions service "") vrs/editor_function))
 
 (defn! vrs/editor_actions (entity)
-  (if (or! (not? (list? entity)) (not? (keyword? (get entity 0))))
-    (error "Expected a tagged entity"))
-  (map (filter (interactive_commands) (fn (name) (accepts_context? name entity)))
-       vrs/editor_function))
+  (map (entity_functions entity) vrs/editor_function))
 
 (defn! vrs/editor_argument (type)
   (map (argument_entities type) vrs/editor_value))

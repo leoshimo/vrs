@@ -78,6 +78,10 @@ pub fn query_request(callback: &str, args: &str, query: &str) -> Result<Form> {
     ))
 }
 
+pub fn root_request() -> Form {
+    service_request("root_page", vec![])
+}
+
 pub fn action_request(item: &str) -> Result<Form> {
     let item = Form::from_expr(item)?;
     if !matches!(item, Form::List(_)) {

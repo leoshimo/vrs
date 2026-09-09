@@ -12,7 +12,7 @@
 (defn! get_items (callback args query)
   (apply (eval callback) (push args query)))
 
-(defn! begin_interaction ()
+(defn! root_page ()
   '(:push_page :get_items root_items :prompt "Search"))
 
 (defn! root_items (query)
@@ -96,4 +96,4 @@
     (if (eq? (get result 0) :push_page) result :close)
     :close))
 
-(spawn_srv! :vrsjmp :interface '(get_items on_click))
+(spawn_srv! :vrsjmp :interface '(root_page get_items on_click))

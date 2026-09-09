@@ -7,7 +7,7 @@ command -v jq >/dev/null
 command -v fzf >/dev/null
 typeset -a pages ctl
 ctl=(vrsctl "$@")
-pages=("$("${ctl[@]}" -c '(begin (bind_srv :vrsjmp) (on_click (quote (:on_click (begin_interaction)))))')")
+pages=("$("${ctl[@]}" -c '(begin (bind_srv :vrsjmp) (root_page))')")
 
 while (( ${#pages} )); do
     page=${pages[-1]}

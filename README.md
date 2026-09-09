@@ -556,7 +556,7 @@ Escape out of the picker cancels the evaluation and leaves the original expressi
 The GUI must be running for automatic opening. Requests remain in the
 `:vrsjmp` service if a wakeup is missed, and are checked again on opening or
 reconnection. `(show_gui)` asks a running GUI to open through its normal
-`begin_interaction`/`get_items` flow.
+`root_page`/`get_items` flow.
 
 Customize `vrs-result-width` (default 90) for editor results. Indentation
 aligns data and keyword/value lists under their opening parenthesis, uses two
