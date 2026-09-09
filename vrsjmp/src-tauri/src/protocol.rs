@@ -21,7 +21,6 @@ pub struct TextSpan {
 #[derive(Debug, Serialize, PartialEq)]
 pub struct ItemCommand {
     pub title: String,
-    pub icon: Option<String>,
     pub primary: bool,
     pub on_click: String,
 }
@@ -163,7 +162,6 @@ fn item_command(item: &Form, primary: Option<&Form>) -> Result<ItemCommand> {
     field(values, "on_click").context("Item is missing an action")?;
     Ok(ItemCommand {
         title: title.clone(),
-        icon: optional_text(values, "icon")?,
         primary: primary.is_some() && field(values, "on_click") == primary,
         on_click: item.to_string(),
     })
@@ -216,18 +214,22 @@ mod tests {
     use super::*;
     #[test]
     fn primary_actions_match_commands_not_labels_or_positions() {
-        let rows = items(Form::from_expr(r#"(
+        let rows = items(
+            Form::from_expr(
+                r#"(
           (:title "Article" :on_click (open_url "https://example.test")
-           :actions ((:title "Copy URL" :on_click (set_clipboard "https://example.test") :icon "link")
-                     (:title "Open in Browser" :on_click (open_url "https://example.test") :icon "open")))
+           :actions ((:title "Copy URL" :on_click (set_clipboard "https://example.test"))
+                     (:title "Open in Browser" :on_click (open_url "https://example.test"))))
           (:title "Function" :on_click (insert_form '(f x))
            :actions ((:title "Fill arguments" :on_click (fill_args 'f))))
-        )"#).unwrap()).unwrap();
+        )"#,
+            )
+            .unwrap(),
+        )
+        .unwrap();
         assert!(!rows[0].actions[0].primary);
         assert!(rows[0].actions[1].primary);
         assert!(!rows[1].actions[0].primary);
-        assert_eq!(rows[0].actions[0].icon.as_deref(), Some("link"));
-        assert_eq!(rows[1].actions[0].icon, None);
         assert!(action_request(&rows[0].actions[1].on_click).is_ok());
     }
 

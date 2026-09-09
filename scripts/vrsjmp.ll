@@ -482,9 +482,9 @@
        `(:subtitle ,(str (if host host url)
                        (if saved (str " · Saved " (get (split "T" saved) 0)) ""))
          :actions ,(list
-           (+ (make_item "Open in Browser" `(open_url ,url)) '(:icon "open"))
-           (+ (make_item "Copy URL" `(set_clipboard ,url)) '(:icon "link"))
-           (+ (make_item "Copy Title and URL" `(set_clipboard ,(str title "\n" url))) '(:icon "copy"))))))))
+           (make_item "Open in Browser" `(open_url ,url))
+           (make_item "Copy URL" `(set_clipboard ,url))
+           (make_item "Copy Title and URL" `(set_clipboard ,(str title "\n" url)))))))))
 
 (def notes_cache nil)
 (defn! apple_notes_page ()
@@ -601,8 +601,8 @@
     (def url (get tab :url))
     (+ (make_item (get tab :title) `(open_url ,url))
        `(:subtitle ,url :aside ,(get tab :device)
-         :actions ,(+ (list (+ (make_item "Open in Browser" `(open_url ,url)) '(:icon "open"))
-                          (+ (make_item "Copy URL" `(set_clipboard ,url)) '(:icon "link")))
+         :actions ,(+ (list (make_item "Open in Browser" `(open_url ,url))
+                          (make_item "Copy URL" `(set_clipboard ,url)))
                      (entity_actions tab)))))))
 
 (def browser_history_cache '())

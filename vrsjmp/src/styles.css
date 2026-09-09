@@ -87,28 +87,25 @@ kbd { font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(
     background: var(--menu); border: 1px solid var(--line); border-radius: 11px;
     box-shadow: 0 8px 22px var(--menu-shadow), 0 2px 5px var(--menu-shadow);
 }
-#action-title { flex: none; padding: 12px 14px 6px; font-size: 11px; color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#action-title { flex: none; padding: 7px 12px 4px; font-size: 11px; color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .action-results { min-height: 0; overflow: auto; overscroll-behavior: contain; }
-#action-list { padding: 0 6px 7px; }
-#action-search { flex: none; display: flex; align-items: center; gap: 9px; padding: 9px 14px; border-top: 1px solid var(--line); color: var(--muted); }
+#action-list { padding: 0 4px 4px; }
+#action-search { flex: none; display: flex; align-items: center; padding: 6px 12px; border-top: 1px solid var(--line); color: var(--muted); }
 /* Keep the native input focused so typing, paste, and IME work before search is revealed. */
 #action-search[data-active="false"] { height: 0; padding-block: 0; border: 0; overflow: hidden; }
 #action-filter { flex: 1; min-width: 0; padding: 0; border: 0; outline: none; background: transparent; color: var(--ink); font-size: 13px; }
 #action-filter::placeholder { color: var(--muted); }
-#action-status { padding: 8px 14px; font-size: 12px; color: var(--muted); }
+#action-status { padding: 6px 12px; font-size: 12px; color: var(--muted); }
 #action-list button {
-    display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px;
-    text-align: left; padding: 7px 9px; border: 0; border-radius: 6px; background: transparent; font-size: 13px;
+    display: flex; align-items: center; width: 100%; min-height: 30px;
+    text-align: left; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; font-size: 13px;
     /* Selection is the focus indicator while the input owns keyboard focus. */
     outline: none;
 }
 #action-list button.action--focus { background: var(--selection); }
 .action-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.action-icon { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
-#action-list kbd { padding: 1px 5px; border: 1px solid var(--line); border-radius: 4px; visibility: hidden; }
-#action-list .action--focus kbd { visibility: visible; }
-#action-list button[data-separator="true"] { position: relative; margin-top: 8px; }
-#action-list button[data-separator="true"]::before { content: ""; position: absolute; top: -5px; left: 9px; right: 9px; height: 1px; background: var(--line); }
+#action-list button[data-separator="true"] { position: relative; margin-top: 4px; }
+#action-list button[data-separator="true"]::before { content: ""; position: absolute; top: -3px; left: 8px; right: 8px; height: 1px; background: var(--line); }
 #toast {
     position: absolute; z-index: 3; bottom: 44px; left: var(--gutter); right: var(--gutter);
     padding: 10px 12px; max-height: 90px; overflow: auto;
