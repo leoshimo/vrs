@@ -125,134 +125,17 @@ can change its default with `(call_timeout 30)`.
 
 ### Introduction to Lyric
 
-The runtime runs software written in Lyric lang:
+VRS programs are written in Lyric, a small Lisp with lexical scope, first-class
+functions, pattern matching, and macros:
 
 ```lyric
-# Use `def` to define new bindings
-# e.g. "hello lyric!" string to symbol `msg`
-(def msg "hello lyric!")
-
-# Raw block strings preserve quotes and backslashes. Indented multiline blocks
-# drop their leading newline and common indentation.
-(def script """
-    printf '%s\n' "$1"
-    """)
-
-# Update bindings with `set`
-(set msg "goodbye lyric!")
-
-# Basic Primitives - integers, lists, keywords, and more
-42                                # integers
-:my_keyword                       # keywords start with colon (:)
-true                              # booleans are `true` or `false`
-(list msg 42 :my_keyword)          # create a list of values
-'("a" "b" "c")                    # quote expression with '
-
-# Function declarations use `defn!`
-# Lyric is expression-oriented - last form is returned as value to caller
-(defn! double (x)
-    (+ x x))
-    
-# Call functions by using bound symbol names within parens, followed by arguments
-(double 10) # => 20
-
-# List Operations
-(def l '(1 2 3))
-(def first (get l 0))       # get 0th item in `l`
-(def last (get l -1))       # get last item in `l`
-(contains? l 3)             # check if `l` contains `3`
-
-# Association Lists
-(def item '(:title "My Title" :subtitle "My Subtitle"))
-(get item :title)      # => "My Title"
-(get item :subtitle)   # => "My Subtitle"
-
-# Functions (Lambdas) are first class
-(defn! with_value (x f)
-    (f x))
-(with_value 41 (lambda (x) (+ x 1)))  # => 42
-(map '(1 2 3) (lambda (x) (+ x x)))   # => (2 4 6)
-
-# Conditionals with `if` - equality with `eq?`
-(if (eq? msg "Hello")
-    "msg was hello"
-    "msg was not hello")
-
-# and flip conditions with `not?`
-(if (not? false)
-    "it was not true")
-
-# Catch error with `try`. Introspect result with `err?` or `ok?`
-(if (err? (try (not_a_function)))
-    "failed to call not_a_function")
-
-# Pattern match with `match`. `_` is a wildcard pattern.
-(def result '(:ok "Successful data"))
-(match result
-    ((:ok msg) msg)
-    ((:err err) (list :err err))
-    (_ '(:err "Unrecognized result")))
-
-# Destructuring bindings can be used to pattern match against forms:
-(def result '(:ok "Success"))
-(def (:ok status) result)      # matches :ok, binds status to string "Success"
-
-# As a Lisp, Lyric has `eval` and `read`:
-(eval (read "(+ 40 2)")) # => 42
-
-# Quasiquote constructs code, evaluating only comma-marked holes:
-(def url "https://example.com")
-`(open_url ,url)                 # => (open_url "https://example.com")
-(def window '(:os/window :id 42))
-`(focus_window ',window)         # => (focus_window '(:os/window :id 42))
-(def commands '((notify "first") (notify "second")))
-`(begin ,@commands)              # splice a list of forms without running them
-
-# and there are more builtins and symbols in environment, introspectable via `ls_env` and `help`
-(ls_env)           # see all symbols defined in environment
-(help recv)        # see documentation via `help`
+(defn! double (x) (+ x x))
+(map '(1 2 3) double) # => (2 4 6)
 ```
 
-**Macros receive source forms and return code.**
-
-```lisp
-(defmacro unless (test & body)
-  `(if ,test nil (begin ,@body)))
-
-(unless! false (+ 20 22)) # => 42
-(macroexpand_1 '(unless! false (+ 20 22)))
-# => (if false nil (begin (+ 20 22)))
-```
-
-The marker belongs to the macro name inside the list: `(unless! ...)`.
-`defn!` is a standard macro; inspect it with
-`(macroexpand_1 '(defn! echo (x) x))`.
-`macroexpand_1` expands one outer call; `macroexpand` repeats outer expansion
-until the head is ordinary code. Both accept source data and return source data;
-quote the call to avoid running its arguments. `pretty` formats the returned
-form, and a separate `eval` runs it deliberately.
-
-Macros expand each time execution reaches a call. They use their definition's
-lexical scope and can call ordinary helpers or perform I/O. Redefining a macro
-affects subsequent calls, including calls inside existing functions.
-`macroexpand_1` and `macroexpand` run the transformer, including its side effects,
-but leave the generated code unevaluated.
-
-See [Lyric macros](lyric/README.md#user-defined-macros) for scope, generated
-names, and expansion limits.
-
-In Emacs, `C-c C-m` displays one expansion of the form at its closing
-parenthesis or preceding point, adding the required quote automatically; a
-prefix argument repeats outer expansion. For example, use it on
-`(srv! :test :interface '())`, or evaluate
-`(macroexpand_1 '(srv! :test :interface '()))`. Without the quote, the service
-loop runs before the inspection function can be called. `C-g` cancels a waiting
-evaluation and clears its session. Evaluation and macro expansion share a
-persistent editor session, so earlier evaluated definitions remain available.
-`M-x vrs-reset-session` explicitly starts a fresh connection.
-
-See [Lyric quotation and code templates](lyric/README.md#quotation-and-code-templates)
-for nesting, literal arguments, and the distinction between insertion and splicing.
+The [Lyric guide](docs/guide-lyric.org) introduces the language through small,
+runnable examples, from values and bindings to code templates and macros.
+See the [Lyric reference](lyric/README.md) for detailed language contracts.
 
 ### Process
 
@@ -473,6 +356,16 @@ or add options such as service bindings.
 Buffers using the same `vrs-vrsctl-command` share a session. Variables, functions,
 macros, and service bindings persist between evaluations, including after errors.
 Re-evaluate a changed definition to update it.
+
+In Emacs, `C-c C-m` displays one expansion of the form at its closing
+parenthesis or preceding point, adding the required quote automatically; a
+prefix argument repeats outer expansion. For example, use it on
+`(srv! :test :interface '())`, or evaluate
+`(macroexpand_1 '(srv! :test :interface '()))`. Without the quote, the service
+loop runs before the inspection function can be called. `C-g` cancels a waiting
+evaluation and clears its session. Evaluation and macro expansion share a
+persistent editor session, so earlier evaluated definitions remain available.
+`M-x vrs-reset-session` explicitly starts a fresh connection.
 
 Choose values and build calls using ordinary Emacs completion, including your
 configured completion packages:
