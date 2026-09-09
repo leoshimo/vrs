@@ -267,6 +267,10 @@ pub fn proc_env() -> Env {
             .bind_native(SymbolId::from("self"), bindings::self_fn())
             .bind_native_async(SymbolId::from("sleep"), bindings::sleep_fn())
             .bind_native_async(SymbolId::from("spawn"), bindings::spawn_fn());
+        e.bind_native_async(
+            SymbolId::from("vrs/spawn_service"),
+            bindings::spawn_service_fn(),
+        );
     }
 
     {

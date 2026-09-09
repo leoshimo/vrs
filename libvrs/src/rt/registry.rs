@@ -3,6 +3,7 @@
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::time::Duration;
 use tokio::sync::{broadcast, mpsc, oneshot, watch};
 
 use lyric::{Form, KeywordId};
@@ -12,6 +13,9 @@ use crate::rt::program::Val;
 use crate::{Error, Extern, ProcessExit, ProcessHandle, Result};
 
 use super::ProcessId;
+
+// This bounds local bookkeeping, never user evaluation or service health.
+const SYNC_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone)]
 pub struct Registry {
@@ -98,6 +102,22 @@ pub struct Registration {
 }
 
 impl Registry {
+    /// A live command channel with no processing task, for fault-injection tests.
+    #[cfg(test)]
+    pub(crate) fn stalled_for_test() -> (Self, impl Send) {
+        let (tx, rx) = mpsc::channel(1);
+        let (events, _) = broadcast::channel(1);
+        let (changed, _) = watch::channel(());
+        (
+            Self {
+                tx,
+                events,
+                changed,
+            },
+            rx,
+        )
+    }
+
     pub(crate) fn spawn_named(node_name: String) -> Registry {
         let (tx, mut rx) = mpsc::channel(32);
         let (events, _) = broadcast::channel(64);
@@ -113,7 +133,7 @@ impl Registry {
                     &cmd,
                     Cmd::Lookup(..) | Cmd::GetAll(..) | Cmd::Checkpoint(..)
                 );
-                registry.handle_cmd(cmd).await;
+                registry.handle_cmd(cmd);
                 if changes {
                     task_changed.send_replace(());
                 }
@@ -177,24 +197,49 @@ impl Registry {
         }
     }
 
+    /// Capture local entries and their revision in one registry command, after
+    /// previously completed registrations. This does not wait for future child
+    /// work or for another node. The internal deadline covers queueing and reply.
     pub(crate) async fn checkpoint(&self) -> Result<Snapshot> {
-        let (tx, rx) = oneshot::channel();
-        self.tx
-            .send(Cmd::Checkpoint(tx))
-            .await
-            .map_err(|_| Error::ConnectionClosed)?;
-        rx.await?
+        self.synchronize("checkpoint", Cmd::Checkpoint).await
     }
 
-    /// Acknowledges application, not just enqueueing. Node-link replacement
-    /// clears the revision so counters from different runtime instances never mix.
+    /// Acknowledges application, not just enqueueing: the registry mutates its
+    /// in-memory entries before replying on the local oneshot. An already-seen
+    /// revision is a successful no-op. This is not a network or health-check ack.
+    /// Both remote replies and ordinary peer announcements await this operation.
+    /// Channel closure and the internal deadline return errors, never success.
+    /// Node-link replacement clears revisions from the previous runtime instance.
     pub(crate) async fn apply_remote(&self, node: String, change: RemoteChange) -> Result<()> {
-        let (tx, rx) = oneshot::channel();
-        self.tx
-            .send(Cmd::ApplyRemote(node, change, tx))
-            .await
-            .map_err(|_| Error::ConnectionClosed)?;
-        rx.await?
+        self.synchronize("apply remote update", |tx| {
+            Cmd::ApplyRemote(node, change, tx)
+        })
+        .await
+    }
+
+    async fn synchronize<T>(
+        &self,
+        operation: &str,
+        command: impl FnOnce(oneshot::Sender<Result<T>>) -> Cmd,
+    ) -> Result<T> {
+        tokio::time::timeout(SYNC_TIMEOUT, async {
+            let (tx, rx) = oneshot::channel();
+            self.tx.send(command(tx)).await.map_err(|_| {
+                Error::RegistryError(format!("{operation}: registry channel closed"))
+            })?;
+            rx.await.map_err(|_| {
+                Error::RegistryError(format!(
+                    "{operation}: registry acknowledgement channel closed"
+                ))
+            })?
+        })
+        .await
+        .map_err(|_| {
+            Error::RegistryError(format!(
+                "{operation}: registry did not acknowledge within {} seconds",
+                SYNC_TIMEOUT.as_secs()
+            ))
+        })?
     }
 
     #[cfg(test)]
@@ -219,10 +264,8 @@ impl Registry {
     }
 
     pub(crate) async fn remove_node(&self, node: String) -> Result<()> {
-        self.tx
-            .send(Cmd::RemoveNode(node))
+        self.synchronize("remove node", |tx| Cmd::RemoveNode(node, tx))
             .await
-            .map_err(|_| Error::NoMessageReceiver("registry task is dead".to_string()))
     }
 }
 
@@ -258,7 +301,12 @@ impl RegistryTask {
         entries.iter().max_by_key(|entry| entry.observed)
     }
 
-    async fn handle_cmd(&mut self, cmd: Cmd) {
+    // Dependency invariant: handlers must not await user code, network I/O, or
+    // the peer manager. The peer manager itself awaits checkpoint/apply replies;
+    // waiting back on it would deadlock. Broadcast sends are nonblocking and
+    // process joins run in separately spawned tasks. Keep this synchronous so
+    // adding an await here requires an explicit change to the dependency model.
+    fn handle_cmd(&mut self, cmd: Cmd) {
         match cmd {
             Cmd::Checkpoint(tx) => {
                 let mut entries: Vec<_> = self
@@ -276,7 +324,11 @@ impl RegistryTask {
                 }));
             }
             Cmd::ApplyRemote(node, change, tx) => {
-                let _ = tx.send(self.apply_remote_change(node, change));
+                // A timed-out response must not apply later and resurrect a
+                // node's registrations after its link has been torn down.
+                if !tx.is_closed() {
+                    let _ = tx.send(self.apply_remote_change(node, change));
+                }
             }
             Cmd::Register(registration, proc, resp_tx) => {
                 let _ = resp_tx.send(self.handle_register(registration, proc));
@@ -303,7 +355,11 @@ impl RegistryTask {
             Cmd::RemoteUp(service) => self.handle_remote_up(service),
             #[cfg(test)]
             Cmd::RemoteDown { node, name, pid } => self.remove_remote(&node, &name, &pid),
-            Cmd::RemoveNode(node) => self.remove_node(&node),
+            Cmd::RemoveNode(node, tx) => {
+                // Cleanup remains useful even if its caller already timed out.
+                self.remove_node(&node);
+                let _ = tx.send(Ok(()));
+            }
         }
     }
 
@@ -627,13 +683,94 @@ enum Cmd {
         name: KeywordId,
         pid: ProcessId,
     },
-    RemoveNode(String),
+    RemoveNode(String, oneshot::Sender<Result<()>>),
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{rt::kernel, Program};
+
+    #[tokio::test(start_paused = true)]
+    async fn registry_sync_stall_errors_while_waiting_for_ack_and_queue_space() {
+        use std::time::Duration;
+        use tokio::time::timeout;
+        let (registry, _receiver) = Registry::stalled_for_test();
+        // First command fits but is never acknowledged. Subsequent commands
+        // cannot even enqueue. Both phases, including disconnect cleanup, need
+        // the internal deadline; the outer timeout is only the test watchdog.
+        assert!(timeout(Duration::from_secs(10), registry.checkpoint())
+            .await
+            .expect("checkpoint hung")
+            .is_err());
+        assert!(timeout(
+            Duration::from_secs(10),
+            registry.apply_remote(
+                "beta".into(),
+                RemoteChange::Snapshot(Snapshot {
+                    revision: 0,
+                    services: vec![]
+                })
+            )
+        )
+        .await
+        .expect("apply hung on a full queue")
+        .is_err());
+        assert!(
+            timeout(Duration::from_secs(10), registry.remove_node("beta".into()))
+                .await
+                .expect("disconnect cleanup hung on a full queue")
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn registry_sync_closed_channel_errors_without_waiting() {
+        let (registry, receiver) = Registry::stalled_for_test();
+        drop(receiver);
+        assert!(registry.checkpoint().await.is_err());
+        assert!(registry
+            .apply_remote(
+                "beta".into(),
+                RemoteChange::Snapshot(Snapshot {
+                    revision: 0,
+                    services: vec![]
+                })
+            )
+            .await
+            .is_err());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn timed_out_snapshot_is_not_applied_when_registry_resumes() {
+        let (tx, mut rx) = mpsc::channel(1);
+        let (events, _) = broadcast::channel(1);
+        let (changed, _) = watch::channel(());
+        let registry = Registry {
+            tx: tx.clone(),
+            events: events.clone(),
+            changed,
+        };
+        let mut task = RegistryTask::new(tx.downgrade(), "alpha".into(), events);
+        let apply = registry.apply_remote(
+            "beta".into(),
+            RemoteChange::Snapshot(Snapshot {
+                revision: 1,
+                services: vec![description("probe", 1)],
+            }),
+        );
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_secs(10), apply)
+                .await
+                .expect("apply hung")
+                .is_err()
+        );
+        // The old response is still queued after the caller abandons it. It
+        // must not resurrect remote entries when processing resumes.
+        task.handle_cmd(rx.recv().await.unwrap());
+        assert!(task.entries.is_empty());
+        assert!(task.remote_revisions.is_empty());
+    }
 
     fn description(name: &str, id: usize) -> ServiceDescription {
         ServiceDescription {

@@ -88,15 +88,21 @@ impl MailboxHandle {
         match tokio::time::timeout(duration, rx).await {
             Ok(message) => Ok(Some(message?)),
             Err(_) => {
-                let (tx, rx) = oneshot::channel();
-                self.tx
-                    .send(Cmd::CancelPoll(tx))
-                    .await
-                    .map_err(|_| Error::NoMailbox)?;
-                rx.await?;
+                self.cancel_poll().await?;
                 Ok(None)
             }
         }
+    }
+
+    /// Clear a receive that lost a race against a deadline or process exit.
+    pub(crate) async fn cancel_poll(&self) -> Result<()> {
+        let (tx, rx) = oneshot::channel();
+        self.tx
+            .send(Cmd::CancelPoll(tx))
+            .await
+            .map_err(|_| Error::NoMailbox)?;
+        rx.await?;
+        Ok(())
     }
 }
 

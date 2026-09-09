@@ -154,8 +154,7 @@ and overhead before choosing an API.
 
 =srv!= and =spawn_srv!= accept =:topics '((:topic handler))=. Handlers receive
 the published value and share the service's state and message loop.
-[[file:scripts/cmd_macro.ll][Command recording]] uses this directly. See
-[[file:docs/service-events.md][service events]] for readiness, cleanup, and delivery semantics.
+[[file:scripts/cmd_macro.ll][Command recording]] uses this directly.
 
 ** TODO System-wide Job Configuration and Node Affinity
 
@@ -180,7 +179,7 @@ indexing are periodic jobs assigned to the always-on node. The conditional
 startup currently written by hand in =scripts/init.ll= should eventually be
 expressed through this model.
 
-[[file:docs/remote-execution.md][Remote execution]] now provides =remote!=, =eval_remote=, and =vrsctl --node=
+[[file:docs/concepts.md][Core concepts]] covers =remote!=, =eval_remote=, and =vrsctl --node=
 for sending code to a connected machine. Persistence, supervision, and automatic
 placement remain follow-ups; remote evaluation does not install a durable job.
 
