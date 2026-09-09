@@ -7,10 +7,7 @@ use lyric::debug::{Event, Observer};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::VecDeque,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc, Mutex,
-    },
+    sync::{Arc, Mutex},
 };
 
 pub const TOPIC: &str = "dbg";
@@ -38,17 +35,26 @@ impl Snapshot {
         serde_json::from_value(from_form(form))
     }
 }
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct History {
     cursor: u64,
     evicted: u64,
-    records: VecDeque<(Record, usize)>,
+    records: VecDeque<(Arc<Record>, usize)>,
     wire_bytes: usize,
+}
+impl Default for History {
+    fn default() -> Self {
+        Self {
+            cursor: 0,
+            evicted: 0,
+            records: VecDeque::with_capacity(CAPACITY + 1),
+            wire_bytes: 0,
+        }
+    }
 }
 #[derive(Debug)]
 struct Inner {
     history: Mutex<History>,
-    dropped: AtomicU64,
     pubsub: PubSubHandle,
 }
 #[derive(Debug, Clone)]
@@ -62,7 +68,6 @@ impl Store {
     pub(crate) fn new(pubsub: PubSubHandle) -> Self {
         Self(Arc::new(Inner {
             history: Mutex::new(History::default()),
-            dropped: AtomicU64::new(0),
             pubsub,
         }))
     }
@@ -73,15 +78,22 @@ impl Store {
         })
     }
     pub(crate) fn snapshot(&self) -> Snapshot {
-        let history = self.0.history.lock().unwrap();
+        // Only copy bounded record handles while synchronized. Cloning values,
+        // serialization, and viewer I/O happen after releasing the lock.
+        let mut records = Vec::with_capacity(CAPACITY);
+        let (cursor, evicted) = {
+            let history = self.0.history.lock().unwrap();
+            records.extend(history.records.iter().map(|(r, _)| Arc::clone(r)));
+            (history.cursor, history.evicted)
+        };
         Snapshot {
-            cursor: history.cursor,
-            evicted: history.evicted,
-            dropped: self.0.dropped.load(Ordering::Relaxed),
-            records: history
-                .records
-                .iter()
-                .map(|(record, _)| record.clone())
+            cursor,
+            evicted,
+            // Kept in the wire format for compatibility with existing viewers.
+            dropped: 0,
+            records: records
+                .into_iter()
+                .map(|record| (*record).clone())
                 .collect(),
         }
     }
@@ -93,7 +105,7 @@ struct ProcessObserver {
 }
 impl Observer for ProcessObserver {
     fn observe(&self, event: Event) {
-        let mut record = Record {
+        let record = Record {
             sequence: 0,
             process: self.process.clone(),
             event,
@@ -105,30 +117,37 @@ impl Observer for ProcessObserver {
             .expect("debug form serializes")
             .len()
             + 32;
-        let Ok(mut history) = self.store.0.history.try_lock() else {
-            self.store.0.dropped.fetch_add(1, Ordering::Relaxed);
-            return;
-        };
+        let mut record = Arc::new(record);
+        // Retire payloads outside the critical section too. A tiny index update
+        // is serialized, rather than losing completions when a viewer reads.
+        let mut retired = Vec::with_capacity(CAPACITY + 1);
+        let mut history = self.store.0.history.lock().unwrap();
         history.cursor += 1;
-        record.sequence = history.cursor;
+        Arc::get_mut(&mut record).unwrap().sequence = history.cursor;
         if let Some(index) = history
             .records
             .iter()
             .position(|(old, _)| old.event.id == record.event.id)
         {
             history.wire_bytes -= history.records[index].1;
-            history.records[index] = (record.clone(), wire_bytes);
+            let old = std::mem::replace(
+                &mut history.records[index],
+                (Arc::clone(&record), wire_bytes),
+            );
+            retired.push(old.0);
         } else {
-            history.records.push_back((record.clone(), wire_bytes));
+            history.records.push_back((Arc::clone(&record), wire_bytes));
         }
         history.wire_bytes += wire_bytes;
         while history.records.len() > CAPACITY || history.wire_bytes > WIRE_BUDGET {
-            if let Some((_, bytes)) = history.records.pop_front() {
+            if let Some((old, bytes)) = history.records.pop_front() {
                 history.wire_bytes -= bytes;
                 history.evicted += 1;
+                retired.push(old);
             }
         }
         drop(history);
+        drop(retired);
         if let Form::List(fields) = &mut form {
             for pair in fields.chunks_exact_mut(2) {
                 if pair[0] == Form::keyword("sequence") {
@@ -330,7 +349,7 @@ mod tests {
         );
     }
     #[tokio::test]
-    async fn bounded_history_and_loss_are_explicit() {
+    async fn bounded_history_preserves_completions_during_snapshot_contention() {
         let store = Store::new(crate::rt::pubsub::PubSub::spawn());
         let observer = store.observer("test".into());
         for i in 0..CAPACITY + 3 {
@@ -351,9 +370,36 @@ mod tests {
         let s = store.snapshot();
         assert_eq!(s.records.len(), CAPACITY);
         assert_eq!(s.evicted, 3);
-        let _held = store.0.history.lock().unwrap();
-        observer.observe(s.records[0].event.clone());
-        assert_eq!(store.0.dropped.load(Ordering::Relaxed), 1);
+        let mut completion = s.records[0].event.clone();
+        completion.status = "returned".into();
+        let id = completion.id.clone();
+        let held = store.0.history.lock().unwrap();
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let writer = std::thread::spawn(move || {
+            started_tx.send(()).unwrap();
+            observer.observe(completion);
+            done_tx.send(()).unwrap();
+        });
+        started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        assert!(done_rx.recv_timeout(Duration::from_millis(20)).is_err());
+        drop(held);
+        done_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        writer.join().unwrap();
+        let after = store.snapshot();
+        assert_eq!(after.dropped, 0);
+        assert_eq!(
+            after
+                .records
+                .iter()
+                .find(|r| r.event.id == id)
+                .unwrap()
+                .event
+                .status,
+            "returned"
+        );
+        // A snapshot remains a point-in-time copy while live records change.
+        assert_eq!(s.records[0].event.status, "running");
     }
     #[tokio::test]
     async fn large_escaped_values_stay_below_the_connection_frame_limit() {

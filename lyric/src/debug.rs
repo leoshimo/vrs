@@ -1,4 +1,4 @@
-//! Observation boundaries in the VM. A host supplies a nonblocking sink; without
+//! Observation boundaries in the VM. A host supplies an observation sink; without
 //! one, debug scopes execute normally and retain no runtime observations.
 use crate::{source::SourceSite, Extern, Inst, Locals, Val};
 use serde::{Deserialize, Serialize};
@@ -28,7 +28,8 @@ pub struct Event {
     pub started_ms: u64,
 }
 
-/// The sink must not wait for consumers or call back into the running fiber.
+/// The sink must not perform I/O, wait for consumer delivery, or call back into
+/// the running fiber. Keep any in-memory synchronization short and bounded.
 pub trait Observer: std::fmt::Debug + Send + Sync {
     fn observe(&self, event: Event);
 }
