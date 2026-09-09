@@ -1,0 +1,78 @@
+#+TITLE: Debugging with source-embedded tools
+#+OPTIONS: toc:nil num:nil
+
+Leave a =dbg!= block beside code you want to understand. Evaluate it, then
+inspect its calls in another client. The block runs normally and returns its
+last value; the source becomes a small tool you can reuse next time.
+
+Paste this into =scratch.ll= in Emacs =vrs-mode= and evaluate with =C-c C-c=:
+
+#+begin_src vrs
+(defn! twice (x)
+  (+ x x))
+
+(dbg!
+  (twice 2)
+  (map '(2 3) twice)
+  (sleep 2)
+  (twice 5))
+# => 10
+#+end_src
+
+Open either viewer before or after evaluation:
+
+#+begin_src sh
+vrsctl dbg
+vrsctl dbg --web
+#+end_src
+
+The terminal prints retained history, then follows live updates until Ctrl-C.
+Calls appear as they complete, followed by the evaluation result. A long
+call prints =running…=, then its outcome with the same =wait N= label. This is
+one invocation, not two. =--time= adds elapsed wall time, including waiting and
+child calls. =--values= adds arguments and reusable call/run filters; =--all=
+includes nested calls.
+
+#+begin_src sh
+vrsctl dbg --all --values --time
+vrsctl dbg --filter 'file::scratch.ll:2:3' --values
+vrsctl dbg --filter 'expr::"(+ x x)" status::error'
+#+end_src
+
+Both viewers use one filter language. Terms narrow the selection together:
+=file::scratch.ll= matches a path substring; =file::scratch.ll:2:3= selects an
+exact line and optional column; =expr::"(+ x x)"= searches source text. Plain
+words search expressions too. Use =status::running=, =status::returned=,
+=status::error=, or =status::cancelled=; =time::>100ms= selects longer calls.
+=run::ID= selects an evaluation; =call::ID= selects a call and its descendants.
+File/run filters keep the terminal overview compact. Specific expression,
+location, status, time, or call filters can find nested calls directly.
+
+In the browser, select source to inspect inputs/results on the side. Pin up to
+three calls to compare beside the current selection. Chevrons open children;
+clicking locations adds filters without changing expansion. The =?= explains
+syntax. Choose oldest/newest evaluations, source-location history, or slowest
+calls. New rows fade in; running calls show a live timer. Scrolling away from
+the live edge preserves your position and shows a button for new calls.
+
+=map= invokes its supplied function once per element. With =--all= these rows
+say =invoke (fn …)=: their result belongs to that invocation, not to constructing
+the function. The inner =(+ x x)= calls remain available too. Special forms such
+as =def= are not call rows. Spawned processes and remote handlers need their own
+=dbg!= blocks to observe execution there.
+
+Try =(dbg! (+ 1 2) (sleep 30) (error "should not run"))= and press =C-g= while
+it waits in Emacs. Emacs closes the evaluation connection; VRS cancels its fiber
+and marks unfinished observations =cancelled=. Earlier results remain and later
+expressions do not run. This resets the Emacs session's definitions; existing
+effects are not undone. Ctrl-C in a /viewer/ only closes that viewer.
+
+History is memory-only, shared per runtime: at most 512 records and 4 MiB of
+encoded record data, with bounded value previews. Old records are evicted at
+either cap; there is no time expiry. Restarting the runtime clears it. Viewers
+use =(dbg_history)= for this snapshot and the existing =:dbg= pub/sub topic for
+updates. Plain =(dbg …)= remains the older runtime-stdout print helper.
+
+=--socket PATH= chooses a local daemon connection; =--node NAME= selects a
+connected remote node through it. Neither is needed for the default runtime.
+Run =vrsctl dbg --help= for the small set of viewer options.

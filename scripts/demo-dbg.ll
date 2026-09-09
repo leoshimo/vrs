@@ -1,6 +1,6 @@
 # Source-embedded debug tools: leave a useful observation beside the code.
 # Run this file, or evaluate it with C-c C-c in Emacs vrs-mode.
-# Inspect with `vrsctl dbg --once --all --details` or `vrsctl dbg --web`.
+# Inspect with `vrsctl dbg --all --values --time` or `vrsctl dbg --web`.
 
 (defn! twice (x)
   (+ x x))

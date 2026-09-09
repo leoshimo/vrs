@@ -47,7 +47,7 @@ To this end:
 - `emacs`: The editor workflow for evaluating expressions and building calls
 - `vrsjmp`: A GUI launch bar client that can also return choices to the editor
 
-[Source-embedded debug tools](docs/source-embedded-debug-tools.md) ·
+[Debugging](docs/guide-debug.org) ·
 [Remote execution](docs/remote-execution.md) ·
 [Core Concepts](docs/concepts.md) · [Demos](docs/demos.md) ·
 [Design Notes](DESIGN.org) · [AI and VRS](docs/ai.md)
