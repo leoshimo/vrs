@@ -1,5 +1,6 @@
 # Metadata and call helpers shared by native clients and vrsjmp.
-# Discovery inspects this process's bindings; providers run only when requested.
+# Functions use this process's bindings; services use the registry.
+# Completion providers run only when requested.
 
 (defn! interactive_commands ()
   (filter (ls_env) (fn (name) (eq? (get (meta (eval name)) :interactive) true))))
@@ -23,6 +24,17 @@
     (def metadata (meta (eval name)))
     (list (display name) (or! (get metadata :doc) "")
           (display (get metadata :service))))))
+
+(defn! service_names (query)
+  "Search registered services, including those not yet bound in this process."
+  (fuzzy_match query (filter (ls_srv) keyword?) display))
+
+(defn! service_interface_functions (service query)
+  "Bind SERVICE and search only its current exported interface."
+  (bind_srv service)
+  (def names (map (info_srv service :interface) (fn (signature)
+    (symbol (get signature 0)))))
+  (filter (service_functions query) (fn (name) (contains? names name))))
 
 (defn! literal_form (value)
   (if (or! (list? value) (symbol? value)) (list 'quote value) value))
