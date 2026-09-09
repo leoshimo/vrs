@@ -1,8 +1,24 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VRS dbg</title><link rel="stylesheet" href="style.css"><script src="app.js" defer></script></head>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VRS dbg</title><link rel="stylesheet" href="style.css"><script src="app.js" defer></script></head>
 <body><main>
-<header><h1>vrs <span>dbg</span></h1><span id="connection" role="status">Connecting…</span><span class="spacer"></span><button id="pause">Pause view</button><button id="export">Export JSON</button></header>
-<form id="filters"><label>File<input name="file" placeholder="path contains…"></label><label>Source location<input name="at" placeholder="file:line[:column]"></label><label>Expression<input name="expr" placeholder="(map…"></label><label>Run<input name="run" placeholder="ID prefix"></label><label>Call<input name="call" placeholder="ID prefix"></label><button type="reset">Reset</button></form>
-<nav><label>Group by <select id="group"><option value="run">Run</option><option value="source">Source location</option></select></label><label><input type="checkbox" id="all"> Expand nested calls</label><label><input type="checkbox" id="details"> Show values</label><span class="spacer"></span><span id="count"></span></nav>
-<p id="notice" role="status"></p><div id="recording"></div><footer>Evaluate <code>(dbg! …)</code> to record calls. Click source to inspect values; click a location to see its history. <span id="cli"></span></footer>
+<header>
+  <div class="title"><h1>vrs <span>dbg</span></h1><span id="connection" role="status">Connecting…</span><span class="spacer"></span><span class="retention" title="Memory-only, per runtime. Old records are evicted at either cap. Restarting the runtime clears history.">512 records · 4 MiB cap</span></div>
+  <form id="filters" role="search">
+    <label class="query-label" for="query">Filter calls</label><input id="query" name="filter" autocomplete="off" spellcheck="false" placeholder='file::scratch.ll:7  expr::"(+ x x)"'>
+    <button type="reset">Clear</button>
+    <details id="syntax"><summary aria-label="Filter syntax help">?</summary><div class="cheatsheet">
+      <strong>Filter syntax</strong><p>Terms narrow the selection together. Quote text containing spaces.</p>
+      <dl><dt><code>file::scratch.ll</code></dt><dd>File path contains this text</dd><dt><code>file::scratch.ll:7:3</code></dt><dd>Exact line and optional column</dd><dt><code>expr::"(+ x x)"</code></dt><dd>Source contains this expression</dd><dt><code>status::running</code></dt><dd>running, returned, error, cancelled</dd><dt><code>time::&gt;100ms</code></dt><dd>Elapsed wall time; also &lt;1s</dd><dt><code>run::ID / call::ID</code></dt><dd>Evaluation / call and descendants</dd></dl>
+      <p>Plain words search expressions. Click a file, location, status, or evaluation to add a filter.</p>
+    </div></details>
+  </form>
+  <nav><label>View <select id="group"><option value="run">Evaluations</option><option value="source">Source history</option></select></label><label>Order <select id="order"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="slowest">Slowest calls</option></select></label><span class="spacer"></span><button id="new" hidden>New calls</button><span id="count"></span></nav>
+  <p id="query-error" role="alert"></p><p id="notice" role="status"></p>
+</header>
+<div id="workspace">
+  <section id="calls" aria-label="Observed calls"><div class="column-head"><span>Source</span><span>Result</span><span>Elapsed</span></div><div id="recording"></div></section>
+  <aside id="inspectors" aria-label="Call inspectors"><div class="inspector-empty">Select a call to inspect its inputs and result.<br>Pin calls to compare them side by side.</div></aside>
+</div>
+<footer>Chevrons open nested calls. Source selects an inspector. Locations add filters. Shift-click a call to pin a comparison.<code id="cli"></code></footer>
 </main></body></html>

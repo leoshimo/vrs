@@ -8,13 +8,7 @@ use tokio::{
     sync::Semaphore,
 };
 
-pub async fn run(
-    client: &Client,
-    filter: Filter,
-    no_open: bool,
-    all: bool,
-    details: bool,
-) -> Result<()> {
+pub async fn run(client: &Client, filter: Filter, all: bool) -> Result<()> {
     let mut subscription = client.subscribe(vrs::debug::TOPIC.into()).await?;
     let state = Arc::new(RwLock::new(snapshot(client).await?));
     let listener = TcpListener::bind("127.0.0.1:0").await?;
@@ -26,7 +20,7 @@ pub async fn run(
     let root = format!("/{token}/");
     let url = format!("http://{address}{root}");
     eprintln!("VRS dbg: {url}\nPress Ctrl-C to stop the viewer.");
-    if !no_open {
+    {
         let opener = if cfg!(target_os = "macos") {
             "open"
         } else {
@@ -36,7 +30,7 @@ pub async fn run(
             eprintln!("Could not open browser: {error}. Open the URL above.");
         }
     }
-    let config = serde_json::json!({"filter":filter,"all":all,"details":details});
+    let config = serde_json::json!({"filter":filter.query,"all":all});
     let collector = async {
         loop {
             tokio::select! { _=subscription.recv()=>(), _=tokio::time::sleep(Duration::from_millis(250))=>() }
@@ -136,32 +130,35 @@ async fn serve(
         ),
         "config" => ("application/json", serde_json::to_vec(config)?),
         "api" => {
-            let mut filter = Filter::default();
-            for part in query.split('&') {
-                let (key, value) = part.split_once('=').unwrap_or((part, ""));
-                let value = decode(value)?;
-                match key {
-                    "file" => filter.file = value,
-                    "at" => filter.at = value,
-                    "expr" => filter.expr = value,
-                    "run" => filter.run = value,
-                    "call" => filter.call = value,
-                    _ => (),
+            let parsed = (|| -> Result<Filter> {
+                let mut query_text = String::new();
+                for part in query.split('&').filter(|p| !p.is_empty()) {
+                    let (key, value) = part.split_once('=').unwrap_or((part, ""));
+                    anyhow::ensure!(key == "filter", "Use the filter query parameter");
+                    query_text = decode(value)?;
                 }
-            }
-            if let Err(error) = filter.validate() {
-                return response(
-                    &mut stream,
-                    "400 Bad Request",
-                    "text/plain",
-                    error.to_string().as_bytes(),
-                )
-                .await;
-            }
+                Filter::parse(&query_text)
+            })();
+            let filter = match parsed {
+                Ok(filter) => filter,
+                Err(error) => {
+                    return response(
+                        &mut stream,
+                        "400 Bad Request",
+                        "text/plain",
+                        error.to_string().as_bytes(),
+                    )
+                    .await
+                }
+            };
             let snapshot = state.read().unwrap().clone();
             (
                 "application/json",
-                serde_json::to_vec(&filter.select(&snapshot))?,
+                serde_json::to_vec(&{
+                    let mut selection = filter.select(&snapshot, now_ms());
+                    selection.snapshot = snapshot; // Inspectors remain stable when the query changes.
+                    selection
+                })?,
             )
         }
         _ => return response(&mut stream, "404 Not Found", "text/plain", b"Not found").await,
@@ -234,7 +231,7 @@ mod tests {
         let response = request("/secret/api", "127.0.0.1:1234").await;
         assert!(response.starts_with("HTTP/1.1 200"));
         assert!(response.contains("\"records\":[]"));
-        assert!(request("/secret/api?at=bad", "127.0.0.1:1234")
+        assert!(request("/secret/api?filter=file::x:0", "127.0.0.1:1234")
             .await
             .starts_with("HTTP/1.1 400"));
         assert!(request("/secret/api", "attacker.example")
