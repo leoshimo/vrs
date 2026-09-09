@@ -184,8 +184,7 @@ async fn dispatch(
 
 #[tauri::command]
 async fn begin_interaction(state: tauri::State<'_, State>) -> Result<protocol::Action, String> {
-    // The service owns context capture. The frontend requests this hook before
-    // showing the window, so the originating application still has focus.
+    // The service chooses Home or a pending input page before the window opens.
     let result = async {
         protocol::action(
             evaluate(

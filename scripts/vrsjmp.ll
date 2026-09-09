@@ -66,7 +66,6 @@
 (bind_srv :safari_history)
 (bind_srv :github)
 (bind_srv :os_clipboard)
-(try (bind_srv :os_context))
 (bind_srv :stickies)
 
 (def pending_inputs '())
@@ -130,27 +129,22 @@
   "Return an instruction to push a lazily rendered page in the GUI"
   `(:push_page :get_items ,callback :prompt ,prompt))
 
-# TODO: Revisit the begin_interaction hook: separate immediate page restoration
-# from slower context enrichment.
 (defn! begin_interaction ()
-  "Return pending input, or capture context and return Home; ordinary on_click protocol"
+  "Return pending input or Home without querying other apps"
   (set things_cache nil)
   (set codex_cache nil)
   (def requests (pending_requests))
   (if (not? (empty? requests)) (get (get requests 0) :page)
-    (let ((context (try (get_context))))
-      (+ (push_page 'root_items "Search commands…")
-         '(:title "Home")
-         `(:args ,(list (if (list? context) context '())))))))
+    (+ (push_page 'root_items "Search commands…") '(:title "Home"))))
 
-(defn! root_items (context query)
+(defn! root_items (query)
   "Retrieve the root command palette's final ordered items"
   (+ (pending_input_items query)
      (if (and! (not? (eq? query "")) (eq? (get (split "-" query) 0) ""))
-       (task_items context query)
-       (command_items context query))))
+       (task_items query)
+       (command_items query))))
 
-(defn! command_items (context query)
+(defn! command_items (query)
   (def candidates (+ (favorite_items)
      (scheduler_items query)
      (macro_items query)
@@ -164,7 +158,7 @@
            (make_item_ex "Configure Display Resolution" '(display_page) 'd)
            (make_item_ex "Browse GitHub PRs" '(github_page) 'gh)
            (make_item "Download YT Video" '(download_video_active_tab)))
-     (interactive_items context)))
+     (interactive_items)))
   # Rank all fields together: a weak title match must not outrank an app name.
   (+ (fuzzy_match query candidates (fn (item)
        (list (get item :title)
@@ -319,31 +313,21 @@
          `(fill_call_value ,id ',name ',arguments ',entity))
        `(:subtitle ,(get entity :app))))))
 
-(defn! interactive_items (context)
-  # One row per command, not one row per captured object. Window commands live
-  # on the Windows page; its secondary actions can fill additional arguments.
+(defn! interactive_items ()
+  # Completion providers run only after selecting a command. Window commands
+  # live on the Windows page; its secondary actions can fill more arguments.
   (map (filter (interactive_commands) (fn (name)
     (if (contains? '(focus_window move_window open_antinote_note) name) false
       (let ((args (get (meta (eval name)) :args)))
         (if (empty? args) true
-          (if (not? (empty? (filter context (fn (entity) (accepts_context? name entity))))) true
-            (not? (empty? (get_entity_completions (get (get args 0) :type))))))))))
+          (not? (empty? (get_entity_completions (get (get args 0) :type)))))))))
     (fn (name)
-      (def matches (filter context (fn (entity) (accepts_context? name entity))))
       (def choose `(call_interactively ',name))
-      (+ (make_item (if (eq? name 'save_page)
-                       (if (empty? matches) "Save a Page to Read Later…" (command_title name))
-                       (command_title name))
-           (if (empty? matches) choose
-             `(continue_call ',name '(,(get matches 0)))))
+      (+ (make_item (command_title name)
+           (if (eq? name 'save_page) '(save_active_tab) choose))
          `(:actions
-       ,(+ (map matches (fn (entity)
-            (make_item (entity_title entity)
-              `(continue_call ',name '(,entity)))))
-          (let ((args (get (meta (eval name)) :args)))
-            (if (empty? args) '()
-              (if (empty? (get_entity_completions (get (get args 0) :type))) '()
-                (list (make_item "Choose…" choose)))))))))))
+           ,(if (empty? (get (meta (eval name)) :args)) '()
+              (list (make_item "Choose…" choose))))))))
 
 (defn! save_page (page)
   "Save to Read Later"
@@ -351,15 +335,11 @@
   (def result (feedbin_call `(:feedbin_save ,(get page :url) ,(get page :title))))
   (if (empty? result) (error "Feedbin did not save the page. Check its connection and authentication.") result))
 
-(defn! copy_page_url (page)
-  "Copy Page URL"
-  (interactive :web/page)
-  (set_clipboard (get page :url)))
-
-(defn! copy_selected_text (selection)
-  "Copy Selected Text"
-  (interactive :text)
-  (set_clipboard (get selection :value)))
+(defn! save_active_tab ()
+  "Read the configured browser's current page only when Save is selected"
+  (def pages (browser_pages))
+  (if (empty? pages) (error "No active browser page to save."))
+  (save_page (get pages 0)))
 
 (defn! call_interactively (name)
   "Fill a named command's required arguments using completion pages, then call it"
@@ -469,7 +449,7 @@
 
 (def things_cache nil)
 
-(defn! task_items (context query)
+(defn! task_items (query)
   (def index 0)
   (def title (trim_text (apply join (+ '("-")
     (filter (split "-" query) (fn (part)
@@ -478,7 +458,6 @@
                  `(things_add ,title "")))
   (+ (list (+ (make_item "Add to Things Inbox" create)
               `(:subtitle ,(if (eq? title "") nil title))))
-     (safari_task_items context)
      (matching_task_items title)))
 
 (defn! matching_task_items (query)
@@ -492,23 +471,6 @@
           (def excerpt (match_excerpt query (get task :notes)))
           (+ (make_item (get task :title) `(open_things_task ',task))
              `(:subtitle ,(if excerpt excerpt (get task :notes)) :aside "Things")))))))
-
-(defn! safari_task_items (context)
-  # Use the captured origin, not whichever app is focused after opening jmp.
-  (def windows (filter context (fn (entity) (eq? (get entity 0) :os/window))))
-  (if (empty? windows) '()
-    (if (not? (eq? (get (get windows 0) :app) "Safari")) '()
-      (let ((pages (filter context (fn (entity)
-                     (if (eq? (get entity 0) :web/page)
-                       (if (get entity :url) (not? (eq? (get entity :url) "")) false)
-                       false)))))
-        (if (empty? pages) '()
-          (let ((page (get pages 0)))
-            (def url (get page :url))
-            (def title (if (get page :title) (trim_text (get page :title)) ""))
-            (if (eq? title "") (set title url))
-            (list (+ (make_item "Add Safari Tab to Things" `(things_add ,title ,url))
-                     `(:subtitle ,title)))))))))
 
 (defn! feedbin_call (message)
   "Let transport errors reach the palette toast rather than masquerading as no results"

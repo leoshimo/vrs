@@ -60,7 +60,7 @@ async fn fixture() -> (Runtime, Arc<Client>) {
         (defn! favorite_items () '())
         (defn! scheduler_items (query) '())
         (defn! macro_items (query) '())
-        (defn! interactive_items (context) '())
+        (defn! interactive_items () '())
         (defn! query_items (query) '())
         (defn! make_item_ex (title command hints) (make_item title command))
         (defn! palette_status () :ready)
@@ -107,7 +107,7 @@ async fn service_browser_navigates_unbound_interfaces_and_calls_without_shadowin
     for (source, expected) in [
         (
             r#"(begin
-              (def entry (get (get_items 'command_items '(()) "Browse Services") 0))
+              (def entry (get (get_items 'command_items '() "Browse Services") 0))
               (def page (on_click entry))
               (list (get entry :title) (get page :get_items) (get page :title)))"#,
             r#"("Browse Services" service_items "Browse Services")"#,

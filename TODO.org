@@ -4,6 +4,11 @@
 
 ** Hypermedia Client - vrsjmp
 
+*** TODO Tokens in the vrsjmp input field
+
+Explore explicit input tokens for optional actions, e.g. attaching the current
+browser tab when adding a task to Things. Resolve the tab only when requested.
+
 *** TODO Simplify vrsjmp
 
 Consider pub/sub and Phoenix LiveView-style ergonomics for page updates and
