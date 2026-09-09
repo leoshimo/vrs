@@ -1,7 +1,8 @@
 //! Line-delimited editor requests on one runtime connection. Source and results
 //! are JSON strings, so multiline Lyric and printed values need no delimiters.
 use crate::output::{Format, Output};
-use anyhow::Result;
+use anyhow::{ensure, Result};
+use lyric::Form;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::io::{BufRead, Cursor, Write};
@@ -17,6 +18,7 @@ struct Request {
     format: Option<Format>,
     width: Option<NonZeroUsize>,
     raw: Option<bool>,
+    literal: Option<bool>,
 }
 
 pub(crate) async fn run(
@@ -46,17 +48,28 @@ pub(crate) async fn run(
 
 async fn respond(client: &Client, defaults: &Output, line: &str) -> Value {
     match evaluate(client, defaults, line).await {
-        Ok(output) => json!({"ok": true, "output": output}),
+        Ok((output, literal)) => {
+            let mut reply = json!({"ok": true, "output": output});
+            if literal {
+                reply["literal"] = json!(true);
+            }
+            reply
+        }
         Err(error) => json!({"ok": false, "error": error.to_string()}),
     }
 }
 
-async fn evaluate(client: &Client, defaults: &Output, line: &str) -> Result<String> {
+async fn evaluate(client: &Client, defaults: &Output, line: &str) -> Result<(String, bool)> {
     let request: Request = serde_json::from_str(line)?;
+    let literal = request.literal.unwrap_or(false);
     let output = Output::new(
         request.format.unwrap_or(defaults.format),
         request.width.map(NonZeroUsize::get).or(defaults.width),
-        request.raw.unwrap_or(defaults.raw),
+        !literal && request.raw.unwrap_or(defaults.raw),
+    );
+    ensure!(
+        !literal || output.format != Format::Editor,
+        "Literal results cannot be combined with an editor transcript"
     );
     let mut text = Vec::new();
     let origin = request.file.as_deref().unwrap_or("<editor>");
@@ -83,15 +96,106 @@ async fn evaluate(client: &Client, defaults: &Output, line: &str) -> Result<Stri
             ))
             .await?
             .contents?;
+        let value = if literal { retain_value(value)? } else { value };
         output.write(&mut text, &value, &request.source)?;
     }
-    Ok(String::from_utf8(text)?)
+    Ok((String::from_utf8(text)?, literal))
+}
+
+fn retain_value(value: Form) -> Result<Form> {
+    // Opaque runtime values can print as plausible source without preserving
+    // their meaning. Validate the entire value, including nested elements.
+    ensure!(
+        Form::from_expr(&value.to_string()).is_ok_and(|parsed| parsed == value),
+        "This value cannot be retained as Lyric source"
+    );
+    Ok(match value {
+        Form::List(_) | Form::Symbol(_) => Form::List(vec![Form::symbol("quote"), value]),
+        _ => value,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use vrs::{Connection, Runtime};
+
+    #[tokio::test]
+    async fn literal_results_round_trip_without_repeating_evaluation() {
+        let runtime = Runtime::new("literal-session");
+        let (local, remote) = Connection::pair().unwrap();
+        runtime.handle_conn(remote).await.unwrap();
+        let client = Client::new(local);
+        let defaults = Output::new(Format::Pretty, Some(20), false);
+        for source in [
+            "'(:todo :title \"Read\" :tags (a b))",
+            "'symbol",
+            "''(open_url \"https://example.com\")",
+            "'()",
+            "\"東京\\n\\\"quoted\\\"\"",
+            ":ready",
+            "true",
+            "nil",
+            "42",
+        ] {
+            let expected = client
+                .request(Form::from_expr(source).unwrap())
+                .await
+                .unwrap()
+                .contents
+                .unwrap();
+            let reply = respond(
+                &client,
+                &defaults,
+                &json!({"source": source, "literal": true, "raw": true}).to_string(),
+            )
+            .await;
+            assert_eq!(reply["ok"], true, "{source}: {reply}");
+            let retained = Form::from_expr(reply["output"].as_str().unwrap()).unwrap();
+            assert_eq!(
+                client.request(retained).await.unwrap().contents.unwrap(),
+                expected
+            );
+        }
+        let reply = respond(
+            &client,
+            &defaults,
+            &json!({
+                "source": "(def count 0)\n(set count (+ count 1))\n(list count)",
+                "literal": true
+            })
+            .to_string(),
+        )
+        .await;
+        assert_eq!(reply["output"], "'(1)\n");
+        let count = respond(&client, &defaults, r#"{"source":"count"}"#).await;
+        assert_eq!(count["output"], "1\n");
+        for source in ["(self)", "(fn () 1)", "(list :nested (self))"] {
+            let reply = respond(
+                &client,
+                &defaults,
+                &json!({"source": source, "literal": true}).to_string(),
+            )
+            .await;
+            assert_eq!(reply["ok"], false, "{source}: {reply}");
+            assert!(reply["error"]
+                .as_str()
+                .unwrap()
+                .contains("cannot be retained"));
+        }
+        let reply = respond(
+            &client,
+            &defaults,
+            &json!({
+                "source": "(set count 99)", "literal": true, "format": "editor"
+            })
+            .to_string(),
+        )
+        .await;
+        assert_eq!(reply["ok"], false);
+        let count = respond(&client, &defaults, r#"{"source":"count"}"#).await;
+        assert_eq!(count["output"], "1\n");
+    }
 
     #[tokio::test]
     async fn requests_share_definitions_and_macros_and_recover_from_errors() {

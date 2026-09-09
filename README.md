@@ -458,10 +458,10 @@ or add options such as service bindings.
 - `C-c C-r` evaluates the region; `C-c C-c` evaluates the buffer. Both currently
   display only the last top-level result, evaluating the source as an implicit
   `begin` in the persistent session.
-- `C-u C-c C-e` and `C-u C-c C-r` replace source with the result and indent it
-  in context. Replacement preserves string quotes/escapes and leaves source
-  intact on evaluation errors. Lists are inserted as data representations;
-  add a quote if you want to evaluate the inserted list as literal data.
+- `C-u C-c C-e` and `C-u C-c C-r` retain the result as literal source and indent
+  it in context, including quotes for lists and symbols. Unrepresentable values
+  and evaluation errors leave source intact. `M-x vrs-insert-evaluated-code`
+  instead inserts generated code without adding a quote or executing it.
 - `C-u C-c C-c` evaluates the buffer expression by expression and displays source
   with commented results: `(+ 1 2)` followed by `# => 3`, then `(+ 3 4)` followed
   by `# => 7`. Use this for a scratch-buffer transcript.
@@ -546,7 +546,7 @@ completion provider exists, enter a Lyric expression such as `"hello"` or `42`.
 
 `M-x vrsjmp-browse-functions` makes the choice in vrsjmp and brings the call
 back into the editor. You can
-also evaluate `(vrsjmp_browse_functions)` with `C-u C-c C-e`. Search by function
+also use `M-x vrs-insert-evaluated-code` on `(vrsjmp_browse_functions)`. Search by function
 or service name; each row shows its service. Press Enter
 to insert its form with argument names as placeholders. In the Cmd-K actions menu,
 choose **Fill arguments** to select one value per argument, using the same choices

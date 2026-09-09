@@ -75,7 +75,8 @@ does not show them automatically. Use =C-c C-e= to inspect =(demo_items)= now.
 | Evaluate an expression | =C-c C-e= | Keep source; display its result. |
 | Evaluate a region / buffer | =C-c C-r= / =C-c C-c= | Keep source; display the last result. |
 | Evaluate a buffer with a transcript | =C-u C-c C-c= | Keep source; show expressions with commented results. |
-| Retain an evaluated result | =C-u C-c C-e= / =C-u C-c C-r= | Replace source with its printed result; add a quote yourself for literal lists or symbols. |
+| Retain an evaluated result | =C-u C-c C-e= / =C-u C-c C-r= | Replace source with its value as literal source, including needed quotes. |
+| Insert generated code | =M-x vrs-insert-evaluated-code= | Replace the expression or region with its result as code; do not add a quote or execute the inserted code. |
 | Choose a list element | =C-c C-v= | Replace source with the chosen literal, including needed quotes. |
 | Choose a record field | =M-x vrs-choose-field= | Replace source with the field's literal value. |
 | Insert a function call | =C-c C-b= | Insert argument names as placeholders. |
@@ -91,6 +92,15 @@ does not show them automatically. Use =C-c C-e= to inspect =(demo_items)= now.
 Value, field, and action commands accept an active region too. If it contains
 several expressions, they use the last value. An entity expression runs once
 before the action prompt; the selected action only runs when explicitly executed.
+
+Prefix evaluation retains a value: a returned list becomes a quoted list,
+a returned symbol becomes a quoted symbol, and strings keep their escapes.
+Runtime-only values such as functions and VRS process IDs cannot be retained;
+the command reports an error and leaves the source unchanged. The expression
+runs once, even when its result cannot be retained.
+
+Use =vrs-insert-evaluated-code= when evaluating a code generator or an explicit
+=macroexpand_1= call. It preserves the old unquoted replacement behavior.
 
 * Choose a value
 

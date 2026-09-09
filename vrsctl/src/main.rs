@@ -134,7 +134,7 @@ fn cli() -> clap::Command {
              .default_value("-")
              .conflicts_with_all(["command", "subscribe", "session"]))
         .arg(arg!(session: --session "Keep a connection for editor requests: one JSON object per stdin line")
-             .long_help("Keep a connection for editor requests. Each stdin line is JSON with source (required), format, width, and raw fields. Each stdout line is JSON with ok and output or error fields. Definitions persist until the connection closes; evaluation errors leave the session open."))
+             .long_help("Keep a connection for editor requests. Each stdin line is JSON with source (required), format, width, raw, and literal fields. Literal results quote lists and symbols for source retention. Each stdout line is JSON with ok and output or error fields. Definitions persist until the connection closes; evaluation errors leave the session open."))
         .arg(arg!(command: -c --command <EXPR> "If present, EXPR is sent as request, then program exits"))
         .arg(arg!(subscribe: -s --subscribe <TOPIC> "If present, watches a specific topic for data"))
         .group(ArgGroup::new("main")
