@@ -255,12 +255,12 @@ fn dbg_views_share_real_recording_filters_and_editor_source_origins() -> Result<
     let request =
         serde_json::json!({"source":source,"file":"/tmp/observe.ll","line":20,"column":1});
     runtime.pipe_input(&["--session"], Some(&format!("{request}\n")));
-    let mut transcript =
-        runtime.terminal(&["dbg", "--all", "--values", "--width", "200"], false, 200)?;
+    let mut transcript = runtime.terminal(&["dbg", "--all", "--width", "200"], false, 200)?;
     transcript.expect("# arg 1: 2")?;
     transcript.expect("invoke (fn (x) (+ x x))  # => 4")?;
     transcript.expect("# arg 1: 3")?;
-    transcript.expect("(map '(2 3) twice)  # => (4 6)  [observe.ll:21:7]")?;
+    transcript.expect("(map '(2 3) twice)  # => (4 6)  [observe.ll:21:7 · ")?;
+    transcript.expect("ms]")?;
     transcript.expect("# arg 2: (fn (x) (+ x x))")?;
     transcript.expect("# evaluation 1 returned (4 6)")?;
     transcript.assert_alive()?;
@@ -270,13 +270,12 @@ fn dbg_views_share_real_recording_filters_and_editor_source_origins() -> Result<
         .kill(expectrl::process::unix::Signal::SIGINT)?;
     transcript.success()?;
 
-    let mut filtered = runtime.terminal(
-        &["dbg", "--filter", "file::observe.ll:20:18", "--values"],
-        false,
-        160,
-    )?;
-    filtered.expect("(+ x x)  # => 4  [observe.ll:20:18]")?;
-    filtered.expect("(+ x x)  # => 6  [observe.ll:20:18]")?;
+    let mut filtered =
+        runtime.terminal(&["dbg", "--filter", "file::observe.ll:20:18"], false, 160)?;
+    filtered.expect("(+ x x)  # => 4  [observe.ll:20:18 · ")?;
+    filtered.expect("ms]")?;
+    filtered.expect("(+ x x)  # => 6  [observe.ll:20:18 · ")?;
+    filtered.expect("ms]")?;
     filtered.expect("# evaluation 1 returned (4 6)")?;
     filtered
         .session
@@ -289,7 +288,7 @@ fn dbg_views_share_real_recording_filters_and_editor_source_origins() -> Result<
 #[test]
 fn dbg_stream_orders_pending_completion_and_evaluation_result() -> Result<()> {
     let runtime = TestRuntime::new()?;
-    let mut viewer = runtime.terminal(&["dbg", "--time", "--width", "200"], false, 200)?;
+    let mut viewer = runtime.terminal(&["dbg", "--width", "200"], false, 200)?;
     viewer.expect("Following dbg! calls.")?;
     let mut command = runtime.command(&["-c", "(dbg! (sleep 1) (+ 20 22))"]);
     let worker = thread::spawn(move || command.output().unwrap());

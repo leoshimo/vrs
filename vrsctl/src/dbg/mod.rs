@@ -14,7 +14,7 @@ use vrs::{debug::Snapshot, Client};
 
 pub fn command() -> Command {
     Command::new("dbg")
-        .about("Follow dbg! calls (recent history, then live updates)")
+        .about("Follow dbg! calls with arguments, results, and elapsed time")
         .after_help(filter::HELP)
         .arg(
             Arg::new("web")
@@ -35,20 +35,6 @@ pub fn command() -> Command {
                 .action(ArgAction::SetTrue)
                 .help("Include nested calls and function invocations"),
         )
-        .arg(
-            Arg::new("values")
-                .long("values")
-                .action(ArgAction::SetTrue)
-                .conflicts_with("web")
-                .help("Show evaluated arguments and reusable call filters"),
-        )
-        .arg(
-            Arg::new("time")
-                .long("time")
-                .action(ArgAction::SetTrue)
-                .conflicts_with("web")
-                .help("Include elapsed wall time, including waiting and child calls"),
-        )
 }
 
 pub async fn snapshot(client: &Client) -> Result<Snapshot> {
@@ -66,8 +52,6 @@ pub async fn run(client: &Client, args: &ArgMatches, width: usize) -> Result<()>
     }
     let opts = transcript::Options {
         all: args.get_flag("all"),
-        values: args.get_flag("values"),
-        time: args.get_flag("time"),
         width,
     };
     let mut interrupt = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
@@ -190,6 +174,8 @@ mod tests {
             "--expr",
             "--run",
             "--call",
+            "--values",
+            "--time",
         ] {
             assert!(
                 command().try_get_matches_from(["dbg", removed]).is_err(),
@@ -197,14 +183,7 @@ mod tests {
             );
         }
         assert!(command()
-            .try_get_matches_from([
-                "dbg",
-                "--filter",
-                "file::x:1",
-                "--time",
-                "--values",
-                "--all"
-            ])
+            .try_get_matches_from(["dbg", "--filter", "file::x:1", "--all"])
             .is_ok());
     }
 

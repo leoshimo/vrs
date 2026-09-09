@@ -29,13 +29,13 @@ vrsctl dbg --web
 The terminal prints retained history, then follows live updates until Ctrl-C.
 Calls appear as they complete, followed by the evaluation result. A long
 call prints =running…=, then its outcome with the same =wait N= label. This is
-one invocation, not two. =--time= adds elapsed wall time, including waiting and
-child calls. =--values= adds arguments and reusable call/run filters; =--all=
-includes nested calls.
+one call, not two. Each call shows its result and elapsed wall time, including
+waiting and child calls. Evaluated arguments and reusable call/run filters are
+included automatically; =--all= includes nested calls.
 
 #+begin_src sh
-vrsctl dbg --all --values --time
-vrsctl dbg --filter 'file::scratch.ll:2:3' --values
+vrsctl dbg --all
+vrsctl dbg --filter 'file::scratch.ll:2:3'
 vrsctl dbg --filter 'expr::"(+ x x)" status::error'
 #+end_src
 
