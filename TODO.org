@@ -593,3 +593,8 @@ Record of "I want to be able to" thoughts
 ** Open a visual structured editor for building interfaces from source, with changes reflected in source
 ** =(interactive)=-like mechanics for dealing with common user-input arguments
 E.g. =(completing-read)= and =(interactive "f")= in Emacs
+
+*** TODO Consider a list of allowed values for interactive arguments
+
+Let an argument provide a list of values for =call_interactively= to offer as
+choices, so callers can select a valid value without typing it from memory.
