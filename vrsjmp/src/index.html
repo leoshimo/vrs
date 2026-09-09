@@ -31,12 +31,17 @@
             </button>
         </footer>
         <section id="action-menu" role="dialog" aria-labelledby="action-title" hidden>
-            <header class="action-header"><div id="action-title"></div><div id="action-subtitle"></div></header>
-            <input id="action-filter" placeholder="Filter actions…" aria-label="Filter actions"
-                   autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                   role="combobox" aria-autocomplete="list" aria-controls="action-list" aria-expanded="true" />
-            <div id="action-list" role="listbox" aria-label="Actions"></div>
-            <div id="action-status" role="status" hidden>No matching actions</div>
+            <header id="action-title"></header>
+            <div class="action-results">
+                <div id="action-list" role="listbox" aria-label="Actions"></div>
+                <div id="action-status" role="status" hidden>No matching actions</div>
+            </div>
+            <div id="action-search" data-active="false">
+                <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="assets/action-icons.svg#search" /></svg>
+                <input id="action-filter" placeholder="Search actions…" aria-label="Search actions"
+                       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                       role="combobox" aria-autocomplete="list" aria-controls="action-list" aria-expanded="true" />
+            </div>
         </section>
         <div id="toast" role="alert" hidden></div>
     </main>
