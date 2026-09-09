@@ -156,6 +156,7 @@
      (macro_items query)
      (list (make_item "Read Later" '(read_later_page))
            (make_item "Browse Functions" '(browse_functions_page))
+           (make_item "Browse Services" '(browse_services_page))
            (make_item "Browser History" '(browser_history_page))
            (make_item "iCloud Tabs" '(cloud_tabs_page))
            (make_item "Tailscale" '(tailscale_page))
@@ -213,6 +214,74 @@
   (map (service_functions query) (fn (name)
     (+ (function_item name)
        `(:on_click (call_interactively ',name))))))
+
+(defn! browse_services_page ()
+  (+ (push_page 'service_items "Search services…") '(:title "Browse Services")))
+
+(defn! service_items (query)
+  (map (service_names query) (fn (service)
+    (make_item (display service) `(browse_service_page ,service)))))
+
+(defn! browse_service_page (service)
+  (+ (push_page 'interface_function_items "Search interface functions…")
+     `(:title ,(display service) :args ,(list service))))
+
+(defn! interface_function_items (service query)
+  "Inspect registry metadata without overwriting the palette's own bindings."
+  (def rows (map (info_srv service :interface_doc) (fn (record)
+    (def signature (get record :interface))
+    (def name (symbol (get signature 0)))
+    `(:title ,(display (concat (list name) (slice signature 1)))
+      :subtitle ,(get record :doc) :aside ,(display service)
+      :on_click (continue_service_call ,service ',name '())))))
+  (fuzzy_match query rows (fn (row) (list (get row :title) (get row :subtitle)))))
+
+(defn! service_call_metadata (service name)
+  (def records (filter (info_srv service :interface_doc) (fn (record)
+    (eq? (get (get record :interface) 0) (keyword name)))))
+  (if (empty? records) (error (format "{} no longer exports {}" service name)))
+  # Evaluate only the stub's initializer to inspect its real signature and types.
+  (meta (eval (get (vrs/service_stub_form service (get records 0)) 2))))
+
+(defn! invoke_service_function (service name values)
+  # A palette export is already local: sending to ourselves would deadlock.
+  (if (eq? (find_srv service) (self)) (apply (eval name) values)
+    (call (find_srv service) (concat (list (keyword name)) values))))
+
+(defn! continue_service_call (service name values)
+  (def metadata (service_call_metadata service name))
+  (def signature (get metadata :args))
+  (if (eq? (len values) (len signature))
+    (invoke_service_function service name values)
+    (let ((arg (get signature (len values))))
+      `(:push_page :get_items service_call_items
+        :args ,(list service name values) :title ,(get metadata :doc)
+        :prompt ,(format "{} · {}" (display name) (display (get arg :name)))))))
+
+(defn! service_call_expression (service name values source)
+  (continue_service_call service name (push values (eval (read source)))))
+
+(defn! service_call_items (service name values query)
+  (def arg (get (get (service_call_metadata service name) :args) (len values)))
+  (def type (get arg :type))
+  (def providers (if (eq? type nil) '()
+    (or! (get (info_srv service :entity_completions) type) '())))
+  (def local_providers (if (eq? type nil) '() (get_entity_completions type)))
+  (def entities (if (empty? providers) (argument_entities type) '()))
+  (map providers (fn (provider)
+    (def found (try (invoke_service_function service provider '())))
+    (if (list? found)
+      (map found (fn (entity)
+        (when! (and! (list? entity) (eq? (get entity 0) type)
+                    (not? (contains? entities entity)))
+          (set entities (push entities entity))))))))
+  (if (and! (empty? providers) (empty? local_providers))
+    (if (or! (eq? query "") (err? (try (read query)))) '()
+      (list (make_item (str "Use " query)
+        `(service_call_expression ,service ',name ',values ,query))))
+    (map (fuzzy_match query entities) (fn (entity)
+      (make_item (choice_label entity)
+        `(continue_service_call ,service ',name ',(push values entity)))))))
 
 (defn! function_items (id query)
   "Return call forms to the editor without running the selected function."
