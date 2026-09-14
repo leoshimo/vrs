@@ -2,6 +2,14 @@
 
 * roadmap
 
+** TODO Clean up the consolidated manual
+
+After reviewing the READMEs and choosing the design essay, make a focused pass
+over [[file:docs/manual.md][the manual]]. Most of it is existing reference material brought together.
+Tighten repetition and transitions, check the learning order, and distinguish
+short working examples from detailed contracts. Keep runtime, Lyric, editor,
+debugger, and CLI documentation under identifiable chapter headings.
+
 ** Hypermedia Client - vrsjmp
 
 *** TODO Tokens in the vrsjmp input field
@@ -84,12 +92,36 @@ instrumented activity, rather than requiring manual additions to every moment.
 
 ** TODO Gizmo / Editable Data Environment (working name)
 
-Explore a separate text-oriented hypermedia environment integrated with VRS.
-Start from an editable buffer: recognize shapes of data in ordinary text and
+Build a hypermedia buffer service and client integrated with VRS. It should
+function as a useful sticky-note service from the start, and provide a substrate
+for lightweight interfaces that need a lasting surface beyond vrsjmp's command
+bar: notes, documents, small forms and controls, and live widgets. Multiple
+buffers can stay open and be revisited independently of a command-bar query.
+
+Give saved buffers stable identities and ordinary VRS operations to create,
+read, edit, list, and reopen them. Persist authored content and saved view
+definitions independently of open windows and running view processes. Clients
+manage presentation, including floating or pinned notes; the service makes the
+same content accessible to scripts, editors, and other clients. vrsjmp can
+create, find, and open buffers through those operations.
+
+Support plain editable text, documents mixing text with live regions, and
+standalone service-generated widgets through the same buffer surface. A widget
+should not require surrounding prose. Reuse ordinary Lyric data, functions,
+service calls, and entity actions for content and behavior. Start with a small
+set of rendering and input capabilities; choose their representation through
+concrete examples.
+
+Keep authored text distinct from generated annotations and results. Refreshing
+a live region must preserve edits, selection, and unrelated content. Services
+remain authoritative for their data; a saved view can fetch current state when
+reopened rather than depending on having received every update notification.
+Decide how concurrent edits and view lifetimes work before adding more clients.
+
+Recognizing shapes of data in ordinary text is one way to enrich a buffer:
 associate them with entities, computations, reusable views, and available
-actions. Keep authored text distinct from generated annotations and results.
-Let structure and behavior be added gradually rather than requiring users to
-author a whole application or arrange a dashboard first.
+actions. Also allow explicitly inserted views and buffers supplied by services.
+Let structure and behavior be added gradually.
 
 For example, write a travel outline with places and dates; recognize those
 references, obtain data through VRS services, and attach useful views or actions
@@ -97,6 +129,12 @@ where they are needed. Investigate reusable view definitions matched to data
 shapes, complementing entity-based action discovery. Naming remains open
 (Gizmo / EDEN / CDEN); treat this as a larger project, separate from the first
 iOS client.
+
+First milestone: create and edit a plain sticky note, close it, restart the
+service, and reopen it with its content intact. Then attach one live VRS view
+with an action to that note, and open the same view as a standalone widget.
+Verify that updates preserve the note's text and that its content and actions
+are also accessible through ordinary VRS calls.
 
 References: [[https://www.inkandswitch.com/embark/][Ink & Switch Embark]] and
 [[https://www.inkandswitch.com/potluck/][Potluck]].
@@ -183,11 +221,31 @@ See [[*Device-local actions in hypermedia clients]] and
 
 ** TODO More source-embedded debug tools
 
+Explore implementing more of =dbg!= through the macro system instead of the
+=__debug_scope= special case.
 Add a =log!= macro for deliberate logging alongside =dbg!= observations.
 Explore a TUI for the same inspection tasks as the CLI and web viewer.
 Add alternate web visualizations of result data, including an HTML render view.
 Revisit implementing bounded observation history with ordinary VRS services or
 retained pub/sub topics; keep the synchronous VM observation hook nonblocking.
+
+** TODO Model vrs dbg as a VRS client
+
+Make =vrs dbg= a VRS client, or generally model its architecture as one.
+Explore using ordinary VRS services and messages for debugging interactions.
+
+** TODO Intercept and swap calls at runtime in vrs dbg
+
+Explore breakpoint-like interception of calls in =vrs dbg=: intercept a call,
+swap in a replacement function or implementation, and continue execution.
+Decide whether a swap applies to one call or subsequent calls, how it is scoped
+to a process or service, and how to inspect and undo active swaps.
+
+** TODO Expand vrs dbg with service management
+
+Add service discovery, status and process inspection, and management actions
+such as starting, stopping, and restarting services. Explore further runtime
+inspection and control features through ordinary VRS services and messages.
 
 ** TODO Runtime hooks inspired by Ruby TracePoint
 
@@ -196,12 +254,6 @@ Explore call, return, and error events, with filters by function or process and
 hooks that can be enabled or disabled interactively. Use this for tracing,
 debugging, and live instrumentation; work out callback context, reentrancy,
 and overhead before choosing an API.
-
-** DONE Pub/sub topic handlers in services
-
-=srv!= and =spawn_srv!= accept =:topics '((:topic handler))=. Handlers receive
-the published value and share the service's state and message loop.
-[[file:scripts/cmd_macro.ll][Command recording]] uses this directly.
 
 ** TODO System-wide Job Configuration and Node Affinity
 
@@ -226,7 +278,7 @@ indexing are periodic jobs assigned to the always-on node. The conditional
 startup currently written by hand in =scripts/init.ll= should eventually be
 expressed through this model.
 
-[[file:docs/concepts.md][Core concepts]] covers =remote!=, =eval_remote=, and =vrsctl --node=
+[[file:docs/manual.md::#how-vrs-runs][Core concepts]] covers =remote!=, =eval_remote=, and =vrsctl --node=
 for sending code to a connected machine. Persistence, supervision, and automatic
 placement remain follow-ups; remote evaluation does not install a durable job.
 
@@ -272,6 +324,15 @@ Add a first-class process / IO handle for streaming commands:
 - Wait for completion, inspect status, and terminate the child process
 - Integrate lazy results with pagination and loading states in hypermedia UI code
 
+** TODO More flexible decoding of command output
+
+Extend =decode= beyond JSON, lines, and TSV with explicit separators and
+whitespace-delimited columns. Consider repeated whitespace, trimming, empty
+fields, and a bounded split that preserves the remainder as the last field.
+For example, =ps= output has padded columns, but command names can contain
+spaces. Keep decoding separate from running the command and make intermediate
+values easy to inspect at the REPL.
+
 ** TODO Revisit Runtime / Client Boundary
 Goal: Revisit protocol b/t/ Runtime / Client w/ New Learnings
 
@@ -298,6 +359,11 @@ Allows:
 Similar to =read= and =input()= working in shell + python respectively
 ** TODO Preemptive Multitasking
 
+Current Lyric execution yields cooperatively for I/O and runtime waits.
+CPU-bound code is not preempted and can occupy a worker thread. Add an
+evaluation budget or scheduling mechanism that keeps other processes responsive.
+This was previously described as supported behavior in DESIGN; it is future work.
+
 - Start a process that infinite loops, =(loop 5)=
 - Show that other screen is still responsive
 
@@ -305,13 +371,13 @@ Similar to =read= and =input()= working in shell + python respectively
 Goal: Unified Interface to persistent storage
 Goal: Expose entities in runtime programs via core primitive
 
-** TODO Plumber / Embark Mechanics for Entities
-Define actions on entities to act on shape of data
-I.e. the hypermedia is generated based rules on entities it matches
+** TODO Extend entity actions to recognized shapes and context
 
-"What can I do with this data" - like Emacs Embark
-Thought - Running embark-like mechanics is itself a cmd - i.e. "show me embark
-meno on this item"
+Tagged entities, interactive metadata, action lookup, and argument providers
+are implemented; see [[file:docs/manual.md::#entities-and-interactive-functions][the manual]].
+The remaining direction is recognizing useful entities in unstructured content
+and offering related actions, as with Plumber, Hyperbole, and Embark.
+An action to explore these relationships should itself be an ordinary command.
 
 ** TODO Desktop context daemon and CLI
 
@@ -325,6 +391,28 @@ Give VRs capability to see (web pages, screen), Hear (user, text) and prompt for
 input (text, voice, selection)
 ** TODO Sqlite IO for S-Expressions
 * lyric lang
+** TODO Tighten contracts as a program settles
+
+Keep the freedom to start with dynamic values and add checks once the domain
+becomes clearer. Explore whether contracts, metadata, or optional typing can
+support this without replacing the common function interface. Gradual typing
+was an aspiration in the earlier design notes, not an implemented feature.
+
+** TODO Syntax for maps, vectors, and proper cons lists
+
+Give maps, vectors, and proper cons lists distinct syntax and representations.
+Current Lyric lists are vector-backed, including code forms and keyword/value
+records. Work out how these types interact with quotation, matching, sequence
+operations, and readable source.
+
+** TODO Structs
+
+Explore structs with named fields.
+
+** TODO Destructuring
+
+Support destructuring values in bindings and function parameters.
+
 ** TODO Explore RAII handles and resource lifetimes
 
 Revisit resource handles with automatic cleanup for subscriptions, event hooks,
@@ -353,11 +441,32 @@ via references captured.
 Thought: Allow but discourage passing lambdas
 
 ** TODO Pipeline Macros / Threading Operator
-(Streaming?)
+
+Add a pipeline operator for composing expressions without deeply nested calls.
+Consider thread-first and thread-last forms, argument placement, and evaluation
+order. Distinguish expression threading from streaming shell pipelines; revisit
+whether both should be supported.
+
+Use =todo_items= in [[file:docs/tour.md][the tour]] as a concrete case: fetch todos, search them,
+build completion rows, then combine them with the capture actions.
+
+#+begin_src vrs
+(def matches (fuzzy_match query (get_todos)))
+(def completion_items (map matches complete_todo_item))
+(+ capture_items completion_items)
+#+end_src
+
+The list occupies different argument positions in =fuzzy_match= and =map=.
+Compare pipeline spellings against this example, including whether they make
+the final combination clearer than named intermediate values.
+
 https://clojure.org/guides/threading_macros
-- Thread first, thread last, etc
 ** TODO Rest, optional, and keyword function arguments
 Macros support =& rest=; ordinary functions require an exact positional arity.
+Explore kwargs-style named arguments at call sites.
+Support defaults such as omitting the notes when adding a todo, so
+=(add_todo "Buy coffee")= can use an empty notes string. Carry optionality
+and defaults through service calls, function metadata, and argument prompts.
 
 ** TODO Pinning Symbols in Pattern Matches
 
@@ -367,7 +476,14 @@ E.g. =(match '(+ a b)= would not work, since =+= would be bound to =Val::Symbol=
 instead of =Val::NativeFn=
 
 ** TODO Fiber API within lyric
-Allow creating and running fibers within lyric?
+Allow creating and running fibers within Lyric?
+
+The earlier design distinguished a child yielding a value from a child waiting
+for host I/O. A value yield would pause that child while its parent continues;
+waiting for host I/O would pause the evaluation chain until the driver can
+resume it. Work out how nested fibers, errors, ownership, and cancellation fit
+together before exposing this API. Host-driven async fibers already exist;
+a general first-class fiber API is a separate proposal.
 E.g. Use Yielding Function as an Iterator
 ** TODO Local Variables in Stack Frame
 
@@ -421,11 +537,6 @@ in the Elixir ecosystem.
 ** TODO Demo: Timeline + Capture + Todo + Notes
 Quickly capture notes, todos, thoughts, tasks
 Recall + Search them
-** TODO Demo: Command Bar: Use Query String in Hypermedia Interaction
-Use query string! e.g.:
-- Open URL typed, instead of selecting item
-- Pass query string to command
-- Run CLI command from launchbar
 ** TODO Demo: Process Manager over =ps=
 Exercises Embark Mechanics + Consuming Program Output
 Generate hypermedia based on =ps= output
@@ -445,7 +556,25 @@ A chat interface for:
 
 Explore =generated!= / =generate!= blocks that retain the generator and accepted
 source together, with explicit regeneration and a reviewable diff.
-See [[file:docs/ai.md][AI and VRS]] for examples and open design questions.
+A proposed source form (not implemented):
+
+Keep the generator beside its editable result:
+
+#+begin_src vrs
+(def timer_menu
+  (generated!
+    :from (interfacegen "A five-minute timer button")
+    :value
+    '((:title "5 minutes"
+       :on_click (begin
+         (sleep 300)
+         (notify "Timer finished" "Five minutes are up"))))))
+#+end_src
+
+Evaluate to use the saved value. Regenerate explicitly to review a new version
+alongside your edits.
+
+The generation and inspection rationale is in [[file:docs/design.md][Design decisions]].
 
 ** TODO Durable Execution
 Goal: Recovering from process or host failure
@@ -481,7 +610,7 @@ Goal: Moving snapshot of running program from machine to machine
 ** TODO Agent Programs
 
 Explore agents using the ordinary runtime for discovery, execution, inspection,
-and asking for input. Collect the design notes in [[file:docs/ai.md][AI and VRS]].
+and asking for input. The current design rationale is in [[file:docs/design.md][Design decisions]].
 * debt  
 ** TODO Native Bindings that should be =Lambda=
 E.g. built-in lambda bindings - e.g. =call_fn=
@@ -528,30 +657,11 @@ Seamless flow from REPL / Past Interaction, into durable program
 E.g. See values
 E.g. See value of =watch=-ed topic
 
-** DONE Choose values and fields from an expression in Emacs
-
-=vrs-choose-value= and =vrs-choose-field= evaluate the expression or region once,
-retain the selected literal, and preserve source on cancellation. Lists and
-symbols are quoted so the retained values can be evaluated again.
-
 ** TODO Insert an accessor for a chosen field or element
 
 Offer a separate action to retain an accessor such as =(get (active_tab) :url)=
 instead of the current value. Keep the source expression and chosen key/index;
 the selected value alone does not carry that provenance.
-
-** DONE Emacs minibuffer choosers and noun–verb commands
-
-Offer list and field selection, Browse Functions, and a direct noun–verb command
-in Emacs's minibuffer. Start noun–verb from an entity returned by the expression
-at point or region, discover compatible actions from runtime metadata, and fill
-remaining arguments through entity completions where available. Support retaining
-the resulting call in source and an explicit action to execute it.
-
-The Emacs commands are integrated. =vrs-browse-functions= uses Emacs completion;
-=vrsjmp-browse-functions= returns a call chosen in the GUI to the editor.
-Both paths preserve values and quoting. The Emacs path works without the GUI.
-See [[file:docs/guide-emacs.org][Working in Emacs]] for a guide with pasteable examples.
 
 ** TODO Source locations for definitions and goto-definition
 
@@ -678,3 +788,104 @@ E.g. =(completing-read)= and =(interactive "f")= in Emacs
 
 Let an argument provide a list of values for =call_interactively= to offer as
 choices, so callers can select a valid value without typing it from memory.
+
+* Further design directions
+
+These proposals were moved out of DESIGN so its main argument can describe
+the working environment. Related existing tasks above remain their owners.
+
+** TODO Richer hypermedia documents and reusable views
+
+Extend the current page/item/action protocol to lasting documents, multiple
+open buffers, reusable views, forms, and richer input. Keep application behavior
+in runtime programs and let clients choose their presentation.
+
+Questions and intended properties:
+- Compose views of data across applications, rather than tying a view to one app.
+- Combine explicit actions with interactions inferred from entities or content.
+- Let clients manage open views while service state remains available to programs.
+- Use bidirectional requests and pubsub updates; decide what must be refetched
+  after reconnecting instead of assuming every update was delivered.
+- Keep the interface usable from automation and tests, including nested input.
+- Decide which selection/navigation primitives are needed from concrete cases.
+- Support terminal, graphical, and potentially voice presentations without
+  requiring all clients to render identical widgets.
+
+The obsolete v0.1 text_field/ul/li schema has been removed. No particular
+document schema or update protocol is established by these notes.
+Continue the concrete work under [[*Gizmo / Editable Data Environment (working name)][Gizmo / Editable Data Environment]]
+and [[*Hypermedia format and React bindings for VRS state and pub/sub][Hypermedia format and React bindings]].
+
+Related work: [[https://github.com/phoenixframework/phoenix_live_view][Phoenix LiveView]],
+[[https://guide.elm-lang.org/architecture/][Elm]], and [[https://htmx.org][htmx]].
+
+** TODO Shared persistence, relationships, and linked views
+
+The entity/interactive system already associates operations and argument
+providers with tagged values. It does not provide shared durable storage, an
+automatic relationship graph, or proactive suggestions.
+
+Explore what additional storage is useful without requiring all application
+state to move into one object store:
+- Persist entities and stable references where an application needs them.
+- Link related data from separate services in one workflow.
+- Recognize relationships from content or context, alongside explicit links.
+- Generate reusable views of data independently of the client or application.
+- Let actions operate on collections, in the spirit of embark-collect.
+- Suggest useful links or operations without making those suggestions the
+  only way to access the underlying data.
+
+This retains the goals of the old Object Store proposal without treating its
+central-store architecture as a prerequisite for the current entity system.
+Connect with [[*Universal Entities, Search, Indexing][Universal Entities, Search, Indexing]],
+[[*Sqlite IO for S-Expressions][SQLite I/O]], and [[*Personal Timeline service][Personal Timeline]].
+
+Related work: [[https://github.com/oantolin/embark][Embark]],
+[[https://mail.gnu.org/archive/html/hyperbole-users/2019-01/msg00037.html][Hyperbole]],
+[[https://9p.io/sys/doc/plumb.html][Plumbing]], and entity-component patterns.
+
+** TODO Runtime hosting and client-provided capabilities
+
+Keep the client API small across local IPC, remote connections, and possible
+in-process hosting for platforms that need it. The current daemon/client model
+should not be mistaken for a completed mobile embedding setup.
+
+Explore clients supplying local capabilities, input methods, or application
+hooks back to the runtime. Relate this to [[*Revisit Runtime / Client Boundary][the runtime/client boundary]]
+and [[*Controlling Terminal Mechanics for Connection][controlling-terminal mechanics]].
+Decide ownership, nested requests, disconnect behavior, and capability routing.
+
+** TODO Inspect why a process is waiting
+
+Expose waiting reasons with useful metadata: a timer, a service reply, user
+input, or an event. A client could inspect a waiting program and, where the
+program permits it, supply the input it awaits.
+
+Keep observation, cancelling work, and supplying a value distinct. Build on
+the existing debugger and process model; do not imply that current dbg!
+records provide resumable breakpoints or arbitrary interventions.
+Connect with [[*Intercept and swap calls at runtime in vrs dbg][call interception]]
+and the existing source-observation work.
+
+** TODO Generative interfaces that appear when needed
+
+A proposed interaction: after a focus session, present actions for the page
+captured when it began. The present operation below is a sketch, not a current
+runtime API.
+
+A focus session ends. Offer actions for the page you started with:
+
+#+begin_src vrs
+(def page (active_tab))
+(spawn (fn ()
+  (sleep 1500)
+  (present
+    `((:title "Continue reading"
+       :on_click (open_url ,(get page :url)))
+      (:title "Save for later"
+       :on_click (save_page ',page))))))
+#+end_src
+
+An agent can generate hypermedia from the functions available in the runtime
+and choose when to present it. New functions become new building blocks. The
+calls behind its actions remain readable and executable from other clients.

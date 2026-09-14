@@ -1,0 +1,169 @@
+/* Bitstream Charter: unmodified WOFF2 release from Practical Typography.
+   https://practicaltypography.com/charter.html
+   Original redistribution notice: fonts/charter-LICENSE.txt */
+@font-face {
+  font-family: "Charter";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/charter-regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Charter";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/charter-bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Charter";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/charter-italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Charter";
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/charter-bold-italic.woff2") format("woff2");
+}
+
+:root {
+  color-scheme: light;
+  --paper: #fbfaf5;
+  --ink: #252c30;
+  --muted: #63685f;
+  --line: #d8d9ce;
+  --accent: #2b6856;
+  --code: #eeefe7;
+  --code-ink: #293b32;
+  --comment: #5d7163;
+  --string: #406c39;
+  --keyword: #805130;
+  --form: #68517e;
+  --number: #835637;
+  --selection: #d5e6d4;
+  --serif: "Charter", Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+  --mono: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --paper: #1c1c1a;
+    --ink: #e4e2da;
+    --muted: #a7aca4;
+    --line: #40443a;
+    --accent: #9bcead;
+    --code: #242821;
+    --code-ink: #dce7e1;
+    --comment: #9aae9f;
+    --string: #acd398;
+    --keyword: #d8b491;
+    --form: #c7b6d8;
+    --number: #d6ac8c;
+    --selection: #3d5842;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: 32px; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 20px/1.65 var(--serif); -webkit-font-smoothing: antialiased; }
+a { color: var(--accent); text-underline-offset: 3px; }
+a:hover { text-decoration-thickness: 2px; }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; }
+::selection { background: var(--selection); }
+
+.site-masthead, .page-grid { width: calc(100% - 72px); max-width: 944px; margin-inline: auto; }
+.site-masthead { display: flex; align-items: center; gap: 32px; margin-top: 36px; margin-bottom: 42px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+.wordmark { color: var(--ink); font: 700 24px/1 var(--serif); letter-spacing: -1px; text-decoration: none; }
+.site-masthead nav { display: flex; gap: 24px; }
+.site-masthead nav a { padding-block: 5px; font: 500 17px/1.4 var(--serif); color: var(--muted); text-decoration: none; }
+.site-masthead nav a:hover, .site-masthead nav a[aria-current] { color: var(--accent); }
+.site-masthead nav a[aria-current] { text-decoration: underline; text-underline-offset: 6px; }
+
+.page-grid { display: grid; grid-template-columns: minmax(0, 1fr) 200px; column-gap: 64px; padding-bottom: 80px; }
+.document-title { grid-column: 1; grid-row: 1; min-width: 0; }
+.document { grid-column: 1; grid-row: 2; min-width: 0; }
+h1 { font: 600 clamp(36px, 5vw, 52px)/1.12 var(--serif); letter-spacing: -.025em; margin: 0 0 32px; }
+h2, h3, h4, h5, h6 { font-family: var(--serif); font-weight: 600; color: var(--ink); }
+h2 { font-size: 30px; line-height: 1.25; letter-spacing: -.015em; margin: 0 0 20px; }
+h3 { font-size: 24px; line-height: 1.35; letter-spacing: -.005em; margin: 36px 0 16px; }
+h4 { font-size: 21px; line-height: 1.4; margin: 28px 0 14px; }
+p { margin: 0 0 22px; }
+.outline-2 { margin-top: 52px; padding-top: 36px; border-top: 1px solid var(--line); }
+ul, ol { padding-left: 24px; margin: 0 0 24px; }
+li { margin: 7px 0; }
+p, li, td { overflow-wrap: anywhere; }
+blockquote { margin: 24px 0; padding-left: 22px; border-left: 2px solid var(--line); }
+img { max-width: 100%; height: auto; }
+figure { margin: 26px 0; }
+table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; margin: 24px 0; font-size: .92em; line-height: 1.55; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+th { font: 600 16px/1.4 var(--serif); }
+
+code, kbd, pre { font-family: var(--mono); }
+code, kbd { font-size: .79em; padding: 0; background: transparent; }
+.code-block { margin: 24px 0 28px; background: var(--code); border-block: 1px solid var(--line); }
+.code-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 7px 16px; border-bottom: 1px solid var(--line); color: var(--muted); font: 500 14px/1.4 var(--serif); letter-spacing: .04em; }
+.copy-code { appearance: none; border: 0; margin-left: auto; padding: 4px 0 4px 12px; background: transparent; color: var(--muted); cursor: pointer; font: 500 15px/1.4 var(--serif); letter-spacing: 0; }
+.copy-code:hover { color: var(--accent); }
+pre { margin: 0; padding: 15px 16px 19px; overflow-x: auto; color: var(--code-ink); font: 14px/1.7 var(--mono); tab-size: 2; white-space: pre; scrollbar-width: thin; }
+pre code { font-size: inherit; }
+.token-comment { color: var(--comment); font-style: italic; }
+.token-string { color: var(--string); }
+.token-keyword { color: var(--keyword); }
+.token-form { color: var(--form); font-weight: 550; }
+.token-number { color: var(--number); }
+
+.contents { grid-column: 2; grid-row: 1 / span 2; position: sticky; top: 36px; align-self: start; max-height: calc(100vh - 72px); overflow-y: auto; padding: 7px 8px 16px 0; scrollbar-width: thin; font: 16px/1.4 var(--serif); }
+.contents > summary { display: block; margin-bottom: 22px; color: var(--muted); font: 600 16px/1.4 var(--serif); }
+.contents > summary::-webkit-details-marker { display: none; }
+.contents ul { list-style: none; padding: 0; margin: 0; }
+.contents li { margin: 0 0 14px; }
+.contents a { display: block; color: var(--muted); text-decoration: none; }
+.contents a:hover, .contents a.current { color: var(--accent); }
+.contents a.current { text-decoration: underline; text-underline-offset: 4px; }
+.contents ul ul { margin: 10px 0 18px 12px; font-size: 15px; }
+.contents ul ul li { margin-bottom: 10px; }
+.contents code { font-size: .82em; }
+.source-link { margin-top: 64px; padding-top: 18px; border-top: 1px solid var(--line); font: 16px/1.5 var(--serif); }
+.source-link a { color: var(--muted); }
+
+@media (min-width: 960px) {
+  .enhanced .contents ul ul { display: none; }
+  .enhanced .contents li.active > ul { display: block; }
+}
+@media (max-width: 959px) {
+  .site-masthead, .page-grid { max-width: 680px; width: calc(100% - 48px); }
+  .page-grid { display: block; }
+  .contents { position: static; max-height: none; overflow: visible; padding: 12px 0; margin: 0 0 28px; border-block: 1px solid var(--line); }
+  .contents > summary { display: list-item; margin: 0; cursor: pointer; font-size: 17px; line-height: 1.4; }
+  .contents > summary::-webkit-details-marker { display: inline; }
+  .contents nav { max-height: 60vh; overflow-y: auto; padding-top: 20px; }
+}
+@media (max-width: 550px) {
+  body { font-size: 19px; line-height: 1.65; }
+  .site-masthead, .page-grid { width: calc(100% - 40px); }
+  .site-masthead { margin-top: 22px; margin-bottom: 30px; gap: 24px; padding-bottom: 16px; }
+  .site-masthead nav { gap: 18px; }
+  .site-masthead nav a { padding-block: 10px; }
+  h1 { font-size: 38px; margin-bottom: 26px; }
+  h2 { font-size: 28px; }
+  h3 { font-size: 23px; }
+  .outline-2 { margin-top: 38px; padding-top: 28px; }
+  pre { font-size: 13px; padding: 14px 12px; }
+  .code-toolbar { padding: 4px 12px; }
+  .copy-code { min-height: 36px; }
+}
+@media print {
+  :root { color-scheme: light; --paper: white; --ink: #111; --line: #ddd; --code: #f5f5f5; --code-ink: #222; }
+  body { font-size: 11pt; }
+  .site-masthead, .contents, .code-toolbar, .source-link { display: none; }
+  .page-grid { display: block; max-width: none; width: 100%; padding: 0; }
+  h1 { font-size: 30pt; }
+  h2, h3, h4 { break-after: avoid; }
+  pre { white-space: pre-wrap; overflow: visible; font-size: 8pt; }
+  pre span, a { color: inherit !important; }
+  .code-block { break-inside: avoid; }
+}

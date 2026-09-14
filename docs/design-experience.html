@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VRS: What comes after the Unix pipe?</title>
+<link rel="stylesheet" href="site.css">
+<script src="site.js" defer></script>
+</head>
+<body>
+<header class="site-masthead"><a class="wordmark" href="index.html" aria-label="vrs documentation">vrs</a><nav aria-label="Documentation"><a href="tour.html">Tour</a><a href="design.html" aria-current="page">Design</a><a href="manual.html">Manual</a></nav></header><main id="content" class="page-grid"><header class="document-title"><h1 class="title">VRS: What comes after the Unix pipe?</h1></header><details id="table-of-contents" class="contents" open><summary>Contents</summary><nav aria-label="Page contents"><div id="text-table-of-contents"><ul>
+<li><a href="#clay-and-duct-tape">Clay and duct tape</a></li>
+<li><a href="#make-glue-first-class">Make glue first class</a></li>
+<li><a href="#the-application-uses-code">The application uses code</a><ul>
+<li><a href="#use-a-feature-get-a-program-example">Use a feature, get a program example</a></li>
+<li><a href="#keep-the-inputs-of-a-failed-attempt">Keep the inputs of a failed attempt</a></li>
+</ul>
+</li>
+<li><a href="#let-the-clients-learn-what-is-available">Let the clients learn what is available</a><ul>
+<li><a href="#the-same-declarations-work-in-both-directions">The same declarations work in both directions</a></li>
+<li><a href="#new-interfaces-can-be-generated-too">New interfaces can be generated too</a></li>
+</ul>
+</li>
+<li><a href="#work-inside-the-running-computer">Work inside the running computer</a><ul>
+<li><a href="#why-the-language-belongs-to-the-environment">Why the language belongs to the environment</a></li>
+<li><a href="#inspection-is-part-of-the-environment-too">Inspection is part of the environment too</a></li>
+<li><a href="#ask-for-real-data-including-in-prompts">Ask for real data, including in prompts</a></li>
+</ul>
+</li>
+<li><a href="#a-program-can-wait">A program can wait</a></li>
+<li><a href="#the-rest-of-the-devices-are-part-of-the-environment">The rest of the devices are part of the environment</a></li>
+<li><a href="#keep-the-whole-thing-within-reach">Keep the whole thing within reach</a></li>
+<li><a href="#influences-and-further-directions">Influences and further directions</a></li>
+</ul>
+</div></nav></details><article class="document">
+
+<p>I want the software I use every day to remain something I can work on. A useful
+program should be a place to start: inspect it, borrow a piece, change what it
+does, or connect it to another program. The same should be true of the
+environment those programs inhabit.</p>
+<p>VRS is my attempt to build that environment. It combines the practicality of
+shell scripting with the exploratory feel of Emacs, across the applications
+and devices I actually use. Services expose functions. Clients run expressions
+and present results. The language, user interface actions, and recordings share
+symbolic expressions, so an interaction can become source for another program.
+The editor works inside the same running system.</p>
+<p>This is the experience-led version of the design. The <a href="design.html">decision-led version</a>
+gives each mechanism its own section; the <a href="tour.html">tour</a> shows them working together.
+Both describe the current environment. Longer proposals live in <a href="https://github.com/leoshimo/vrs/blob/main/TODO.org">TODO</a>.</p>
+<div id="outline-container-clay-and-duct-tape" class="outline-2">
+<h2 id="clay-and-duct-tape">Clay and duct tape</h2>
+<p>The goal is to create a computing environment that brings me joy. I live on a
+collection of personal software running on VRS, evolving the runtime as I go.
+There is no requirement that every experiment become a polished application.
+Sometimes a small script is the right amount of software.</p>
+<p>Building that script can still involve an absurd amount of surrounding work.
+An application has useful data but no convenient API. Another application
+could use it, but only through a bespoke integration. A graphical interface
+needs a different representation of the same action. Running something on
+another machine adds another set of conventions.</p>
+<p>I want to compose the software I already have and write the parts that are
+missing. Lyric provides the glue, bringing existing programs into a shared
+environment where their capabilities can be combined, scripted, and used
+across devices.</p>
+<p>For this kind of work, I want clay and duct tape. Software can feel like having
+to CNC-mill every trivial connection. Gary Bernhardt's <a href="https://www.youtube.com/watch?v=sCZJblyT_XM">Unix Chainsaw</a> gets at
+the attitude: half-assed, but the right half of the ass. Use the program that
+already works. Spend the effort on the part that matters.</p>
+<p>VRS tries to make that attitude practical across a much larger part of the
+computer. The language, runtime, service model, clients, and editing experience
+are designed together. A small shared vocabulary can remove repeated work
+between them. The ambition is broad; the pieces can remain small.</p>
+<p>That is why simplicity matters to me. It leaves more of the software within
+reach of its author. Understanding and changing a useful program should remain
+ordinary activities after it starts being useful. Personal programming is as
+much about continued authorship as about getting the first version to run.</p>
+</div>
+<div id="outline-container-make-glue-first-class" class="outline-2">
+<h2 id="make-glue-first-class">Make glue first class</h2>
+<p>Unix makes programs written independently useful together. Its common
+conventions let one program's output become another program's input. What
+comes after the Unix pipe, when the material includes application data,
+interactive actions, and capabilities on other devices?</p>
+<p>VRS uses values and expressions as that material. A <em>service</em> is a running
+program with a name and exported functions. It can implement behavior in
+Lyric or hack it together from command-line programs, local databases, and
+UI automation. Other programs use the resulting functions.</p>
+<p>The <a href="https://github.com/leoshimo/vrs/blob/main/scripts/os_browser.ll">Safari service</a> is an example of the practical side. It uses AppleScript
+to obtain the active page, and SQLite to read tabs synced from other devices.
+There isn't one blessed route into the application. There are useful ways in,
+and a service that presents their results consistently.</p>
+<p>Once available, those results can become inputs to other software. With the
+browser and the tour's todo service bound:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">def</span> tab (<span class="token-form">active_tab</span>))
+(<span class="token-form">add_todo</span> <span class="token-string">"Try VRS"</span>
+  (<span class="token-form">format</span> <span class="token-string">"{}\n{}"</span> (<span class="token-form">get</span> tab <span class="token-keyword">:title</span>) (<span class="token-form">get</span> tab <span class="token-keyword">:url</span>)))
+</pre></div>
+<p>This is an ordinary program using two services. The browser-specific work
+belongs to the browser service. A todo list, an automation, or a graphical
+interface can use the same access without each implementing a Safari extension.</p>
+<p><a href="https://github.com/leoshimo/vrs/blob/main/scripts/os_notes.ll">Apple Notes</a>, <a href="https://github.com/leoshimo/vrs/blob/main/scripts/antinote.ll">Antinote</a>, and <a href="https://github.com/leoshimo/vrs/blob/main/scripts/feedbin.ll">Feedbin</a> use different combinations of databases,
+application URLs, AppleScript, and dedicated CLIs. The programs underneath can
+be written in whatever language suits the job. Lyric makes their capabilities
+available in a shared programming environment.</p>
+<p>The useful promise is that an integration has more than one consumer. In the
+ideal case, M services and N clients need M adapters and N runtime clients,
+rather than M×N application-specific connections. The adapter still has to be
+written and maintained. The next program gets to use it.</p>
+</div>
+<div id="outline-container-the-application-uses-code" class="outline-2">
+<h2 id="the-application-uses-code">The application uses code</h2>
+<p>The same expression can describe an action in a user interface:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">'(<span class="token-keyword">:title</span> <span class="token-string">"Add todo: Buy coffee"</span>
+  <span class="token-keyword">:on_click</span> (<span class="token-form">add_todo</span> <span class="token-string">"Buy coffee"</span> <span class="token-string">""</span>))
+</pre></div>
+<p>There is no new command language hidden in this item. Its action is the call
+itself, with its arguments included. A program can extract and evaluate it;
+another program can construct an item using the same list operations.</p>
+<p>The effect is programmed normally. Its call is also data that another program
+can inspect, collect, or transform. An expression built from that data can run
+as code again.</p>
+<p>The editor participates in this too: it can insert calls into source, while
+other programs can construct actions for the user interface. I don't want
+another layer of app-intent declarations or action schemas translating these
+operations back into calls. Such layers can become weak approximations of
+programming languages. The page and item formats still define a contract for
+clients, but the action itself is already expressed in the language.</p>
+<p>This representation is powerful for both users and programs. A person can
+edit an action into a script, and another program can
+turn it into a recording or capture its argument values for retry. The function
+being called needs no special recording or retry interface.</p>
+<p>This is where “everything is S-expr” and <em>code mode</em> come together. Symbolic
+expressions describe data, programs, interface markup, and actions. Service
+discovery supplies callable functions. An operation can move from a REPL into
+a script or a user interface without needing another representation of what
+it does.</p>
+<p>It doesn't mean every runtime object is printable source. Functions execute
+as bytecode, and values such as process IDs and references have their own
+representation. The important continuity is between the things a programmer
+reads, constructs, invokes, and keeps.</p>
+<div id="outline-container-use-a-feature-get-a-program-example" class="outline-3">
+<h3 id="use-a-feature-get-a-program-example">Use a feature, get a program example</h3>
+<p>The shared command path can publish selected expressions through pubsub.
+After choosing <em>Add todo: Buy coffee</em>, a subscriber can receive:</p>
+<div class="code-block"><div class="code-toolbar"><button class="copy-code" type="button" aria-label="Copy code">Copy</button></div><pre class="example">(add_todo "Buy coffee" "")
+</pre></div>
+<p>That expression can be edited, replayed, or pasted into a larger program. The
+<a href="https://github.com/leoshimo/vrs/blob/main/scripts/cmd_macro.ll">command-macro service</a> records a sequence by collecting such expressions into
+a <code>begin</code> form. It uses the same evaluator as a hand-written program.</p>
+<p>Using an application becomes a way to explore how to program it. A familiar
+interaction supplies a function call with real arguments. This is something I
+value in Emacs: the program remains accessible through the commands that make
+it work. VRS extends that relationship across clients and services.</p>
+<p>Recording is explicit and captures the selected source form. It does not prove
+that an operation succeeded, and replay runs against current state. There is
+no hidden time machine behind the expression.</p>
+</div>
+<div id="outline-container-keep-the-inputs-of-a-failed-attempt" class="outline-3">
+<h3 id="keep-the-inputs-of-a-failed-attempt">Keep the inputs of a failed attempt</h3>
+<p>The <code>:vrsjmp</code> service uses code as data to prepare a retry. An action such as
+<code>(save_page (active_tab))</code> initially contains a query. The shared execution
+code evaluates that argument and uses ordinary list operations to construct
+a call containing the result:</p>
+<div class="code-block"><div class="code-toolbar"><button class="copy-code" type="button" aria-label="Copy code">Copy</button></div><pre class="example">(save_page '(:title "VRS" :url "https://github.com/leoshimo/vrs"))
+</pre></div>
+<p>The captured page is now part of the program. Retry sends this expression back
+to <code>eval</code>, using that page even if the active tab has changed. The action itself
+is still an ordinary call to <code>save_page</code>. If the service implementation needed
+fixing, the named function can resolve through its existing binding to the replacement.
+The same expression is also a useful case to inspect in the editor.</p>
+<p>The interface for Retry and Dismiss uses ordinary items and actions. Neither
+the desktop nor the terminal client needs another error-recovery protocol.
+This behavior took shared code to implement; the common representation made
+it applicable across service calls.</p>
+<p>It is still a manual retry of the whole call. Only the outer arguments are
+captured; queries inside the function run again. Earlier effects can be
+repeated, and the record is lost when the service restarts. The <a href="manual.html#failed-actions">manual</a> gives
+the precise limits. Durable execution is a different problem.</p>
+</div>
+</div>
+<div id="outline-container-let-the-clients-learn-what-is-available" class="outline-2">
+<h2 id="let-the-clients-learn-what-is-available">Let the clients learn what is available</h2>
+<p>A <em>hypermedia</em> interface describes available interactions as part of the data
+it returns. In VRS, a page names the function that supplies its items, and the
+items include executable actions. The client can ask what is available rather
+than having every operation built into it.</p>
+<p>The desktop app <code>vrsjmp</code> and the <a href="https://github.com/leoshimo/vrs/blob/main/scripts/vrsjmp-terminal">terminal script</a> are two clients of the
+<code>:vrsjmp</code> service. One renders graphical entries; the other presents a terminal
+list. They send selections back to the service for execution. The todo example
+adds search and completion to both by changing the service's Lyric code.</p>
+<p>This is the benefit of a general-purpose client: it doesn't need to know what
+a todo is. The same client can present operations on notes, windows, or a new
+service. New actions use an existing interaction vocabulary. A new kind of
+widget still needs client support.</p>
+<p>Recording, source editing, general-purpose clients, and retry are connected
+consequences of including ordinary executable code directly in the markup.
+An interaction can become source to edit or data another program transforms.
+The clients present the resulting actions through the markup they already
+understand.</p>
+<p>The inspiration from hypermedia is useful on its own terms. A program supplies
+its available behavior; the client presents it. There is no need to turn the
+whole explanation into an analogy with web pages.</p>
+<div id="outline-container-the-same-declarations-work-in-both-directions" class="outline-3">
+<h3 id="the-same-declarations-work-in-both-directions">The same declarations work in both directions</h3>
+<p>Some interactions can be obtained from the functions themselves. A function
+declares the type of value it accepts for interactive use:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">defn!</span> copy_title (<span class="token-form">note</span>)
+  <span class="token-string">"Copy note title"</span>
+  (<span class="token-form">interactive</span> <span class="token-keyword">:note</span>)
+  (<span class="token-form">exec</span> <span class="token-string">"pbcopy"</span> <span class="token-keyword">:stdin</span> (<span class="token-form">get</span> note <span class="token-keyword">:title</span>)))
+
+(<span class="token-form">entity_functions</span> '(<span class="token-keyword">:note</span> <span class="token-keyword">:title</span> <span class="token-string">"A small idea"</span>))
+<span class="token-comment"># =&gt; (copy_title) when it is the only matching function in scope.</span>
+</pre></div>
+<p>Given a note, a program can discover <code>copy_title</code>. Given a function instead,
+it can inspect the argument types and ask their registered providers for
+current values. That is how a command can prompt for a window or a todo without
+a separate implementation of the prompt for every function.</p>
+<p>The <a href="https://github.com/oantolin/embark">Embark</a> and Emacs <code>interactive</code> influences are quite direct. VRS makes
+these relationships available through runtime queries. The editor uses them
+to construct calls in source; the shared user interface service uses them to
+construct prompts and action menus. Functions remain functions, callable
+without either user interface.</p>
+<p>Entities are tagged values. They do not need a central object store, and the
+metadata guides interaction rather than enforcing runtime types. A database
+row, a service result, or decoded shell output can supply the value.</p>
+</div>
+<div id="outline-container-new-interfaces-can-be-generated-too" class="outline-3">
+<h3 id="new-interfaces-can-be-generated-too">New interfaces can be generated too</h3>
+<p><code>interfacegen</code> explores a consequence of using ordinary data and expressions
+for interfaces. Asked for a five-minute timer button, it can produce:</p>
+<div class="code-block"><div class="code-toolbar"><button class="copy-code" type="button" aria-label="Copy code">Copy</button></div><pre class="example">((:title "5 minutes"
+  :on_click (begin (sleep 300)
+                   (notify "Timer finished" "Five minutes are up"))))
+</pre></div>
+<p>The <a href="https://github.com/leoshimo/vrs/blob/main/scripts/vrsjmp_interfacegen_demo.ll">example</a> executes button actions in background processes. The generated
+interface can use existing clients because it describes their usual items and
+actions. Adding a service gives the generator more functions to compose; it
+doesn't require deploying a new frontend for each generated application.</p>
+<p>The generated code is still available to inspect and edit. Generating it and
+executing it are separate operations.</p>
+</div>
+</div>
+<div id="outline-container-work-inside-the-running-computer" class="outline-2">
+<h2 id="work-inside-the-running-computer">Work inside the running computer</h2>
+<p>The editor is another client. It can call functions, inspect actual results,
+and retain those results in source. With the browser service bound:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">active_tab</span>) <span class="token-comment"># C-u C-c C-e retains its result as source.</span>
+<span class="token-comment"># For example, the expression becomes:</span>
+<span class="token-comment"># '(:title "VRS" :url "https://github.com/leoshimo/vrs")</span>
+</pre></div>
+<p>An observed value can become a fixture or a starting point for another program.
+A function that offers a choice can supply an argument. A function that
+constructs code can supply an edit. These operations use the same environment
+as the applications being developed.</p>
+<p>This is more than a shorter edit-run cycle. The computer can answer questions
+while the program is being constructed. I don't have to simulate every
+intermediate result in my head before trying the next expression.</p>
+<div id="outline-container-why-the-language-belongs-to-the-environment" class="outline-3">
+<h3 id="why-the-language-belongs-to-the-environment">Why the language belongs to the environment</h3>
+<p>Owning a Lisp makes it possible to shape the programming model around these
+interactions. The language already has code as data. Its functions also have
+metadata slots for documentation and interactive argument information. The
+same values can be used by the evaluator, service bindings, editor, and clients.</p>
+<p>Other languages can support annotations and registries. The reason to own
+Lyric is the freedom to extend the common model rather than repeatedly building
+a smaller programming language around another one. Macros can construct code;
+native bindings can expose host capabilities; execution can yield to runtime
+operations. These parts can be designed together.</p>
+<p>Repeated conventions can become part of the language instead of leaving the
+programmer to act as a human compiler. This is the appeal of
+<a href="https://www.paulgraham.com/hundred.html">bottom-up programming</a>: teach the environment how to express the work,
+then use that vocabulary to build more of it.</p>
+<p>Maintaining a language is a real cost. Lyric doesn't inherit all the libraries
+and machinery of a mature ecosystem. Practical composition lets external
+programs do much of that work while the common language stays focused on the
+environment. See <a href="manual.html#lyric">Lyric</a> for the language itself.</p>
+</div>
+<div id="outline-container-inspection-is-part-of-the-environment-too" class="outline-3">
+<h3 id="inspection-is-part-of-the-environment-too">Inspection is part of the environment too</h3>
+<p>The debugger extends the access already used by the REPL and editor. <code>dbg!</code>
+records calls, arguments, results, and source locations while returning the
+ordinary result:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">dbg!</span> (<span class="token-form">map</span> '(<span class="token-number">2</span> <span class="token-number">3</span>) (<span class="token-form">fn</span> (<span class="token-form">x</span>) (<span class="token-form">+</span> x x))))
+(<span class="token-form">get</span> (<span class="token-form">dbg_history</span>) <span class="token-keyword">:records</span>)
+</pre></div>
+<p>The terminal and web viewers use the same recorded values that another program
+can query. Observations can stay beside the source as expressions worth running
+again. This history is bounded and in memory; it is not stepping or time-travel
+debugging. Code in another process needs its own observation block.</p>
+<p>Reevaluating service startup replaces a running service. Compatible bindings
+follow the new instance, and existing clients can present new actions in the
+format they already understand. The service's state and old stack aren't
+automatically migrated. Redefining an export in a separate REPL alone is not
+the same operation; the <a href="manual.html#editor">editor chapter</a> makes that distinction explicit.</p>
+</div>
+<div id="outline-container-ask-for-real-data-including-in-prompts" class="outline-3">
+<h3 id="ask-for-real-data-including-in-prompts">Ask for real data, including in prompts</h3>
+<p>The same access is useful when constructing a prompt. A program can fetch the
+active page, current tasks, or calendar entries and put those values into its
+request. For example, with the relevant functions available:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">def</span> tab (<span class="token-form">active_tab</span>))
+(<span class="token-form">def</span> proposed
+  (<span class="token-form">codegen</span>
+    (<span class="token-form">format</span> <span class="token-string">"Write a notification reminding me to revisit this page: {}"</span>
+            (<span class="token-form">pretty</span> tab))))
+(<span class="token-form">pretty</span> proposed)
+</pre></div>
+<p>The computer supplies the page instead of requiring someone to describe it
+from memory. <a href="https://github.com/leoshimo/vrs/blob/main/scripts/nl_shell.ll">Natural-language commands</a> and <a href="https://github.com/leoshimo/vrs/blob/main/scripts/nl_scheduler.ll">calendar scheduling</a> explore this
+pattern. Agents can use the same function discovery, expressions, and process
+primitives as other programs. The architecture doesn't need a second model
+of every application for an agent to work with it.</p>
+</div>
+</div>
+<div id="outline-container-a-program-can-wait" class="outline-2">
+<h2 id="a-program-can-wait">A program can wait</h2>
+<p>A process runs a sequence of Lyric expressions with an environment and mailbox.
+It can suspend while waiting for a message, I/O, or a timer. A service is a
+process handling requests; a recurring job can be a process that sleeps:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">spawn</span> (<span class="token-form">fn</span> ()
+  (<span class="token-form">loop</span>
+    (<span class="token-form">publish</span> <span class="token-keyword">:index_result</span> (<span class="token-form">exec</span> <span class="token-string">"feedbinctl"</span> <span class="token-string">"index"</span>))
+    (<span class="token-form">sleep</span> <span class="token-number">900</span>))))
+</pre></div>
+<p>The indexer can use other services and publish results to subscribers. It can
+be inspected and stopped through ordinary runtime functions. It needs neither
+a separate scheduling language nor an operating-system thread reserved for
+the time it spends asleep.</p>
+<p>This is the appeal of lightweight processes and message passing from Erlang:
+concurrent work can still be written as sequences. A service can also receive
+pubsub events in its message loop. Completing a todo can trigger a separate
+program, such as the unicorn animation in the tour, without adding that behavior
+to the todo service itself.</p>
+<p>Current boundaries matter. CPU-bound code is not preempted; closures can share
+mutable bindings across processes. A sleeping worker doesn't answer requests
+at the same time, so responsive controls belong in a separate process. Waiting
+retains memory, and a runtime restart loses it. Pubsub is node-local; an event
+handler can still call a service on another device.</p>
+</div>
+<div id="outline-container-the-rest-of-the-devices-are-part-of-the-environment" class="outline-2">
+<h2 id="the-rest-of-the-devices-are-part-of-the-environment">The rest of the devices are part of the environment</h2>
+<p>In the tour, the todo service moves to a home server. It still asks the laptop's
+Safari service for the current page. The user interface keeps making the same
+todo calls. Those relationships survive the change in where the service runs.</p>
+<p>A file can be sent to a connected node for execution. A <code>remote!</code> block can
+define and start a service there. The registry makes its functions discoverable,
+and existing bindings follow a replacement service. Remote development uses
+the same programming environment as local development.</p>
+<p>The <a href="https://github.com/leoshimo/vrs/blob/main/scripts/ditoo.ll">Ditoo service</a> makes the consequence tangible: only the host attached to
+the Bluetooth display needs access to the hardware. A build script on another
+machine can call its display functions. Another program can connect them to an
+event without implementing Bluetooth again.</p>
+<p>Plan 9 is an important influence here. I want the collection of devices to
+feel like one computer I can program. Network failures, dependencies, and
+service lifetimes remain real. Their <a href="manual.html#connected-devices">contracts</a> belong in the environment too.</p>
+</div>
+<div id="outline-container-keep-the-whole-thing-within-reach" class="outline-2">
+<h2 id="keep-the-whole-thing-within-reach">Keep the whole thing within reach</h2>
+<p>The recurring qualities are practical, direct, and interactive. Services use
+whatever works. Expressions stay close to the operations they describe. The
+editor, debugger, and applications participate in a running system that can
+answer questions and accept changes.</p>
+<p>The useful test is whether the next piece can participate. Can another client
+use the capability? Can an interaction become a program? Can a failure produce
+an input worth retaining? The second consumer reveals more about the design
+than another list of primitives.</p>
+<p>A personal software ecosystem can grow one small program at a time. The parts
+can be useful, occasionally scrappy, and still available to change. Building
+the larger environment should retain the practicality—and the pleasure—of
+hacking on a small program.</p>
+</div>
+<div id="outline-container-influences-and-further-directions" class="outline-2">
+<h2 id="influences-and-further-directions">Influences and further directions</h2>
+<p>Unix, Acme, and Plan 9 inform how independent programs participate in an
+environment. Emacs informs the continuity between use, inspection, and editing.
+Erlang informs concurrent execution. Hypermedia, Embark, and Hyperbole inform
+how data can describe interactions. The <a href="design.html#further-reading">linked reading list</a> gives the sources
+and additional influences without making them prerequisites for this essay.</p>
+<p>Richer documents, durable work, a relationship store, preemption, and deeper
+execution control are proposals in <a href="https://github.com/leoshimo/vrs/blob/main/TODO.org">TODO</a>. The working entity system doesn't
+depend on those proposals being completed.</p>
+</div>
+<footer class="source-link"><a href="design-experience.md" download>Source</a></footer></article></main>
+</body></html>

@@ -1,0 +1,1469 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VRS Manual</title>
+<link rel="stylesheet" href="site.css">
+<script src="site.js" defer></script>
+</head>
+<body>
+<header class="site-masthead"><a class="wordmark" href="index.html" aria-label="vrs documentation">vrs</a><nav aria-label="Documentation"><a href="tour.html">Tour</a><a href="design.html">Design</a><a href="manual.html" aria-current="page">Manual</a></nav></header><main id="content" class="page-grid"><header class="document-title"><h1 class="title">VRS Manual</h1></header><details id="table-of-contents" class="contents" open><summary>Contents</summary><nav aria-label="Page contents"><div id="text-table-of-contents"><ul>
+<li><a href="#how-vrs-runs">How VRS runs</a></li>
+<li><a href="#start-and-evaluate">Start and evaluate</a></li>
+<li><a href="#lyric">Lyric</a><ul>
+<li><a href="#values-and-bindings">Values and bindings</a></li>
+<li><a href="#functions">Functions</a></li>
+<li><a href="#lists-and-keyword-fields">Lists and keyword fields</a></li>
+<li><a href="#control-flow-and-patterns">Control flow and patterns</a></li>
+<li><a href="#quotation-and-code-templates">Quotation and code templates</a></li>
+<li><a href="#documentation-and-metadata">Documentation and metadata</a></li>
+<li><a href="#macros">Macros</a></li>
+<li><a href="#readable-values">Readable values</a></li>
+<li><a href="#embedding-and-source-observations">Embedding and source observations</a></li>
+</ul>
+</li>
+<li><a href="#services">Services</a><ul>
+<li><a href="#discovery-and-binding">Discovery and binding</a></li>
+<li><a href="#replacement-and-state">Replacement and state</a></li>
+</ul>
+</li>
+<li><a href="#processes-and-messages">Processes and messages</a><ul>
+<li><a href="#deadlines-and-cancellation">Deadlines and cancellation</a></li>
+<li><a href="#waiting-and-recurring-work">Waiting and recurring work</a></li>
+</ul>
+</li>
+<li><a href="#events-and-subscriptions">Events and subscriptions</a></li>
+<li><a href="#external-programs">External programs</a><ul>
+<li><a href="#keyboard-brightness">Keyboard brightness</a></li>
+</ul>
+</li>
+<li><a href="#entities-and-interactive-functions">Entities and interactive functions</a></li>
+<li><a href="#user-interface-clients">User interface clients</a><ul>
+<li><a href="#pages-and-actions">Pages and actions</a></li>
+<li><a href="#refreshing-the-current-page">Refreshing the current page</a></li>
+<li><a href="#browsing-services">Browsing services</a></li>
+<li><a href="#returning-a-choice">Returning a choice</a></li>
+<li><a href="#failed-actions">Failed actions</a></li>
+<li><a href="#building-the-desktop-client">Building the desktop client</a></li>
+</ul>
+</li>
+<li><a href="#editor">Working in the editor</a><ul>
+<li><a href="#connect-the-editor">Connect the editor</a></li>
+<li><a href="#start-in-scratch-ll">Start in scratch.ll</a></li>
+<li><a href="#notebook-setup">Set up the notebook example</a></li>
+<li><a href="#command-reference">Command reference</a></li>
+<li><a href="#choose-a-value">Choose a value</a></li>
+<li><a href="#choose-fields-and-regions">Choose fields and regions</a></li>
+<li><a href="#browse-functions-and-fill-arguments">Browse functions and fill arguments</a></li>
+<li><a href="#start-with-an-entity-and-construct-an-action">Start with an entity and construct an action</a></li>
+<li><a href="#execute-an-action-on-a-literal-or-a-call">Execute an action on a literal or a call</a></li>
+<li><a href="#show-an-evaluation-transcript">Show an evaluation transcript</a></li>
+<li><a href="#make-a-choice-in-vrsjmp-and-keep-it-in-emacs">Make a choice in vrsjmp and keep it in Emacs</a></li>
+<li><a href="#cancel-and-keep-working">Cancel and keep working</a></li>
+<li><a href="#evaluation-details">Evaluation details</a></li>
+<li><a href="#update-a-service">Update a service</a></li>
+</ul>
+</li>
+<li><a href="#debugging">Debug execution</a><ul>
+<li><a href="#viewer-behavior">Viewer behavior</a></li>
+<li><a href="#filters">Filters</a></li>
+<li><a href="#the-browser-viewer">The browser viewer</a></li>
+<li><a href="#cancellation-and-retention">Cancellation and retention</a></li>
+</ul>
+</li>
+<li><a href="#cli-reference">CLI reference</a><ul>
+<li><a href="#output-formatting">Output formatting</a></li>
+</ul>
+</li>
+<li><a href="#scripts-and-initialization">Scripts and initialization</a></li>
+<li><a href="#connected-devices">Connected devices</a><ul>
+<li><a href="#transport-and-build-configuration">Transport and build configuration</a></li>
+<li><a href="#per-node-startup">Per-node startup</a></li>
+<li><a href="#two-local-nodes">Two local nodes</a></li>
+<li><a href="#remote-execution-and-replacement">Remote execution and replacement</a></li>
+</ul>
+</li>
+<li><a href="#runtime-and-client-implementation">Runtime and client implementation</a><ul>
+<li><a href="#testing-the-development-clients">Testing the development clients</a></li>
+</ul>
+</li>
+</ul>
+</div></nav></details><article class="document">
+
+<p>Begin with the shape of the running environment, evaluate a small program,
+then give it a service interface. Later sections cover individual tasks and
+contracts without requiring a linear read.</p>
+<p>The <a href="tour.html">tour</a> demonstrates the environment; <a href="design.html">Design decisions</a> explains
+its choices. This manual covers the runtime, language, editor, debugger, and
+command-line interface. Start here, then use the contents to look up a topic.</p>
+<div id="outline-container-how-vrs-runs" class="outline-2">
+<h2 id="how-vrs-runs">How VRS runs</h2>
+<p>The daemon <code>vrsd</code> hosts the runtime. A client connects and evaluates Lyric
+expressions in a process inside it. A process has an environment and a mailbox.
+A service is a process registered under a name, with functions other programs
+can call.</p>
+<table>
+<thead>
+<tr>
+<th>Part</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>lyric</code></td>
+<td>Language, values, compiler, and bytecode interpreter.</td>
+</tr>
+<tr>
+<td><code>libvrs</code></td>
+<td>Runtime and client libraries.</td>
+</tr>
+<tr>
+<td><code>vrsd</code></td>
+<td>Daemon hosting the runtime and accepting connections.</td>
+</tr>
+<tr>
+<td><code>vrsctl</code></td>
+<td>CLI for expressions, scripts, a REPL, subscriptions, and debugging.</td>
+</tr>
+<tr>
+<td><code>:vrsjmp</code></td>
+<td>Service supplying user interface descriptions and executing selections.</td>
+</tr>
+<tr>
+<td><code>vrsjmp</code> and <code>vrsjmp-terminal</code></td>
+<td>Desktop and terminal clients of that service.</td>
+</tr>
+<tr>
+<td><code>vrs-mode</code></td>
+<td>The editor connection and editing commands for Emacs.</td>
+</tr>
+</tbody>
+</table>
+<p><img src="../assets/vrs-arch-stack.png" alt="vrs-arch-stack.png" /></p>
+<p>A client connection and a service have different lifetimes. Disconnecting a
+client ends its evaluation process; child services it started can keep running.
+A new CLI invocation does not restore earlier definitions. Persistent REPL and
+editor sessions retain their definitions and service bindings.</p>
+<p>Each VRS process runs a Lyric fiber in an async task. <code>recv</code>, <code>sleep</code>, and I/O
+can suspend it without reserving an OS thread. CPU-bound code is not preempted.
+Spawned processes copy bindings, but closures can retain shared mutable
+environments; this is not complete memory isolation.</p>
+</div>
+<div id="outline-container-start-and-evaluate" class="outline-2">
+<h2 id="start-and-evaluate">Start and evaluate</h2>
+<p>The repository uses Rust and Cargo. <code>./serve</code> installs a matching <code>vrsctl</code> and
+starts the release runtime and desktop app with the <a href="https://github.com/leoshimo/vrs/blob/main/scripts/init.ll">personal service configuration</a>.
+Adapters may depend on installed applications or separate CLIs.</p>
+<div class="code-block"><div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">./serve          <span class="token-comment"># Runtime and desktop app.</span>
+./serve headless <span class="token-comment"># Runtime and configured services.</span>
+./serve dev      <span class="token-comment"># Debug runtime and matching client.</span>
+</pre></div>
+<p>For a runtime without that init file, use two terminals in the checkout:</p>
+<div class="code-block"><div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">cargo run --locked --bin vrsd
+</pre></div>
+<div class="code-block"><div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">cargo run --locked --bin vrsctl
+</pre></div>
+<p>These Cargo invocations use the debug profile. An installed CLI must match the
+daemon's profile or explicitly choose its socket. In the REPL:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">+</span> <span class="token-number">20</span> <span class="token-number">22</span>) <span class="token-comment"># =&gt; 42</span>
+(<span class="token-form">defn!</span> double (<span class="token-form">x</span>) (<span class="token-form">+</span> x x))
+(<span class="token-form">double</span> <span class="token-number">21</span>) <span class="token-comment"># =&gt; 42</span>
+(<span class="token-form">help</span> recv)
+(<span class="token-form">ls_env</span>)
+</pre></div>
+<p>The <a href="manual.html#lyric">language chapter</a> covers values, functions, quotation, and macros.
+The following sections add runtime facilities to that language.</p>
+</div>
+<div id="outline-container-lyric" class="outline-2">
+<h2 id="lyric">Lyric</h2>
+<p>Lyric is VRS's small, lexically scoped Lisp. Functions are values, programs are
+symbolic expressions, and quotation lets programs work on code as data. It is
+designed for dynamic scripting, native bindings, and embedding in Rust.</p>
+<p>Examples within a section may use earlier definitions. Enter expressions in
+<code>vrsctl</code> or the <a href="manual.html#editor">editor</a>.</p>
+<div id="outline-container-values-and-bindings" class="outline-3">
+<h3 id="values-and-bindings">Values and bindings</h3>
+<p>Numbers, strings, keywords, booleans, and <code>nil</code> evaluate to themselves.
+Symbols name bindings. Ordinary calls use <code>(function argument ...)</code> and
+evaluate the function and arguments from left to right. <code>#</code> starts a line comment.</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">+</span> <span class="token-number">20</span> <span class="token-number">22</span>)                          <span class="token-comment"># =&gt; 42</span>
+(<span class="token-form">list</span> <span class="token-number">42</span> <span class="token-string">"hello"</span> <span class="token-keyword">:ready</span> true nil)   <span class="token-comment"># =&gt; (42 "hello" :ready true nil)</span>
+
+(<span class="token-form">def</span> message <span class="token-string">"hello lyric!"</span>)
+message                           <span class="token-comment"># =&gt; "hello lyric!"</span>
+(<span class="token-form">set</span> message <span class="token-string">"goodbye lyric!"</span>)
+message                           <span class="token-comment"># =&gt; "goodbye lyric!"</span>
+</pre></div>
+<p><code>def</code> creates or replaces a binding in the current scope. <code>set</code> updates the
+nearest existing binding, and errors if none exists. <code>let</code> introduces local
+bindings; their initializers run in the surrounding scope. <code>begin</code> evaluates
+several expressions in order and returns the last value without a new scope.</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">def</span> amount <span class="token-number">40</span>)
+(<span class="token-form">let</span> ((<span class="token-form">amount</span> <span class="token-number">2</span>) (<span class="token-form">original</span> amount))
+  (<span class="token-form">+</span> original amount))             <span class="token-comment"># =&gt; 42</span>
+amount                             <span class="token-comment"># =&gt; 40</span>
+(<span class="token-form">begin</span> (<span class="token-form">set</span> amount (<span class="token-form">+</span> amount <span class="token-number">1</span>))
+       (<span class="token-form">+</span> amount <span class="token-number">1</span>))               <span class="token-comment"># =&gt; 42</span>
+</pre></div>
+<p>Regular strings use escapes such as <code>\n</code> and <code>\&quot;</code>. Triple-quoted strings
+preserve quotes and backslashes. Indented multiline blocks drop the opening
+newline and common indentation; the final newline remains. Neither string
+syntax interpolates expressions.</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">def</span> text <span class="token-string">"""
+    say "hello"
+    C:\notes
+    """</span>)
+text                               <span class="token-comment"># =&gt; "say \"hello\"\nC:\\notes\n"</span>
+</pre></div>
+</div>
+<div id="outline-container-functions" class="outline-3">
+<h3 id="functions">Functions</h3>
+<p><code>fn</code> and <code>lambda</code> are synonyms. <code>defn!</code> names a function, and the last body
+expression is its return value. The <code>!</code> marks a macro call; we'll define one
+below. Ordinary function calls need no marker.</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">defn!</span> double (<span class="token-form">x</span>)
+  (<span class="token-form">+</span> x x))
+(<span class="token-form">double</span> <span class="token-number">21</span>)                        <span class="token-comment"># =&gt; 42</span>
+((<span class="token-form">fn</span> (<span class="token-form">x</span>) (<span class="token-form">+</span> x <span class="token-number">1</span>)) <span class="token-number">41</span>)               <span class="token-comment"># =&gt; 42</span>
+
+(<span class="token-form">defn!</span> with_value (<span class="token-form">x</span> f)
+  (<span class="token-form">f</span> x))
+(<span class="token-form">with_value</span> <span class="token-number">21</span> double)              <span class="token-comment"># =&gt; 42</span>
+(<span class="token-form">with_value</span> <span class="token-number">41</span> (<span class="token-form">lambda</span> (<span class="token-form">x</span>) (<span class="token-form">+</span> x <span class="token-number">1</span>))) <span class="token-comment"># =&gt; 42</span>
+</pre></div>
+<p>Functions close over their lexical bindings, including bindings updated with
+<code>set</code>:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">defn!</span> make_counter (<span class="token-form">count</span>)
+  (<span class="token-form">fn</span> ()
+    (<span class="token-form">set</span> count (<span class="token-form">+</span> count <span class="token-number">1</span>))
+    count))
+(<span class="token-form">def</span> next (<span class="token-form">make_counter</span> <span class="token-number">0</span>))
+(<span class="token-form">next</span>)                             <span class="token-comment"># =&gt; 1</span>
+(<span class="token-form">next</span>)                             <span class="token-comment"># =&gt; 2</span>
+</pre></div>
+</div>
+<div id="outline-container-lists-and-keyword-fields" class="outline-3">
+<h3 id="lists-and-keyword-fields">Lists and keyword fields</h3>
+<p>Quote (<code>'</code>) returns a form as data. <code>list</code> constructs a list from computed
+values. The empty list is <code>'()</code>, distinct from <code>nil</code>. <code>get</code> uses zero-based
+indexes, accepts negative indexes from the end, and returns <code>nil</code> when absent.
+<code>push</code> returns a new list with an element appended; it leaves the original
+value unchanged.</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">def</span> numbers '(<span class="token-number">1</span> <span class="token-number">2</span> <span class="token-number">3</span>))
+(<span class="token-form">get</span> numbers <span class="token-number">0</span>)                     <span class="token-comment"># =&gt; 1</span>
+(<span class="token-form">get</span> numbers <span class="token-number">-1</span>)                    <span class="token-comment"># =&gt; 3</span>
+(<span class="token-form">first</span> numbers)                     <span class="token-comment"># =&gt; 1</span>
+(<span class="token-form">last</span> numbers)                      <span class="token-comment"># =&gt; 3</span>
+(<span class="token-form">first</span> '())                         <span class="token-comment"># =&gt; nil (last also returns nil)</span>
+(<span class="token-form">get</span> numbers <span class="token-number">9</span>)                     <span class="token-comment"># =&gt; nil</span>
+(<span class="token-form">contains?</span> numbers <span class="token-number">2</span>)               <span class="token-comment"># =&gt; true</span>
+(<span class="token-form">len</span> numbers)                      <span class="token-comment"># =&gt; 3</span>
+(<span class="token-form">push</span> numbers <span class="token-number">4</span>)                    <span class="token-comment"># =&gt; (1 2 3 4)</span>
+numbers                            <span class="token-comment"># =&gt; (1 2 3)</span>
+(<span class="token-form">eq?</span> '() nil)                       <span class="token-comment"># =&gt; false</span>
+</pre></div>
+<p>Records are ordinary flat lists with keyword/value fields. With a keyword,
+<code>get</code> finds its first occurrence and returns the following element.
+<code>map</code> and <code>filter</code> take the list first, then the function. <code>apply</code> calls a
+function with a list of argument values.</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">def</span> item '(<span class="token-keyword">:title</span> <span class="token-string">"Notebook"</span> <span class="token-keyword">:pages</span> <span class="token-number">80</span>))
+(<span class="token-form">get</span> item <span class="token-keyword">:title</span>)                   <span class="token-comment"># =&gt; "Notebook"</span>
+(<span class="token-form">get</span> item <span class="token-keyword">:missing</span>)                 <span class="token-comment"># =&gt; nil</span>
+(<span class="token-form">list</span> <span class="token-keyword">:title</span> (<span class="token-form">get</span> item <span class="token-keyword">:title</span>)
+      <span class="token-keyword">:pages</span> (<span class="token-form">+</span> (<span class="token-form">get</span> item <span class="token-keyword">:pages</span>) <span class="token-number">1</span>))
+<span class="token-comment"># =&gt; (:title "Notebook" :pages 81)</span>
+
+(<span class="token-form">map</span> '(<span class="token-number">1</span> <span class="token-number">2</span> <span class="token-number">3</span>) (<span class="token-form">fn</span> (<span class="token-form">x</span>) (<span class="token-form">+</span> x x)))     <span class="token-comment"># =&gt; (2 4 6)</span>
+(<span class="token-form">filter</span> '(<span class="token-number">0</span> <span class="token-number">1</span> <span class="token-number">0</span> <span class="token-number">2</span>) (<span class="token-form">fn</span> (<span class="token-form">x</span>) (<span class="token-form">not?</span> (<span class="token-form">eq?</span> x <span class="token-number">0</span>))))
+<span class="token-comment"># =&gt; (1 2)</span>
+(<span class="token-form">apply</span> + '(<span class="token-number">10</span> <span class="token-number">20</span> <span class="token-number">12</span>))               <span class="token-comment"># =&gt; 42</span>
+</pre></div>
+</div>
+<div id="outline-container-control-flow-and-patterns" class="outline-3">
+<h3 id="control-flow-and-patterns">Control flow and patterns</h3>
+<p><code>if</code> evaluates only the selected branch; an omitted else branch returns
+<code>nil</code>. False conditions are <code>nil</code>, <code>false</code>, <code>0</code>, <code>&quot;&quot;</code>, and the empty list.
+Nonzero integers, nonempty strings/lists, and <code>true</code> are true conditions.
+Other types, including keywords and symbols, are invalid conditions.</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">if</span> (<span class="token-form">eq?</span> <span class="token-number">2</span> <span class="token-number">2</span>) <span class="token-string">"equal"</span> <span class="token-string">"different"</span>) <span class="token-comment"># =&gt; "equal"</span>
+(<span class="token-form">if</span> false <span class="token-string">"yes"</span>)                   <span class="token-comment"># =&gt; nil</span>
+(<span class="token-form">if</span> <span class="token-number">0</span> <span class="token-string">"nonzero"</span> <span class="token-string">"zero"</span>)            <span class="token-comment"># =&gt; "zero"</span>
+(<span class="token-form">not?</span> '())                         <span class="token-comment"># =&gt; true</span>
+
+(<span class="token-form">cond</span> ((<span class="token-form">eq?</span> <span class="token-number">3</span> <span class="token-number">1</span>) <span class="token-keyword">:one</span>)
+      ((<span class="token-form">eq?</span> <span class="token-number">3</span> <span class="token-number">2</span>) <span class="token-keyword">:two</span>)
+      (<span class="token-form">true</span> <span class="token-keyword">:many</span>))                <span class="token-comment"># =&gt; :many</span>
+(<span class="token-form">when!</span> true (<span class="token-form">+</span> <span class="token-number">20</span> <span class="token-number">22</span>))              <span class="token-comment"># =&gt; 42</span>
+(<span class="token-form">and!</span> false (<span class="token-form">error</span> <span class="token-string">"skipped"</span>))      <span class="token-comment"># =&gt; false</span>
+(<span class="token-form">or!</span> nil <span class="token-string">"fallback"</span> (<span class="token-form">error</span> <span class="token-string">"skipped"</span>)) <span class="token-comment"># =&gt; "fallback"</span>
+</pre></div>
+<p><code>cond</code> selects the first true clause. <code>when!</code>, <code>and!</code>, and <code>or!</code> are standard
+macros; <code>and!</code> and <code>or!</code> stop as soon as their result is determined and return
+the last evaluated value.</p>
+<p><code>match</code> compares a value with patterns in order. Keywords and other literals
+match themselves, symbols bind matched values, and <code>_</code> ignores a value.
+<code>def</code> can also destructure a value, raising an error if the pattern fails.</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">def</span> result '(<span class="token-keyword">:ok</span> (<span class="token-number">20</span> <span class="token-number">22</span>)))
+(<span class="token-form">match</span> result
+  ((<span class="token-keyword">:ok</span> (<span class="token-form">a</span> b)) (<span class="token-form">+</span> a b))
+  ((<span class="token-keyword">:err</span> reason) reason)
+  (<span class="token-form">_</span> <span class="token-string">"unknown result"</span>))            <span class="token-comment"># =&gt; 42</span>
+
+(<span class="token-form">def</span> (<span class="token-keyword">:ok</span> (<span class="token-form">left</span> right)) result)
+(<span class="token-form">+</span> left right)                     <span class="token-comment"># =&gt; 42</span>
+</pre></div>
+<p><code>try</code> turns a raised error into an error value; a successful result passes
+through unchanged. <code>err?</code> and <code>ok?</code> inspect that distinction. A list tagged
+<code>:err</code> is still just a list, not a raised error.</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">try</span> (<span class="token-form">+</span> <span class="token-number">20</span> <span class="token-number">22</span>))                    <span class="token-comment"># =&gt; 42</span>
+(<span class="token-form">err?</span> (<span class="token-form">try</span> (<span class="token-form">error</span> <span class="token-string">"missing item"</span>))) <span class="token-comment"># =&gt; true</span>
+(<span class="token-form">ok?</span> (<span class="token-form">try</span> (<span class="token-form">+</span> <span class="token-number">20</span> <span class="token-number">22</span>)))               <span class="token-comment"># =&gt; true</span>
+(<span class="token-form">err?</span> '(<span class="token-keyword">:err</span> <span class="token-string">"ordinary data"</span>))      <span class="token-comment"># =&gt; false</span>
+</pre></div>
+</div>
+<div id="outline-container-quotation-and-code-templates" class="outline-3">
+<h3 id="quotation-and-code-templates">Quotation and code templates</h3>
+<p>Reading produces data; evaluating runs it. <code>'FORM</code> is shorthand for
+<code>(quote FORM)</code>. <code>pretty</code> returns readable text, useful for inspecting a form
+or reading it back.</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">def</span> code '(<span class="token-form">+</span> <span class="token-number">20</span> <span class="token-number">22</span>))
+code                               <span class="token-comment"># =&gt; (+ 20 22)</span>
+(<span class="token-form">get</span> code <span class="token-number">0</span>)                       <span class="token-comment"># =&gt; +</span>
+(<span class="token-form">eval</span> code)                        <span class="token-comment"># =&gt; 42</span>
+(<span class="token-form">read</span> <span class="token-string">"(+ 20 22)"</span>)                 <span class="token-comment"># =&gt; (+ 20 22)</span>
+(<span class="token-form">eval</span> (<span class="token-form">read</span> <span class="token-string">"(+ 20 22)"</span>))           <span class="token-comment"># =&gt; 42</span>
+(<span class="token-form">pretty</span> code)                      <span class="token-comment"># =&gt; "(+ 20 22)"</span>
+(<span class="token-form">eq?</span> (<span class="token-form">read</span> (<span class="token-form">pretty</span> code)) code)     <span class="token-comment"># =&gt; true</span>
+</pre></div>
+<p>Backtick starts a template. Comma inserts one evaluated value; comma-at
+splices the elements of an evaluated list. The template constructs code
+without running the resulting call.</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">def</span> base <span class="token-number">20</span>)
+(<span class="token-form">def</span> extra '(<span class="token-number">10</span> <span class="token-number">12</span>))
+(<span class="token-form">def</span> code `(<span class="token-form">+</span> ,base ,@extra))
+code                               <span class="token-comment"># =&gt; (+ 20 10 12)</span>
+(<span class="token-form">eval</span> code)                        <span class="token-comment"># =&gt; 42</span>
+`(<span class="token-form">values</span> ,extra ,@extra)            <span class="token-comment"># =&gt; (values (10 12) 10 12)</span>
+</pre></div>
+<p>When generated code should receive a list or symbol as literal data, include
+the quote that the future call needs:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">def</span> item '(<span class="token-keyword">:title</span> <span class="token-string">"Notebook"</span> <span class="token-keyword">:pages</span> <span class="token-number">80</span>))
+(<span class="token-form">def</span> code `(<span class="token-form">get</span> ',item <span class="token-keyword">:title</span>))
+code                               <span class="token-comment"># =&gt; (get '(:title "Notebook" :pages 80) :title)</span>
+(<span class="token-form">eval</span> code)                        <span class="token-comment"># =&gt; "Notebook"</span>
+</pre></div>
+<p>Splices require lists, including <code>'()</code>; <code>nil</code> is not an empty splice. Nesting and evaluation rules follow below.</p>
+<div id="outline-container-template-evaluation-and-nesting" class="outline-4">
+<h4 id="template-evaluation-and-nesting">Template evaluation and nesting</h4>
+<p>The exact reader forms are <code>(quasiquote FORM)</code>, <code>(unquote EXPR)</code>, and
+<code>(unquote-splicing EXPR)</code>. Reading never executes them. Quasiquote evaluates
+active holes once, in left-to-right order, in its surrounding lexical scope.
+Inserted values are not rescanned or executed. Splices require lists: <code>()</code> is
+empty, while <code>nil</code> and strings are errors. A splice must occupy a list-element
+position; ordinary calls still use <code>apply</code> for a list of argument values.</p>
+<p>When generating a call that should receive a symbol or list <strong>as data</strong>, keep
+a quote around the inserted value:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">def</span> window '(<span class="token-keyword">:os/window</span> <span class="token-keyword">:id</span> <span class="token-number">42</span>))
+`(<span class="token-form">focus_window</span> ',window)
+<span class="token-comment"># =&gt; (focus_window '(:os/window :id 42))</span>
+</pre></div>
+<p>Quote inside a template is ordinary structure, so <code>',window</code> captures the
+value inside a future quote. An outer quote makes its entire operand literal.
+Nested backticks increase quotation depth; commas remove one level:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">def</span> x <span class="token-number">7</span>)
+`(<span class="token-form">outer</span> `(<span class="token-form">inner</span> ,x ,,x))
+<span class="token-comment"># =&gt; (outer (quasiquote (inner (unquote x) (unquote 7))))</span>
+</pre></div>
+<p>Unquote outside a template, misplaced splices, and marker forms with the wrong
+number of arguments are errors. Regular and triple-quoted strings do not
+interpolate. Comma and backtick are reserved outside strings/comments; <code>!</code> and
+<code>@</code> remain symbol characters. <code>,@name</code> splices <code>name</code>; <code>, @name</code> inserts the
+value of <code>@name</code> without splicing. Both compact and pretty printers preserve
+that distinction. Templates use ordinary <code>Form</code> lists and retain the existing
+serialization shape. They do not qualify symbols or provide macro hygiene.</p>
+<p>Use list construction for computed elements and templates when showing the
+resulting structure helps. Records and executable forms are both ordinary lists.</p>
+</div>
+</div>
+<div id="outline-container-documentation-and-metadata" class="outline-3">
+<h3 id="documentation-and-metadata">Documentation and metadata</h3>
+<p>A function's leading string is its docstring. <code>help</code> returns it, and <code>meta</code>
+returns a keyword-field list with the function's argument names and metadata.
+<code>with_meta</code> returns a lambda with the supplied metadata; its real argument
+names are retained. <code>ls_env</code> lists visible bindings as symbols.</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">defn!</span> double (<span class="token-form">x</span>)
+  <span class="token-string">"Add a number to itself."</span>
+  (<span class="token-form">+</span> x x))
+(<span class="token-form">help</span> double)                      <span class="token-comment"># =&gt; "Add a number to itself."</span>
+(<span class="token-form">get</span> (<span class="token-form">meta</span> double) <span class="token-keyword">:args</span>)           <span class="token-comment"># =&gt; ((:name x))</span>
+(<span class="token-form">def</span> labelled (<span class="token-form">with_meta</span> double '(<span class="token-keyword">:category</span> <span class="token-keyword">:math</span>)))
+(<span class="token-form">get</span> (<span class="token-form">meta</span> labelled) <span class="token-keyword">:category</span>)     <span class="token-comment"># =&gt; :math</span>
+(<span class="token-form">labelled</span> <span class="token-number">21</span>)                      <span class="token-comment"># =&gt; 42</span>
+(<span class="token-form">contains?</span> (<span class="token-form">ls_env</span>) 'double)        <span class="token-comment"># =&gt; true</span>
+</pre></div>
+</div>
+<div id="outline-container-macros" class="outline-3">
+<h3 id="macros">Macros</h3>
+<p>A macro receives unevaluated expressions and returns code. Define it with
+<code>defmacro</code> and call it with <code>!</code>:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">defmacro</span> unless (<span class="token-form">condition</span> &amp; body)
+  `(<span class="token-form">when!</span> (<span class="token-form">not?</span> ,condition) ,@body))
+
+(<span class="token-form">unless!</span> false (<span class="token-form">+</span> <span class="token-number">20</span> <span class="token-number">22</span>))               <span class="token-comment"># =&gt; 42</span>
+(<span class="token-form">unless!</span> true (<span class="token-form">error</span> <span class="token-string">"should not run"</span>)) <span class="token-comment"># =&gt; nil</span>
+</pre></div>
+<p><code>&amp; body</code> collects the remaining expressions. A function evaluates its arguments
+before the call; a macro can choose which expressions run. Redefine a macro and
+evaluate its call again to try the new version.</p>
+<p><code>and!</code> stops at the first false value; <code>or!</code> stops at the first true value:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">and!</span> (<span class="token-form">list?</span> window) (<span class="token-form">get</span> window <span class="token-keyword">:id</span>))
+(<span class="token-form">or!</span> (<span class="token-form">get</span> window <span class="token-keyword">:title</span>) <span class="token-string">"Untitled"</span>)
+</pre></div>
+<p>Both return the last value evaluated. Like <code>if</code>, they treat <code>nil</code>, <code>false</code>, <code>0</code>,
+<code>&quot;&quot;</code>, and <code>'()</code> as false.</p>
+<div id="outline-container-inspecting-an-expansion" class="outline-4">
+<h4 id="inspecting-an-expansion">Inspecting an expansion</h4>
+<p>Quote the call to see the code it produces:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">macroexpand_1</span> '(<span class="token-form">unless!</span> false (<span class="token-form">+</span> <span class="token-number">20</span> <span class="token-number">22</span>)))
+<span class="token-comment"># =&gt; (when! (not? false) (+ 20 22))</span>
+
+(<span class="token-form">macroexpand</span> '(<span class="token-form">unless!</span> false (<span class="token-form">+</span> <span class="token-number">20</span> <span class="token-number">22</span>)))
+<span class="token-comment"># =&gt; (if (not? false) (begin (+ 20 22)) nil)</span>
+</pre></div>
+<p><code>macroexpand_1</code> expands once. <code>macroexpand</code> continues while the result is another
+outer macro call; it does not expand calls nested inside that result. Neither
+executes the returned code, but both run the macro body.</p>
+</div>
+<div id="outline-container-scope-and-helpers" class="outline-4">
+<h4 id="scope-and-helpers">Scope and helpers</h4>
+<p>Macros can call ordinary functions. You do not need <code>for_syntax</code>; it behaves
+like <code>begin</code>. Define helpers with <code>defn!</code> as usual.</p>
+<p>The macro body uses definitions from where the macro was defined; the code it
+returns runs in the caller's scope. To evaluate an expression using variables
+at the call site while building that code, use <code>eval_caller</code>:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">defmacro</span> remember (<span class="token-form">expression</span>)
+  (<span class="token-form">def</span> value (<span class="token-form">eval_caller</span> expression))
+  `(<span class="token-form">quote</span> ,value))
+
+(<span class="token-form">defn!</span> example (<span class="token-form">x</span>)
+  (<span class="token-form">remember!</span> (<span class="token-form">+</span> x <span class="token-number">1</span>)))
+
+(<span class="token-form">example</span> <span class="token-number">41</span>) <span class="token-comment"># =&gt; 42</span>
+</pre></div>
+<p>Here <code>eval_caller</code> sees the caller's <code>x</code>. It is only available while a macro is
+expanding. Ordinary <code>eval</code> uses variables visible where it is called.</p>
+</div>
+<div id="outline-container-generated-names" class="outline-4">
+<h4 id="generated-names">Generated names</h4>
+<p>Use <code>gensym</code> for temporary variables introduced by a macro:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">defmacro</span> or_else (<span class="token-form">expression</span> fallback)
+  (<span class="token-form">def</span> temp (<span class="token-form">gensym</span> <span class="token-string">"value"</span>))
+  `(<span class="token-form">let</span> ((,temp ,expression))
+     (<span class="token-form">if</span> ,temp ,temp ,fallback)))
+
+(<span class="token-form">def</span> value <span class="token-number">42</span>)
+(<span class="token-form">or_else!</span> false value) <span class="token-comment"># =&gt; 42</span>
+</pre></div>
+<p>This evaluates <code>expression</code> once. Naming the temporary <code>value</code> would hide the
+caller's <code>value</code> in the fallback. <code>gensym</code> creates a fresh name starting with
+<code>value__</code>, avoiding that collision.</p>
+</div>
+<div id="outline-container-expansion-execution-and-limits" class="outline-4">
+<h4 id="expansion-execution-and-limits">Expansion execution and limits</h4>
+<p><code>defn!</code> expands <code>(defn! NAME PARAMS BODY...)</code> to
+<code>(def NAME (fn PARAMS BODY...))</code>. A nested definition is checked when execution
+reaches it. <code>(defmacro defn ...)</code> replaces the macro for subsequent definitions;
+existing function values are unchanged.</p>
+<p>Standard macros include <code>when!</code>, <code>and!</code>, and <code>or!</code>. <code>and!</code> stops at the first
+false value; <code>or!</code> stops at the first true value, using the same conditions as
+<code>if</code>. Both return the last evaluated value, evaluate each operand at most once,
+and skip the remaining operands. <code>(and!)</code> returns <code>true</code>; <code>(or!)</code> returns <code>nil</code>.</p>
+<p><code>macroexpand_1</code> runs one outer transformer; <code>macroexpand</code> repeats only at the
+outermost position. Neither executes its returned program or walks quoted data.</p>
+<p>Macros expand when execution reaches the call, including inside a function or
+loop. The transformer runs on the same fiber as ordinary code and can call
+ordinary helpers, mutate state, yield, or await host functions. Its result must
+still be source data; opaque runtime values cannot be embedded in an expansion.
+The result is compiled and evaluated in the call's scope. Unexecuted branches
+are not expanded. Redefining a macro changes subsequent calls in existing
+functions; expansions are not cached.</p>
+<p>Transformers capture their definition's lexical environment, just like lambdas.
+<code>(eval_caller FORM)</code> explicitly evaluates an argument's source in the active
+macro call's environment, and works from helper functions too. Ordinary <code>eval</code>
+retains its lexical behavior. <code>for_syntax</code> is no longer necessary; its old spelling
+is accepted as an alias for <code>begin</code>.</p>
+<p><code>macroexpand_1</code> and <code>macroexpand</code> execute transformers with the same permissions
+as an actual call. They do not execute the returned program, but transformer
+effects still happen. Quote the call being inspected. Use <code>(gensym &quot;hint&quot;)</code> for
+fresh printable local names; there is no implicit qualification or automatic
+hygiene for free identifiers.</p>
+<p>Macro definitions belong to a process. A spawned process receives a snapshot of
+the definitions; it can redefine them independently. No macros are transported
+with quoted source data; the evaluating process needs its own definitions.</p>
+<p>Each expansion chain is bounded by 1,000,000 transformer instructions, 10,000
+macro invocations, and 1,000,000 accumulated output nodes. Expansion also checks
+call depth (256 frames) and nested transformer depth (64). Intermediate values
+have size bounds. Source nesting is limited to 256 levels, including in <code>read</code>.
+Generated code runs outside the transformer instruction budget. Independent
+invocations start fresh budgets and can recover after a caught expansion error.
+These limits do not put a wall-clock timeout on I/O initiated by a transformer.</p>
+</div>
+</div>
+<div id="outline-container-readable-values" class="outline-3">
+<h3 id="readable-values">Readable values</h3>
+<p><code>(pretty VALUE [WIDTH])</code> returns a formatted string (default width 90; explicit
+widths must be positive integers). Small lists stay on one line. Larger lists
+wrap with indentation, keeping small keyword/value pairs together. Oversized
+nested values start below their keyword:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">pretty</span> '((<span class="token-keyword">:name</span> <span class="token-keyword">:echo</span> <span class="token-keyword">:node</span> <span class="token-string">"alpha"</span> <span class="token-keyword">:interface</span> ((<span class="token-form">ping</span> x) (<span class="token-form">pong</span> y)))
+          (<span class="token-keyword">:name</span> <span class="token-keyword">:clock</span> <span class="token-keyword">:interface</span> ((<span class="token-form">now</span>)))) <span class="token-number">40</span>)
+</pre></div>
+<p>The string contains:</p>
+<div class="code-block"><div class="code-toolbar"><button class="copy-code" type="button" aria-label="Copy code">Copy</button></div><pre class="example">((:name :echo
+  :node "alpha"
+  :interface ((ping x) (pong y)))
+ (:name :clock :interface ((now))))
+</pre></div>
+<p>Serializable values round-trip through <code>(read (pretty VALUE))</code>. Strings are
+escaped, quote prefixes are preserved, and opaque runtime values keep their
+existing display notation. Width is measured in display columns and is a target:
+atoms are not split, scalar keyword/value pairs stay together, and deeply nested
+values may exceed it. The formatter never truncates a value.</p>
+<p>Rust embedders can use <code>Form::to_pretty_string(width)</code> and
+<code>Val::to_pretty_string(width)</code>. Width zero is treated as one column in this Rust
+API. <code>Display</code> and <code>(display ...)</code> stay compact, abbreviating quotation forms;
+wire serialization retains the same atoms-and-lists representation.
+The Rust <code>Form::RawString</code> variant is verbatim display text, not a readable
+string literal.</p>
+</div>
+<div id="outline-container-embedding-and-source-observations" class="outline-3">
+<h3 id="embedding-and-source-observations">Embedding and source observations</h3>
+<p><code>(dbg! BODY...)</code> runs like <code>begin</code>, while an optional host observer records its
+calls, returns, errors, and cancellation. Hosts attach a <code>debug::Observer</code> through
+<code>Fiber::set_observer</code>. Without an observer, the body executes normally without a
+recording. The observer must never block on a viewer or reenter the fiber.</p>
+<p><code>parse_source</code> retains file, line, column, and expression provenance through
+macro list operations. The compiler embeds call/function source descriptors;
+<code>(eval_source SOURCE FILE LINE COLUMN)</code> evaluates located text in the current
+lexical scope. See VRS's <a href="manual.html#editor">source-embedded debug tools</a>
+for the macro, recording policy, clients, and limits.</p>
+</div>
+</div>
+<div id="outline-container-services" class="outline-2">
+<h2 id="services">Services</h2>
+<p>Define the functions before starting a service:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">defn!</span> echo (<span class="token-form">message</span>) message)
+(<span class="token-form">spawn_srv!</span> <span class="token-keyword">:echo</span> <span class="token-keyword">:interface</span> '(<span class="token-form">echo</span>))
+(<span class="token-form">bind_srv</span> <span class="token-keyword">:echo</span>)
+(<span class="token-form">echo</span> <span class="token-string">"hello"</span>) <span class="token-comment"># =&gt; "hello"</span>
+</pre></div>
+<p><code>spawn_srv!</code> returns the child's PID after local registration and subscriptions
+are ready, or raises an error if the child exits first. This is not a health
+check and has no startup deadline. <code>srv!</code> serves in the current process instead.
+Omitting <code>:interface</code> means an empty list, useful for event-only services.</p>
+<div id="outline-container-discovery-and-binding" class="outline-3">
+<h3 id="discovery-and-binding">Discovery and binding</h3>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">ls_srv</span>)
+(<span class="token-form">find_srv</span> <span class="token-keyword">:echo</span>)
+(<span class="token-form">info_srv</span> <span class="token-keyword">:echo</span> <span class="token-keyword">:interface</span>) <span class="token-comment"># =&gt; ((:echo message))</span>
+(<span class="token-form">info_srv</span> <span class="token-keyword">:echo</span> <span class="token-keyword">:interface_doc</span>)
+</pre></div>
+<p><code>bind_srv</code> installs message-passing function stubs in the calling environment,
+including exported metadata and completion providers. Exported names replace
+existing bindings of the same name. With the window service running:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">bind_srv</span> <span class="token-keyword">:os_window</span>)
+(<span class="token-form">get_windows</span>)
+(<span class="token-form">help</span> focus_window)
+</pre></div>
+<p>The editor can browse registered services or already-bound functions; see the
+<a href="manual.html#editor">editor chapter</a> for those two workflows.</p>
+</div>
+<div id="outline-container-replacement-and-state" class="outline-3">
+<h3 id="replacement-and-state">Replacement and state</h3>
+<p>Reevaluating a script containing <code>spawn_srv!</code> replaces the local service with
+that name. Compatible bindings follow the replacement. Bind again to import
+newly added exported names.</p>
+<p>A service retains its exported functions. Redefining an export in a separate
+REPL alone does not replace it there. Closures can share captured environments;
+service replacement is the explicit update operation used in the tour.</p>
+<p>Replacement does not preserve in-memory state or migrate stack frames.
+<code>spawn_srv!</code> cannot kill a process on another node. To move a service, stop its
+old instance before starting the new one. Remote evaluation does not provide
+automatic singleton management.</p>
+</div>
+</div>
+<div id="outline-container-processes-and-messages" class="outline-2">
+<h2 id="processes-and-messages">Processes and messages</h2>
+<p><code>spawn</code> starts a process. <code>self</code> returns the current process's ID; <code>send</code> and
+<code>recv</code> exchange values:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">def</span> parent (<span class="token-form">self</span>))
+(<span class="token-form">spawn</span> (<span class="token-form">fn</span> () (<span class="token-form">send</span> parent '(<span class="token-keyword">:greeting</span> <span class="token-string">"hello"</span>))))
+(<span class="token-form">match</span> (<span class="token-form">recv</span>)
+  ((<span class="token-keyword">:greeting</span> message) message)) <span class="token-comment"># =&gt; "hello"</span>
+</pre></div>
+<p><code>call</code> sends a request and waits for its reply. <code>call_timeout</code> sets the deadline
+in seconds for this process's calls:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">call_timeout</span> <span class="token-number">10</span>)
+(<span class="token-form">call</span> (<span class="token-form">find_srv</span> <span class="token-keyword">:echo</span>) '(<span class="token-keyword">:echo</span> <span class="token-string">"hello"</span>))
+</pre></div>
+<p><code>ps</code> lists runtime processes, <code>self</code> returns the current PID, and <code>kill</code> stops a
+process. <code>ls_msgs</code> inspects queued messages without consuming them. A pattern
+passed to <code>recv</code> waits for a matching message and leaves other messages queued.</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">send</span> (<span class="token-form">self</span>) '(<span class="token-keyword">:notice</span> <span class="token-string">"ready"</span>))
+(<span class="token-form">ls_msgs</span>)
+(<span class="token-form">recv</span> '(<span class="token-keyword">:notice</span> _)) <span class="token-comment"># =&gt; (:notice "ready")</span>
+</pre></div>
+<p>A message loop can dispatch on patterns. <code>srv!</code> supplies the usual request and
+response loop for exported functions.</p>
+<div id="outline-container-deadlines-and-cancellation" class="outline-3">
+<h3 id="deadlines-and-cancellation">Deadlines and cancellation</h3>
+<p>The default call deadline is five seconds for local and remote calls.
+<code>call_timeout</code> changes it for the current process. Calls are not retried
+automatically. A timeout ends the wait; it does not establish that the service
+stopped. Retrying may repeat effects. Cancellation does not roll back work
+already done.</p>
+</div>
+<div id="outline-container-waiting-and-recurring-work" class="outline-3">
+<h3 id="waiting-and-recurring-work">Waiting and recurring work</h3>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">def</span> worker
+  (<span class="token-form">spawn</span> (<span class="token-form">fn</span> ()
+    (<span class="token-form">loop</span>
+      (<span class="token-form">publish</span> <span class="token-keyword">:tick</span> <span class="token-string">"another minute"</span>)
+      (<span class="token-form">sleep</span> <span class="token-number">60</span>)))))
+(<span class="token-form">kill</span> worker)
+</pre></div>
+<p>A child can outlive its starting client, but its state is in runtime memory.
+A sleeping worker is not also answering service requests. Use a separate
+process for responsive controls when the worker can stay busy or asleep.</p>
+</div>
+</div>
+<div id="outline-container-events-and-subscriptions" class="outline-2">
+<h2 id="events-and-subscriptions">Events and subscriptions</h2>
+<p>Subscribe to a topic to receive its future publications:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">subscribe</span> <span class="token-keyword">:clock</span>)
+(<span class="token-form">publish</span> <span class="token-keyword">:clock</span> '(<span class="token-keyword">:tick</span> <span class="token-number">1</span>))
+(<span class="token-form">recv</span>) <span class="token-comment"># =&gt; (:topic_updated :clock (:tick 1))</span>
+</pre></div>
+<p>Earlier publications are not replayed to new subscribers.</p>
+<p>Services can react to topics alongside their ordinary calls:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">defn!</span> celebrate (<span class="token-form">task</span>) (<span class="token-form">exec</span> <span class="token-string">"unicornleap"</span>))
+(<span class="token-form">spawn_srv!</span> <span class="token-keyword">:celebration</span>
+  <span class="token-keyword">:topics</span> '((<span class="token-keyword">:todo_completed</span> celebrate)))
+</pre></div>
+<p>Each handler receives the published value and shares the service's state.
+Both <code>srv!</code> and <code>spawn_srv!</code> default to an empty interface when <code>:interface</code>
+is omitted, so a service that only responds to events needs no export list.
+Events are node-local and best-effort; publishing does not wait for handlers
+to finish.</p>
+</div>
+<div id="outline-container-external-programs" class="outline-2">
+<h2 id="external-programs">External programs</h2>
+<p><code>exec</code> returns a program's exit status, stdout, and stderr. <code>decode</code> turns text
+into values:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">def</span> result (<span class="token-form">exec</span> <span class="token-string">"printf"</span> <span class="token-string">"one\ntwo\n"</span>))
+(<span class="token-form">decode</span> <span class="token-keyword">:lines</span> (<span class="token-form">get</span> result <span class="token-keyword">:stdout</span>)) <span class="token-comment"># =&gt; ("one" "two")</span>
+</pre></div>
+<p>For macOS launch helpers, bind <code>:os_browser</code> to use <code>open_url</code>, or <code>:os_apps</code>
+to use <code>open_app</code> and <code>open_file</code>.</p>
+<p>Keep execution separate from decoding. Inspect status, stdout, and stderr
+before constructing domain values. <code>(exec PROGRAM ... :stdin TEXT)</code> supplies
+input to the subprocess.</p>
+<p>Existing services demonstrate different adapters:</p>
+<table>
+<thead>
+<tr>
+<th>Service</th>
+<th>How it reaches the capability</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/leoshimo/vrs/blob/main/scripts/os_browser.ll">Safari</a></td>
+<td>AppleScript for the active page; SQLite for the locally synced tab cache. Reading the cache does not force a sync.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/leoshimo/vrs/blob/main/scripts/os_notes.ll">Apple Notes</a></td>
+<td>SQLite titles, application URLs, and AppleScript actions.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/leoshimo/vrs/blob/main/scripts/antinote.ll">Antinote</a></td>
+<td>SQLite data and application URLs.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/leoshimo/vrs/blob/main/scripts/feedbin.ll">Feedbin</a></td>
+<td>The separate <code>feedbinctl</code> command.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/leoshimo/vrs/blob/main/scripts/ditoo.ll">Ditoo</a></td>
+<td>A dedicated CLI for a Bluetooth display.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/leoshimo/vrs/blob/main/scripts/system_appearance.ll">System appearance</a></td>
+<td>Platform commands behind appearance-setting functions.</td>
+</tr>
+</tbody>
+</table>
+<div id="outline-container-keyboard-brightness" class="outline-3">
+<h3 id="keyboard-brightness">Keyboard brightness</h3>
+<p>On the MacBook node, <code>:os_keyboard</code> uses macOS's built-in <code>osascript</code> and its
+Objective-C bridge to access the private CoreBrightness interface. No separate
+executable or installation is needed. API and hardware failures surface as errors.</p>
+<p>Search Home for <strong>Toggle Keyboard Backlight</strong>. It changes 0% to 5% and any
+positive brightness to 0%; it does not remember the previous level.</p>
+<p>The same operations are available under <strong>Browse Services → :os<sub>keyboard</sub></strong> or
+from Lyric:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">bind_srv</span> <span class="token-keyword">:os_keyboard</span>)
+(<span class="token-form">get_keyboard_brightness</span>)
+(<span class="token-form">set_keyboard_brightness</span> <span class="token-number">5</span>)
+(<span class="token-form">toggle_keyboard_backlight</span>)
+</pre></div>
+<p>All three functions return macOS's brightness readback as an integer percentage.
+To load changes into a running node, evaluate <code>scripts/os_keyboard.ll</code>, then
+<code>scripts/vrsjmp.ll</code>. Normal startup loads both from <code>scripts/init.ll</code>.</p>
+</div>
+</div>
+<div id="outline-container-entities-and-interactive-functions" class="outline-2">
+<h2 id="entities-and-interactive-functions">Entities and interactive functions</h2>
+<p>An entity is a list with a type tag followed by properties:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">def</span> window '(<span class="token-keyword">:os/window</span> <span class="token-keyword">:id</span> <span class="token-number">123</span> <span class="token-keyword">:app</span> <span class="token-string">"Safari"</span> <span class="token-keyword">:title</span> <span class="token-string">"VRS"</span>))
+(<span class="token-form">get</span> window <span class="token-keyword">:title</span>) <span class="token-comment"># =&gt; "VRS"</span>
+</pre></div>
+<p>Add <code>interactive</code> to a function to describe which kind of value to offer
+for each argument:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">defn!</span> focus_window (<span class="token-form">window</span>)
+  <span class="token-string">"Focus Window"</span>
+  (<span class="token-form">interactive</span> <span class="token-keyword">:os/window</span>)
+  (<span class="token-form">exec</span> <span class="token-string">"yabai"</span> <span class="token-string">"-m"</span> <span class="token-string">"window"</span> (<span class="token-form">str</span> (<span class="token-form">get</span> window <span class="token-keyword">:id</span>)) <span class="token-string">"--focus"</span>))
+</pre></div>
+<p>Register a function that returns those choices:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">set_entity_completions</span> <span class="token-keyword">:os/window</span> 'get_windows)
+</pre></div>
+<p>The provider takes no arguments and returns a list of entities. Bindings import
+providers exported by a service. To inspect a function or its choices:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">meta</span> focus_window)
+(<span class="token-form">get_entity_completions</span> <span class="token-keyword">:os/window</span>) <span class="token-comment"># =&gt; (get_windows)</span>
+</pre></div>
+<p>The type annotation guides the picker; it does not reject other values when
+you call the function directly.</p>
+<p>Given an entity, <code>entity_functions</code> returns bound function names whose first
+<code>interactive</code> argument matches its leading tag. It runs neither those functions
+nor completion providers. Emacs action selection and vrsjmp's Cmd-K menu use
+this same query:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">entity_functions</span> '(<span class="token-keyword">:os/window</span> <span class="token-keyword">:id</span> <span class="token-number">7</span>))
+<span class="token-comment"># =&gt; (focus_window) # Other bound window actions may also appear.</span>
+</pre></div>
+<p><code>argument_entities</code> invokes registered providers for current values of a type:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">argument_entities</span> <span class="token-keyword">:os/window</span>)
+</pre></div>
+<p>The providers must be available in the calling environment. <code>entity_functions</code>
+finds operations from a value; <code>argument_entities</code> supplies values for an
+operation. The <a href="tour.html">tour</a> demonstrates both directions on the same declarations.</p>
+</div>
+<div id="outline-container-user-interface-clients" class="outline-2">
+<h2 id="user-interface-clients">User interface clients</h2>
+<p>The <code>:vrsjmp</code> service supplies markup and executes selections. The desktop app
+<code>vrsjmp</code> and <a href="https://github.com/leoshimo/vrs/blob/main/scripts/vrsjmp-terminal">vrsjmp-terminal</a> are clients of that service. The terminal script
+uses <code>fzf</code> and <code>vrsctl</code>; keep both on its path.</p>
+<div class="code-block"><div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">./scripts/vrsjmp-terminal
+</pre></div>
+<div id="outline-container-pages-and-actions" class="outline-3">
+<h3 id="pages-and-actions">Pages and actions</h3>
+<p>The GUI and terminal client call the exported <code>root_page</code> function to open an
+interaction. It returns Home or a pending chooser's page description directly;
+opening is not routed through <code>on_click</code> or recorded as a <code>:cmd</code> action. The
+page names its item callback, arguments, and any cancellation action. A small
+launcher exports <code>root_page</code>, <code>get_items</code>, and <code>on_click</code>.</p>
+<p>To add a page, define an item function in
+<a href="https://github.com/leoshimo/vrs/blob/main/scripts/vrsjmp.ll">scripts/vrsjmp.ll</a>. It takes the search text and returns
+rows with titles and commands:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">defn!</span> project_items (<span class="token-form">query</span>)
+  (<span class="token-form">fuzzy_match</span> query
+    '((<span class="token-keyword">:title</span> <span class="token-string">"VRS"</span>
+       <span class="token-keyword">:subtitle</span> <span class="token-string">"github.com"</span>
+       <span class="token-keyword">:on_click</span> (<span class="token-form">open_url</span> <span class="token-string">"https://github.com/leoshimo/vrs"</span>)))
+    (<span class="token-form">fn</span> (<span class="token-form">item</span>) (<span class="token-form">get</span> item <span class="token-keyword">:title</span>))))
+</pre></div>
+<p>Add an entry to <code>favorite_items</code> that opens the page:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">make_item</span> <span class="token-string">"Projects"</span> '(<span class="token-form">push_page</span> 'project_items <span class="token-string">"Find a project…"</span>))
+</pre></div>
+<p>Enter runs a row's <code>:on_click</code> expression. Escape returns to the previous page.
+Optional <code>:actions</code> use the same row format and appear in the Cmd-K menu.
+The menu initially selects the first secondary action when available. An action
+with the same <code>:on_click</code> form as its row is treated as primary and grouped above
+the secondary actions. Typing reveals a search field at the bottom; Escape closes
+the menu and restores the page search.
+Reload your edits with <code>(run &quot;./scripts/vrsjmp.ll&quot;)</code>.</p>
+<p>For an action that asks for arguments and then runs a function, use:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">make_item</span> <span class="token-string">"Focus a window"</span> '(<span class="token-form">call_interactively</span> 'focus_window))
+</pre></div>
+<p><code>call_interactively</code> shows one selection page per argument, using the registered
+completion providers. Selecting the last argument runs the function.</p>
+</div>
+<div id="outline-container-refreshing-the-current-page" class="outline-3">
+<h3 id="refreshing-the-current-page">Refreshing the current page</h3>
+<p>Choose <strong>Display Resolution</strong> from Home. Selecting a resolution keeps the page
+and search open, preserves the selected mode, and refreshes the <strong>(current)</strong>
+marker from the display. The marker is only a label; that row can be selected
+again after switching modes. Unavailable modes and failed changes show an error.</p>
+<p>Page actions can return <code>:refresh</code> to query the current page again without
+closing it or adding a history entry.</p>
+</div>
+<div id="outline-container-browsing-services" class="outline-3">
+<h3 id="browsing-services">Browsing services</h3>
+<p>Choose <strong>Browse Services</strong> from Home, select a registered service, then search
+its exported functions by signature or documentation. Selecting a function
+prompts for its arguments and invokes it. Typed arguments use the service's
+completion providers, falling back to providers already configured in vrsjmp;
+otherwise enter a Lyric expression such as <code>&quot;hello&quot;</code>, <code>42</code>, or <code>'(a b)</code>.
+Escape returns to the previous page.</p>
+<p>The service browser reads the live registry, including services that vrsjmp has
+not imported. Browsing leaves vrsjmp's function bindings intact. <strong><strong>Browse
+Functions</strong></strong> continues to search functions already bound in vrsjmp.</p>
+</div>
+<div id="outline-container-returning-a-choice" class="outline-3">
+<h3 id="returning-a-choice">Returning a choice</h3>
+<p>Choose one element of a list, or one field's value from a record:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">vrsjmp_choose</span> '(<span class="token-string">"tea"</span> <span class="token-string">"coffee"</span> <span class="token-string">"water"</span>))
+(<span class="token-form">vrsjmp_choose</span> (<span class="token-form">get_windows</span>))
+(<span class="token-form">vrsjmp_choose_field</span> (<span class="token-form">active_tab</span>))
+</pre></div>
+<p>The call waits for your selection. <code>vrsjmp_choose_field</code> shows keys and values;
+it accepts keyword/value records and tagged entities. Empty input is an error.
+Cancelling the picker raises an error in the waiting call.</p>
+<p>The GUI must already be running for automatic opening. Pending requests remain
+in <code>:vrsjmp</code> after a missed wakeup and are checked on opening or reconnection.
+<code>(show_gui)</code> asks the GUI to open through the normal page flow.</p>
+</div>
+<div id="outline-container-failed-actions" class="outline-3">
+<h3 id="failed-actions">Failed actions</h3>
+<p>Failed actions remain searchable on Home with their original title, <strong>Failed</strong>,
+the error, and the captured call. Select the row to retry, or choose <strong>Retry</strong>
+or <strong>Dismiss</strong> from its action menu. A retry uses the original argument values,
+even after switching apps or browser tabs. Actions run in separate processes;
+return to Home to see their latest outcome. Repeated activation of a running
+retry does not start another attempt.</p>
+<p>Items keep ordinary calls, such as <code>:on_click (save_page (active_tab))</code>. The
+shared click handler evaluates each argument once and retains the resulting
+call. It recognizes functions with existing <code>interactive</code> or bound-service
+metadata; completed interactive calls also retain their filled arguments.
+Palette navigation and macro controls keep their synchronous behavior. Compound
+forms such as <code>begin</code> use normal execution without retry capture. Capture stops
+at the outer call: input read inside a function's body is read again on retry.</p>
+<p>Failures survive closing the window, but restarting or reloading the vrsjmp
+service clears them. Retry starts the whole captured call again, including any
+effects that previously completed. Timeouts keep their original error text;
+they do not imply cancellation of the remote operation. No automatic retry is
+performed. Items use the existing title, aside, multiline subtitle, and actions.</p>
+</div>
+<div id="outline-container-building-the-desktop-client" class="outline-3">
+<h3 id="building-the-desktop-client">Building the desktop client</h3>
+<p>With the Tauri CLI installed, run from <code>vrsjmp/</code>:</p>
+<div class="code-block"><div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">cargo tauri dev
+</pre></div>
+</div>
+</div>
+<div id="outline-container-editor" class="outline-2">
+<h2 id="editor">Working in the editor</h2>
+<p>The editor is a client of the running environment. It can evaluate source,
+retain live values, construct calls, and update services. The following
+examples build up a notebook service and use it from the editor.</p>
+<div id="outline-container-connect-the-editor" class="outline-3">
+<h3 id="connect-the-editor">Connect the editor</h3>
+<p>With VRS running, open a scratch buffer with the repository's mode:</p>
+<div class="code-block"><div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">emacs -Q -L emacs -l vrs-mode scratch.ll
+</pre></div>
+<p>For a regular Emacs configuration:</p>
+<div class="code-block"><div class="code-toolbar"><span>EMACS LISP</span><button class="copy-code" type="button" aria-label="Copy emacs lisp code">Copy</button></div><pre class="src src-emacs-lisp">(add-to-list 'load-path "/path/to/vrs/emacs")
+(require 'vrs-mode)
+</pre></div>
+<p>The mode uses built-in Emacs libraries. Set <code>vrs-vrsctl-command</code> to the CLI path
+and options, such as a socket, remote node, or service binding. Buffers using
+the same command share a session. Source is sent unchanged, including raw
+block strings and reader prefixes.</p>
+<p>The daemon and CLI must be compatible builds. <code>./serve</code> installs the client
+matching the release runtime; <code>./serve dev</code> uses the debug profile.</p>
+</div>
+<div id="outline-container-start-in-scratch-ll" class="outline-3">
+<h3 id="start-in-scratch-ll">Start in scratch.ll</h3>
+<p>Use your running VRS and an Emacs buffer in <code>vrs-mode</code>. Load the current
+<code>emacs/vrs-mode.el</code> and <code>emacs/vrs-choose.el</code> with <code>M-x load-file</code> if needed;
+the daemon and <code>vrsctl</code> must also include the chooser helpers from this version.</p>
+<p>Copy the examples into <code>scratch.ll</code>, or press <code>C-c '</code> inside a <code>vrs</code> source
+block to open it in the VRS source editor. Use the evaluation commands there;
+press <code>C-c '</code> again to bring your edited source back into this guide.</p>
+<p>Buffers using the same <code>vrs-vrsctl-command</code> share a persistent session. Evaluated
+definitions, macros, and service bindings remain available in later expressions.
+Set that variable to choose a different <code>vrsctl</code> executable or runtime socket.</p>
+</div>
+<div id="outline-container-notebook-setup" class="outline-3">
+<h3 id="notebook-setup">Set up the notebook example</h3>
+<p>This block defines every <code>demo_*</code> function used in the guide. Paste it into
+<code>scratch.ll</code>, select it, and evaluate with <code>C-c C-r</code>. It supplies notebooks and
+destinations, actions to try on them, and a log that lets you see what ran.</p>
+<!-- example: notebook-setup -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">def</span> demo_history '())
+
+(<span class="token-form">defn!</span> demo_items ()
+  '((<span class="token-keyword">:demo/item</span> <span class="token-keyword">:title</span> <span class="token-string">"Blue notebook"</span> <span class="token-keyword">:id</span> <span class="token-number">1</span> <span class="token-keyword">:note</span> <span class="token-string">"first"</span> <span class="token-keyword">:tags</span> (<span class="token-form">alpha</span> beta))
+    (<span class="token-keyword">:demo/item</span> <span class="token-keyword">:title</span> <span class="token-string">"Green notebook"</span> <span class="token-keyword">:id</span> <span class="token-number">2</span> <span class="token-keyword">:note</span> <span class="token-string">"line\n\"quoted\""</span> <span class="token-keyword">:tags</span> (<span class="token-form">gamma</span> delta))))
+
+(<span class="token-form">defn!</span> demo_places ()
+  '((<span class="token-keyword">:demo/place</span> <span class="token-keyword">:title</span> <span class="token-string">"Desk"</span> <span class="token-keyword">:id</span> <span class="token-number">10</span>)
+    (<span class="token-keyword">:demo/place</span> <span class="token-keyword">:title</span> <span class="token-string">"Backpack"</span> <span class="token-keyword">:id</span> <span class="token-number">20</span>)))
+
+(<span class="token-form">defn!</span> demo_move (<span class="token-form">item</span> place)
+  <span class="token-string">"Move demo item"</span>
+  (<span class="token-form">interactive</span> <span class="token-keyword">:demo/item</span> <span class="token-keyword">:demo/place</span>)
+  (<span class="token-form">set</span> demo_history (<span class="token-form">push</span> demo_history (<span class="token-form">list</span> <span class="token-keyword">:item</span> item <span class="token-keyword">:place</span> place)))
+  <span class="token-keyword">:moved</span>)
+
+(<span class="token-form">defn!</span> demo_note (<span class="token-form">item</span> text)
+  <span class="token-string">"Note demo item"</span>
+  (<span class="token-form">interactive</span> <span class="token-keyword">:demo/item</span> <span class="token-keyword">:demo/text</span>)
+  (<span class="token-form">set</span> demo_history (<span class="token-form">push</span> demo_history (<span class="token-form">list</span> <span class="token-keyword">:item</span> item <span class="token-keyword">:note</span> text)))
+  <span class="token-keyword">:noted</span>)
+
+(<span class="token-form">defn!</span> demo_log () demo_history)
+
+(<span class="token-form">set_entity_completions</span> <span class="token-keyword">:demo/item</span> 'demo_items)
+(<span class="token-form">set_entity_completions</span> <span class="token-keyword">:demo/place</span> 'demo_places)
+(<span class="token-form">spawn_srv!</span> <span class="token-keyword">:chooser_demo</span> <span class="token-keyword">:interface</span> '(<span class="token-form">demo_items</span> demo_places demo_move demo_note demo_log))
+(<span class="token-form">bind_srv</span> <span class="token-keyword">:chooser_demo</span>)
+</pre></div>
+<p>The final <code>:ok</code> comes from <code>bind_srv</code>. Definitions and bindings remain available
+for later evaluations. Re-evaluating this setup starts a new demo service with
+an empty log.</p>
+<p>For each expression below, put point immediately after its closing parenthesis
+unless a region is specified. <code>TAB</code> shows choices when your completion setup
+does not show them automatically. Use <code>C-c C-e</code> to inspect <code>(demo_items)</code> now.</p>
+</div>
+<div id="outline-container-command-reference" class="outline-3">
+<h3 id="command-reference">Command reference</h3>
+<table>
+<thead>
+<tr>
+<th>Interaction</th>
+<th>Command</th>
+<th>Effect on source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Evaluate an expression</td>
+<td><code>C-c C-e</code></td>
+<td>Keep source; display its result.</td>
+</tr>
+<tr>
+<td>Evaluate a region / buffer</td>
+<td><code>C-c C-r</code> / <code>C-c C-c</code></td>
+<td>Keep source; display the last result.</td>
+</tr>
+<tr>
+<td>Evaluate a buffer with a transcript</td>
+<td><code>C-u C-c C-c</code></td>
+<td>Keep source; show expressions with commented results.</td>
+</tr>
+<tr>
+<td>Retain an evaluated result</td>
+<td><code>C-u C-c C-e</code> / <code>C-u C-c C-r</code></td>
+<td>Replace source with its value as literal source, including needed quotes.</td>
+</tr>
+<tr>
+<td>Insert generated code</td>
+<td><code>M-x vrs-insert-evaluated-code</code></td>
+<td>Replace the expression or region with its result as code; do not add a quote or execute the inserted code.</td>
+</tr>
+<tr>
+<td>Choose a list element</td>
+<td><code>C-c C-v</code></td>
+<td>Replace source with the chosen literal, including needed quotes.</td>
+</tr>
+<tr>
+<td>Choose a record field</td>
+<td><code>M-x vrs-choose-field</code></td>
+<td>Replace source with the field's literal value.</td>
+</tr>
+<tr>
+<td>Insert a function call</td>
+<td><code>C-c C-b</code></td>
+<td>Insert argument names as placeholders.</td>
+</tr>
+<tr>
+<td>Insert a filled function call</td>
+<td><code>C-u C-c C-b</code></td>
+<td>Prompt for arguments and insert the call; do not execute it.</td>
+</tr>
+<tr>
+<td>Browse a service's interface</td>
+<td><code>C-c C-s</code></td>
+<td>Choose a service, then insert a function call with placeholders.</td>
+</tr>
+<tr>
+<td>Fill a service call</td>
+<td><code>C-u C-c C-s</code></td>
+<td>Choose a service and function, then prompt for arguments.</td>
+</tr>
+<tr>
+<td>Build an action on an entity</td>
+<td><code>C-c C-a</code></td>
+<td>Replace the entity expression with a filled call; do not execute it.</td>
+</tr>
+<tr>
+<td>Execute an action on an entity</td>
+<td><code>M-x vrs-execute-action</code></td>
+<td>Keep source; run the chosen action and display its result.</td>
+</tr>
+<tr>
+<td>Build a call in the GUI</td>
+<td><code>M-x vrsjmp-browse-functions</code></td>
+<td>Insert the call returned by vrsjmp.</td>
+</tr>
+<tr>
+<td>Inspect a macro expansion</td>
+<td><code>C-c C-m</code> / <code>C-u C-c C-m</code></td>
+<td>Keep source; display one expansion or repeat outer expansion.</td>
+</tr>
+<tr>
+<td>Start a fresh session</td>
+<td><code>M-x vrs-reset-session</code></td>
+<td>Keep source; clear the shared session's definitions and bindings.</td>
+</tr>
+</tbody>
+</table>
+<p>Value, field, and action commands accept an active region too. If it contains
+several expressions, they use the last value. An entity expression runs once
+before the action prompt; the selected action only runs when explicitly executed.</p>
+<p>Prefix evaluation retains a value: a returned list becomes a quoted list,
+a returned symbol becomes a quoted symbol, and strings keep their escapes.
+Runtime-only values such as functions and VRS process IDs cannot be retained;
+the command reports an error and leaves the source unchanged. The expression
+runs once, even when its result cannot be retained.</p>
+<p>Use <code>vrs-insert-evaluated-code</code> when evaluating a code generator or an explicit
+<code>macroexpand_1</code> call. It preserves the old unquoted replacement behavior.</p>
+</div>
+<div id="outline-container-choose-a-value" class="outline-3">
+<h3 id="choose-a-value">Choose a value</h3>
+<p>Insert <code>(demo_items)</code> and press <code>C-c C-v</code>. Each row shows a full Lyric value;
+choose the one containing <code>&quot;Green notebook&quot;</code> and <code>:id 2</code>.
+The expression becomes:</p>
+<div class="code-block"><div class="code-toolbar"><button class="copy-code" type="button" aria-label="Copy code">Copy</button></div><pre class="example">'(:demo/item :title "Green notebook" :id 2 :note "line\n\"quoted\"" :tags (gamma delta))
+</pre></div>
+<p>Emacs displays the value directly. <code>:title</code> is just one of this example's
+fields; no title field is required. Row numbers distinguish identical values.</p>
+<p>The tag, nested symbols, string escaping, and outer quote should survive.
+Evaluate the retained value with <code>C-c C-e</code> to confirm it is usable source.</p>
+</div>
+<div id="outline-container-choose-fields-and-regions" class="outline-3">
+<h3 id="choose-fields-and-regions">Choose fields and regions</h3>
+<p>Insert <code>(get (demo_items) 1)</code> and run <code>M-x vrs-choose-field</code>.
+Choose <code>:note</code>: the source should become <code>&quot;line\n\&quot;quoted\&quot;&quot;</code>.
+Repeat on a fresh copy and choose <code>:tags</code>: expect <code>'(gamma delta)</code>.
+This retains the field's current value; it does not generate a <code>get</code> expression.</p>
+<p>Then select this whole region and press <code>C-c C-v</code>:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">def</span> chosen_items (<span class="token-form">demo_items</span>))
+chosen_items
+</pre></div>
+<p>Choose either item. The whole region should be replaced by that one literal.</p>
+</div>
+<div id="outline-container-browse-functions-and-fill-arguments" class="outline-3">
+<h3 id="browse-functions-and-fill-arguments">Browse functions and fill arguments</h3>
+<p>On a blank line, run <code>C-c C-b</code> (<code>M-x vrs-browse-functions</code>). Search for
+<code>demo_move</code>; its signature, service, and <strong>Move demo item</strong> documentation appear.
+Select it. Expect <code>(demo_move item place)</code> with placeholders.</p>
+<p>On another blank line, run <code>C-u C-c C-b</code>. Choose <code>demo_move</code>, then the value
+containing <strong>Green notebook</strong>, then the value containing <strong>Desk</strong>. Expect a call
+with both complete, quoted entities. Evaluate <code>(demo_log)</code> on a separate line:
+it should still be <code>()</code>.</p>
+<p>Repeat with <code>demo_note</code>. After choosing an item, type <code>&quot;hello&quot;</code> for the text
+argument, including quotes. The call should be inserted with <code>&quot;hello&quot;</code>, and the
+log should still be empty. Entering a call such as <code>(demo_items)</code> as an argument
+also only inserts that expression; it does not evaluate it during construction.</p>
+<p>To start from a service, use <code>C-c C-s</code> (<code>M-x vrs-browse-services</code>). Choose
+<code>:chooser_demo</code>, then <code>demo_move</code>. The second minibuffer lists only that
+service's exported functions, with their signatures and documentation.
+<code>C-u C-c C-s</code> also fills arguments before inserting the call.</p>
+<p>The service list comes from the registry, so it includes services you have not
+bound yet. Selecting a service runs <code>bind_srv</code> in the shared editor session;
+its functions and completion providers remain available for later evaluations.
+As with <code>bind_srv</code>, exported names replace existing bindings of the same name.
+Browsing does not execute the selected function. <code>C-g</code> at either prompt keeps
+the buffer unchanged; it does not undo a completed service binding.</p>
+</div>
+<div id="outline-container-start-with-an-entity-and-construct-an-action" class="outline-3">
+<h3 id="start-with-an-entity-and-construct-an-action">Start with an entity and construct an action</h3>
+<p>Insert <code>(get (demo_items) 1)</code> and press <code>C-c C-a</code>.
+Choose <strong>Move demo item</strong>, then <strong>Desk</strong>. Expect:</p>
+<div class="code-block"><div class="code-toolbar"><button class="copy-code" type="button" aria-label="Copy code">Copy</button></div><pre class="example">(demo_move '(:demo/item :title "Green notebook" :id 2 :note "line\n\"quoted\"" :tags (gamma delta))
+           '(:demo/place :title "Desk" :id 10))
+</pre></div>
+<p><code>(demo_log)</code> should still be empty. You now have a complete call you can edit,
+save, or evaluate explicitly with <code>C-c C-e</code>. The same interaction works on the
+quoted entity retained earlier. The leading <code>:demo/item</code> matches the action's
+first declared argument type; the title does not decide which actions apply.</p>
+</div>
+<div id="outline-container-execute-an-action-on-a-literal-or-a-call" class="outline-3">
+<h3 id="execute-an-action-on-a-literal-or-a-call">Execute an action on a literal or a call</h3>
+<p>Paste this literal and run <code>M-x vrs-execute-action</code>:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">'(<span class="token-keyword">:demo/item</span> <span class="token-keyword">:title</span> <span class="token-string">"Green notebook"</span> <span class="token-keyword">:id</span> <span class="token-number">2</span> <span class="token-keyword">:tags</span> (<span class="token-form">gamma</span> delta))
+</pre></div>
+<p>Choose <strong>Move demo item</strong>, then <strong>Desk</strong>. The literal stays in the buffer,
+<code>*VRS Result*</code> shows <code>:moved</code>, and <code>(demo_log)</code> contains one new entry.</p>
+<p>Now paste this call and run the same command directly, without first retaining
+its result with a chooser:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">get</span> (<span class="token-form">demo_items</span>) <span class="token-number">1</span>)
+</pre></div>
+<p>Choose <strong>Move demo item</strong>, then <strong>Backpack</strong>. The call runs once to obtain the
+entity. Its source stays in place, the chosen action runs once, and <code>(demo_log)</code>
+has one more entry. This is also how to act directly on live service results.</p>
+<p>To inspect the concrete call published for macro recording, evaluate
+<code>(subscribe :cmd)</code> with <code>C-c C-e</code>, perform one more <code>vrs-execute-action</code>, then
+evaluate:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">recv</span> '(<span class="token-keyword">:topic_updated</span> <span class="token-keyword">:cmd</span> _))
+</pre></div>
+<p>The event contains the action call with the chosen entity and destination.</p>
+</div>
+<div id="outline-container-show-an-evaluation-transcript" class="outline-3">
+<h3 id="show-an-evaluation-transcript">Show an evaluation transcript</h3>
+<p>In another scratch buffer in <code>vrs-mode</code>, paste only:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">+</span> <span class="token-number">1</span> <span class="token-number">2</span>)
+(<span class="token-form">+</span> <span class="token-number">3</span> <span class="token-number">4</span>)
+</pre></div>
+<p><code>C-c C-c</code> currently displays <code>7</code>, the buffer's final value. <code>C-u C-c C-c</code>
+evaluates the expressions separately and shows this in <code>*VRS Result*</code>:</p>
+<div class="code-block"><div class="code-toolbar"><button class="copy-code" type="button" aria-label="Copy code">Copy</button></div><pre class="example">(+ 1 2)
+# =&gt; 3
+(+ 3 4)
+# =&gt; 7
+</pre></div>
+<p>The source buffer stays unchanged. The prefix command evaluates the buffer
+again; it does not recover output from the previous evaluation.</p>
+</div>
+<div id="outline-container-make-a-choice-in-vrsjmp-and-keep-it-in-emacs" class="outline-3">
+<h3 id="make-a-choice-in-vrsjmp-and-keep-it-in-emacs">Make a choice in vrsjmp and keep it in Emacs</h3>
+<p>With vrsjmp running on your runtime, insert
+<code>(vrsjmp_choose '(&quot;tea&quot; &quot;coffee&quot;))</code> and press <code>C-u C-c C-e</code>.
+Choose <strong>coffee</strong> in the GUI. The waiting editor expression becomes <code>&quot;coffee&quot;</code>.</p>
+<p>You can also run <code>M-x vrsjmp-browse-functions</code> to bring a call built in the GUI
+back into the editor. Enter selects placeholders; its <strong>Fill arguments</strong> action
+chooses values before returning the call. The GUI lists functions bound in its
+own service, so it need not show the same functions as the Emacs session.
+<code>C-c C-b</code> and <code>C-u C-c C-b</code> use Emacs completion for those two interactions.</p>
+</div>
+<div id="outline-container-cancel-and-keep-working" class="outline-3">
+<h3 id="cancel-and-keep-working">Cancel and keep working</h3>
+<p>Start <code>C-u C-c C-b</code>, choose a function and one argument, then press <code>C-g</code>.
+The buffer and <code>(demo_log)</code> stay unchanged. You can explore a call and abandon
+it before anything runs.</p>
+<p>An evaluation error also leaves the source in place. Try <code>(missing_function)</code>
+with <code>C-c C-v</code>, then evaluate <code>(demo_items)</code> to keep working in the same session.</p>
+<p>To interrupt a waiting call, evaluate <code>(recv)</code> and press <code>C-g</code>. That resets the
+editor session. Evaluate <code>(bind_srv :chooser_demo)</code> to reconnect to the notebook
+service; its history remains available in <code>(demo_log)</code>.</p>
+<p><code>M-x vrs-reset-session</code> also starts a fresh session. Connection setup is at the beginning of this guide.</p>
+</div>
+<div id="outline-container-evaluation-details" class="outline-3">
+<h3 id="evaluation-details">Evaluation details</h3>
+<p>Expression evaluation includes the reader prefix. Region and buffer evaluation
+use an implicit <code>begin</code> and display the last value. Prefix buffer evaluation
+runs forms separately to produce a transcript; it executes them again.</p>
+<p>Functions, variables, macros, and service bindings remain in the session,
+including after ordinary evaluation errors. Reevaluate a definition to update
+it. Cancelling a waiting evaluation resets the session.</p>
+<p>Value, field, and action commands evaluate source once. Field selection accepts
+records and tagged entities; row numbers distinguish duplicate values.
+Constructing a call parses manually entered arguments without evaluating them;
+requested completion providers do run.</p>
+<p>Function browsing searches bound methods by name, signature, service, and
+documentation. Service browsing starts from the live registry and binds the
+chosen service. Session-local interactive functions also participate in
+noun–verb discovery through the first argument's declared type.</p>
+<p><code>vrs-execute-action</code> publishes the selected call to <code>:cmd</code> and executes it
+through the runtime command helper. Construction does not execute that call.
+The <code>:vrsjmp</code> service's captured-call retry behavior is described in the
+<a href="manual.html#failed-actions">manual</a>.</p>
+<p>Errors, cancellation, source edits, or closing the source buffer prevent a
+partial replacement. Buffer changes detected before dispatch also prevent
+execution. Effects already performed are not undone. The older
+<code>vrs-browse-functions-minibuffer</code> name remains an alias.</p>
+<div id="outline-container-macro-inspection" class="outline-4">
+<h4 id="macro-inspection">Macro inspection</h4>
+<p><code>C-c C-m</code> shows one expansion; <code>C-u C-c C-m</code> repeats outer expansion.
+The editor quotes the selected form. The equivalent expression is:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">macroexpand_1</span> '(<span class="token-form">srv!</span> <span class="token-keyword">:test</span> <span class="token-keyword">:interface</span> '()))
+</pre></div>
+<p>Without the quote, the service loop runs before the inspection function.
+Transformers run during inspection, including their effects; the generated
+program is not executed. <code>vrs-insert-evaluated-code</code> retains code without
+quoting it. See <a href="manual.html#macros">Lyric</a> for macro scope and limits.</p>
+</div>
+<div id="outline-container-display-and-indentation" class="outline-4">
+<h4 id="display-and-indentation">Display and indentation</h4>
+<p><code>vrs-result-width</code> defaults to 90. The read-only result buffer uses Lyric
+highlighting and displays top-level strings as text. Indentation aligns data
+and keyword/value lists under their opening parenthesis, uses two spaces for
+call bodies, and preserves raw block strings.</p>
+</div>
+<div id="outline-container-gui-requests" class="outline-4">
+<h4 id="gui-requests">GUI requests</h4>
+<p>Keep the GUI running for automatic opening. Pending requests remain in the
+<code>:vrsjmp</code> service after a missed wakeup and are checked on opening/reconnection.
+<code>(show_gui)</code> opens the GUI through the usual page flow.</p>
+</div>
+</div>
+<div id="outline-container-update-a-service" class="outline-3">
+<h3 id="update-a-service">Update a service</h3>
+<p>To install a changed export, reevaluate the file including <code>spawn_srv!</code>.
+Compatible bindings follow the replacement; bind again for newly added names.
+Old in-memory state is not preserved automatically.</p>
+<p>A remote editor session or <code>eval_remote</code> can update a service on another node.
+The <a href="manual.html#remote-execution-and-replacement">manual</a> explains dependencies, deployment, and lifetimes.</p>
+</div>
+</div>
+<div id="outline-container-debugging" class="outline-2">
+<h2 id="debugging">Debug execution</h2>
+<p>Leave a <code>dbg!</code> block beside code you want to understand. Evaluate it, then
+inspect its calls in another client. The block runs normally and returns its
+last value; the source becomes a small tool you can reuse next time.</p>
+<p>Evaluate this in a persistent REPL or an editor scratch buffer. In the editor,
+<code>C-c C-c</code> evaluates the buffer:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">defn!</span> twice (<span class="token-form">x</span>)
+  (<span class="token-form">+</span> x x))
+
+(<span class="token-form">dbg!</span>
+  (<span class="token-form">twice</span> <span class="token-number">2</span>)
+  (<span class="token-form">map</span> '(<span class="token-number">2</span> <span class="token-number">3</span>) twice)
+  (<span class="token-form">sleep</span> <span class="token-number">2</span>)
+  (<span class="token-form">twice</span> <span class="token-number">5</span>))
+<span class="token-comment"># =&gt; 10</span>
+</pre></div>
+<p>Open a viewer before evaluating:</p>
+<div class="code-block"><div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">vrsctl dbg
+vrsctl dbg --web
+</pre></div>
+<div id="outline-container-viewer-behavior" class="outline-3">
+<h3 id="viewer-behavior">Viewer behavior</h3>
+<p>Both viewers start with new observations after connecting. The terminal
+follows updates until Ctrl-C. Calls appear as they complete, followed by
+the result of the <code>dbg!</code> block. A long
+call prints <code>running…</code>, then its outcome with the same <code>wait N</code> label. This is
+one call, not two. Each call shows its result and elapsed wall time, including
+waiting and child calls. Evaluated arguments and call/run IDs for filtering are
+included automatically; <code>--all</code> includes nested calls.</p>
+<div class="code-block"><div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">vrsctl dbg --all
+vrsctl dbg --filter 'file:scratch.ll:2:3'
+vrsctl dbg --filter 'expr:<span class="token-string">"(+ x x)"</span> status:error'
+</pre></div>
+</div>
+<div id="outline-container-filters" class="outline-3">
+<h3 id="filters">Filters</h3>
+<p>Both viewers use one filter language. Terms narrow the selection together:
+<code>file:scratch.ll</code> matches a path substring; <code>file:scratch.ll:2:3</code> selects an
+exact line and optional column; <code>expr:&quot;(+ x x)&quot;</code> searches source text. Plain
+words search expressions too. Use <code>status:running</code>, <code>status:returned</code>,
+<code>status:error</code>, or <code>status:cancelled</code>; <code>time:&gt;100ms</code> selects longer calls.
+<code>run:ID</code> selects an evaluation; <code>call:ID</code> selects a call and its descendants.
+File/run filters keep the terminal overview compact. Specific expression,
+location, status, time, or call filters can find nested calls directly.</p>
+</div>
+<div id="outline-container-the-browser-viewer" class="outline-3">
+<h3 id="the-browser-viewer">The browser viewer</h3>
+<p>In the browser, click a call to inspect it. Shift-click selects a range;
+Up/Down moves the selection and Shift-Up/Down extends it. Cmd/Ctrl-click toggles
+individual calls. Each selected call gets an inspector; its <code>×</code> deselects it.
+Drag the divider to resize the list and inspectors. Chevrons open children;
+clicking locations adds filters. The <code>?</code> explains controls and filter syntax.</p>
+<p><code>Group by: Run</code> groups calls from one execution of a <code>dbg!</code> block; <code>Source
+location</code> groups repeated calls from the same place. Choose newest/oldest runs
+or slowest calls. New rows fade in, running calls show a timer, and scrolling
+away from new calls preserves your position. A warning appears if disconnected.</p>
+<p><code>map</code> calls its supplied function once per element. Open its children (or use
+<code>--all</code> in the terminal) to see those calls and their arguments/results. A
+source name such as <code>twice</code> identifies the function when available; otherwise
+it says <code>fn</code>. The function definition is in the inspector. Inner <code>(+ x x)</code>
+calls remain available too. Spawned processes and remote handlers need their
+own <code>dbg!</code> blocks to observe execution there.</p>
+</div>
+<div id="outline-container-cancellation-and-retention" class="outline-3">
+<h3 id="cancellation-and-retention">Cancellation and retention</h3>
+<p>Try <code>(dbg! (+ 1 2) (sleep 30) (error &quot;should not run&quot;))</code> and press <code>C-g</code> while
+it waits in Emacs. Emacs closes the evaluation connection; VRS cancels its fiber
+and marks unfinished observations <code>cancelled</code>. Earlier results remain and later
+expressions do not run. This resets the Emacs session's definitions; existing
+effects are not undone. Ctrl-C in a <em>viewer</em> only closes that viewer.</p>
+<p>History is memory-only, shared per runtime: at most 512 records and 4 MiB of
+encoded record data, with bounded value previews. Old records are evicted at
+either cap; there is no time expiry. Restarting the runtime clears it. Viewers
+use <code>(dbg_history)</code> for this snapshot and the existing <code>:dbg</code> pub/sub topic for
+updates. Plain <code>(dbg …)</code> remains the older runtime-stdout print helper.</p>
+<p><code>--socket PATH</code> chooses a local daemon connection; <code>--node NAME</code> selects a
+connected remote node through it. Neither is needed for the default runtime.
+Run <code>vrsctl dbg --help</code> for the small set of viewer options.</p>
+</div>
+</div>
+<div id="outline-container-cli-reference" class="outline-2">
+<h2 id="cli-reference">CLI reference</h2>
+<p><code>vrsctl</code> is a control client. With no arguments it starts a REPL. <code>-c</code> evaluates
+source; a file argument sends local source to the runtime. It can also read
+source from stdin, follow subscriptions, or open debugging viewers.</p>
+<div class="code-block"><div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">vrsctl
+vrsctl -c '(ls_srv)'
+vrsctl ./example.ll
+vrsctl --bind echo -c '(echo <span class="token-string">"hello"</span>)'
+vrsctl --subscribe cmd --follow
+vrsctl dbg --web
+</pre></div>
+<p>Run <code>vrsctl --help</code> for the current options. New invocations start new evaluation
+sessions. Use a persistent REPL or editor session to keep definitions.</p>
+<div id="outline-container-output-formatting" class="outline-3">
+<h3 id="output-formatting">Output formatting</h3>
+<p>Results automatically use multiline formatting when stdout is a terminal,
+including the REPL, <code>--command</code>, script files/stdin, and subscriptions
+(<code>--subscribe</code>, <code>--follow</code>, <code>--followclear</code>). Lists that fit stay on one line;
+larger lists put each element on its own line. Keyword/value records such as
+those returned by <code>(ls_srv)</code> keep small pairs together. The default target width is
+90 columns in every output mode; use <code>--width</code> to choose another width. A nested value that is too
+large to fit after its keyword starts on the next line.</p>
+<div class="code-block"><div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">vrsctl -c '(ls_srv)'                       <span class="token-comment"># readable terminal output</span>
+vrsctl --width <span class="token-number">60</span> -c '(ls_srv)'             <span class="token-comment"># choose a target width</span>
+vrsctl --format pretty -c '(ls_srv)' | less <span class="token-comment"># readable even through a pipe</span>
+vrsctl --format compact -c '(ls_srv)'       <span class="token-comment"># force compact output</span>
+vrsctl --raw -c '(pretty (ls_srv) <span class="token-number">60</span>)'      <span class="token-comment"># display the formatter's string</span>
+</pre></div>
+<p>Redirected stdout stays compact by default. <code>--format default</code> selects this
+terminal/pipe behavior explicitly. Strings remain quoted and escaped, including
+embedded newlines; <code>--raw</code> prints only top-level strings verbatim. It does not
+change nested strings. <code>--format editor</code> echoes source and prefixes every result
+line with a comment, so multiline results remain safe in a Lyric transcript.
+All output options apply to every input mode; subscriptions take priority over
+redirected stdin. Explicit files cannot be combined with commands/subscriptions.</p>
+<p>The language-level formatter and readable-value contracts are in
+<a href="manual.html#readable-values">Lyric</a>. Editor display and transcripts are in the <a href="manual.html#editor">editor chapter</a>.</p>
+</div>
+</div>
+<div id="outline-container-scripts-and-initialization" class="outline-2">
+<h2 id="scripts-and-initialization">Scripts and initialization</h2>
+<p><code>vrsctl</code> sends a local file to the runtime. Scripts conventionally use <code>.ll</code>
+and can also use <code>#!/usr/bin/env vrsctl</code>.</p>
+<p><code>run</code> executes a file in a new process and waits for it to finish. All top-level
+forms run as an implicit <code>begin</code>. Unlike <code>run</code>, <code>fread</code> reads a value. Services
+spawned by a script can continue after it finishes.</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">run</span> <span class="token-string">"./scripts/counter.ll"</span>)
+</pre></div>
+<p><code>vrsd --init PATH</code> executes an init file before accepting local clients. The
+repository's <a href="https://github.com/leoshimo/vrs/blob/main/scripts/init.ll">init script</a> starts its service set; add startup calls there for
+services that should run with <code>./serve</code>.</p>
+<div class="code-block"><div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">cargo run --bin vrsd -- --node laptop --init ./scripts/init.ll
+</pre></div>
+<p>A service uses the host's files, commands, and applications. Sending its source
+elsewhere does not install its dependencies.</p>
+</div>
+<div id="outline-container-connected-devices" class="outline-2">
+<h2 id="connected-devices">Connected devices</h2>
+<p>Connect another node to discover and call its services by name:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">node_name</span>) <span class="token-comment"># =&gt; "laptop"</span>
+(<span class="token-form">configure</span> <span class="token-keyword">:nodes</span> '(<span class="token-string">"ssh://home-server"</span>))
+(<span class="token-form">ls_srv</span>)
+</pre></div>
+<p>Put a capability on the machine that has it. With a connected Mac named <code>home</code>,
+evaluate this from your laptop:</p>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">remote!</span> <span class="token-string">"home"</span>
+  (<span class="token-form">defn!</span> announce (<span class="token-form">message</span>) (<span class="token-form">exec</span> <span class="token-string">"say"</span> message))
+  (<span class="token-form">spawn_srv!</span> <span class="token-keyword">:speaker</span> <span class="token-keyword">:interface</span> '(<span class="token-form">announce</span>)))
+
+(<span class="token-form">bind_srv</span> <span class="token-keyword">:speaker</span>)
+(<span class="token-form">announce</span> <span class="token-string">"The backup has finished."</span>)
+</pre></div>
+<p>The home Mac speaks. Change the implementation and evaluate it again; existing
+bindings follow the replacement. Services started by <code>remote!</code> are discoverable
+on the calling node when it returns. For an independently starting service,
+<code>(wait_srv :speaker :pid expected)</code> can wait for a particular instance.</p>
+<p><code>vrsctl --node home ./speaker.ll</code> sends a local file's source; the file need not
+exist on <code>home</code>. <code>vrsctl --node home</code> opens a persistent remote REPL, also usable
+as Emacs's <code>vrs-vrsctl-command</code>. Code runs with the destination's files and tools;
+dependencies and startup configuration are separate. Both nodes need compatible
+builds. Cancellation stops waiting without rolling back effects, and failed
+evaluations are never automatically replayed.</p>
+<div id="outline-container-transport-and-build-configuration" class="outline-3">
+<h3 id="transport-and-build-configuration">Transport and build configuration</h3>
+<p>Each daemon has an immutable string name, defaulting to the short hostname;
+<code>--node</code> chooses it explicitly. Endpoints name <code>ssh://</code> or <code>tcp://</code> transports.</p>
+<p>Release builds use port 8773 and debug builds use 8774. Append <code>:PORT</code> to choose
+one explicitly. SSH runs <code>ssh -W 127.0.0.1:PORT HOST</code>; OpenSSH resolves aliases,
+Bonjour names, and configured host names. The VRS listener stays on localhost.</p>
+<p><code>./serve</code> installs the matching CLI before starting the runtime; <code>./serve dev</code>
+uses the debug profile and socket. Both peered nodes need compatible builds.</p>
+</div>
+<div id="outline-container-per-node-startup" class="outline-3">
+<h3 id="per-node-startup">Per-node startup</h3>
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">if</span> (<span class="token-form">eq?</span> (<span class="token-form">node_name</span>) <span class="token-string">"home-server"</span>)
+    (<span class="token-form">run</span> <span class="token-string">"./scripts/feedbin.ll"</span>)
+    (<span class="token-form">configure</span> <span class="token-keyword">:nodes</span> '(<span class="token-string">"ssh://home-server"</span>)))
+</pre></div>
+<p>Configuration adds node connections nonblockingly. A configured connection and
+a discovered service are different; <code>wait_srv</code> can wait for a particular service
+instance when startup ordering matters.</p>
+</div>
+<div id="outline-container-two-local-nodes" class="outline-3">
+<h3 id="two-local-nodes">Two local nodes</h3>
+<p>Use distinct sockets, names, and listener ports in separate terminals:</p>
+<div class="code-block"><div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">cargo run --bin vrsd -- --node alpha --node-port <span class="token-number">8773</span> --socket /tmp/alpha.socket
+cargo run --bin vrsd -- --node beta --node-port <span class="token-number">8774</span> --socket /tmp/beta.socket
+</pre></div>
+<p>Then connect a node to the other's listener. The explicit ports override the
+normal profile defaults.</p>
+</div>
+<div id="outline-container-remote-execution-and-replacement" class="outline-3">
+<h3 id="remote-execution-and-replacement">Remote execution and replacement</h3>
+<div class="code-block"><div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">vrsctl --node home-server ./scripts/feedbin.ll
+</pre></div>
+<p>The CLI reads the file locally and sends source to the connected node.
+<code>eval_remote</code> evaluates an expression on a node; <code>read_script</code> reads a source
+file for use in such a call. <code>remote!</code> packages an inline block.</p>
+<p>Remote execution installs no restart policy or singleton guarantee. A
+disconnected destination fails immediately. Replacement does not preserve old
+state; cancellation stops waiting without rolling back completed effects.</p>
+</div>
+</div>
+<div id="outline-container-runtime-and-client-implementation" class="outline-2">
+<h2 id="runtime-and-client-implementation">Runtime and client implementation</h2>
+<p>The component map at the beginning is enough to use VRS. For implementation
+work, these are the main boundaries:</p>
+<ul>
+<li><a href="https://github.com/leoshimo/vrs/blob/main/lyric/src/types.rs">Lyric values</a> and <a href="https://github.com/leoshimo/vrs/blob/main/lyric/src/fiber.rs">fibers</a> describe executable state and host operations.</li>
+<li><a href="https://github.com/leoshimo/vrs/blob/main/libvrs/src/rt/kernel.rs">The kernel</a> manages runtime processes.</li>
+<li><a href="https://github.com/leoshimo/vrs/blob/main/libvrs/src/rt/proc.rs">Processes</a> hold environments, execution state, and access to messaging.</li>
+<li><a href="https://github.com/leoshimo/vrs/tree/main/libvrs/src/rt">Runtime services</a> provide registry and pubsub facilities.</li>
+<li><a href="https://github.com/leoshimo/vrs/tree/main/libvrs/src/client">The client library</a> provides the connection API used by clients.</li>
+</ul>
+<p>A fiber yields an operation to its host. The runtime waits asynchronously and
+resumes evaluation when it can proceed. A waiting program therefore remains
+sequential code without reserving an OS thread.</p>
+<p>Client connections are bidirectional: requests receive responses, and
+subscriptions receive updates. Evaluation state belongs to the connection;
+separate services have their own lifetimes. <code>vrsctl</code> provides a small way to
+build another client without embedding the Rust client library.</p>
+<p>Embedding and source observers are described in <a href="manual.html#embedding-and-source-observations">Lyric</a>.
+Additional mobile/in-process hosting configurations remain in <a href="https://github.com/leoshimo/vrs/blob/main/TODO.org">TODO</a>.
+The <a href="manual.html#testing-the-development-clients">editor chapter</a> explains the CLI/editor test harness.</p>
+<div id="outline-container-testing-the-development-clients" class="outline-3">
+<h3 id="testing-the-development-clients">Testing the development clients</h3>
+<p>Run the Emacs tests without a runtime:</p>
+<div class="code-block"><div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">emacs -Q --batch -L emacs -l vrs-mode-tests -f ert-run-tests-batch-and-exit
+</pre></div>
+<p>The terminal harness starts a separate test runtime and includes Emacs evaluation
+tests when <code>emacs</code> is installed:</p>
+<div class="code-block"><div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">cargo build --locked -p vrsctl -p vrsd
+cargo test --locked -p vrsctl --test terminal
+</pre></div>
+<p>Add <code>--release</code> to both commands to exercise optimized binaries. Build <code>vrsd</code>
+first because it belongs to a separate Cargo package; the tests use the daemon
+next to Cargo's <code>vrsctl</code> binary, including with a custom target directory.</p>
+<p>The terminal harness uses a temporary socket, an ephemeral node port, and an
+init fixture that starts a small in-memory service. It checks
+startup, command, file, stdin, REPL, and subscription output on pipes and
+pseudo-terminals, and keeps the user's runtime and REPL history intact.</p>
+</div>
+</div>
+<footer class="source-link"><a href="manual.md" download>Source</a></footer></article></main>
+</body></html>

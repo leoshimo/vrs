@@ -1,999 +1,528 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>A Tour of VRS</title>
-<meta name="generator" content="Org Mode" />
-<style>
-
-:root{
- color-scheme:light;
- --paper:#fbfaf7;
- --ink:#252c30;
- --muted:#606d72;
- --line:#d7dedb;
- --accent:#236a5b;
- --code:#f0f3f1;
- --link-underline:#86aa9f;
- --inline-border:#d2dcd6;
- --inline-background:#edf1ee;
- --code-border:#d0dad4;
- --toolbar-line:#d5ded8;
- --toolbar-ink:#53675d;
- --button-ink:#52685c;
- --button-hover:#dde9e1;
- --scroll-thumb:#879b8c;
- --code-ink:#293b32;
- --example-background:#eef2ed;
- --example-border:#8b9c86;
- --example-ink:#405c45;
- --comment:#5d7163;
- --string:#326c40;
- --keyword:#8b502c;
- --form:#72508c;
- --number:#915538;
- --prefix:#75632f;
- --toc-ink:#5a676d;
- --toc-hover:#ecf2ed;
- --toc-current:#e2eee7;
- --selection:#cce4d8;
- --toc-background:#f2f5f2;
-}
-@media (prefers-color-scheme: dark){
-:root{
- color-scheme:dark;
- --paper:#171b1e;
- --ink:#e1e6e5;
- --muted:#9aa8ad;
- --line:#343e42;
- --accent:#86cfc0;
- --code:#1d2528;
- --link-underline:#588b81;
- --inline-border:#364246;
- --inline-background:#252e32;
- --code-border:#354145;
- --toolbar-line:#344145;
- --toolbar-ink:#a0b3ad;
- --button-ink:#a6b9b2;
- --button-hover:#34443e;
- --scroll-thumb:#54685f;
- --code-ink:#dce7e1;
- --example-background:#202627;
- --example-border:#627a69;
- --example-ink:#bbc9bd;
- --comment:#9aae9f;
- --string:#a8d5b5;
- --keyword:#e1b593;
- --form:#c6b3e7;
- --number:#e0aa90;
- --prefix:#ccbd92;
- --toc-ink:#a4b0b6;
- --toc-hover:#26312e;
- --toc-current:#293a34;
- --selection:#3b5e52;
- --toc-background:#1e2629;
-}
-}
-*{box-sizing:border-box}
-html{scroll-behavior:smooth;scroll-padding-top:38px}
-body{margin:0;background:var(--paper);color:var(--ink);font:18px/1.78 Georgia,"Iowan Old Style","Palatino Linotype",serif;-webkit-font-smoothing:antialiased}
-#content{max-width:760px;margin:0 auto;padding:66px 28px 110px}
-header{margin-bottom:32px}
-.review-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;font:11px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
-.review-bar a{letter-spacing:.025em;text-transform:none;font-size:13px;text-decoration:none}
-h1,h2,h3,h4,#table-of-contents,button{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-h1{font-size:clamp(36px,5vw,52px);line-height:1.1;letter-spacing:-.045em;font-weight:690;margin:0 0 12px}
-h2{font-size:29px;line-height:1.28;letter-spacing:-.025em;font-weight:660;margin:0 0 24px}
-h3{font-size:21px;line-height:1.4;letter-spacing:-.012em;font-weight:630;margin:38px 0 16px}
-p{margin:0 0 22px}header+nav+p{font-size:21px;line-height:1.65}
-.outline-2{padding-top:46px;margin-top:46px;border-top:1px solid var(--line)}
-a{color:var(--accent);text-decoration-color:var(--link-underline);text-underline-offset:3px}
-a:hover{text-decoration-color:var(--accent)}a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:3px}
-li{margin:7px 0}ul,ol{padding-left:23px;margin:0 0 24px}
-code,kbd,pre{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace}
-code{font-size:.79em;padding:2px 5px;border:1px solid var(--inline-border);background:var(--inline-background);border-radius:4px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
-h2 code,h3 code{font-size:.83em}
-.org-src-container{margin:25px 0 29px;background:var(--code);border:1px solid var(--code-border);border-radius:10px;overflow:hidden}
-.code-toolbar{display:flex;justify-content:space-between;align-items:center;padding:9px 17px 8px;border-bottom:1px solid var(--toolbar-line);font:10px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.1em;color:var(--toolbar-ink)}
-.copy-code{appearance:none;border:0;background:transparent;color:var(--button-ink);cursor:pointer;font-size:11px;padding:3px 7px;border-radius:4px;letter-spacing:0;min-width:48px;text-align:right}
-.copy-code:hover{background:var(--button-hover);color:var(--accent)}
-pre{font-size:13px;line-height:1.7;tab-size:2;white-space:pre;overflow-x:auto;margin:0;padding:19px 20px 21px;scrollbar-width:thin;scrollbar-color:var(--scroll-thumb) transparent}
-pre.src{color:var(--code-ink)}pre code{padding:0;border:0;background:transparent;font-size:inherit}
-pre.example{margin:24px 0 28px;padding:12px 18px;background:var(--example-background);border-left:3px solid var(--example-border);border-radius:0 7px 7px 0;color:var(--example-ink)}
-.token-comment{color:var(--comment);font-style:italic}.token-string{color:var(--string)}.token-keyword{color:var(--keyword)}.token-form{color:var(--form);font-weight:550}.token-number{color:var(--number)}.token-prefix{color:var(--prefix)}
-#table-of-contents{font-size:13px;line-height:1.45}
-#table-of-contents h2{font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);margin:0 0 15px}
-#table-of-contents ul{list-style:none;padding:0;margin:0}
-#table-of-contents li{margin:0 0 4px}
-#table-of-contents a{display:block;padding:7px 12px;border-left:2px solid transparent;text-decoration:none;color:var(--toc-ink);border-radius:0 5px 5px 0}
-#table-of-contents a:hover{color:var(--accent);background:var(--toc-hover)}
-#table-of-contents a.current{border-color:var(--accent);color:var(--accent);background:var(--toc-current);font-weight:550}
-#table-of-contents ul ul{margin:0 0 12px 13px;font-size:12px}
-#table-of-contents ul ul a{padding:4px 12px}
-#table-of-contents code{padding:0;border:none;background:transparent;font-size:inherit}
-.enhanced #table-of-contents ul ul{display:none}.enhanced #table-of-contents li.active>ul{display:block}
-#postamble{display:none}
-.progress-track{position:fixed;top:0;left:0;height:3px;width:100%;z-index:10;background:transparent}
-.progress-fill{height:100%;width:0;background:var(--accent);opacity:.7}
-::selection{background:var(--selection)}
-@media(min-width:1120px){
- #content{margin-left:calc(50% - 280px);margin-right:36px}
- #table-of-contents{position:fixed;left:max(28px,calc(50% - 558px));top:72px;width:225px;max-height:calc(100vh - 104px);overflow:auto;scrollbar-width:thin;padding-right:10px}
-}
-@media(max-width:1119px){
- #table-of-contents{border:1px solid var(--line);border-radius:8px;padding:18px 22px;margin:28px 0 34px;background:var(--toc-background)}
- #table-of-contents>h2{cursor:pointer}
- .enhanced #table-of-contents #text-table-of-contents{display:none}
- .enhanced #table-of-contents.expanded #text-table-of-contents{display:block}
- .enhanced #table-of-contents h2{margin:0}
- .enhanced #table-of-contents h2::after{content:"+";float:right;font-size:16px;line-height:12px}
- .enhanced #table-of-contents.expanded h2::after{content:"−"}
- .enhanced #table-of-contents.expanded h2{margin-bottom:14px}
-}
-@media(max-width:600px){
- body{font-size:17px;line-height:1.73}
- #content{padding:35px 22px 75px}
- h1{font-size:38px}h2{font-size:26px}h3{font-size:20px}
- pre{font-size:12px;padding:16px;line-height:1.7}
- .outline-2{padding-top:33px;margin-top:33px}
- .org-src-container{margin-left:-6px;margin-right:-6px}
- header+nav+p{font-size:19px}
-}
-@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
-@media print{
- :root{color-scheme:light;--line:#ddd;--code:#f5f5f5}
- code,pre.example{background:#f5f5f5;color:#222;border-color:#ddd}
- pre.src,pre.src span{color:#222}
- .org-src-container{border-color:#ddd}
- body{background:white;font-size:11pt;color:#111}
- #content{max-width:none;margin:0;padding:0}
- #table-of-contents,.review-bar,.code-toolbar,.progress-track{display:none}
- h1{font-size:30pt}h2{font-size:20pt;break-after:avoid}h3{font-size:15pt;break-after:avoid}
- pre{white-space:pre-wrap;overflow:visible;font-size:8pt}.org-src-container{break-inside:avoid}
- a{color:inherit}.outline-2{margin-top:24px;padding-top:24px}
-}
-
-
-</style>
+<link rel="stylesheet" href="site.css">
+<script src="site.js" defer></script>
 </head>
 <body>
-<div class="progress-track" aria-hidden="true"><div class="progress-fill"></div></div>
-<div id="content" class="content">
-<header><div class="review-bar"><span>VRS / Tour</span><a href="tour.md" download>Download Markdown source ↗</a></div>
-<h1 class="title">A Tour of VRS</h1>
-</header><nav id="table-of-contents" role="doc-toc">
-<h2>Table of Contents</h2>
-<div id="text-table-of-contents" role="doc-toc">
-<ul>
-<li><a href="#orgc0ffaec">Working through the tour</a></li>
-<li><a href="#orgfc7ce9d">Build a todo service</a></li>
-<li><a href="#orge62e1d6">Build a user interface</a>
-<ul>
-<li><a href="#orgbab13cc">Show and complete todos</a></li>
+<header class="site-masthead"><a class="wordmark" href="index.html" aria-label="vrs documentation">vrs</a><nav aria-label="Documentation"><a href="tour.html" aria-current="page">Tour</a><a href="design.html">Design</a><a href="manual.html">Manual</a></nav></header><main id="content" class="page-grid"><header class="document-title"><h1 class="title">A Tour of VRS</h1></header><details id="table-of-contents" class="contents" open><summary>Contents</summary><nav aria-label="Page contents"><div id="text-table-of-contents"><ul>
+<li><a href="#how-to-follow-along">How to follow along</a></li>
+<li><a href="#build-a-todo-service">Build a todo service</a></li>
+<li><a href="#build-a-user-interface">Build a user interface</a><ul>
+<li><a href="#show-existing-todos">Show existing todos</a></li>
+<li><a href="#user-interactions-are-code">User interactions are code</a></li>
 </ul>
 </li>
-<li><a href="#org1490585">Turn an interaction into a program</a></li>
-<li><a href="#org33c3583">Build interactions from functions and data</a>
-<ul>
-<li><a href="#orgc59dd31">Discover actions for a todo</a></li>
-<li><a href="#org3f5898d">Find arguments for a function</a></li>
+<li><a href="#build-interactions-from-functions-and-data">Build interactions from functions and data</a><ul>
+<li><a href="#discover-actions-for-a-todo">Discover actions for a todo</a></li>
+<li><a href="#find-arguments-for-a-function">Find arguments for a function</a></li>
 </ul>
 </li>
-<li><a href="#org04c60fb">Connect more of your software</a></li>
-<li><a href="#orge3b4587">Respond to events: make a unicorn leap</a></li>
-<li><a href="#org700fe12">Run recurring work</a></li>
-<li><a href="#org0d4b7b0">Build capabilities across devices</a></li>
-<li><a href="#org09423cd">Inspect execution</a></li>
-<li><a href="#org4eb2ebd">That's VRS</a></li>
+<li><a href="#connect-more-of-your-software">Connect more of your software</a></li>
+<li><a href="#respond-to-events-make-a-unicorn-leap">Respond to events: make a unicorn leap</a></li>
+<li><a href="#run-recurring-work">Run recurring work</a></li>
+<li><a href="#build-capabilities-across-devices">Build capabilities across devices</a></li>
+<li><a href="#build-against-the-running-system">Build against the running system</a></li>
+<li><a href="#toward-a-personal-software-ecosystem">Toward a personal software ecosystem</a></li>
 </ul>
-</div>
-</nav>
-<p>
-VRS is a personal programming environment for building and composing
+</div></nav></details><article class="document">
+
+<p>VRS is a personal programming environment for building and composing
 software across your applications and devices. Its design combines a
 practical, exploratory style of programming with relentlessly uniform
-abstractions.
-</p>
-
-<p>
-In VRS, <i>services</i> make their functions available to other programs and user
-interfaces. They are written in <a href="guide-lyric.org">Lyric</a>, VRS's scripting language.
+abstractions.</p>
+<p>VRS is built around <em>services</em> that make their functions available to other
+programs and user interfaces. They are written in <a href="manual.html#lyric">Lyric</a>, VRS's scripting language.
 Like a Unix shell, it's built for hacking software together from
 command-line programs, local databases, and UI automation—whatever gets
-the job done.
-</p>
-
-<p>
-The REPL, shell scripts, graphical applications, and even your <a href="guide-emacs.org">editor</a> and <a href="guide-debug.org">debugger</a>
-are <i>clients</i> of VRS. Each can run code, introspect live state, and use the full
-capabilities of the runtime.
-</p>
-
-<p>
-The environment extends across devices. Connect a laptop and a home
+the job done.</p>
+<p>The REPL, shell scripts, graphical applications, and even your <a href="manual.html#editor">editor</a>
+are <em>clients</em> of VRS. Each can run code, introspect live state, and use the full
+capabilities of the runtime.</p>
+<p>The environment extends across devices. Connect a laptop and a home
 server as peers, and programs can use capabilities from both through
-ordinary function calls.
-</p>
-
-<p>
-Programs and user interface markup share the same exact representation.
-An expression from the REPL can be included directly in that markup as
-an action. User interactions, in turn, can be recorded directly into
-programs—then edited, combined, and run again.
-</p>
-
-<p>
-Development happens iteratively, against the running system. The editor
+ordinary function calls.</p>
+<p>Programs, data, and user interface markup share the same representation.
+An expression that runs at the REPL can be included directly in user interface
+markup as an action. User interactions, in turn, can be recorded as code—then
+edited, combined, and replayed.</p>
+<p>Development happens iteratively, against the running system. The editor
 can call functions, inspect their results, and insert those values into
-source code. Update a running service and the programs using it pick up
-the changes without restarting.
-</p>
-
-<p>
-VRS is a live, personal software ecosystem, grown one small script at a time—with
-the whole system available to programs and user interfaces across all your devices.
-</p>
-<div id="outline-container-orgc0ffaec" class="outline-2">
-<h2 id="orgc0ffaec">Working through the tour</h2>
-<div class="outline-text-2" id="text-orgc0ffaec">
-<p>
-With <a href="../README.md">VRS running</a>, the examples can be run in the <code>vrsctl</code> REPL.
-</p>
-
-<p>
-For the full live editing experience, use <a href="guide-emacs.org">the editor</a>:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">emacs -Q -L emacs -l vrs-mode scratch.ll
-</pre>
+source code. It can also deploy services and update running ones. Programs
+using those services pick up the changes without restarting.</p>
+<div id="outline-container-how-to-follow-along" class="outline-2">
+<h2 id="how-to-follow-along">How to follow along</h2>
+<p>With <a href="manual.html#start-and-evaluate">VRS running</a>, enter expressions in the
+<code>vrsctl</code> REPL or evaluate a saved file with <code>vrsctl filename.ll</code>.</p>
+<div class="code-block"><div class="code-toolbar"><span>CONSOLE</span><button class="copy-code" type="button" aria-label="Copy console code">Copy</button></div><pre class="src src-console">$ vrsctl
+vrs&gt; (format "Hello, {}!" "computer")
+"Hello, computer!"
+</pre></div>
 </div>
-
-<p>
-In the editor, <code>C-c C-e</code> evaluates an expression and <code>C-c C-c</code> evaluates
-the buffer.
-</p>
-</div>
-</div>
-<div id="outline-container-orgfc7ce9d" class="outline-2">
-<h2 id="orgfc7ce9d">Build a todo service</h2>
-<div class="outline-text-2" id="text-orgfc7ce9d">
-<p>
-A small script can add a capability to the whole VRS environment,
-available across connected devices through ordinary function calls.
-</p>
-
-<p>
-Here is a simple todo service:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="org9b566a6"><span class="token-comment"># todos.ll</span>
-(<span class="token-form">def</span> todos <span class="token-prefix">&#x27;</span>())
+<div id="outline-container-build-a-todo-service" class="outline-2">
+<h2 id="build-a-todo-service">Build a todo service</h2>
+<p>A small script can add a capability to the whole VRS environment.</p>
+<p>Here is a simple todo service:</p>
+<!-- example: todo-service -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs"><span class="token-comment"># todos.ll</span>
+(<span class="token-form">def</span> todos '())
 
 (<span class="token-form">defn!</span> get_todos () todos)
 
 (<span class="token-form">defn!</span> add_todo (<span class="token-form">title</span> notes)
-  (<span class="token-form">def</span> todo <span class="token-prefix">`</span>(<span class="token-keyword">:title</span> <span class="token-prefix">,</span>title <span class="token-keyword">:notes</span> <span class="token-prefix">,</span>notes))
+  (<span class="token-form">def</span> todo `(<span class="token-keyword">:title</span> ,title <span class="token-keyword">:notes</span> ,notes))
   (<span class="token-form">set</span> todos (<span class="token-form">push</span> todos todo))
   todo)
 
 (<span class="token-form">defn!</span> complete_todo (<span class="token-form">todo</span>)
   (<span class="token-form">set</span> todos (<span class="token-form">filter</span> todos (<span class="token-form">fn</span> (<span class="token-form">item</span>) (<span class="token-form">not?</span> (<span class="token-form">eq?</span> item todo))))))
 
-<span class="token-comment"># Start (or update) the service with these functions.</span>
-(<span class="token-form">spawn_srv!</span> <span class="token-keyword">:todos</span> <span class="token-keyword">:interface</span> <span class="token-prefix">&#x27;</span>(<span class="token-form">get_todos</span> add_todo complete_todo))
-</pre>
-</div>
+<span class="token-comment"># Start the service with these functions.</span>
+(<span class="token-form">spawn_srv!</span> <span class="token-keyword">:todos</span> <span class="token-keyword">:interface</span> '(<span class="token-form">get_todos</span> add_todo complete_todo))
+</pre></div>
+<p>Evaluating this file starts the service:</p>
+<div class="code-block"><div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">vrsctl todos.ll
+</pre></div>
+<p>Once the service is running, its functions can be called from the REPL:</p>
+<!-- example: use-todos -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs"><span class="token-comment"># Import the todo service's functions into this REPL's namespace.</span>
+(<span class="token-form">bind_srv</span> <span class="token-keyword">:todos</span>)
 
-<p>
-Once deployed, its functions are available from the REPL:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="orge59e9f1">(<span class="token-form">bind_srv</span> <span class="token-keyword">:todos</span>)
 (<span class="token-form">get_todos</span>)
 <span class="token-comment"># =&gt; ()</span>
 
-(<span class="token-form">add_todo</span> <span class="token-string">&quot;Buy coffee&quot;</span> <span class="token-string">&quot;&quot;</span>)
-<span class="token-comment"># =&gt; (:title &quot;Buy coffee&quot; :notes &quot;&quot;)</span>
+(<span class="token-form">add_todo</span> <span class="token-string">"Buy coffee"</span> <span class="token-string">""</span>)
+<span class="token-comment"># =&gt; (:title "Buy coffee" :notes "")</span>
 
 (<span class="token-form">get_todos</span>)
-<span class="token-comment"># =&gt; ((:title &quot;Buy coffee&quot; :notes &quot;&quot;))</span>
-</pre>
-</div>
-
-<p>
-The todo functions can compose with existing services. VRS's
-<a href="../scripts/os_browser.ll">browser service</a> exposes Safari's current page through <code>active_tab</code>.
-Inspect its result in the REPL, then use the title and URL as a todo's notes:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="org13662f3">(<span class="token-form">bind_srv</span> <span class="token-keyword">:os_browser</span>)
-(<span class="token-form">def</span> tab (<span class="token-form">active_tab</span>))
-<span class="token-comment"># =&gt; (:title &quot;VRS&quot; :url &quot;https://github.com/leoshimo/vrs&quot;)</span>
-
-(<span class="token-form">add_todo</span> <span class="token-string">&quot;Try VRS&quot;</span>
-  (<span class="token-form">format</span> <span class="token-string">&quot;{}\n{}&quot;</span> (<span class="token-form">get</span> tab <span class="token-keyword">:title</span>) (<span class="token-form">get</span> tab <span class="token-keyword">:url</span>)))
-<span class="token-comment"># =&gt; (:title &quot;Try VRS&quot; :notes &quot;VRS\nhttps://github.com/leoshimo/vrs&quot;)</span>
-</pre>
-</div>
-
-<p>
-The REPL shows the browser's actual data, so the composition can be tried
-before it becomes part of the service. In the editor, the result can also
-be inserted directly into source:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="org8d31660"><span class="token-comment"># Place the cursor after this expression and press C-u C-c C-e.</span>
-(<span class="token-form">active_tab</span>)
-
-<span class="token-comment"># The expression is replaced with its result:</span>
-<span class="token-prefix">&#x27;</span>(<span class="token-keyword">:title</span> <span class="token-string">&quot;VRS&quot;</span> <span class="token-keyword">:url</span> <span class="token-string">&quot;https://github.com/leoshimo/vrs&quot;</span>)
-</pre>
-</div>
-
-<p>
-Add a function that creates a todo with the current Safari page attached:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="orgc770133"><span class="token-comment"># todos.ll — replace the final spawn_srv! with this block, then reevaluate.</span>
+<span class="token-comment"># =&gt; ((:title "Buy coffee" :notes ""))</span>
+</pre></div>
+<p>The todo functions can be combined with capabilities from existing services.
+For example, the <a href="https://github.com/leoshimo/vrs/blob/main/scripts/os_browser.ll">browser service</a> provides Safari's
+current page through <code>active_tab</code>:</p>
+<!-- example: compose-browser-todo -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs"><span class="token-comment"># Import Safari's browser functions.</span>
 (<span class="token-form">bind_srv</span> <span class="token-keyword">:os_browser</span>)
 
-(<span class="token-form">defn!</span> add_todo_from_tab (<span class="token-form">title</span>)
+(<span class="token-form">active_tab</span>)
+<span class="token-comment"># =&gt; (:title "VRS" :url "https://github.com/leoshimo/vrs")</span>
+</pre></div>
+<p>A new function combines <code>active_tab</code> with <code>add_todo</code>, using the page's title
+as the todo's title and its URL as the notes:</p>
+<!-- example: todo-from-tab -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs"><span class="token-comment"># todos.ll — replace the final spawn_srv! with this block, then reevaluate.</span>
+(<span class="token-form">bind_srv</span> <span class="token-keyword">:os_browser</span>)
+
+(<span class="token-form">defn!</span> add_todo_from_tab ()
   (<span class="token-form">def</span> tab (<span class="token-form">active_tab</span>))
-  (<span class="token-form">add_todo</span> title
-    (<span class="token-form">format</span> <span class="token-string">&quot;{}\n{}&quot;</span> (<span class="token-form">get</span> tab <span class="token-keyword">:title</span>) (<span class="token-form">get</span> tab <span class="token-keyword">:url</span>))))
+  (<span class="token-form">add_todo</span> (<span class="token-form">get</span> tab <span class="token-keyword">:title</span>) (<span class="token-form">get</span> tab <span class="token-keyword">:url</span>)))
 
 <span class="token-comment"># Update the service to include the new function.</span>
 (<span class="token-form">spawn_srv!</span> <span class="token-keyword">:todos</span>
-  <span class="token-keyword">:interface</span> <span class="token-prefix">&#x27;</span>(<span class="token-form">get_todos</span> add_todo complete_todo add_todo_from_tab))
-</pre>
+  <span class="token-keyword">:interface</span> '(<span class="token-form">get_todos</span> add_todo complete_todo add_todo_from_tab))
+</pre></div>
+<p>Reevaluating <code>todos.ll</code> makes the new function available to other programs:</p>
+<!-- example: capture-todo -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">bind_srv</span> <span class="token-keyword">:todos</span>) <span class="token-comment"># Discover the newly added function.</span>
+(<span class="token-form">add_todo_from_tab</span>)
+<span class="token-comment"># =&gt; (:title "VRS" :notes "https://github.com/leoshimo/vrs")</span>
+</pre></div>
 </div>
-
-<p>
-Reevaluating <code>todos.ll</code> makes this new function available through the service:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="org1437d88">(<span class="token-form">bind_srv</span> <span class="token-keyword">:todos</span>) <span class="token-comment"># Discover the newly added function.</span>
-(<span class="token-form">add_todo_from_tab</span> <span class="token-string">&quot;Try VRS&quot;</span>)
-<span class="token-comment"># =&gt; (:title &quot;Try VRS&quot; :notes &quot;VRS\nhttps://github.com/leoshimo/vrs&quot;)</span>
-</pre>
-</div>
-</div>
-</div>
-<div id="outline-container-orge62e1d6" class="outline-2">
-<h2 id="orge62e1d6">Build a user interface</h2>
-<div class="outline-text-2" id="text-orge62e1d6">
-<p>
-A function that works at the REPL can become an action in a user interface
-with very little code. VRS's user interface markup is <i>self-describing</i>:
-it specifies what to display and what to execute.
-</p>
-
-<p>
-Each <code>:on_click</code> field in the markup contains the actual expression to
-execute, arguments included. Add two actions: create a todo, or create a
-todo with context from Safari.
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="org0392fda"><span class="token-comment"># todo-ui.ll</span>
+<div id="outline-container-build-a-user-interface" class="outline-2">
+<h2 id="build-a-user-interface">Build a user interface</h2>
+<p>A function that works at the REPL can become an action in a user interface
+with very little code.</p>
+<p>Start with markup that gives the user two choices: create a todo from the
+typed text, or create one from the current Safari tab.</p>
+<!-- example: todo-ui -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs"><span class="token-comment"># todo-ui.ll</span>
 (<span class="token-form">bind_srv</span> <span class="token-keyword">:todos</span>)
 
-(<span class="token-form">defn!</span> add_todo_items (<span class="token-form">query</span>)
-  <span class="token-comment"># Use the search text as the title of a new todo.</span>
-  <span class="token-prefix">`</span>((<span class="token-keyword">:title</span> <span class="token-prefix">,</span>(<span class="token-form">format</span> <span class="token-string">&quot;Add todo: {}&quot;</span> query)
-     <span class="token-keyword">:on_click</span> (<span class="token-form">add_todo</span> <span class="token-prefix">,</span>query <span class="token-string">&quot;&quot;</span>))
-    (<span class="token-keyword">:title</span> <span class="token-prefix">,</span>(<span class="token-form">format</span> <span class="token-string">&quot;Add todo with this page: {}&quot;</span> query)
-     <span class="token-keyword">:on_click</span> (<span class="token-form">add_todo_from_tab</span> <span class="token-prefix">,</span>query))))
-
+<span class="token-comment"># Build two user interface rows, each with a title and an action.</span>
 (<span class="token-form">defn!</span> todo_items (<span class="token-form">query</span>)
-  (<span class="token-form">add_todo_items</span> query))
-</pre>
-</div>
+  <span class="token-comment"># The first action uses the search text; the second uses the Safari tab.</span>
+  `((<span class="token-keyword">:title</span> ,(<span class="token-form">format</span> <span class="token-string">"Add todo: {}"</span> query)
+     <span class="token-keyword">:on_click</span> (<span class="token-form">add_todo</span> ,query <span class="token-string">""</span>))
+    (<span class="token-keyword">:title</span> <span class="token-string">"Add todo with Safari tab"</span>
+     <span class="token-keyword">:on_click</span> (<span class="token-form">add_todo_from_tab</span>))))
+</pre></div>
+<p>Each <code>:on_click</code> contains the expression that runs when the item is selected.</p>
+<p>Serve the markup through <code>:vrsjmp</code>, the service that user interface clients
+use to request pages and run selected actions:</p>
+<!-- example: ui-service -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs"><span class="token-comment"># Append to todo-ui.ll, then evaluate the file.</span>
 
-<p>
-Build a <code>:vrsjmp</code> service to serve the page and evaluate selections:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="orga2bedca"><span class="token-comment"># Append to todo-ui.ll, then evaluate the file.</span>
+<span class="token-comment"># Describe the initial page shown by the client.</span>
 (<span class="token-form">defn!</span> root_page ()
-  <span class="token-comment"># The page names the function that supplies its entries.</span>
-  <span class="token-prefix">&#x27;</span>(<span class="token-keyword">:push_page</span> <span class="token-keyword">:title</span> <span class="token-string">&quot;Todos&quot;</span> <span class="token-keyword">:prompt</span> <span class="token-string">&quot;Add a todo…&quot;</span>
+  '(<span class="token-keyword">:push_page</span> <span class="token-keyword">:title</span> <span class="token-string">"Todos"</span> <span class="token-keyword">:prompt</span> <span class="token-string">"Add a todo…"</span>
     <span class="token-keyword">:get_items</span> todo_items <span class="token-keyword">:args</span> ()))
 
+<span class="token-comment"># Return todo choices for the current search text.</span>
 (<span class="token-form">defn!</span> get_items (<span class="token-form">callback</span> args query)
-  <span class="token-comment"># Call the provider named by the page, passing the search text.</span>
-  (<span class="token-form">apply</span> (<span class="token-form">eval</span> callback) (<span class="token-form">push</span> args query)))
+  (<span class="token-form">todo_items</span> query))
 
+<span class="token-comment"># Execute the selected item's action.</span>
 (<span class="token-form">defn!</span> on_click (<span class="token-form">item</span>)
-  <span class="token-comment"># Execute the expression included in the selected item.</span>
   (<span class="token-form">eval</span> (<span class="token-form">get</span> item <span class="token-keyword">:on_click</span>))
-  <span class="token-keyword">:close</span>) <span class="token-comment"># Close the user interface after the selection.</span>
+  <span class="token-keyword">:close</span>)
 
-<span class="token-comment"># The desktop app and terminal script use this shared service.</span>
-(<span class="token-form">spawn_srv!</span> <span class="token-keyword">:vrsjmp</span> <span class="token-keyword">:interface</span> <span class="token-prefix">&#x27;</span>(<span class="token-form">root_page</span> get_items on_click))
-</pre>
-</div>
+<span class="token-comment"># Expose these functions through the :vrsjmp service.</span>
+(<span class="token-form">spawn_srv!</span> <span class="token-keyword">:vrsjmp</span> <span class="token-keyword">:interface</span> '(<span class="token-form">root_page</span> get_items on_click))
+</pre></div>
+<p>The service returns the user interface as ordinary Lyric data. Each item
+includes what to display and the expression to execute:</p>
+<!-- example: ui-interaction -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">bind_srv</span> <span class="token-keyword">:vrsjmp</span>)
+(<span class="token-form">def</span> page (<span class="token-form">root_page</span>))
 
-<p>
-The REPL can show what a client receives:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="orgd759fca">(<span class="token-form">bind_srv</span> <span class="token-keyword">:vrsjmp</span>)
-(<span class="token-form">def</span> page (<span class="token-form">root_page</span>)) <span class="token-comment"># The description of the current user interface.</span>
-
-<span class="token-comment"># Ask the provider named in the page for items matching the query.</span>
+<span class="token-comment"># Fetch todo choices for the search query "Try VRS".</span>
 (<span class="token-form">def</span> items
   (<span class="token-form">get_items</span> (<span class="token-form">get</span> page <span class="token-keyword">:get_items</span>)
              (<span class="token-form">get</span> page <span class="token-keyword">:args</span>)
-             <span class="token-string">&quot;Buy coffee&quot;</span>))
-
-(<span class="token-form">get</span> items <span class="token-number">1</span>) <span class="token-comment"># Inspect the second choice, including its executable action.</span>
-<span class="token-comment"># =&gt; (:title &quot;Add todo with this page: Buy coffee&quot;</span>
-<span class="token-comment">#     :on_click (add_todo_from_tab &quot;Buy coffee&quot;))</span>
-</pre>
-</div>
-
-<p>
-The desktop app <code>vrsjmp</code> and the shell script
-<a href="../scripts/vrsjmp-terminal">vrsjmp-terminal</a> share this <code>:vrsjmp</code> service. Both display the same markup;
-selecting an entry asks the service to evaluate the expression included in it.
-The same user interface runs in the terminal:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh" id="org38b46ff">./scripts/vrsjmp-terminal
-</pre>
-</div>
-
-<p>
-Typing <i>Buy coffee</i> in either client displays the two actions. Neither
-client contains a todo implementation: the service supplies the markup
-and the expressions to run. The terminal script uses <code>fzf</code> for presentation;
-the desktop app renders graphical entries.
-</p>
-</div>
-<div id="outline-container-orgbab13cc" class="outline-3">
-<h3 id="orgbab13cc">Show and complete todos</h3>
-<div class="outline-text-3" id="text-orgbab13cc">
-<p>
-Extend the running application to list, search, and complete todos.
-Keep the capture actions and add a function that turns existing todos into
-choices:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="orgcd4ab3f"><span class="token-comment"># todo-ui.ll — add this helper, replace todo_items, and reevaluate the file.</span>
-(<span class="token-form">defn!</span> matching_todo_items (<span class="token-form">query</span>)
-  <span class="token-comment"># Search real todos, then attach the call that completes each one.</span>
-  (<span class="token-form">map</span> (<span class="token-form">fuzzy_match</span> query (<span class="token-form">get_todos</span>)) (<span class="token-form">fn</span> (<span class="token-form">todo</span>)
-    <span class="token-prefix">`</span>(<span class="token-keyword">:title</span> <span class="token-prefix">,</span>(<span class="token-form">format</span> <span class="token-string">&quot;Complete: {}&quot;</span> (<span class="token-form">get</span> todo <span class="token-keyword">:title</span>))
-      <span class="token-keyword">:subtitle</span> <span class="token-prefix">,</span>(<span class="token-form">get</span> todo <span class="token-keyword">:notes</span>)
-      <span class="token-keyword">:on_click</span> (<span class="token-form">complete_todo</span> <span class="token-prefix">&#x27;</span><span class="token-prefix">,</span>todo)))))
-
+             <span class="token-string">"Try VRS"</span>))
+<span class="token-comment"># Each item includes its label and the exact expression to run.</span>
+<span class="token-comment"># =&gt; ((:title "Add todo: Try VRS"</span>
+<span class="token-comment">#      :on_click (add_todo "Try VRS" ""))</span>
+<span class="token-comment">#     (:title "Add todo with Safari tab"</span>
+<span class="token-comment">#      :on_click (add_todo_from_tab)))</span>
+</pre></div>
+<p>The <code>vrsjmp</code> desktop app and the <a href="https://github.com/leoshimo/vrs/blob/main/scripts/vrsjmp-terminal">vrsjmp-terminal shell script</a>
+are general-purpose clients for this markup. One presents a graphical
+interface; the other presents it in the terminal. Selecting an item sends it
+back to the service, which evaluates its <code>:on_click</code> expression.</p>
+<p>Try our todo user interface in the terminal:</p>
+<!-- example: shell-client -->
+<div class="code-block"><div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">./scripts/vrsjmp-terminal
+</pre></div>
+<div id="outline-container-show-existing-todos" class="outline-3">
+<h3 id="show-existing-todos">Show existing todos</h3>
+<p>Let’s update the interface to show existing todos, each with an action to mark it complete.</p>
+<!-- example: live-todos -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs"><span class="token-comment"># todo-ui.ll — replace todo_items and reevaluate the file.</span>
 (<span class="token-form">defn!</span> todo_items (<span class="token-form">query</span>)
-  (<span class="token-form">+</span> (<span class="token-form">add_todo_items</span> query) (<span class="token-form">matching_todo_items</span> query)))
-</pre>
-</div>
+  <span class="token-comment"># Keep the two actions for adding todos.</span>
+  (<span class="token-form">def</span> capture_items
+    `((<span class="token-keyword">:title</span> ,(<span class="token-form">format</span> <span class="token-string">"Add todo: {}"</span> query)
+       <span class="token-keyword">:on_click</span> (<span class="token-form">add_todo</span> ,query <span class="token-string">""</span>))
+      (<span class="token-keyword">:title</span> <span class="token-string">"Add todo with Safari tab"</span>
+       <span class="token-keyword">:on_click</span> (<span class="token-form">add_todo_from_tab</span>))))
 
-<p>
-Search for <i>coffee</i>: <i>Complete: Buy coffee</i> now appears alongside the
-capture actions. The new search and completion actions are immediately
-available in both user interfaces—without rebuilding the desktop app or
-editing the terminal script.
-</p>
-</div>
-</div>
-</div>
-<div id="outline-container-org1490585" class="outline-2">
-<h2 id="org1490585">Turn an interaction into a program</h2>
-<div class="outline-text-2" id="text-org1490585">
-<p>
-Selecting an item executes the <code>:on_click</code> expression from its markup—the
-same code a program would run. Use the runtime's built-in <i>pubsub</i> to inspect those
-expressions as the software is used. Publish each selected action to a
-topic, <code>:tour_cmd</code>, for another client to follow:
-</p>
+  <span class="token-comment"># Find existing todos matching the search text.</span>
+  (<span class="token-form">def</span> matches (<span class="token-form">fuzzy_match</span> query (<span class="token-form">get_todos</span>)))
 
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="orga2e9afc"><span class="token-comment"># todo-ui.ll — replace on_click and reevaluate the file, including spawn_srv!.</span>
+  <span class="token-comment"># Give each match an action to complete it.</span>
+  (<span class="token-form">def</span> completion_items
+    (<span class="token-form">map</span> matches
+      (<span class="token-form">fn</span> (<span class="token-form">todo</span>)
+        `(<span class="token-keyword">:title</span> ,(<span class="token-form">format</span> <span class="token-string">"Complete: {}"</span> (<span class="token-form">get</span> todo <span class="token-keyword">:title</span>))
+          <span class="token-keyword">:subtitle</span> ,(<span class="token-form">get</span> todo <span class="token-keyword">:notes</span>)
+          <span class="token-keyword">:on_click</span> (<span class="token-form">complete_todo</span> ',todo)))))
+
+  (<span class="token-form">+</span> capture_items completion_items))
+</pre></div>
+<p>The interface now supports adding a todo, finding it, and marking it complete.
+For example, add <em>Buy coffee</em>, search for <em>coffee</em>, then select
+<em>Complete: Buy coffee</em>.</p>
+<p>This new capability works in both <code>:vrsjmp</code> clients without recompiling the
+desktop app or editing the terminal script.</p>
+</div>
+<div id="outline-container-user-interactions-are-code" class="outline-3">
+<h3 id="user-interactions-are-code">User interactions are code</h3>
+<p>Selecting an item executes the <code>:on_click</code> expression in its markup—code
+that other programs can inspect and manipulate as data.</p>
+<p>Let’s use VRS’s built-in <em>pubsub</em> to see this in practice. Update <code>on_click</code>
+to publish each expression to <code>:tour_cmd</code> before evaluating it:</p>
+<!-- example: publishing-clicks -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs"><span class="token-comment"># todo-ui.ll — replace on_click and reevaluate the file, including spawn_srv!.</span>
 (<span class="token-form">defn!</span> on_click (<span class="token-form">item</span>)
   (<span class="token-form">def</span> command (<span class="token-form">get</span> item <span class="token-keyword">:on_click</span>))
-  (<span class="token-form">publish</span> <span class="token-keyword">:tour_cmd</span> command) <span class="token-comment"># Send the expression to subscribers before running it.</span>
+  (<span class="token-form">publish</span> <span class="token-keyword">:tour_cmd</span> command) <span class="token-comment"># Publish the command.</span>
   (<span class="token-form">eval</span> command)
   <span class="token-keyword">:close</span>)
-</pre>
-</div>
-
-<p>
-A second client follows the topic:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">vrsctl --subscribe tour_cmd --follow
-</pre>
-</div>
-
-<p>
-Selecting <i>Add todo: Buy coffee</i> in the terminal or desktop app prints:
-</p>
-
-<pre class="example" id="orgc1ce816">
-(add_todo "Buy coffee" "")
-</pre>
-
-<p>
-The output is exactly the code that ran. It can be pasted into source,
-edited, combined with other expressions, or run again.
-</p>
-
-<p>
-For example, the <a href="../scripts/cmd_macro.ll">command-macro service</a> collects these expressions into a
-program to replay. The full <code>:vrsjmp</code> service also uses executable expressions
-to retry failed calls, retaining their argument values in the call itself.
-</p>
-
-<p>
-Each interaction can reveal a function call with real arguments.
-Using the application reveals how to program it.
-</p>
+</pre></div>
+<p>Watch the published expressions by following the <code>tour_cmd</code> topic:</p>
+<div class="code-block"><div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">vrsctl --subscribe tour_cmd --follow
+</pre></div>
+<p>Adding a <em>Buy coffee</em> todo through the interface will now show this in the terminal:</p>
+<div class="code-block"><div class="code-toolbar"><button class="copy-code" type="button" aria-label="Copy code">Copy</button></div><pre class="example">(add_todo "Buy coffee" "")
+</pre></div>
+<p>Your interactions give you executable code you can edit and run again.</p>
+<p>This symmetry between user interactions, code, and data is powerful.
+<a href="https://github.com/leoshimo/vrs/blob/main/scripts/cmd_macro.ll">Another program</a> can record and replay those expressions. The editor can
+use those same expressions and live values to edit programs,
+<a href="#build-against-the-running-system">as we’ll see later</a>.</p>
+<p>A sequence of user interactions can become a program—and data for other
+programs to work with.</p>
 </div>
 </div>
-<div id="outline-container-org33c3583" class="outline-2">
-<h2 id="org33c3583">Build interactions from functions and data</h2>
-<div class="outline-text-2" id="text-org33c3583">
-<p>
-Earlier, we wrote the function calls to add and complete todos. VRS's
-metadata interface also lets programs discover which functions accept a
-value, or fetch available values from the environment to pass to a function.
-</p>
-
-<p>
-Give each todo a leading <code>:todo</code> tag, then associate two operations with it: complete
-the todo or copy its title.
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="org3e84fb4"><span class="token-comment"># todos.ll — replace add_todo.</span>
+<div id="outline-container-build-interactions-from-functions-and-data" class="outline-2">
+<h2 id="build-interactions-from-functions-and-data">Build interactions from functions and data</h2>
+<p>So far, we've written the function calls behind each action explicitly.
+VRS's metadata system lets us discover which functions to call and
+what arguments to supply. Start with a todo and discover the actions
+available for it. Or start with an action and find the todos it can operate on.</p>
+<div id="outline-container-discover-actions-for-a-todo" class="outline-3">
+<h3 id="discover-actions-for-a-todo">Discover actions for a todo</h3>
+<p>Give each todo a leading <code>:todo</code> tag, then associate two operations with it: complete
+the todo or copy its title.</p>
+<!-- example: tagged-todos -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs"><span class="token-comment"># todos.ll — replace add_todo.</span>
 (<span class="token-form">defn!</span> add_todo (<span class="token-form">title</span> notes)
-  (<span class="token-form">def</span> todo <span class="token-prefix">`</span>(<span class="token-keyword">:todo</span> <span class="token-keyword">:title</span> <span class="token-prefix">,</span>title <span class="token-keyword">:notes</span> <span class="token-prefix">,</span>notes)) <span class="token-comment"># The leading tag identifies a todo.</span>
+  (<span class="token-form">def</span> todo `(<span class="token-keyword">:todo</span> <span class="token-keyword">:title</span> ,title <span class="token-keyword">:notes</span> ,notes)) <span class="token-comment"># The leading tag identifies todo data.</span>
   (<span class="token-form">set</span> todos (<span class="token-form">push</span> todos todo))
   todo)
-</pre>
-</div>
-
-<p>
-Functions declare what they accept through <code>interactive</code> metadata:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="org2811507"><span class="token-comment"># todos.ll — replace complete_todo and add copy_todo.</span>
+</pre></div>
+<p>Functions use <code>interactive</code> metadata to describe the data they can act on:</p>
+<!-- example: todo-operations -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs"><span class="token-comment"># todos.ll — replace complete_todo and add copy_todo.</span>
 (<span class="token-form">defn!</span> complete_todo (<span class="token-form">todo</span>)
-  <span class="token-string">&quot;Complete todo&quot;</span>
-  (<span class="token-form">interactive</span> <span class="token-keyword">:todo</span>) <span class="token-comment"># This function accepts a :todo entity.</span>
+  <span class="token-string">"Complete todo"</span>
+  (<span class="token-form">interactive</span> <span class="token-keyword">:todo</span>) <span class="token-comment"># Offer this function as an action for :todo data.</span>
   (<span class="token-form">set</span> todos (<span class="token-form">filter</span> todos (<span class="token-form">fn</span> (<span class="token-form">item</span>) (<span class="token-form">not?</span> (<span class="token-form">eq?</span> item todo))))))
 
 (<span class="token-form">defn!</span> copy_todo (<span class="token-form">todo</span>)
-  <span class="token-string">&quot;Copy todo title&quot;</span>
+  <span class="token-string">"Copy todo title"</span>
   (<span class="token-form">interactive</span> <span class="token-keyword">:todo</span>)
-  (<span class="token-form">exec</span> <span class="token-string">&quot;pbcopy&quot;</span> <span class="token-keyword">:stdin</span> (<span class="token-form">get</span> todo <span class="token-keyword">:title</span>)))
-</pre>
-</div>
-
-<p>
-Register <code>get_todos</code> as the provider of available <code>:todo</code> entities. Clients
-can then fetch current todos to use as arguments. Updating the service
-makes both the functions and their metadata available:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="orgb56bd94"><span class="token-comment"># todos.ll — replace the final spawn_srv!, then reevaluate the file.</span>
-(<span class="token-form">set_entity_completions</span> <span class="token-keyword">:todo</span> <span class="token-prefix">&#x27;</span>get_todos)
+  (<span class="token-form">exec</span> <span class="token-string">"pbcopy"</span> <span class="token-keyword">:stdin</span> (<span class="token-form">get</span> todo <span class="token-keyword">:title</span>)))
+</pre></div>
+<p>Update the service to make these functions and their metadata available:</p>
+<!-- example: todo-metadata-service -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs"><span class="token-comment"># todos.ll — replace the final spawn_srv!, then reevaluate the file.</span>
 (<span class="token-form">spawn_srv!</span> <span class="token-keyword">:todos</span>
-  <span class="token-keyword">:interface</span> <span class="token-prefix">&#x27;</span>(<span class="token-form">get_todos</span> add_todo complete_todo add_todo_from_tab copy_todo))
-</pre>
-</div>
-
-<p>
-VRS makes this metadata available to programs. The REPL can inspect
-exactly what another client would receive:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="orge7baf72">(<span class="token-form">bind_srv</span> <span class="token-keyword">:todos</span>)
-(<span class="token-form">get</span> (<span class="token-form">meta</span> complete_todo) <span class="token-keyword">:args</span>)
-<span class="token-comment"># =&gt; ((:type :todo :name todo))</span>
-
-(<span class="token-form">get</span> (<span class="token-form">meta</span> copy_todo) <span class="token-keyword">:doc</span>)
-<span class="token-comment"># =&gt; &quot;Copy todo title&quot;</span>
-</pre>
-</div>
-
-<p>
-These declarations support two directions through the same interface.
-</p>
-</div>
-<div id="outline-container-orgc59dd31" class="outline-3">
-<h3 id="orgc59dd31">Discover actions for a todo</h3>
-<div class="outline-text-3" id="text-orgc59dd31">
-<p>
-Given a todo, discover which functions accept it:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="orgf669a94">(<span class="token-form">def</span> todo (<span class="token-form">add_todo</span> <span class="token-string">&quot;Buy coffee&quot;</span> <span class="token-string">&quot;&quot;</span>))
-<span class="token-comment"># =&gt; (:todo :title &quot;Buy coffee&quot; :notes &quot;&quot;)</span>
+  <span class="token-keyword">:interface</span> '(<span class="token-form">get_todos</span> add_todo complete_todo add_todo_from_tab copy_todo))
+</pre></div>
+<p>Given a todo, discover which functions can act on it:</p>
+<!-- example: todo-actions -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">bind_srv</span> <span class="token-keyword">:todos</span>)
+(<span class="token-form">def</span> todo (<span class="token-form">add_todo</span> <span class="token-string">"Buy coffee"</span> <span class="token-string">""</span>))
+<span class="token-comment"># =&gt; (:todo :title "Buy coffee" :notes "")</span>
 
 (<span class="token-form">entity_functions</span> todo)
 <span class="token-comment"># =&gt; (complete_todo copy_todo)</span>
-</pre>
-</div>
+</pre></div>
+<p>The function metadata explains those choices and supplies their labels:</p>
+<!-- example: inspect-todo-metadata -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">get</span> (<span class="token-form">meta</span> complete_todo) <span class="token-keyword">:args</span>)
+<span class="token-comment"># =&gt; ((:type :todo :name todo))</span>
 
-<p>
-Select one of those functions and combine it with the value:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="orga8eea92">(<span class="token-form">def</span> action <span class="token-prefix">&#x27;</span>complete_todo) <span class="token-comment"># Select Complete todo.</span>
-(<span class="token-form">def</span> invocation <span class="token-prefix">`</span>(<span class="token-prefix">,</span>action <span class="token-prefix">&#x27;</span><span class="token-prefix">,</span>todo))
-<span class="token-comment"># =&gt; (complete_todo &#x27;(:todo :title &quot;Buy coffee&quot; :notes &quot;&quot;))</span>
+(<span class="token-form">get</span> (<span class="token-form">meta</span> copy_todo) <span class="token-keyword">:doc</span>)
+<span class="token-comment"># =&gt; "Copy todo title"</span>
+</pre></div>
+<p>Select one of those functions and combine it with the value:</p>
+<!-- example: invoke-todo-action -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">def</span> action 'complete_todo) <span class="token-comment"># Select Complete todo.</span>
+(<span class="token-form">def</span> invocation `(,action ',todo))
+<span class="token-comment"># =&gt; (complete_todo '(:todo :title "Buy coffee" :notes ""))</span>
 
 (<span class="token-form">eval</span> invocation)
-</pre>
+</pre></div>
 </div>
-</div>
-</div>
-<div id="outline-container-org3f5898d" class="outline-3">
-<h3 id="org3f5898d">Find arguments for a function</h3>
-<div class="outline-text-3" id="text-org3f5898d">
-<p>
-Start with a function this time. Read its argument type, then fetch
-available values of that type from the environment:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="org26cbdda">(<span class="token-form">add_todo</span> <span class="token-string">&quot;Buy tea&quot;</span> <span class="token-string">&quot;&quot;</span>)
+<div id="outline-container-find-arguments-for-a-function" class="outline-3">
+<h3 id="find-arguments-for-a-function">Find arguments for a function</h3>
+<p>To offer todos as arguments, clients need a way to fetch them. Register
+<code>get_todos</code> as the source of available <code>:todo</code> values, then update the service:</p>
+<!-- example: todo-argument-provider -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs"><span class="token-comment"># todos.ll — add before the final spawn_srv!, then reevaluate the file.</span>
+(<span class="token-form">set_entity_completions</span> <span class="token-keyword">:todo</span> 'get_todos)
+</pre></div>
+<p>Use <code>complete_todo</code>'s argument metadata to ask for available todos:</p>
+<!-- example: todo-arguments -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">bind_srv</span> <span class="token-keyword">:todos</span>) <span class="token-comment"># Import the argument provider.</span>
+(<span class="token-form">add_todo</span> <span class="token-string">"Buy tea"</span> <span class="token-string">""</span>)
 (<span class="token-form">def</span> argument (<span class="token-form">first</span> (<span class="token-form">get</span> (<span class="token-form">meta</span> complete_todo) <span class="token-keyword">:args</span>)))
 <span class="token-comment"># =&gt; (:type :todo :name todo)</span>
 
 (<span class="token-form">argument_entities</span> (<span class="token-form">get</span> argument <span class="token-keyword">:type</span>))
-<span class="token-comment"># =&gt; ((:todo :title &quot;Buy tea&quot; :notes &quot;&quot;))</span>
-</pre>
-</div>
-
-<p>
-The provider supplies the todos currently available through the service,
-including when that service runs on another device:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="org3a9c5f6">(<span class="token-form">def</span> todo (<span class="token-form">first</span> (<span class="token-form">argument_entities</span> (<span class="token-form">get</span> argument <span class="token-keyword">:type</span>))))
+<span class="token-comment"># =&gt; ((:todo :title "Buy tea" :notes ""))</span>
+</pre></div>
+<p>Choose one of those values and call the function:</p>
+<!-- example: invoke-with-todo -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">def</span> todo (<span class="token-form">first</span> (<span class="token-form">argument_entities</span> (<span class="token-form">get</span> argument <span class="token-keyword">:type</span>))))
 (<span class="token-form">complete_todo</span> todo) <span class="token-comment"># Choose the first candidate and call the function.</span>
-</pre>
-</div>
-
-<p>
-Using this metadata, clients can start with a function and interactively
+</pre></div>
+<p>Using this metadata, clients can start with a function and interactively
 prompt for its arguments—or start with selected data and discover applicable
 actions. For <code>focus_window</code>, a client can list available windows; for a
-window in that list, it can find functions such as <code>move_window</code>.
-</p>
-
-<p>
-The <code>:vrsjmp</code> service uses these queries to build interactions from the
+window in that list, it can find functions such as <code>move_window</code>.</p>
+<p>The <code>:vrsjmp</code> service uses these queries to build interactions from the
 functions available at runtime. The editor can use them to construct calls
-in source. Each client uses the same mechanism for unfamiliar entity types.
-</p>
+in source. Each client uses the same mechanism for unfamiliar entity types.</p>
+<p>Entity discovery is one application of VRS's metadata system. The docstrings
+above can also supply action labels, and parameter names can supply
+placeholders when building a call.</p>
 </div>
 </div>
-</div>
-<div id="outline-container-org04c60fb" class="outline-2">
-<h2 id="org04c60fb">Connect more of your software</h2>
-<div class="outline-text-2" id="text-org04c60fb">
-<p>
-A service can give the rest of VRS a programmable way into an application.
+<div id="outline-container-connect-more-of-your-software" class="outline-2">
+<h2 id="connect-more-of-your-software">Connect more of your software</h2>
+<p>A service can give the rest of VRS a programmable way into an application.
 Hack it together from whatever gets the job done: command-line programs,
-local databases, UI automation, or a small program written for the task.
-</p>
-
-<p>
-Existing services use several ways into applications and hardware:
-</p>
-
-<ul class="org-ul">
-<li><a href="../scripts/os_browser.ll">Safari</a> uses AppleScript for the active page and SQLite for tabs synced
+local databases, UI automation, or a small program written for the task.</p>
+<p>Existing services use several ways into applications and hardware:</p>
+<ul>
+<li><a href="https://github.com/leoshimo/vrs/blob/main/scripts/os_browser.ll">Safari</a> uses AppleScript for the active page and SQLite for tabs synced
 from other devices. Both are available through the browser service.</li>
-<li><a href="../scripts/os_notes.ll">Apple Notes</a> reads titles from SQLite, opens notes through application
+<li><a href="https://github.com/leoshimo/vrs/blob/main/scripts/os_notes.ll">Apple Notes</a> reads titles from SQLite, opens notes through application
 URLs, and creates them with AppleScript.</li>
-<li><a href="../scripts/antinote.ll">Antinote</a> reads its SQLite database and opens notes through URLs. Its
+<li><a href="https://github.com/leoshimo/vrs/blob/main/scripts/antinote.ll">Antinote</a> reads its SQLite database and opens notes through URLs. Its
 tagged notes also work with the action and argument menus above.</li>
-<li><a href="../scripts/feedbin.ll">Feedbin</a> runs <code>feedbinctl</code> to search articles and save pages, with recurring
+<li><a href="https://github.com/leoshimo/vrs/blob/main/scripts/feedbin.ll">Feedbin</a> runs <code>feedbinctl</code> to search articles and save pages, with recurring
 indexing hosted in the runtime too.</li>
-<li><a href="../scripts/os_notify.ll">Notifications</a> uses <code>osascript</code> on macOS and <code>notify-send</code> on Linux
+<li><a href="https://github.com/leoshimo/vrs/blob/main/scripts/os_notify.ll">Notifications</a> uses <code>osascript</code> on macOS and <code>notify-send</code> on Linux
 behind the same <code>notify</code> function.</li>
-<li><a href="../scripts/os_keyboard.ll">Keyboard brightness</a> reaches a private macOS framework through
+<li><a href="https://github.com/leoshimo/vrs/blob/main/scripts/os_keyboard.ll">Keyboard brightness</a> reaches a private macOS framework through
 <code>osascript</code> to read and change the backlight.</li>
-<li><a href="../scripts/ditoo.ll">Ditoo</a> calls a dedicated CLI to drive a Bluetooth pixel display.</li>
+<li><a href="https://github.com/leoshimo/vrs/blob/main/scripts/ditoo.ll">Ditoo</a> calls a dedicated CLI to drive a Bluetooth pixel display.</li>
 </ul>
 </div>
-</div>
-<div id="outline-container-orge3b4587" class="outline-2">
-<h2 id="orge3b4587">Respond to events: make a unicorn leap</h2>
-<div class="outline-text-2" id="text-orge3b4587">
-<p>
-A service can publish and respond to events in the environment. This
+<div id="outline-container-respond-to-events-make-a-unicorn-leap" class="outline-2">
+<h2 id="respond-to-events-make-a-unicorn-leap">Respond to events: make a unicorn leap</h2>
+<p>A service can publish and respond to events in the environment. This
 makes it possible to attach new behavior to programs that are already
-running.
-</p>
-
-<p>
-Let's make a unicorn leap across the screen whenever a todo is completed:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="orgc85db63"><span class="token-comment"># todos.ll — replace complete_todo and reevaluate the file.</span>
+running.</p>
+<p>Let's make a unicorn leap across the screen whenever a todo is completed:</p>
+<!-- example: completing-with-events -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs"><span class="token-comment"># todos.ll — replace complete_todo and reevaluate the file.</span>
 (<span class="token-form">defn!</span> complete_todo (<span class="token-form">todo</span>)
-  <span class="token-string">&quot;Complete todo&quot;</span>
+  <span class="token-string">"Complete todo"</span>
   (<span class="token-form">interactive</span> <span class="token-keyword">:todo</span>)
   (<span class="token-form">if</span> (<span class="token-form">contains?</span> todos todo)
     (<span class="token-form">begin</span>
       (<span class="token-form">set</span> todos (<span class="token-form">filter</span> todos (<span class="token-form">fn</span> (<span class="token-form">item</span>) (<span class="token-form">not?</span> (<span class="token-form">eq?</span> item todo)))))
       (<span class="token-form">publish</span> <span class="token-keyword">:todo_completed</span> todo))))
-</pre>
-</div>
-
-<p>
-A separate service responds by running <a href="https://github.com/kevinliddle/unicornleap">unicornleap</a>, which animates a
-unicorn across the desktop:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="org200dd94">(<span class="token-form">defn!</span> celebrate (<span class="token-form">todo</span>)
-  (<span class="token-form">exec</span> <span class="token-string">&quot;unicornleap&quot;</span>))
+</pre></div>
+<p>A separate service responds by running <a href="https://github.com/kevinliddle/unicornleap">unicornleap</a>, which animates a
+unicorn across the desktop:</p>
+<!-- example: celebration-service -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">defn!</span> celebrate (<span class="token-form">todo</span>)
+  (<span class="token-form">exec</span> <span class="token-string">"unicornleap"</span>))
 
 (<span class="token-form">spawn_srv!</span> <span class="token-keyword">:celebration</span>
-  <span class="token-keyword">:topics</span> <span class="token-prefix">&#x27;</span>((<span class="token-keyword">:todo_completed</span> celebrate))) <span class="token-comment"># Call celebrate with each event&#x27;s value.</span>
-</pre>
-</div>
-
-<p>
-Complete a todo:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="orge4524cd">(<span class="token-form">bind_srv</span> <span class="token-keyword">:todos</span>)
-(<span class="token-form">def</span> todo (<span class="token-form">add_todo</span> <span class="token-string">&quot;Finish this example&quot;</span> <span class="token-string">&quot;&quot;</span>))
+  <span class="token-keyword">:topics</span> '((<span class="token-keyword">:todo_completed</span> celebrate))) <span class="token-comment"># Call celebrate with each event's value.</span>
+</pre></div>
+<p>Complete a todo:</p>
+<!-- example: complete-todo -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">bind_srv</span> <span class="token-keyword">:todos</span>)
+(<span class="token-form">def</span> todo (<span class="token-form">add_todo</span> <span class="token-string">"Finish this example"</span> <span class="token-string">""</span>))
 (<span class="token-form">complete_todo</span> todo)
 <span class="token-comment"># A unicorn leaps.</span>
-</pre>
-</div>
-
-<p>
-The todo service publishes what happened; the subscriber decides what to do with it.
+</pre></div>
+<p>The todo service publishes what happened; the subscriber decides what to do with it.
 Other subscribers could refresh an e-ink todo display, append completed
-tasks to a daily journal, or update a pixel display on the desk. Each is
-a small program using capabilities from the same environment.
-</p>
+tasks to a daily journal, or update a pixel display on the desk.</p>
 </div>
-</div>
-<div id="outline-container-org700fe12" class="outline-2">
-<h2 id="org700fe12">Run recurring work</h2>
-<div class="outline-text-2" id="text-org700fe12">
-<p>
-VRS runs programs as lightweight <i>processes</i>. A service is a process that
+<div id="outline-container-run-recurring-work" class="outline-2">
+<h2 id="run-recurring-work">Run recurring work</h2>
+<p>VRS runs programs as lightweight <em>processes</em>. A service is a process that
 handles function calls and events; a recurring job is another process
-using the same runtime. This indexer works, waits fifteen minutes, and repeats:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="org87f6a68">(<span class="token-form">def</span> indexer
+using the same runtime. This indexer works, waits fifteen minutes, and repeats:</p>
+<!-- example: index-loop -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">def</span> indexer
   (<span class="token-form">spawn</span> (<span class="token-form">fn</span> ()
     (<span class="token-form">loop</span>
-      (<span class="token-form">publish</span> <span class="token-keyword">:index_result</span> (<span class="token-form">exec</span> <span class="token-string">&quot;feedbinctl&quot;</span> <span class="token-string">&quot;index&quot;</span>))
+      (<span class="token-form">publish</span> <span class="token-keyword">:index_result</span> (<span class="token-form">exec</span> <span class="token-string">"feedbinctl"</span> <span class="token-string">"index"</span>))
       (<span class="token-form">sleep</span> <span class="token-number">900</span>)))))
-</pre>
-</div>
-
-<p>
-Its results can be followed through pubsub, displayed in a user interface,
+</pre></div>
+<p>Its results can be followed through pubsub, displayed in a user interface,
 or used by another program. The job can call services and use the same
 debugging facilities as any other VRS program. There is no separate job
-language, scheduler configuration, or observation system to learn.
-</p>
-
-<p>
-The <a href="../scripts/feedbin.ll">Feedbin service</a> uses this pattern with error reporting and a name
-so reloading replaces its previous indexer.
-</p>
+language, scheduler configuration, or observation system to learn.</p>
+<p>The <a href="https://github.com/leoshimo/vrs/blob/main/scripts/feedbin.ll">Feedbin service</a> uses this pattern with error reporting and a name
+so reloading replaces its previous indexer.</p>
 </div>
-</div>
-<div id="outline-container-org0d4b7b0" class="outline-2">
-<h2 id="org0d4b7b0">Build capabilities across devices</h2>
-<div class="outline-text-2" id="text-org0d4b7b0">
-<p>
-The todo service can run on a home server without a single edit to the
+<div id="outline-container-build-capabilities-across-devices" class="outline-2">
+<h2 id="build-capabilities-across-devices">Build capabilities across devices</h2>
+<p>The todo service can run on a home server without a single edit to the
 scripts, services, or user interfaces that use it. For example, with a
-device named <code>mac-mini</code> <a href="../README.md#init-scripts-and-nodes">connected as a VRS peer</a>, send it the same <code>todos.ll</code>:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh" id="org2467b82"><span class="token-comment"># Stop the example service on the laptop.</span>
-vrsctl -c <span class="token-prefix">&#x27;</span>(<span class="token-form">kill</span> (<span class="token-form">find_srv</span> <span class="token-keyword">:todos</span>))<span class="token-prefix">&#x27;</span>
+device named <code>mac-mini</code> <a href="manual.html#connected-devices">connected as a VRS peer</a>, send it the same <code>todos.ll</code>:</p>
+<!-- example: deploy-todos -->
+<div class="code-block"><div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh"><span class="token-comment"># Stop the example service on the laptop.</span>
+vrsctl -c '(kill (find_srv :todos))'
 <span class="token-comment"># Send the local source file to mac-mini and start the service there.</span>
 vrsctl --node mac-mini ./todos.ll
-</pre>
-</div>
-
-<p>
-The laptop discovers the remote service and calls it in the usual way:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="org5496b49">(<span class="token-form">bind_srv</span> <span class="token-keyword">:todos</span>) <span class="token-comment"># Bind to the service now running on mac-mini.</span>
-(<span class="token-form">add_todo_from_tab</span> <span class="token-string">&quot;Try VRS&quot;</span>)
+</pre></div>
+<p>The laptop discovers the remote service and calls it in the usual way:</p>
+<!-- example: call-remote-todos -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">bind_srv</span> <span class="token-keyword">:todos</span>) <span class="token-comment"># Bind to the service now running on mac-mini.</span>
+(<span class="token-form">add_todo_from_tab</span>)
 (<span class="token-form">get_todos</span>)
-<span class="token-comment"># =&gt; ((:todo :title &quot;Try VRS&quot; :notes &quot;VRS\nhttps://github.com/leoshimo/vrs&quot;))</span>
-</pre>
-</div>
-
-<p>
-The todo service runs on the remote device and calls the laptop's
-<code>:os_browser</code> service to capture its Safari page. The implementation of
-<code>add_todo_from_tab</code> needs no edits. The separate <code>todo-ui.ll</code> service and
-both user interfaces work without changes too.
-</p>
-
-<p>
-Source can also be evaluated on another device directly from the REPL or
-editor. The <code>remote!</code> block runs on the named device:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="org677d765">(<span class="token-form">remote!</span> <span class="token-string">&quot;mac-mini&quot;</span>
+<span class="token-comment"># =&gt; ((:todo :title "VRS" :notes "https://github.com/leoshimo/vrs"))</span>
+</pre></div>
+<p>The todo service runs on the remote device and calls the laptop's
+<code>:os_browser</code> service to capture its Safari page.</p>
+<p>Source can also be evaluated on another device directly from the REPL or
+editor. The <code>remote!</code> block runs on the named device:</p>
+<!-- example: remote-expression -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">remote!</span> <span class="token-string">"mac-mini"</span>
   (<span class="token-form">node_name</span>))
-<span class="token-comment"># =&gt; &quot;mac-mini&quot;</span>
-</pre>
-</div>
-
-<p>
-Making a capability available to VRS makes it available to all these uses,
-without another integration for each client or device.
-</p>
-
-<p>
-For another example, the <a href="../scripts/ditoo.ll">Ditoo service</a> exposes a Bluetooth pixel display
-attached to a home Mac. A program on another device can put a message on it:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="org68bb9f3">(<span class="token-form">call_timeout</span> <span class="token-number">120</span>) <span class="token-comment"># Allow time for the Bluetooth connection and upload.</span>
+<span class="token-comment"># =&gt; "mac-mini"</span>
+</pre></div>
+<p>For another example, the <a href="https://github.com/leoshimo/vrs/blob/main/scripts/ditoo.ll">Ditoo service</a> exposes a Bluetooth pixel display
+attached to a home Mac. A program on another device can put a message on it:</p>
+<!-- example: desk-display -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">call_timeout</span> <span class="token-number">120</span>) <span class="token-comment"># Allow time for the Bluetooth connection and upload.</span>
 (<span class="token-form">bind_srv</span> <span class="token-keyword">:ditoo</span>)
-(<span class="token-form">ditoo_text</span> <span class="token-string">&quot;OFF DUTY&quot;</span>)
-</pre>
+(<span class="token-form">ditoo_text</span> <span class="token-string">"OFF DUTY"</span>)
+</pre></div>
+<p>A build script on another device could display <em>BUILD PASSED</em> on the desk.</p>
 </div>
-
-<p>
-The same call can appear in a user interface or an automation. A build
-script on another device could display <i>BUILD PASSED</i> on the desk.
-</p>
-</div>
-</div>
-<div id="outline-container-org09423cd" class="outline-2">
-<h2 id="org09423cd">Inspect execution</h2>
-<div class="outline-text-2" id="text-org09423cd">
-<p>
-The debugger is another client of the running environment. VRS's
-<a href="guide-debug.org">source-embedded tools</a> make execution observable through code. For example,
-<code>dbg!</code> records calls, arguments, and results while returning the expression's
-usual value. Its viewer can run in a browser or terminal:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">vrsctl dbg --web
+<div id="outline-container-build-against-the-running-system" class="outline-2">
+<h2 id="build-against-the-running-system">Build against the running system</h2>
+<p>The editor can use live data and metadata to help write a program. Open a
+scratch buffer with the editor integration loaded:</p>
+<div class="code-block"><div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">emacs -Q -L emacs -l vrs-mode scratch.ll
+</pre></div>
+<p>Start by inspecting the running todo service:</p>
+<!-- example: inspect-live-todos -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">bind_srv</span> <span class="token-keyword">:todos</span>)
+<span class="token-comment"># Place the cursor after the closing parenthesis and press C-c C-e.</span>
+(<span class="token-form">get_todos</span>)
+</pre></div>
+<p>Press <code>C-c C-v</code> at the same position to choose a todo from the result.
+The editor replaces <code>(get_todos)</code> with the chosen value. Selecting
+<em>VRS</em>, for example, leaves:</p>
+<!-- example: retain-todo-result -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">'(<span class="token-keyword">:todo</span> <span class="token-keyword">:title</span> <span class="token-string">"VRS"</span> <span class="token-keyword">:notes</span> <span class="token-string">"https://github.com/leoshimo/vrs"</span>)
+</pre></div>
+<p>The same <code>interactive</code> metadata that describes actions for other clients
+also works in the editor. With the cursor after the value's closing
+parenthesis, press <code>C-c C-a</code>. The editor offers <em>Complete todo</em> and
+<em>Copy todo title</em>. Choosing <em>Complete todo</em> turns the value into a call:</p>
+<!-- example: construct-todo-action -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">complete_todo</span> '(<span class="token-keyword">:todo</span> <span class="token-keyword">:title</span> <span class="token-string">"VRS"</span> <span class="token-keyword">:notes</span> <span class="token-string">"https://github.com/leoshimo/vrs"</span>))
+</pre></div>
+<p>The editor has assembled a function call from a live value and the service's
+metadata. It inserts the call without executing it.</p>
+<p>The debugger is another client of the running environment. For a closer
+look at execution, open its viewer in a browser or terminal:</p>
+<div class="code-block"><div class="code-toolbar"><span>SHELL</span><button class="copy-code" type="button" aria-label="Copy shell code">Copy</button></div><pre class="src src-sh">vrsctl dbg --web
 <span class="token-comment"># Or use vrsctl dbg for the terminal viewer.</span>
-</pre>
+</pre></div>
+<p>Wrap the call in <a href="manual.html#debugging"><code>dbg!</code></a> and evaluate it:</p>
+<!-- example: debug-todos -->
+<div class="code-block"><div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs">(<span class="token-form">dbg!</span> (<span class="token-form">complete_todo</span> '(<span class="token-keyword">:todo</span> <span class="token-keyword">:title</span> <span class="token-string">"VRS"</span> <span class="token-keyword">:notes</span> <span class="token-string">"https://github.com/leoshimo/vrs"</span>)))
+</pre></div>
+<p>This completes the todo and records the service call's arguments, result,
+and source location in the viewer. <code>dbg!</code> returns the call's usual value.</p>
 </div>
-
-<p>
-The <code>dbg!</code> expression returns todo titles while recording how they were
-computed:
-</p>
-
-<div class="org-src-container">
-<div class="code-toolbar"><span>LYRIC</span><button class="copy-code" type="button" aria-label="Copy lyric code">Copy</button></div><pre class="src src-vrs" id="org8cb9272">(<span class="token-form">bind_srv</span> <span class="token-keyword">:todos</span>)
-(<span class="token-form">dbg!</span> (<span class="token-form">map</span> (<span class="token-form">get_todos</span>) (<span class="token-form">fn</span> (<span class="token-form">todo</span>) (<span class="token-form">get</span> todo <span class="token-keyword">:title</span>))))
-</pre>
-</div>
-
-<p>
-The viewer shows the service call and each local function call, with their
-arguments, results, and source locations.
-</p>
-</div>
-</div>
-<div id="outline-container-org4eb2ebd" class="outline-2">
-<h2 id="org4eb2ebd">That's VRS</h2>
-<div class="outline-text-2" id="text-org4eb2ebd">
-<p>
-A todo service starts as a small script. Extend it to integrate with your
+<div id="outline-container-toward-a-personal-software-ecosystem" class="outline-2">
+<h2 id="toward-a-personal-software-ecosystem">Toward a personal software ecosystem</h2>
+<p>A todo service starts as a small script. Extend it to integrate with your
 browser, publish events, trigger automations, and power multiple user
 interfaces. Its capabilities remain available to other programs and
-clients, whether it runs locally or on another device.
-</p>
-
-<p>
-VRS uses its programming language as the common interface between programs,
-user interfaces, and devices. Source code, user interface markup, and
-recorded actions share symbolic expressions. An expression can be tried
-at the REPL and included directly in user interface markup as an action.
-Recording the interaction produces that same expression as source code.
-The shared representation does much of the work that would otherwise
-require custom integration code.
-</p>
-
-<p>
-Even the editor and debugger work with those same expressions and values
+clients, whether it runs locally or on another device.</p>
+<p>VRS uses its programming language as the common interface between programs,
+user interfaces, and devices. Programs, data, and user interface markup share
+the same representation. This representation is powerful for both users
+and programs. An interaction supplies code a person can edit; a program
+can construct new actions for clients that already know how to present them.</p>
+<p>Even the editor and debugger work with those same expressions and values
 in the running environment. Inspect the data an application is using,
 change a function, and see the application respond. Using the software
-and shaping it happen in the same live environment.
-</p>
-
-<p>
-A live, personal software ecosystem, grown one small script at a time.
-</p>
+and shaping it happen in the same live environment.</p>
+<p>A live, personal software ecosystem, grown one small script at a time.
+An environment to make your own.</p>
 </div>
-</div>
-</div>
-<script>
-
-document.documentElement.classList.add("enhanced");
-const toc=document.querySelector("#table-of-contents");
-const toggle=toc.querySelector("h2");
-function syncTocControl(){
- const compact=matchMedia("(max-width:1119px)").matches;
- toggle.tabIndex=compact?0:-1;
- if(compact){toggle.setAttribute("role","button");toggle.setAttribute("aria-expanded",String(toc.classList.contains("expanded")));}
- else{toggle.removeAttribute("role");toggle.removeAttribute("aria-expanded");}
-}
-syncTocControl();addEventListener("resize",syncTocControl);
-function toggleToc(){if(!matchMedia("(max-width:1119px)").matches)return;const expanded=toc.classList.toggle("expanded");toggle.setAttribute("aria-expanded",String(expanded));}
-toggle.addEventListener("click",toggleToc);
-toggle.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();toggleToc();}});
-const links=[...toc.querySelectorAll("a[href^='#']")];
-const sections=[...document.querySelectorAll(".outline-2")];
-function update(){
- const at=sections.filter(s=>s.getBoundingClientRect().top<140).at(-1);
- links.forEach(a=>{a.classList.remove("current");a.removeAttribute("aria-current");});
- toc.querySelectorAll("li.active").forEach(li=>li.classList.remove("active"));
- if(at){const id=at.querySelector("h2").id;const link=links.find(a=>a.getAttribute("href")==="#"+id);
- if(link){link.classList.add("current");link.setAttribute("aria-current","location");link.closest("li").classList.add("active");}}
- const total=document.documentElement.scrollHeight-innerHeight;
- document.querySelector(".progress-fill").style.width=(total?Math.min(100,scrollY/total*100):0)+"%";
-}
-let queued=false;
-addEventListener("scroll",()=>{if(!queued){queued=true;requestAnimationFrame(()=>{queued=false;update();});}},{passive:true});
-addEventListener("resize",update);update();
-document.querySelectorAll(".copy-code").forEach(button=>{
- button.addEventListener("click",async()=>{
-  const value=button.closest(".org-src-container").querySelector("pre").textContent;
-  try{
-   if(navigator.clipboard&&window.isSecureContext)await navigator.clipboard.writeText(value);
-   else{const area=document.createElement("textarea");area.value=value;area.style.position="fixed";area.style.opacity="0";document.body.append(area);area.select();const ok=document.execCommand("copy");area.remove();if(!ok)throw Error("copy unavailable");}
-   button.textContent="Copied";setTimeout(()=>button.textContent="Copy",1600);
-  }catch{button.textContent="Select text";setTimeout(()=>button.textContent="Copy",1800);}
- });
-});
-
-
-</script>
-</body>
-</html>
+<footer class="source-link"><a href="tour.md" download>Source</a></footer></article></main>
+</body></html>

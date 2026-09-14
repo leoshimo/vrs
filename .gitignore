@@ -59,7 +59,8 @@ flycheck_*.el
 .LSOverride
 
 # Icon must end with two \r
-Icon
+Icon
+
 
 # Thumbnails
 ._*
@@ -100,3 +101,7 @@ target/
 /vrsd.log
 *.log
 scratch.ll
+
+# Generated documentation site and Python bytecode.
+/_site/
+__pycache__/
