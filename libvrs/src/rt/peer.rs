@@ -1,10 +1,10 @@
-//! Persistent node links and the wire format used to synchronize services.
+//! Persistent node links for services, messages, and publications.
 
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::process::{Child, Command};
@@ -14,6 +14,7 @@ use tracing::{debug, error, info, warn};
 
 use super::kernel::WeakKernelHandle;
 use super::program::{Extern, Val};
+use super::pubsub::{PubSubHandle, Publication};
 use super::registry::{Registry, RegistryEvent, RemoteChange, ServiceDescription, Snapshot};
 use super::remote::{RemoteMessage, RemoteSessions};
 use super::runtime::DEFAULT_NODE_PORT;
@@ -25,8 +26,8 @@ static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_REMOTE_ID: AtomicU64 = AtomicU64::new(1);
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(15);
-// Version 3 adds an explicit evaluation failure when registry sync cannot finish.
-const NODE_PROTOCOL_VERSION: u32 = 3;
+// Version 4 adds publications. Older peers must not silently drop these events.
+const NODE_PROTOCOL_VERSION: u32 = 4;
 
 #[derive(Debug, Clone)]
 pub(crate) struct PeerHandle {
@@ -88,6 +89,7 @@ enum SessionEvent {
 #[derive(Debug)]
 struct ActiveSession {
     id: u64,
+    connected_at: Instant,
     direction: Direction,
     tx: mpsc::Sender<PeerMessage>,
     shutdown: oneshot::Sender<()>,
@@ -136,6 +138,10 @@ pub(super) enum PeerMessage {
     },
     Deliver {
         pid: ProcessId,
+        contents: WireVal,
+    },
+    Publish {
+        topic: lyric::KeywordId,
         contents: WireVal,
     },
 }
@@ -254,10 +260,12 @@ impl PeerManager {
     pub(crate) fn start(
         node_name: String,
         registry: Registry,
+        pubsub: PubSubHandle,
         kernel: WeakKernelHandle,
         mut commands: mpsc::Receiver<ManagerCmd>,
     ) {
         let (session_tx, mut session_rx) = mpsc::channel(64);
+        let mut publications = pubsub.local_publications();
 
         tokio::spawn(async move {
             let mut desired = HashSet::new();
@@ -355,6 +363,13 @@ impl PeerManager {
                             }
                         }
                     },
+                    publication = publications.recv() => match publication {
+                        Ok(publication) => broadcast_publication(&sessions, publication),
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                            warn!(skipped, "peer publications lagged; events were lost");
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                    },
                     event = registry_events.recv() => match event {
                         Ok(RegistryEvent::Up { revision, service }) => {
                             broadcast(&sessions, PeerMessage::RegistryUp { revision, service: Box::new(service) }).await;
@@ -397,6 +412,7 @@ impl PeerManager {
                             info!("node connected: {node}");
                             sessions.insert(node.clone(), ActiveSession {
                                 id,
+                                connected_at: Instant::now(),
                                 direction,
                                 tx: tx.clone(),
                                 shutdown,
@@ -438,6 +454,15 @@ impl PeerManager {
                                     }
                                     Ok(())
                                 },
+                                PeerMessage::Publish { topic, contents } => {
+                                    // The active-session check above rejects stale links.
+                                    // Remote events are local-only, so a mesh cannot echo
+                                    // a publication or deliver it through multiple paths.
+                                    match contents.into_val() {
+                                        Ok(val) => pubsub.publish_from_peer(&topic, val).await,
+                                        Err(error) => Err(error),
+                                    }
+                                }
                                 PeerMessage::Hello { .. }
                                 | PeerMessage::Heartbeat
                                 | PeerMessage::RegistryUp { .. }
@@ -472,6 +497,36 @@ impl PeerManager {
 async fn broadcast(sessions: &HashMap<String, ActiveSession>, message: PeerMessage) {
     for session in sessions.values() {
         let _ = session.tx.send(message.clone()).await;
+    }
+}
+
+fn broadcast_publication(sessions: &HashMap<String, ActiveSession>, publication: Publication) {
+    if sessions.is_empty() {
+        return;
+    }
+    let Publication {
+        topic,
+        val,
+        published_at,
+    } = publication;
+    let contents = match WireVal::from_val(val) {
+        Ok(contents) => contents,
+        Err(error) => {
+            warn!(%topic, %error, "publication cannot cross nodes; delivered locally only");
+            return;
+        }
+    };
+    let message = PeerMessage::Publish { topic, contents };
+    for (node, session) in sessions {
+        // An event queued before this link existed is not reconnect history.
+        if published_at < session.connected_at {
+            continue;
+        }
+        // A slow link must not block other peers or the manager's receive path.
+        // Publications are best-effort, just like the broker's bounded topics.
+        if let Err(error) = session.tx.try_send(message.clone()) {
+            warn!(%node, %error, "peer publication dropped");
+        }
     }
 }
 
@@ -827,6 +882,92 @@ mod tests {
     use super::*;
     use tokio::io::{duplex, split};
     use tokio::time::timeout;
+
+    #[tokio::test]
+    async fn publication_fanout_skips_full_links_and_preconnection_events() {
+        let mut sessions = HashMap::new();
+        let mut receivers = Vec::new();
+        let now = Instant::now();
+        for (index, node) in ["slow", "ready", "reconnected"].into_iter().enumerate() {
+            let (tx, rx) = mpsc::channel(1);
+            let (shutdown, _shutdown_rx) = oneshot::channel();
+            if node == "slow" {
+                tx.try_send(PeerMessage::Heartbeat).unwrap();
+            }
+            sessions.insert(
+                node.to_string(),
+                ActiveSession {
+                    id: index as u64,
+                    connected_at: if node == "reconnected" {
+                        now + Duration::from_secs(1)
+                    } else {
+                        now
+                    },
+                    direction: Direction::Outgoing,
+                    tx,
+                    shutdown,
+                },
+            );
+            receivers.push(rx);
+        }
+        broadcast_publication(
+            &sessions,
+            Publication {
+                topic: "topic".into(),
+                val: Val::Int(42),
+                published_at: now,
+            },
+        );
+        assert!(matches!(
+            receivers[0].try_recv(),
+            Ok(PeerMessage::Heartbeat)
+        ));
+        assert!(matches!(
+            receivers[1].try_recv(),
+            Ok(PeerMessage::Publish {
+                contents: WireVal::Int(42),
+                ..
+            })
+        ));
+        assert!(matches!(
+            receivers[2].try_recv(),
+            Err(mpsc::error::TryRecvError::Empty)
+        ));
+    }
+
+    #[tokio::test]
+    async fn sessions_reject_peers_without_publication_support() {
+        let (local, remote) = duplex(4096);
+        let (local_read, local_write) = split(local);
+        let (remote_read, mut remote_write) = split(remote);
+        let mut remote_lines = BufReader::new(remote_read).lines();
+        let (events_tx, mut events_rx) = mpsc::channel(8);
+        let session = tokio::spawn(run_session(
+            local_read,
+            local_write,
+            "alpha".into(),
+            Direction::Outgoing,
+            events_tx,
+        ));
+        remote_lines.next_line().await.unwrap().unwrap();
+        write_message(
+            &mut remote_write,
+            &PeerMessage::Hello {
+                node: "old".into(),
+                protocol: 3,
+            },
+        )
+        .await
+        .unwrap();
+        timeout(Duration::from_secs(1), session)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            events_rx.recv().await.is_none(),
+            "incompatible peer must not become active"
+        );
+    }
 
     #[test]
     fn node_endpoints_have_explicit_transports_and_optional_ports() {

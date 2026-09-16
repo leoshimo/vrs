@@ -1,10 +1,17 @@
 #![allow(dead_code)]
-//! Global PubSub
+//! Future-only, best-effort pub/sub, locally and across direct peer links.
+//!
+//! Each local publication is offered to the peer manager through a bounded
+//! stream. Peers inject received publications into their local broker without
+//! relaying them. There is no replay on reconnect or transitive routing through
+//! intermediate nodes. Only values supported by the peer wire format cross
+//! nodes; other values retain local delivery and produce a transport warning.
 // TODO: Leased Topics: Topics that can only be published by process that "claimed" that initially. On process exit, PubSub cleans Topic
 // TODO: Namespaced Topics: Add topics to namespaces (?) e.g. global, process-specific, etc
 // TODO: Think - Is PubSub general-case for Registry? I.e. Each process has special topic
 
 use std::collections::HashMap;
+use std::time::Instant;
 
 use crate::{Error, Result, Val};
 use lyric::KeywordId;
@@ -19,12 +26,22 @@ use tracing::{info, warn};
 #[derive(Debug, Clone)]
 pub(crate) struct PubSubHandle {
     tx: mpsc::Sender<Cmd>,
+    local_publications: broadcast::Sender<Publication>,
 }
 
-/// Global pubsub task
-#[derive(Debug, Default)]
+/// A publication originating on this node, for best-effort peer fanout.
+#[derive(Debug, Clone)]
+pub(crate) struct Publication {
+    pub topic: KeywordId,
+    pub val: Val,
+    pub published_at: Instant,
+}
+
+/// Node-local pubsub task, with an outbound stream for connected peers.
+#[derive(Debug)]
 pub(crate) struct PubSub {
     topics: HashMap<KeywordId, Topic>,
+    local_publications: broadcast::Sender<Publication>,
 }
 
 /// Handle to active subscription.
@@ -55,6 +72,7 @@ enum Cmd {
     Publish {
         topic: KeywordId,
         val: Val,
+        forward_to_peers: bool,
         resp_tx: oneshot::Sender<Result<()>>,
     },
     Clear {
@@ -64,6 +82,10 @@ enum Cmd {
 }
 
 impl PubSubHandle {
+    pub(crate) fn local_publications(&self) -> broadcast::Receiver<Publication> {
+        self.local_publications.subscribe()
+    }
+
     /// Best-effort publication from synchronous observation hooks. Never wait
     /// for the broker or a subscriber; callers decide how to recover from loss.
     pub(crate) fn try_publish(&self, topic: &KeywordId, val: Val) -> bool {
@@ -92,11 +114,26 @@ impl PubSubHandle {
     /// Publish a new value for given handle
     pub(crate) async fn publish(&self, topic: &KeywordId, val: Val) -> Result<()> {
         info!("publish {topic} {val}");
+        self.publish_inner(topic, val, true).await
+    }
+
+    /// Inject a peer publication locally without echoing it back or relaying it.
+    pub(crate) async fn publish_from_peer(&self, topic: &KeywordId, val: Val) -> Result<()> {
+        self.publish_inner(topic, val, false).await
+    }
+
+    async fn publish_inner(
+        &self,
+        topic: &KeywordId,
+        val: Val,
+        forward_to_peers: bool,
+    ) -> Result<()> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.tx
             .send(Cmd::Publish {
                 topic: topic.clone(),
                 val,
+                forward_to_peers,
                 resp_tx,
             })
             .await
@@ -129,16 +166,20 @@ impl PubSub {
     /// Spawn a new global pubsub task
     pub(crate) fn spawn() -> PubSubHandle {
         let (tx, mut rx) = mpsc::channel(128);
+        let (local_publications, _) = broadcast::channel(128);
+        let mut pubsub = PubSub {
+            topics: HashMap::new(),
+            local_publications: local_publications.clone(),
+        };
 
         tokio::spawn(async move {
-            let mut pubsub = PubSub::default();
             while let Some(cmd) = rx.recv().await {
                 match cmd {
                     Cmd::TryPublish { topic, val } => {
                         // Optional observation logging happens on the broker,
                         // never inside the synchronous VM hook.
                         tracing::debug!(target: "vrs::observations", %topic, %val);
-                        let _ = pubsub.handle_publish(topic, val);
+                        let _ = pubsub.handle_publish(topic, val, true);
                     }
                     Cmd::Subscribe { topic, resp_tx } => {
                         let res = pubsub.handle_subscribe(topic);
@@ -147,9 +188,10 @@ impl PubSub {
                     Cmd::Publish {
                         topic,
                         val,
+                        forward_to_peers,
                         resp_tx,
                     } => {
-                        let res = pubsub.handle_publish(topic, val);
+                        let res = pubsub.handle_publish(topic, val, forward_to_peers);
                         let _ = resp_tx.send(res);
                     }
                     Cmd::Clear { topic, resp_tx } => {
@@ -159,7 +201,10 @@ impl PubSub {
                 }
             }
         });
-        PubSubHandle { tx }
+        PubSubHandle {
+            tx,
+            local_publications,
+        }
     }
 
     /// Handle a new add subscription to add
@@ -173,9 +218,24 @@ impl PubSub {
     }
 
     /// Publish new value on given topic
-    fn handle_publish(&mut self, topic_id: KeywordId, val: Val) -> Result<()> {
-        let topic = self.get_topic(&topic_id);
-        let _ = topic.tx.send(val);
+    fn handle_publish(
+        &mut self,
+        topic_id: KeywordId,
+        val: Val,
+        forward_to_peers: bool,
+    ) -> Result<()> {
+        // Publications on topics with no local subscribers need no topic state.
+        if let Some(topic) = self.topics.get(&topic_id) {
+            let _ = topic.tx.send(val.clone());
+        }
+        if forward_to_peers {
+            // Never block local delivery on a slow or disconnected peer.
+            let _ = self.local_publications.send(Publication {
+                topic: topic_id,
+                val,
+                published_at: Instant::now(),
+            });
+        }
         Ok(())
     }
 
@@ -220,6 +280,35 @@ mod tests {
     use super::*;
     use std::time::Duration;
     use tokio::time::timeout;
+
+    #[tokio::test]
+    async fn peer_ingress_is_local_only_and_local_publications_leave_the_node() {
+        let ps = PubSub::spawn();
+        let topic = KeywordId::from("topic");
+        let mut outbound = ps.local_publications();
+        let mut sub = ps.subscribe(&topic).await.unwrap();
+
+        ps.publish_from_peer(&topic, Val::Int(1)).await.unwrap();
+        assert_eq!(sub.recv().await, Some(Val::Int(1)));
+        assert!(matches!(
+            outbound.try_recv(),
+            Err(broadcast::error::TryRecvError::Empty)
+        ));
+
+        assert!(ps.try_publish(&topic, Val::Int(2)));
+        let publication = timeout(Duration::from_secs(1), outbound.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(publication.topic, topic);
+        assert_eq!(publication.val, Val::Int(2));
+        assert_eq!(sub.recv().await, Some(Val::Int(2)));
+
+        // Remote delivery must not depend on a local subscriber existing.
+        drop(sub);
+        ps.publish(&topic, Val::Int(3)).await.unwrap();
+        assert_eq!(outbound.recv().await.unwrap().val, Val::Int(3));
+    }
 
     #[tokio::test]
     async fn subscribe_then_publish() {

@@ -127,6 +127,269 @@ async fn wait_for_value(client: &Client, expression: &str, expected: &Form, fail
 }
 
 #[tokio::test]
+async fn publications_reach_local_and_remote_subscribers() {
+    let dir = TestDir::new();
+    let alpha_socket = dir.join("a.socket");
+    let beta_socket = dir.join("b.socket");
+    let alpha_init = dir.join("a.ll");
+    let beta_init = dir.join("b.ll");
+    let (alpha_port, beta_port) = node_ports();
+    std::fs::write(
+        &alpha_init,
+        format!("(configure :nodes '(\"tcp://127.0.0.1:{beta_port}\"))"),
+    )
+    .unwrap();
+    std::fs::write(&beta_init, ":ok").unwrap();
+    let _alpha = spawn_vrsd("alpha", alpha_port, &alpha_socket, &alpha_init);
+    let mut beta_daemon = spawn_vrsd("beta", beta_port, &beta_socket, &beta_init);
+    let alpha = connect_client(&alpha_socket).await;
+    let beta = connect_client(&beta_socket).await;
+    wait_for_value(
+        &alpha,
+        "(remote! \"beta\" (node_name))",
+        &Form::string("beta"),
+        "peer never connected",
+    )
+    .await;
+
+    // Add the reverse configured link as well. The preferred session remains
+    // alpha -> beta; the redundant connection must not duplicate publications.
+    beta.request(
+        Form::from_expr(&format!(
+            "(configure :nodes '(\"tcp://127.0.0.1:{alpha_port}\"))"
+        ))
+        .unwrap(),
+    )
+    .await
+    .unwrap()
+    .contents
+    .unwrap();
+
+    let mut local = alpha.subscribe("count".into()).await.unwrap();
+    let mut remote = beta.subscribe("count".into()).await.unwrap();
+    let mut other_topic = beta.subscribe("other".into()).await.unwrap();
+    let mailbox = connect_client(&beta_socket).await;
+    mailbox
+        .request(Form::from_expr("(subscribe :count)").unwrap())
+        .await
+        .unwrap()
+        .contents
+        .unwrap();
+    // Requests on the same connection follow SubscriptionStart, so this also
+    // confirms the broker has installed each subscription before publishing.
+    beta.request(Form::keyword("ready")).await.unwrap();
+    // Non-transferable values keep working locally even with connected peers.
+    assert_eq!(
+        alpha.request(Form::from_expr("(begin (subscribe :local_function) (publish :local_function (fn () 7)) ((get (recv '(:topic_updated :local_function _)) 2)))").unwrap())
+            .await.unwrap().contents.unwrap(),
+        Form::Int(7),
+    );
+    alpha
+        .request(Form::from_expr("(publish :count 42)").unwrap())
+        .await
+        .unwrap()
+        .contents
+        .unwrap();
+    assert_eq!(
+        timeout(Duration::from_secs(2), local.recv())
+            .await
+            .unwrap()
+            .unwrap(),
+        Form::Int(42),
+    );
+    assert_eq!(
+        timeout(Duration::from_secs(2), remote.recv())
+            .await
+            .expect("publication never reached the subscriber on beta")
+            .unwrap(),
+        Form::Int(42),
+    );
+    assert_eq!(
+        timeout(
+            Duration::from_secs(2),
+            mailbox.request(Form::from_expr("(recv '(:topic_updated :count _))").unwrap())
+        )
+        .await
+        .unwrap()
+        .unwrap()
+        .contents
+        .unwrap(),
+        Form::from_expr("(:topic_updated :count 42)").unwrap(),
+    );
+
+    // Identical payloads are separate publications; both directions work.
+    for _ in 0..2 {
+        beta.request(Form::from_expr("(publish :count 43)").unwrap())
+            .await
+            .unwrap()
+            .contents
+            .unwrap();
+        for subscription in [&mut local, &mut remote] {
+            assert_eq!(
+                timeout(Duration::from_secs(2), subscription.recv())
+                    .await
+                    .unwrap()
+                    .unwrap(),
+                Form::Int(43)
+            );
+        }
+    }
+    for subscription in [&mut local, &mut remote, &mut other_topic] {
+        assert!(
+            timeout(Duration::from_millis(150), subscription.recv())
+                .await
+                .is_err(),
+            "unexpected duplicate, echo, or wrong topic"
+        );
+    }
+
+    // The alpha subscription survives beta restarting. Offline events reach
+    // local subscribers, but must not be replayed to beta after reconnecting.
+    beta_daemon.0.kill().await.unwrap();
+    beta_daemon.0.wait().await.unwrap();
+    timeout(Duration::from_secs(2), beta.closed())
+        .await
+        .unwrap();
+    wait_for_value(
+        &alpha,
+        "(ok? (try (remote! \"beta\" (node_name))))",
+        &Form::Bool(false),
+        "peer stayed connected",
+    )
+    .await;
+    alpha
+        .request(Form::from_expr("(publish :count :offline)").unwrap())
+        .await
+        .unwrap()
+        .contents
+        .unwrap();
+    assert_eq!(
+        timeout(Duration::from_secs(2), local.recv())
+            .await
+            .unwrap()
+            .unwrap(),
+        Form::keyword("offline")
+    );
+    assert!(timeout(Duration::from_millis(150), local.recv())
+        .await
+        .is_err());
+
+    let _restarted = spawn_vrsd("beta", beta_port, &beta_socket, &beta_init);
+    let beta = connect_client(&beta_socket).await;
+    let mut remote = beta.subscribe("count".into()).await.unwrap();
+    beta.request(Form::keyword("ready")).await.unwrap();
+    wait_for_value(
+        &alpha,
+        "(remote! \"beta\" (node_name))",
+        &Form::string("beta"),
+        "peer did not reconnect",
+    )
+    .await;
+    for (publisher, value) in [(&alpha, 44), (&beta, 45)] {
+        publisher
+            .request(Form::from_expr(&format!("(publish :count {value})")).unwrap())
+            .await
+            .unwrap()
+            .contents
+            .unwrap();
+        for subscription in [&mut local, &mut remote] {
+            assert_eq!(
+                timeout(Duration::from_secs(2), subscription.recv())
+                    .await
+                    .unwrap()
+                    .unwrap(),
+                Form::Int(value)
+            );
+        }
+    }
+    for subscription in [&mut local, &mut remote] {
+        assert!(
+            timeout(Duration::from_millis(150), subscription.recv())
+                .await
+                .is_err(),
+            "reconnect duplicated or replayed a publication"
+        );
+    }
+}
+
+#[tokio::test]
+async fn publications_do_not_loop_through_a_three_node_mesh() {
+    let dir = TestDir::new();
+    let listeners: Vec<_> = (0..3)
+        .map(|_| std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap())
+        .collect();
+    let ports: Vec<_> = listeners
+        .iter()
+        .map(|listener| listener.local_addr().unwrap().port())
+        .collect();
+    let [alpha_port, beta_port, gamma_port] = ports[..] else {
+        unreachable!()
+    };
+    drop(listeners);
+    let nodes = [
+        ("alpha", alpha_port, beta_port),
+        ("beta", beta_port, gamma_port),
+        ("gamma", gamma_port, alpha_port),
+    ];
+    let mut daemons = Vec::new();
+    let mut clients = Vec::new();
+    for (node, port, peer_port) in nodes {
+        let init = dir.join(&format!("{node}.ll"));
+        let socket = dir.join(&format!("{node}.socket"));
+        std::fs::write(
+            &init,
+            format!("(configure :nodes '(\"tcp://127.0.0.1:{peer_port}\"))"),
+        )
+        .unwrap();
+        daemons.push(spawn_vrsd(node, port, &socket, &init));
+        clients.push(connect_client(&socket).await);
+    }
+    for (index, client) in clients.iter().enumerate() {
+        for (node, _, _) in nodes {
+            if node != nodes[index].0 {
+                wait_for_value(
+                    client,
+                    &format!("(remote! \"{node}\" (node_name))"),
+                    &Form::string(node),
+                    "mesh never connected",
+                )
+                .await;
+            }
+        }
+    }
+    let mut subscriptions = Vec::new();
+    for client in &clients {
+        subscriptions.push(client.subscribe("mesh".into()).await.unwrap());
+        client.request(Form::keyword("ready")).await.unwrap();
+    }
+    for (index, client) in clients.iter().enumerate() {
+        client
+            .request(Form::from_expr(&format!("(publish :mesh {index})")).unwrap())
+            .await
+            .unwrap()
+            .contents
+            .unwrap();
+        for subscription in &mut subscriptions {
+            assert_eq!(
+                timeout(Duration::from_secs(2), subscription.recv())
+                    .await
+                    .unwrap()
+                    .unwrap(),
+                Form::Int(index as i32)
+            );
+        }
+    }
+    for subscription in &mut subscriptions {
+        assert!(
+            timeout(Duration::from_millis(200), subscription.recv())
+                .await
+                .is_err(),
+            "publication looped through another peer"
+        );
+    }
+}
+
+#[tokio::test]
 async fn remote_requests_fail_on_disconnect_and_new_sessions_work_after_restart() {
     let dir = TestDir::new();
     let alpha_socket = dir.join("a.socket");
