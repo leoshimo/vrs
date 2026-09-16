@@ -20,7 +20,7 @@ pub(crate) fn subscribe_fn() -> NativeAsyncFn {
 pub(crate) fn publish_fn() -> NativeAsyncFn {
     NativeAsyncFn {
         metadata: vec![],
-        doc: "(publish TOPIC DATA) - Publish DATA over TOPIC, notifying all active subscribers."
+        doc: "(publish TOPIC DATA) - Notify active subscribers locally and on directly connected nodes. Best-effort, with no replay; functions and other non-transferable values are local-only."
             .to_string(),
         func: |f, args| Box::new(publish_impl(f, args)),
     }

@@ -399,7 +399,12 @@ mod tests {
 
     #[tokio::test]
     async fn checkpoint_failure_replies_with_error_instead_of_hanging() {
-        let kernel = kernel::start("beta".into(), Registry::spawn_named("beta".into()), None);
+        let kernel = kernel::start(
+            "beta".into(),
+            Registry::spawn_named("beta".into()),
+            super::super::pubsub::PubSub::spawn(),
+            None,
+        );
         // Fault-inject a registry task that closed its channel, while leaving
         // the evaluator and transport alive. Its error must reach the caller.
         let (registry, receiver) = Registry::stalled_for_test();

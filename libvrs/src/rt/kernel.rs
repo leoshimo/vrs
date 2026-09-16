@@ -5,7 +5,7 @@ use super::mailbox::Message;
 use super::peer::PeerHandle;
 use super::proc::{ProcessExit, ProcessHandle, ProcessSet};
 use super::program;
-use super::pubsub::{PubSub, PubSubHandle};
+use super::pubsub::PubSubHandle;
 use super::registry::Registry;
 use crate::rt::term::Term;
 use crate::rt::{proc::Process, Error, ProcessId, Result};
@@ -29,12 +29,13 @@ pub(crate) struct WeakKernelHandle {
 pub(crate) fn start(
     node_name: String,
     registry: Registry,
+    pubsub: PubSubHandle,
     peers: Option<PeerHandle>,
 ) -> KernelHandle {
     let (ev_tx, mut ev_rx) = mpsc::channel(32);
 
     let handle = KernelHandle { ev_tx };
-    let mut kernel = Kernel::new(handle.clone(), node_name, registry, peers);
+    let mut kernel = Kernel::new(handle.clone(), node_name, registry, pubsub, peers);
     tokio::spawn(async move {
         loop {
             tokio::select! {
@@ -58,7 +59,12 @@ pub(crate) fn start(
 #[cfg(test)]
 pub(crate) fn start_test() -> KernelHandle {
     let node_name = "test".to_string();
-    start(node_name.clone(), Registry::spawn_named(node_name), None)
+    start(
+        node_name.clone(),
+        Registry::spawn_named(node_name),
+        super::pubsub::PubSub::spawn(),
+        None,
+    )
 }
 
 impl KernelHandle {
@@ -168,9 +174,9 @@ impl Kernel {
         handle: KernelHandle,
         node_name: String,
         registry: Registry,
+        pubsub: PubSubHandle,
         peers: Option<PeerHandle>,
     ) -> Self {
-        let pubsub = PubSub::spawn();
         Self {
             debug: crate::debug::Store::new(pubsub.clone()),
             weak_hdl: handle.downgrade(),
