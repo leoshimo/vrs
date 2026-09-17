@@ -12,16 +12,30 @@ env:
 jobs:
   build:
 
-    # Tauri 1 requires WebKitGTK 4.0, which Ubuntu 24.04 no longer packages.
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf emacs-nox
+        sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf emacs-nox
+
+    - uses: actions/setup-node@v7
+      with:
+        node-version: '24'
+
+    - uses: pnpm/action-setup@v6
+      with:
+        version: '11.19.0'
+
+    - name: Build and test GUI frontend
+      working-directory: vrsjmp
+      run: |
+        pnpm install --frozen-lockfile
+        pnpm build
+        pnpm test
 
     - name: Format
       run: cargo fmt --all --check
@@ -30,7 +44,7 @@ jobs:
       run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
     - name: Build
-      run: cargo build --workspace --locked
+      run: cargo build --workspace --locked --features vrsjmp/custom-protocol
 
     - name: Test
       run: cargo test --workspace --locked

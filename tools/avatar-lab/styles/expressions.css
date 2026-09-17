@@ -1,0 +1,496 @@
+.avatar-canvas {
+  height: 200px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  overflow: hidden;
+  background: #f0f1eb;
+}
+.avatar-canvas[data-appearance='dark'] {
+  background: #151916;
+}
+.avatar-canvas[data-view='bar'] {
+  background: url('/tahoe.png') center 60%/cover;
+  padding: 24px;
+}
+.avatar-viewer {
+  position: relative;
+  display: grid;
+  place-items: center;
+  color: #343b37;
+  --ink: #343b37;
+  --sheet: #f0f1eb;
+}
+.avatar-viewer[data-appearance='dark'] {
+  color: #ece7db;
+  --ink: #ece7db;
+  --sheet: #252823;
+}
+.avatar-viewer[data-bar='true'] {
+  width: 560px;
+}
+.avatar-render-slot {
+  position: relative;
+  flex: none;
+  width: var(--avatar-presented);
+  height: var(--avatar-presented);
+}
+.avatar-object {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--avatar-size) + 80px);
+  height: calc(var(--avatar-size) + 80px);
+  transform: translate(-50%, -50%) scale(var(--avatar-scale));
+  transform-origin: center;
+}
+.avatar-viewer[data-zoomed='true'] .native-shader {
+  image-rendering: pixelated;
+}
+.signal-field {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.native-shader {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.signal-anchor {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--avatar-size);
+  height: var(--avatar-size);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+.avatar-viewer-input {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 48px;
+  padding: 3px 12px 3px 8px;
+  border-radius: 18px;
+}
+.avatar-bar-surface {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--sheet);
+  box-shadow:
+    0 5px 18px #0003,
+    inset 0 1px 0 #fff3;
+  pointer-events: none;
+  z-index: -1;
+}
+.avatar-bar-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding-left: 60px;
+  pointer-events: none;
+  opacity: 0.58;
+  line-height: 1;
+  font-size: 16px;
+}
+.viewer-caption {
+  position: absolute;
+  bottom: 10px;
+  right: 12px;
+  background: #f0f1ebe8;
+  padding: 3px 7px;
+  border-radius: 4px;
+  font:
+    10px ui-monospace,
+    monospace;
+  color: #394137;
+}
+.avatar-canvas[data-appearance='dark'] .viewer-caption {
+  background: #151916db;
+  color: #c9d2c5;
+}
+.avatar-viewer[data-surface='solar'][data-appearance='light'] {
+  --sheet: #f5f0df;
+  --ink: #47463c;
+}
+.avatar-viewer[data-surface='solar'][data-appearance='dark'] {
+  --sheet: #22231e;
+  --ink: #ece8d3;
+}
+.avatar-viewer[data-surface='mineral'][data-appearance='light'] {
+  --sheet: #eeefef;
+  --ink: #343c42;
+}
+.avatar-viewer[data-surface='mineral'][data-appearance='dark'] {
+  --sheet: #192027;
+  --ink: #e4e9ef;
+}
+.avatar-bar-placeholder {
+  color: var(--ink);
+}
+.expression-editor {
+  max-width: 1100px;
+  margin-inline: auto;
+}
+.expression-editor .options-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.file-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.file-actions output {
+  font-size: 11px;
+  color: var(--muted);
+  max-width: 280px;
+}
+.expression-preview {
+  margin-bottom: 18px;
+}
+.preview-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+.preview-toolbar .study-choices {
+  margin: 0;
+}
+.preview-toolbar .preview-pause {
+  margin-left: auto;
+}
+.preview-toolbar .study-choices legend {
+  display: none;
+}
+.expression-preview .avatar-canvas {
+  height: 202px;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+.interactive-avatar {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+.avatar-bar-input {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  margin-left: 10px;
+  border: 0 !important;
+  outline: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--ink);
+  font:
+    16px -apple-system,
+    BlinkMacSystemFont,
+    sans-serif !important;
+  padding: 0 !important;
+}
+.avatar-bar-input::placeholder {
+  color: var(--ink);
+  opacity: 0.55;
+}
+.avatar-viewer-input .avatar-bar-input:focus,
+.avatar-viewer-input .avatar-bar-input:focus-visible {
+  outline: none;
+}
+.avatar-viewer-input:focus-within .avatar-bar-surface {
+  box-shadow:
+    0 5px 18px #0003,
+    inset 0 0 0 1px color-mix(in srgb, var(--ink) 25%, transparent);
+}
+.event-transport {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.event-transport label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  margin-inline: 3px 8px;
+}
+.event-transport input {
+  accent-color: var(--lab-accent);
+}
+.preview-visibility input {
+  appearance: none;
+  position: relative;
+  width: 28px;
+  height: 16px;
+  margin: 0;
+  border: 1px solid var(--muted);
+  border-radius: 9px;
+  background: var(--wash);
+  cursor: pointer;
+}
+.preview-visibility input::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.preview-visibility input:checked {
+  background: var(--text);
+  border-color: var(--text);
+}
+.preview-visibility input:checked::before {
+  transform: translateX(12px);
+  background: var(--page);
+}
+.event-transport output {
+  margin-left: auto;
+  color: var(--muted);
+  font:
+    11px ui-monospace,
+    monospace;
+}
+.event-transport [aria-pressed='true'] {
+  background: var(--wash);
+  color: var(--lab-accent);
+  border-color: var(--lab-accent);
+}
+.expression-body {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.expression-nav {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.expression-nav h2 {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0 0 5px 8px;
+}
+.expression-nav button {
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+  padding: 8px;
+  border-radius: 5px;
+  overflow-wrap: anywhere;
+}
+.expression-nav small {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 3px;
+  font-weight: 400;
+}
+.expression-nav button[aria-current] {
+  background: var(--wash);
+  color: var(--lab-accent);
+  font-weight: 600;
+}
+.expression-nav .library-toggle {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  margin-top: 6px;
+  padding-top: 14px;
+}
+.expression-nav .library-toggle span {
+  color: var(--muted);
+}
+.expression-nav .combinations-heading {
+  margin-top: 16px;
+}
+.expression-parameters {
+  min-width: 0;
+}
+.parameter-heading {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+.parameter-heading h2 {
+  font-size: 16px;
+  margin: 0 auto 0 0;
+}
+.expression-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--muted);
+  margin: 10px 0;
+}
+.expression-name input {
+  width: 100%;
+  font-size: 12px;
+  color: var(--text);
+}
+.motion-parameters {
+  border-top: 1px solid var(--line);
+  margin-top: 16px;
+  padding-top: 12px;
+}
+.motion-parameters > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.motion-parameters h3 {
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+.add-motion {
+  margin-top: 16px;
+  font-size: 12px;
+}
+.motion-picker {
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.motion-picker > p {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.motion-picker > div {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.motion-picker button {
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  text-align: left;
+}
+.motion-picker button:not(:disabled):hover {
+  background: var(--wash);
+}
+.motion-picker button:disabled {
+  opacity: 0.65;
+}
+.motion-picker small {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.appearance-preview-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+}
+.expression-parameters .character-properties {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+  align-items: start;
+}
+.expression-parameters .character-properties > .effect-control-group {
+  margin-top: 10px;
+}
+@media (max-width: 600px) {
+  .preview-toolbar {
+    gap: 6px;
+  }
+  .expression-editor .options-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .file-actions output {
+    max-width: 140px;
+  }
+  .expression-body {
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 12px;
+  }
+  .expression-nav button {
+    padding: 7px 5px;
+  }
+  .expression-preview .avatar-canvas {
+    height: 172px;
+  }
+  .avatar-canvas[data-view='bar'] {
+    padding: 8px;
+  }
+  .event-transport output {
+    width: 100%;
+    margin-top: 4px;
+  }
+  .expression-parameters .avatar-controls {
+    display: block;
+  }
+}
+.motion-parameters .expression-properties {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+  align-items: start;
+}
+.motion-parameters .expression-properties > .effect-control-group {
+  grid-column: 1/-1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+}
+.motion-parameters .effect-control-group > h3,
+.motion-parameters .effect-control-group > p {
+  grid-column: 1/-1;
+}
+.motion-parameters .avatar-range {
+  margin: 8px 0;
+}
+.expression-name input {
+  padding: 5px 7px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+@media (max-width: 700px) {
+  .motion-parameters .expression-properties,
+  .motion-parameters .expression-properties > .effect-control-group,
+  .expression-parameters .character-properties {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .motion-picker > div {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.avatar-viewer[data-bar='true'] {
+  flex: none;
+}
+.expression-preview {
+  position: sticky;
+  top: 56px;
+  z-index: 10;
+  background: var(--page);
+  padding-bottom: 8px;
+}

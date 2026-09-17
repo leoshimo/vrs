@@ -72,6 +72,37 @@
 (def pending_inputs '())
 (def action_runs '())
 
+(def ui_config_path "~/.vrsjmp-ui.ll")
+(def ui_config '(:theme :neutral :appearance :system))
+
+(defn! validate_ui_config (config)
+  (if (not? (list? config)) (error "UI configuration must be a property list"))
+  (if (not? (contains? '(:neutral :warm :cool) (get config :theme)))
+    (error "Theme must be :neutral, :warm, or :cool"))
+  (if (not? (contains? '(:system :light :dark) (get config :appearance)))
+    (error "Appearance must be :system, :light, or :dark"))
+  config)
+
+(defn! get_ui_config ()
+  "Read the palette's persisted theme and appearance."
+  (def saved (try (fread ui_config_path)))
+  (if (ok? saved) (set ui_config (validate_ui_config saved)))
+  ui_config)
+
+(defn! set_ui_config (options)
+  "Set :theme (:neutral/:warm/:cool) or :appearance (:system/:light/:dark)."
+  (if (not? (list? options)) (error "UI configuration must be a property list"))
+  (def current (get_ui_config))
+  (def theme (get options :theme))
+  (def appearance (get options :appearance))
+  (def next (validate_ui_config
+    `(:theme ,(if (eq? theme nil) (get current :theme) theme)
+      :appearance ,(if (eq? appearance nil) (get current :appearance) appearance))))
+  (fdump ui_config_path next)
+  (set ui_config next)
+  (publish :vrsjmp :config_changed)
+  next)
+
 (defn! action_record (id)
   (get (filter action_runs (fn (record) (eq? (get record :id) id))) 0))
 
@@ -210,7 +241,7 @@
   (set codex_cache nil)
   (def requests (pending_requests))
   (if (not? (empty? requests)) (get (get requests 0) :page)
-    (+ (push_page 'root_items "Search commands…") '(:title "Home"))))
+    (+ (push_page 'root_items "Search…") '(:title "Home"))))
 
 (defn! root_items (query)
   "Retrieve the root command palette's final ordered items"
@@ -904,4 +935,4 @@
     (if (eq? (get result 0) :push_page) result :close)
     (if (eq? result :refresh) :refresh :close)))
 
-(spawn_srv! :vrsjmp :interface '(root_page get_items on_click enqueue_input finish_action))
+(spawn_srv! :vrsjmp :interface '(root_page get_items on_click enqueue_input finish_action get_ui_config set_ui_config))

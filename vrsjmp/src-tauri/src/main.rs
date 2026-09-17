@@ -9,7 +9,8 @@ use std::time::Duration;
 #[cfg(test)]
 mod client_tests;
 mod protocol;
-use tauri::{async_runtime::JoinHandle, GlobalShortcutManager, Manager, PhysicalPosition, Window};
+use tauri::{async_runtime::JoinHandle, Emitter, Manager, PhysicalPosition, WebviewWindow};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tokio::{
     net::UnixStream,
     sync::{mpsc, oneshot},
@@ -114,6 +115,7 @@ impl Client {
                         },
                         event = subscription.recv() => match event {
                             Ok(Form::Keyword(event)) if event.as_str() == "show" => notify("show-palette"),
+                            Ok(Form::Keyword(event)) if event.as_str() == "config_changed" => notify("vrs-config-changed"),
                             Ok(_) => {},
                             Err(error) => {
                                 tracing::warn!("VRS subscription interrupted: {error}");
@@ -191,8 +193,19 @@ async fn root_page(state: tauri::State<'_, State>) -> Result<protocol::Action, S
 }
 
 #[tauri::command]
+async fn ui_config(state: tauri::State<'_, State>) -> Result<protocol::UiConfig, String> {
+    let result = async {
+        protocol::ui_config(
+            evaluate(&state, protocol::service_request("get_ui_config", vec![])).await?,
+        )
+    }
+    .await;
+    result.map_err(|error: anyhow::Error| error.to_string())
+}
+
+#[tauri::command]
 fn show(app: tauri::AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_window("main") {
+    if let Some(window) = app.get_webview_window("main") {
         center_in_primary_monitor(&window);
         #[cfg(target_os = "macos")]
         app.show().map_err(|error| error.to_string())?;
@@ -204,7 +217,7 @@ fn show(app: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn hide(app: tauri::AppHandle) {
-    if let Some(window) = app.get_window("main") {
+    if let Some(window) = app.get_webview_window("main") {
         let _ = window.hide();
     }
     #[cfg(target_os = "macos")]
@@ -221,39 +234,20 @@ fn main() -> Result<()> {
     let socket = args.socket.unwrap_or_else(vrs::runtime_socket);
 
     let context = tauri::generate_context!();
-    #[cfg(target_os = "macos")]
-    let context = {
-        let mut context = context;
-        if let Some(window) = context
-            .config_mut()
-            .tauri
-            .windows
-            .iter_mut()
-            .find(|w| w.label == "main")
-        {
-            // AppKit owns the outline, clipping, and shadow as a single frame.
-            // Overlay content fills it without a separate titlebar surface.
-            window.decorations = true;
-            window.transparent = false;
-            window.title_bar_style = tauri::TitleBarStyle::Overlay;
-            window.hidden_title = true;
-        }
-        context
-    };
-
     tauri::Builder::default()
-        .on_page_load(|_window, _| {
-            #[cfg(target_os = "macos")]
-            if let Err(error) = setup_native_frame(&_window) {
-                error!("Failed to set up palette frame: {error}");
-            }
-        })
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _, event| {
+                    if event.state == ShortcutState::Pressed {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.emit("toggle-palette", ());
+                        }
+                    }
+                })
+                .build(),
+        )
         .setup(move |app| {
-            // Tauri 1/tao dereferences a missing zoom button when maximizable is
-            // false on a borderless macOS window (caught by debug Rust builds).
-            // Leave it true in config; the palette remains non-resizable and
-            // has no titlebar controls. TODO: Remove after upgrading Tauri.
-            let window = app.get_window("main").unwrap();
+            let window = app.get_webview_window("main").unwrap();
             let notifications = window.clone();
             let mut client = Client::new(socket.clone());
             client.start(move |event| {
@@ -264,24 +258,18 @@ fn main() -> Result<()> {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(ActivationPolicy::Accessory);
 
-            let mut shortcuts = app.global_shortcut_manager();
-
             let binding = if cfg!(debug_assertions) {
                 "CMD+CTRL+SHIFT+SPACE" // debug
             } else {
                 "CMD+SPACE" // release
             };
 
-            shortcuts
-                .register(binding, move || {
-                    let _ = window.emit("toggle-palette", ());
-                })
-                .unwrap();
+            app.global_shortcut().register(binding)?;
 
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            set_query, dispatch, root_page, show, hide, on_blur
+            set_query, dispatch, root_page, ui_config, show, hide, on_blur
         ])
         .run(context)
         .expect("error while running tauri application");
@@ -289,35 +277,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-#[cfg(target_os = "macos")]
-#[allow(unexpected_cfgs)] // objc 0.2 macros refer to their historical cargo-clippy feature.
-fn setup_native_frame(window: &Window) -> Result<()> {
-    use cocoa::{
-        appkit::{NSWindow, NSWindowButton},
-        base::{id, YES},
-    };
-    use objc::{msg_send, sel, sel_impl};
-
-    // Keep the native frame but hide its traffic-light controls. The palette
-    // still closes with Escape or blur, not a conventional window close action.
-    unsafe {
-        let ns_window = window.ns_window()? as id;
-        for kind in [
-            NSWindowButton::NSWindowCloseButton,
-            NSWindowButton::NSWindowMiniaturizeButton,
-            NSWindowButton::NSWindowZoomButton,
-        ] {
-            let button = ns_window.standardWindowButton_(kind);
-            if !button.is_null() {
-                let _: () = msg_send![button, setHidden: YES];
-            }
-        }
-    }
-    window.eval("document.documentElement.classList.add('native-frame')")?;
-    Ok(())
-}
-
-fn center_in_primary_monitor(window: &Window) {
+fn center_in_primary_monitor(window: &WebviewWindow) {
     let primary_monitor = match window.primary_monitor() {
         Ok(Some(m)) => m,
         Err(e) => {
@@ -340,8 +300,8 @@ fn center_in_primary_monitor(window: &Window) {
 
     let monitor_pos = primary_monitor.position();
     let monitor_size = primary_monitor.size();
-    let x = monitor_pos.x + (monitor_size.width / 2 - window_size.width / 2) as i32;
-    let y = monitor_pos.y + (monitor_size.height / 2 - window_size.height / 2) as i32;
+    let x = monitor_pos.x + (monitor_size.width as i32 - window_size.width as i32).max(0) / 2;
+    let y = monitor_pos.y + (monitor_size.height as i32 - window_size.height as i32).max(0) / 2;
     if let Err(e) = window.set_position(PhysicalPosition::new(x, y)) {
         tracing::error!("Failed to set position - {e}");
     }

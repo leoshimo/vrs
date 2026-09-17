@@ -1,0 +1,113 @@
+.lab button[data-slot='button'] {
+  height: auto;
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+  box-shadow: none;
+  white-space: normal;
+  line-height: 1.35;
+}
+.lab button[data-slot='button']:hover:not(:disabled) {
+  background: var(--wash);
+}
+.lab button[aria-pressed='true'] {
+  background: var(--wash);
+  border-color: var(--muted);
+}
+.study-choices {
+  border: 0;
+  padding: 0;
+  margin: 12px 0;
+  min-width: 0;
+}
+.study-choices legend {
+  margin-bottom: 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.study-choices > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.avatar-range {
+  display: block;
+  margin: 14px 0;
+  min-width: 0;
+}
+.avatar-range > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+.avatar-range output {
+  color: var(--muted);
+  flex: none;
+}
+.avatar-range input {
+  display: block;
+  width: 100%;
+  height: 18px;
+  margin: 5px 0 0;
+  accent-color: var(--lab-accent);
+}
+.avatar-range small {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.effect-select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 10px 0;
+  font-size: 12px;
+}
+.effect-select select {
+  min-width: 0;
+  max-width: 65%;
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+}
+.effect-control-group {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  margin-top: 18px;
+}
+.effect-control-group:first-of-type {
+  margin-top: 10px;
+}
+.effect-control-group h3 {
+  margin: 0;
+}
+.effect-control-group > p {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 3px 0 10px;
+}
+.signal-knobs {
+  min-width: 0;
+}
+.signal-knobs > h2 {
+  margin: 0 0 10px;
+}
+input[type='number'],
+input[type='text'],
+.avatar-sequence input:not([type]) {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 5px;
+  padding: 4px 6px;
+  min-width: 0;
+}
