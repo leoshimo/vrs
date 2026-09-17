@@ -3,6 +3,33 @@ use lyric::Form;
 use serde::Serialize;
 
 #[derive(Debug, Serialize, PartialEq)]
+pub struct UiConfig {
+    pub theme: String,
+    pub appearance: String,
+}
+
+pub fn ui_config(value: Form) -> Result<UiConfig> {
+    let Form::List(values) = value else {
+        bail!("Expected UI configuration");
+    };
+    let setting = |name, allowed: &[&str], default: &str| -> Result<String> {
+        let value = match field(&values, name) {
+            Some(Form::Keyword(value)) => value.as_str(),
+            None => default,
+            _ => bail!("{name} must be a keyword"),
+        };
+        if !allowed.contains(&value) {
+            bail!("Invalid {name}");
+        }
+        Ok(value.to_string())
+    };
+    Ok(UiConfig {
+        theme: setting("theme", &["neutral", "warm", "cool"], "neutral")?,
+        appearance: setting("appearance", &["system", "light", "dark"], "system")?,
+    })
+}
+
+#[derive(Debug, Serialize, PartialEq)]
 pub struct Item {
     pub id: String,
     pub title: String,
@@ -223,6 +250,26 @@ pub fn action(value: Form) -> Result<Action> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn ui_configuration_is_validated_at_the_bridge() {
+        assert_eq!(
+            ui_config(Form::from_expr("(:theme :warm :appearance :dark)").unwrap()).unwrap(),
+            UiConfig {
+                theme: "warm".into(),
+                appearance: "dark".into()
+            }
+        );
+        assert_eq!(
+            ui_config(Form::from_expr("()").unwrap()).unwrap(),
+            UiConfig {
+                theme: "neutral".into(),
+                appearance: "system".into()
+            }
+        );
+        assert!(ui_config(Form::from_expr("(:theme :unknown)").unwrap()).is_err());
+        assert!(ui_config(Form::from_expr("(:appearance 42)").unwrap()).is_err());
+        assert!(ui_config(Form::keyword("config")).is_err());
+    }
     #[test]
     fn primary_actions_match_commands_not_labels_or_positions() {
         let rows = items(

@@ -1,5 +1,5 @@
 // The GUI owns history, not page behavior. Callbacks/arguments stay opaque here.
-export const rootPage = () => ({ get_items: "root_items", args: "()", title: "Home", prompt: "Search commands…", debounce_ms: 0 });
+export const rootPage = () => ({ get_items: "root_items", args: "()", title: "Home", prompt: "Search…", debounce_ms: 0 });
 export const retentionMs = 30 * 1000;
 
 export class Navigation {
@@ -270,6 +270,15 @@ export class Navigation {
         this.interact();
         this.opening = null;
         this.changed();
+    }
+    dispose() {
+        this.invalidate();
+        if (this.idleTimer !== null) this.timers.clearTimeout(this.idleTimer);
+        this.idleTimer = null;
+        this.lastInteractionAt = null;
+        this.opening = null;
+        this.visible = false;
+        this.render = () => {};
     }
     cancelPage(page) {
         if (page?.on_cancel) Promise.resolve(this.transport.dispatch(page.on_cancel)).catch(console.error);

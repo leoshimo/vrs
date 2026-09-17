@@ -1,0 +1,190 @@
+@import 'tailwindcss';
+@import '../styles/controls.css';
+@import '../styles/expressions.css';
+@import '../styles/recipe.css';
+@custom-variant dark (&:where(.dark, .dark *));
+@theme inline {
+  --color-background: var(--panel);
+  --color-foreground: var(--text);
+  --color-primary: var(--text);
+  --color-primary-foreground: var(--panel);
+  --color-secondary: var(--wash);
+  --color-secondary-foreground: var(--text);
+  --color-accent: var(--wash);
+  --color-accent-foreground: var(--text);
+  --color-muted: var(--wash);
+  --color-muted-foreground: var(--muted);
+  --color-border: var(--line);
+  --color-ring: var(--lab-accent);
+  --color-input: var(--line);
+  --color-destructive: #b84b42;
+  --radius-md: 6px;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+button,
+input,
+select {
+  font: inherit;
+}
+button,
+a,
+select,
+summary {
+  -webkit-tap-highlight-color: transparent;
+}
+button,
+summary {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+button,
+input,
+select,
+a,
+summary {
+  outline-offset: 3px;
+}
+:focus-visible {
+  outline: 2px solid var(--lab-accent);
+}
+[hidden] {
+  display: none !important;
+}
+.lab {
+  --page: #f5f5f2;
+  --panel: #fff;
+  --wash: #eeefeb;
+  --text: #282b28;
+  --muted: #686e67;
+  --line: #dcded7;
+  --lab-accent: #9b4929;
+  --ink: var(--text);
+  --sheet: var(--panel);
+  --quiet: var(--muted);
+  min-height: 100vh;
+  background: var(--page);
+  color: var(--text);
+  color-scheme: light;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.lab[data-theme='dark'] {
+  --page: #181b19;
+  --panel: #202420;
+  --wash: #2a302a;
+  --text: #e2e5dc;
+  --muted: #a4ada1;
+  --line: #3a4239;
+  --lab-accent: #e5b07f;
+  color-scheme: dark;
+}
+.lab-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 56px;
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--page);
+}
+.lab-header nav {
+  display: flex;
+  gap: 4px;
+}
+.lab-header a {
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 600;
+}
+.lab-header a[aria-current] {
+  background: var(--wash);
+  color: var(--text);
+}
+.lab-header .study-choices {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.lab-header legend {
+  display: none;
+}
+.lab main {
+  max-width: 1440px;
+  margin: auto;
+  padding: 20px 24px 64px;
+}
+h1 {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+h3 {
+  font-size: 13px;
+  font-weight: 600;
+}
+p {
+  margin: 8px 0;
+}
+code,
+output {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.options-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+svg {
+  flex-shrink: 0;
+}
+@media (max-width: 520px) {
+  .lab-header {
+    padding-inline: 10px;
+    gap: 4px;
+  }
+  .lab-header a {
+    padding-inline: 7px;
+  }
+  .lab main {
+    padding: 14px 12px 40px;
+  }
+  .lab-header .study-choices button {
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+}
+[data-slot='tooltip-content'] {
+  background: #30372f;
+  color: #f4f5ee;
+  font-size: 12px;
+  line-height: 1.5;
+  box-shadow: 0 3px 16px #0003;
+}
+[data-slot='tooltip-content'] svg {
+  fill: #30372f;
+  background: #30372f;
+}

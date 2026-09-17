@@ -64,6 +64,17 @@ async fn gui_bridge_uses_one_connection_for_queries_and_wakeups_and_resubscribes
     });
     assert_eq!(response.unwrap().contents.unwrap(), Form::keyword("answer"));
     assert_eq!(accepted.load(Ordering::SeqCst), 1);
+    bridge
+        .request(Form::from_expr("(publish :vrsjmp :config_changed)").unwrap())
+        .await
+        .unwrap();
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(3), notifications.recv())
+            .await
+            .unwrap()
+            .unwrap(),
+        "vrs-config-changed"
+    );
     let _ = bridge
         .request(Form::from_expr("(kill (self))").unwrap())
         .await;

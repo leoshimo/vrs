@@ -19,6 +19,11 @@ if [ "$MODE" != "dev" ]; then
     CARGO_ARGS="--release"
 fi
 
+if [ "$MODE" != "headless" ]; then
+    pnpm --dir vrsjmp install --frozen-lockfile || exit $?
+    pnpm --dir vrsjmp build || exit $?
+fi
+
 # Editor commands and script shebangs use the installed client. Match its
 # build profile to the daemon so they select the same default socket.
 if [ "$MODE" = "dev" ]; then
@@ -60,7 +65,7 @@ until cargo run --locked $CARGO_ARGS --bin vrsctl -- --command ':healthcheck' >/
 done
 
 if [ "$MODE" != "headless" ]; then
-    cargo run --locked $CARGO_ARGS --bin vrsjmp &
+    cargo run --locked $CARGO_ARGS --bin vrsjmp --features vrsjmp/custom-protocol &
     VRSJMP_PID=$!
     wait "$VRSD_PID" "$VRSJMP_PID"
 else

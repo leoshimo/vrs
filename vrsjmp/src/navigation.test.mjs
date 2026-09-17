@@ -22,6 +22,21 @@ test("Tauri transport never overwrites reserved IPC envelope keys", async () => 
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
+test("disposing cancels idle reset and ignores late responses", async () => {
+    const t = setup();
+    let renders = 0;
+    t.nav.render = () => renders++;
+    t.nav.open();
+    t.nav.dispose();
+    const count = renders;
+    t.queries[0].resolve([item("late")]);
+    await tick();
+    t.advance(retentionMs);
+    assert.equal(renders, count);
+    assert.equal(t.timers.size, 0);
+    assert.equal(t.nav.visible, false);
+});
+
 test("initial page resolves before showing; cancelled openings stay hidden", async () => {
     const starts = [], shown = [];
     const nav = { visible: false, begin() {
