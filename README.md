@@ -38,6 +38,12 @@ To this end:
 - Contributions of the intellectual kind are welcome ([reach me here](https://x.com/leoshimo)), but contributions of code are not accepted.
 - [This software has sharp edges](https://www.youtube.com/watch?v=sCZJblyT_XM&t=310s). Be warned!
 
+## Warning
+
+VRS has no default security mechanism. Connected clients can execute arbitrary
+code. Use only trusted code and devices, and do not expose the runtime to
+untrusted networks or users.
+
 ## Documentation
 
 - [A tour of VRS](docs/tour.md)
