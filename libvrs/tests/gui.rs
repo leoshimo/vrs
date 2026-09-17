@@ -147,7 +147,7 @@ async fn service_browser_navigates_unbound_interfaces_and_calls_without_shadowin
             (set hits (push hits (list object text))) :recorded)
           (defn! browser_status () (list hits queries))
           (defn! browser_plain (value) value)
-          (set_entity_completions :browser/item 'browser_objects)
+          (register_entity_source :browser/item 'browser_objects)
           (spawn_srv! :browser_fixture :interface '(get_items browser_objects browser_status browser_plain))
           (spawn_srv! :browser_empty :interface '()))"#,
     )
@@ -176,6 +176,10 @@ async fn service_browser_navigates_unbound_interfaces_and_calls_without_shadowin
         (
             r#"(get_items 'interface_function_items '(:browser_empty) "")"#,
             "()",
+        ),
+        (
+            r#"(get (on_click '(:on_click (continue_service_call :browser_fixture 'browser_plain '()))) :title)"#,
+            r#""browser_plain""#,
         ),
         (
             r#"(call (find_srv :browser_fixture) '(:browser_status))"#,

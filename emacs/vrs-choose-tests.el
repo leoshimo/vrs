@@ -220,8 +220,8 @@
    (defn! native_failure (object)
      \"Failure\" (interactive :test/object)
      '(:exit 1 :stderr \"fixture failed\"))
-   (set_entity_completions :test/object 'native_objects)
-   (set_entity_completions :test/dest 'native_destinations)
+   (register_entity_source :test/object 'native_objects)
+   (register_entity_source :test/dest 'native_destinations)
    (spawn_srv! :native_fixture
      :interface '(native_objects native_destinations native_copy native_source
                   native_plain native_status native_failure))")

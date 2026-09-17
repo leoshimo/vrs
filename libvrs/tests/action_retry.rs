@@ -52,7 +52,7 @@ async fn fixture() -> (Runtime, Arc<Client>) {
         (defn! capture_input () (set input_reads (+ input_reads 1)) current_page)
         (defn! active_tab () (slice (capture_input) 1))
         (defn! browser_pages () (list (capture_input)))
-        (set_entity_completions :web/page 'browser_pages)
+        (register_entity_source :web/page 'browser_pages)
         (defn! set_page (page) (set current_page page))
         (defn! retry_stats () (list input_reads (len action_runs)))
         (defn! favorite_items () '())

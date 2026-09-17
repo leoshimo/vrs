@@ -135,6 +135,6 @@
   (if (eq? address nil) (error "This device has no Tailscale IP address"))
   (tailscale_exec (list "ping" "--c=1" "--timeout=2s" "--until-direct=false" "--" address)))
 
-(set_entity_completions :tailscale/device 'get_tailscale_devices)
+(register_entity_source :tailscale/device 'get_tailscale_devices)
 (spawn_srv! :tailscale
   :interface '(get_tailscale_snapshot get_tailscale_devices ping_tailscale_device))

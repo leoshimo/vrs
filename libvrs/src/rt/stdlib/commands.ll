@@ -39,16 +39,23 @@
 (defn! literal_form (value)
   (if (or! (list? value) (symbol? value)) (list 'quote value) value))
 
+(defn! vrs/command_title (name metadata)
+  # A docstring's summary is a label; its remaining lines are documentation.
+  (def lines (filter (split "\n" (or! (get metadata :doc) ""))
+    (fn (line)
+      (not? (empty? (filter (split "" line)
+        (fn (char) (not? (contains? '("" " " "\t" "\r") char)))))))))
+  (if (empty? lines) (display name) (first lines)))
+
 (defn! command_title (name)
-  (def metadata (meta (eval name)))
-  (or! (get metadata :doc) (display name)))
+  (vrs/command_title name (meta (eval name))))
 
 (defn! accepts_context? (name entity)
   (def args (get (meta (eval name)) :args))
   (if (empty? args) false
     (eq? (get (get args 0) :type) (get entity 0))))
 
-(defn! entity_functions (entity)
+(defn! interactive_functions (entity)
   "Return bound function names whose first interactive argument matches this entity's tag. Does not run functions or completion providers."
   (if (or! (not? (list? entity)) (not? (keyword? (get entity 0))))
     (error "Expected a tagged entity"))
@@ -60,19 +67,19 @@
       (get entity :title))
     (display entity)))
 
-(defn! argument_entities (type)
-  "Shared argument choices for interactive execution and call construction."
-  (def providers (if (eq? type nil) '() (get_entity_completions type)))
-  (def entities '())
+(defn! entities (type)
+  "Retrieve available entities of a type from its registered sources."
+  (def providers (if (eq? type nil) '() (entity_sources type)))
+  (def values '())
   (map providers (fn (provider)
     (def found (try (apply (eval provider) '())))
     (if (list? found)
       (map found (fn (entity)
         (when! (and! (list? entity)
                     (eq? (get entity 0) type)
-                    (not? (contains? entities entity)))
-          (set entities (push entities entity))))))))
-  entities)
+                    (not? (contains? values entity)))
+          (set values (push values entity))))))))
+  values)
 
 (defn! vrs/execute_command (cmd)
   "Publish a selected command for macro recording, then execute it once."

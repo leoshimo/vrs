@@ -103,16 +103,16 @@ fn environment_discovery_and_completion_overrides_are_process_local() {
         eval_expr(
             r#"(begin
         (defn! source () '())
-        (set_entity_completions :example/object 'source)
+        (register_entity_source :example/object 'source)
         (defn! nested () (list (contains? (ls_env) 'source)
-                             (get_entity_completions :example/object)))
+                             (entity_sources :example/object)))
         (nested))"#
         )
         .unwrap(),
         Val::from_expr("(true (source))").unwrap()
     );
     assert_eq!(
-        eval_expr("(get_entity_completions :example/object)").unwrap(),
+        eval_expr("(entity_sources :example/object)").unwrap(),
         Val::List(vec![])
     );
 }

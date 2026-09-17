@@ -43,7 +43,7 @@
   (map (service_interface_functions service "") vrs/editor_function))
 
 (defn! vrs/editor_actions (entity)
-  (map (entity_functions entity) vrs/editor_function))
+  (map (interactive_functions entity) vrs/editor_function))
 
 (defn! vrs/editor_argument (type)
-  (map (argument_entities type) vrs/editor_value))
+  (map (entities type) vrs/editor_value))

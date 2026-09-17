@@ -38,5 +38,5 @@
   # TODO: Replace with plain open if a supported/non-promoting route is found.
   (exec "open" (str "antinote://x-callback-url/promoteAndOpen?noteId=" (get note :id))))
 
-(set_entity_completions :antinote/note 'get_antinote_notes)
+(register_entity_source :antinote/note 'get_antinote_notes)
 (spawn_srv! :antinote :interface '(get_antinote_notes open_antinote open_antinote_note))
