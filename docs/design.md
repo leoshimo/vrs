@@ -1,6 +1,6 @@
 # Design of VRS
 
-> **Reorganization WIP**
+> **🚧 WIP — Under construction 🚧**
 
 VRS is my experiment in building a personal software environment. I want the
 practicality of shell scripting, the feeling of working inside Emacs, and access

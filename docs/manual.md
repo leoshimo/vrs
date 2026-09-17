@@ -1,5 +1,7 @@
 # VRS Manual
 
+> **🚧 WIP — Under construction 🚧**
+
 This manual covers the runtime, language, editor, debugger, and command-line interface.
 
 The [tour](tour.md) demonstrates the environment; [Design of VRS](design.md) explains
