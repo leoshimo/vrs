@@ -284,7 +284,7 @@ def book_layout(document, source, output):
     masthead = (f'<header class="site-masthead"><a class="wordmark" href="{index}" '
                 'aria-label="vrs documentation">vrs</a><nav aria-label="Documentation">' +
                 ''.join(links) + '</nav></header>')
-    footer = f'<footer class="source-link"><a href="{source.name}" download>Source</a></footer>'
+    footer = f'<footer class="repository-link"><a href="{REPOSITORY}">GitHub</a></footer>'
     body = (masthead + '<main id="content" class="page-grid">'
             f'<header class="document-title">{title}</header>{toc}'
             f'<article class="document">{article}{footer}</article></main>')
