@@ -27,7 +27,10 @@ if [[ ${1-} == --items ]]; then
     exit
 fi
 
-command -v fzf >/dev/null
+if ! command -v fzf >/dev/null 2>&1; then
+    print -u2 -- 'vrsjmp-terminal: fzf is required. Install fzf and try again.'
+    exit 127
+fi
 typeset -a pages client_args fetch
 client_args=("$@") # Forward vrsctl options, such as --socket or --node.
 script=${0:A}
