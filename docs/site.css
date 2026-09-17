@@ -127,8 +127,8 @@ pre code { font-size: inherit; }
 .contents ul ul { margin: 10px 0 18px 12px; font-size: 15px; }
 .contents ul ul li { margin-bottom: 10px; }
 .contents code { font-size: .82em; }
-.source-link { margin-top: 64px; padding-top: 18px; border-top: 1px solid var(--line); font: 16px/1.5 var(--serif); }
-.source-link a { color: var(--muted); }
+.repository-link { margin-top: 64px; padding-top: 18px; border-top: 1px solid var(--line); font: 16px/1.5 var(--serif); }
+.repository-link a { color: var(--muted); }
 
 @media (min-width: 960px) {
   .enhanced .contents ul ul { display: none; }
@@ -159,7 +159,7 @@ pre code { font-size: inherit; }
 @media print {
   :root { color-scheme: light; --paper: white; --ink: #111; --line: #ddd; --code: #f5f5f5; --code-ink: #222; }
   body { font-size: 11pt; }
-  .site-masthead, .contents, .code-toolbar, .source-link { display: none; }
+  .site-masthead, .contents, .code-toolbar, .repository-link { display: none; }
   .page-grid { display: block; max-width: none; width: 100%; padding: 0; }
   h1 { font-size: 30pt; }
   h2, h3, h4 { break-after: avoid; }

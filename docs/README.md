@@ -3,7 +3,7 @@
 The documentation is Markdown, rendered with markdown-it-py.
 `TODO.org` remains in the repository; links to it open its source on GitHub.
 The exporter lives in [`tools/docs/build.py`](../tools/docs/build.py). It adds
-the shared page layout, navigation, source downloads, and code highlighting.
+the shared page layout, navigation, repository link, and code highlighting.
 [`site.css`](site.css) styles the pages; [`site.js`](site.js) handles the contents
 and copy buttons. Examples are displayed, never evaluated during export.
 
