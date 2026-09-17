@@ -1,6 +1,6 @@
 # Design of VRS
 
-> **Reorganization WIP**
+> **🚧 WIP — Under construction 🚧**
 
 The design documents now live in `docs/`. Two approaches to the design are available:
 

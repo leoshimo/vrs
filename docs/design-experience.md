@@ -1,6 +1,6 @@
 # VRS: What comes after the Unix pipe?
 
-> **Reorganization WIP**
+> **🚧 WIP — Under construction 🚧**
 
 I want the software I use every day to remain something I can work on. A useful
 program should be a place to start: inspect it, borrow a piece, change what it
