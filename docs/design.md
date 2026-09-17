@@ -1,4 +1,4 @@
-# VRS: Design decisions
+# Design of VRS
 
 > **Reorganization WIP**
 

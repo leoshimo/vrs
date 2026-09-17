@@ -1,12 +1,9 @@
 # VRS Manual
 
-Begin with the shape of the running environment, evaluate a small program,
-then give it a service interface. Later sections cover individual tasks and
-contracts without requiring a linear read.
+This manual covers the runtime, language, editor, debugger, and command-line interface.
 
-The [tour](tour.md) demonstrates the environment; [Design decisions](design.md) explains
-its choices. This manual covers the runtime, language, editor, debugger, and
-command-line interface. Start here, then use the contents to look up a topic.
+The [tour](tour.md) demonstrates the environment; [Design of VRS](design.md) explains
+its choices.
 
 
 <a id="how-vrs-runs"></a>
