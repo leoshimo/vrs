@@ -16,17 +16,47 @@ async fn eval(source: &str) -> Val {
 }
 
 #[tokio::test]
+async fn command_titles_use_a_doc_summary_or_the_function_name_after_binding() {
+    let value = eval(
+        r#"
+        (defn! complete_todo (todo) (interactive :todo) (error "must not run"))
+        (defn! move_window (window)
+          "\n\t\nMove window\nA longer explanation of placement and side effects."
+          (interactive :os/window) (error "must not run"))
+        (defn! blank_doc () " \t\n\r" (error "must not run"))
+        (spawn_srv! :labels :interface '(complete_todo move_window blank_doc))
+        (bind_srv :labels)
+        (list (command_title 'complete_todo)
+              (command_title 'move_window)
+              (command_title 'blank_doc)
+              (get (meta move_window) :doc)
+              (vrs/command_title 'unbound_function '(:doc "Short summary\nMore detail")))
+        "#,
+    )
+    .await;
+    assert_eq!(
+        value,
+        Val::from_expr(
+            r#"("complete_todo" "Move window" "blank_doc"
+                 "\n\t\nMove window\nA longer explanation of placement and side effects."
+                 "Short summary")"#
+        )
+        .unwrap()
+    );
+}
+
+#[tokio::test]
 async fn bind_imports_metadata_and_completions_without_running_provider() {
     let value = eval(
         r#"
         (defn! objects () (error "must not run during registration or binding"))
         (defn! choose (object) (interactive :example/object) object)
-        (set_entity_completions :example/object 'objects)
+        (register_entity_source :example/object 'objects)
         (spawn_srv! :example :interface '(objects choose))
-        (set_entity_completions :example/object nil)
+        (register_entity_source :example/object nil)
         (bind_srv :example)
         (bind_srv :example)
-        (list (get_entity_completions :example/object)
+        (list (entity_sources :example/object)
               (get (meta choose) :interactive)
               (get (get (get (meta choose) :args) 0) :type)
               (choose '(:example/object :id 1)))
@@ -40,7 +70,41 @@ async fn bind_imports_metadata_and_completions_without_running_provider() {
 }
 
 #[tokio::test]
-async fn entity_functions_discovers_current_bindings_without_executing_them() {
+async fn entities_queries_registered_sources_for_live_values() {
+    let value = eval(
+        r#"
+        (def fetches 0)
+        (defn! first_objects ()
+          (set fetches (+ fetches 1))
+          '((:example/object :id 1) (:other/type :id 7) "not an entity"))
+        (defn! second_objects ()
+          '((:example/object :id 1) (:example/object :id 2)))
+        (register_entity_source :example/object '(first_objects second_objects))
+        (def sources (entity_sources :example/object))
+        (def before fetches)
+        (def found (entities :example/object))
+        (defn! first_objects ()
+          (set fetches (+ fetches 1))
+          '((:example/object :id 3)))
+        (list sources before found (entities :example/object)
+              (entities :unknown/type) fetches)
+    "#,
+    )
+    .await;
+    assert_eq!(
+        value,
+        Val::from_expr(
+            "((first_objects second_objects) 0
+              ((:example/object :id 1) (:example/object :id 2))
+              ((:example/object :id 3) (:example/object :id 1) (:example/object :id 2))
+              () 2)"
+        )
+        .unwrap()
+    );
+}
+
+#[tokio::test]
+async fn interactive_functions_discovers_current_bindings_without_executing_them() {
     let value = eval(
         r#"
         (defn! objects () (error "provider must not run"))
@@ -50,20 +114,20 @@ async fn entity_functions_discovers_current_bindings_without_executing_them() {
         (defn! plain (object) object)
         (defn! reversed (place object)
           (interactive :example/place :example/object) (error "must not run"))
-        (set_entity_completions :example/object 'objects)
+        (register_entity_source :example/object 'objects)
         (spawn_srv! :example :interface '(objects copy_id move_object plain reversed))
         (bind_srv :example)
         (def object '(:example/object :id 7))
-        (def found (entity_functions object))
+        (def found (interactive_functions object))
         (def checks (list (eq? (len found) 2)
                           (contains? found 'copy_id) (contains? found 'move_object)
-                          (empty? (entity_functions '(:unknown/type :id 7)))))
+                          (empty? (interactive_functions '(:unknown/type :id 7)))))
         (defn! copy_id (place) (interactive :example/place) place)
         (list checks
-              (entity_functions object)
+              (interactive_functions object)
               (map (vrs/editor_actions object) (fn (entry) (get entry 0)))
               (map '(nil 42 "text" () (untagged 7))
-                   (fn (value) (err? (try (entity_functions value))))))
+                   (fn (value) (err? (try (interactive_functions value))))))
     "#,
     )
     .await;
@@ -83,18 +147,18 @@ async fn defaults_compose_and_local_override_survives_rebinding() {
         (defn! first_objects () '())
         (defn! second_objects () '())
         (defn! local_objects () '())
-        (set_entity_completions :example/object 'first_objects)
+        (register_entity_source :example/object 'first_objects)
         (spawn_srv! :first :interface '(first_objects))
-        (set_entity_completions :example/object 'second_objects)
+        (register_entity_source :example/object 'second_objects)
         (spawn_srv! :second :interface '(second_objects))
-        (set_entity_completions :example/object nil)
+        (register_entity_source :example/object nil)
         (bind_srv :first) (bind_srv :second)
-        (def defaults (get_entity_completions :example/object))
-        (set_entity_completions :example/object 'local_objects)
+        (def defaults (entity_sources :example/object))
+        (register_entity_source :example/object 'local_objects)
         (bind_srv :first)
-        (def overridden (get_entity_completions :example/object))
-        (set_entity_completions :example/object nil)
-        (list defaults overridden (get_entity_completions :example/object))
+        (def overridden (entity_sources :example/object))
+        (register_entity_source :example/object nil)
+        (list defaults overridden (entity_sources :example/object))
     "#,
     )
     .await;
@@ -113,18 +177,18 @@ async fn rebinding_replaces_stale_defaults_and_private_providers_are_not_exporte
         r#"
         (defn! public_objects () '())
         (defn! private_objects () '())
-        (set_entity_completions :public/object 'public_objects)
-        (set_entity_completions :private/object 'private_objects)
+        (register_entity_source :public/object 'public_objects)
+        (register_entity_source :private/object 'private_objects)
         (spawn_srv! :example :interface '(public_objects))
-        (set_entity_completions :public/object nil)
-        (set_entity_completions :private/object nil)
+        (register_entity_source :public/object nil)
+        (register_entity_source :private/object nil)
         (bind_srv :example)
-        (def before (get_entity_completions :public/object))
-        (def private (get_entity_completions :private/object))
+        (def before (entity_sources :public/object))
+        (def private (entity_sources :private/object))
         (defn! ping () :pong)
         (spawn_srv! :example :interface '(ping))
         (bind_srv :example)
-        (list before private (get_entity_completions :public/object))
+        (list before private (entity_sources :public/object))
     "#,
     )
     .await;
@@ -136,11 +200,11 @@ async fn spawned_process_completion_overrides_do_not_taint_the_parent() {
     let value = eval(
         r#"
         (def parent (self))
-        (set_entity_completions :example/object 'parent_objects)
+        (register_entity_source :example/object 'parent_objects)
         (spawn (fn ()
-          (set_entity_completions :example/object 'child_objects)
-          (send parent (get_entity_completions :example/object))))
-        (list (recv) (get_entity_completions :example/object))
+          (register_entity_source :example/object 'child_objects)
+          (send parent (entity_sources :example/object))))
+        (list (recv) (entity_sources :example/object))
     "#,
     )
     .await;

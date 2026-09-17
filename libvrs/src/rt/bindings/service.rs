@@ -211,14 +211,14 @@ async fn info_srv_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
                     .as_keyword()?;
 
                 let doc = match entry.doc(kwd) {
-                    Some(doc) => doc.to_string(),
-                    None => format!("<no documentation for {}>", kwd.clone().to_symbol()),
+                    Some(doc) => Val::String(doc.to_string()),
+                    None => Val::Nil,
                 };
                 interface_doc.push(Val::List(vec![
                     Val::keyword("interface"),
                     i.clone(),
                     Val::keyword("doc"),
-                    Val::String(doc),
+                    doc,
                     Val::keyword("metadata"),
                     Val::from(lyric::Form::List(entry.metadata(kwd))),
                 ]));

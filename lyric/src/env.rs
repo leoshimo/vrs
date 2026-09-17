@@ -72,12 +72,12 @@ impl<T: Extern, L: Locals> Env<T, L> {
             .bind_native(SymbolId::from("help"), builtin::help_fn())
             .bind_native(SymbolId::from("meta"), builtin::metadata::meta_fn())
             .bind_native(
-                SymbolId::from("set_entity_completions"),
-                builtin::env::set_entity_completions_fn(),
+                SymbolId::from("register_entity_source"),
+                builtin::env::register_entity_source_fn(),
             )
             .bind_native(
-                SymbolId::from("get_entity_completions"),
-                builtin::env::get_entity_completions_fn(),
+                SymbolId::from("entity_sources"),
+                builtin::env::entity_sources_fn(),
             )
             .bind_native(SymbolId::from("ls_env"), builtin::ls_env_fn());
 
@@ -204,7 +204,7 @@ impl<T: Extern, L: Locals> Env<T, L> {
         self.macros = Some(macros);
     }
 
-    pub fn set_entity_completions(&mut self, ty: KeywordId, providers: Option<Vec<SymbolId>>) {
+    pub fn register_entity_source(&mut self, ty: KeywordId, providers: Option<Vec<SymbolId>>) {
         match providers {
             Some(providers) => {
                 self.completions.local.insert(ty, providers);

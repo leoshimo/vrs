@@ -78,7 +78,7 @@
     (if (get tab :url) (list (+ '(:web/page) tab)) '())
     '()))
 
-(set_entity_completions :web/page 'browser_pages)
+(register_entity_source :web/page 'browser_pages)
 
 (defn! active_tab_open_wayback ()
   "(active_tab_open_wayback) - Open current active tab in Wayback Machine"

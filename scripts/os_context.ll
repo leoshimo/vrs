@@ -80,5 +80,5 @@
 (defn! get_context ()
   (get_context_for_window nil))
 
-(set_entity_completions :text 'get_context)
+(register_entity_source :text 'get_context)
 (spawn_srv! :os_context :interface '(get_context get_context_for_window))

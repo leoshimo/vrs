@@ -30,7 +30,7 @@
   (if (eq? (get result :exit) 0) result
     (error (str "Could not move window: " (get result :stderr)))))
 
-(set_entity_completions :os/window 'get_windows)
+(register_entity_source :os/window 'get_windows)
 
 (defn! yabai_grid (grid_str)
   (exec "yabai" "--message" "window" "--grid" grid_str))

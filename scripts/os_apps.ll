@@ -55,5 +55,5 @@
   "Open a file with its default macOS application."
   (exec "open" (shell_expand file)))
 
-(set_entity_completions :os/app 'get_running_apps)
+(register_entity_source :os/app 'get_running_apps)
 (spawn_srv! :os_apps :interface '(get_running_apps force_quit_app open_app open_file))

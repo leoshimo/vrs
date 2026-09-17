@@ -13,7 +13,7 @@
   (set metadata (+ (list :service service) metadata))
   `(def ,(symbol message)
      (with_meta
-       (lambda ,params ,doc
+       (lambda ,params ,@(if doc (list doc) '())
          (call (find_srv ,service) (list ,message ,@params)))
        ',metadata)))
 

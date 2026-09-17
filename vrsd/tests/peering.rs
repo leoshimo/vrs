@@ -572,7 +572,7 @@ async fn remote_bind_preserves_interactive_metadata_and_completion_defaults() {
         r#"
         (defn! objects () '((:example/object :id 7)))
         (defn! choose (object) (interactive :example/object) object)
-        (set_entity_completions :example/object 'objects)
+        (register_entity_source :example/object 'objects)
         (spawn_srv! :remote_probe :interface '(objects choose))
     "#,
     )
@@ -586,8 +586,8 @@ async fn remote_bind_preserves_interactive_metadata_and_completion_defaults() {
         (bind_srv :remote_probe)
         (list (get (meta choose) :interactive)
               (get (get (get (meta choose) :args) 0) :type)
-              (get_entity_completions :example/object)
-              (choose (get (objects) 0))))"#,
+              (entity_sources :example/object)
+              (choose (get (entities :example/object) 0))))"#,
         &Form::from_expr("(true :example/object (objects) (:example/object :id 7))").unwrap(),
         "remote metadata, provider defaults, or object invocation failed",
     )

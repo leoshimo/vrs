@@ -11,7 +11,7 @@
         :title ,(format "Display {}" (get display :index)))))
     '()))
 
-(set_entity_completions :os/display 'get_displays)
+(register_entity_source :os/display 'get_displays)
 
 (defn! list_alternative_resolutions ()
   "List favorite resolutions and the current mode, marked with (current)."
