@@ -1,44 +1,43 @@
-import { SignalField } from "../avatar/SignalField";
-import type { SignalConfig } from "../avatar/signal-field";
-import type { MotionMode } from "../avatar/signal-motion";
+import { useLayoutEffect, useRef, type RefObject } from "react";
+import { registerPreview } from "../avatar/preview-renderer";
+import { applyPlaceholderAccent } from "../avatar/preview-colors";
+import type { ExpressionPlayer } from "../avatar/expression-player";
 
 export function Avatar({
-  config,
-  mode,
-  pulse,
-  working,
+  player,
+  revision,
   active,
   dark,
   reduced,
+  inputRef,
 }: {
-  config: SignalConfig;
-  mode: MotionMode;
-  pulse: number;
-  working: boolean;
+  player: ExpressionPlayer;
+  revision: number;
   active: boolean;
   dark: boolean;
   reduced: boolean;
+  inputRef: RefObject<HTMLInputElement | null>;
 }) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const renderer = useRef<ReturnType<typeof registerPreview> | null>(null);
+  useLayoutEffect(() => {
+    renderer.current = registerPreview(canvas.current!, player);
+    return () => renderer.current?.dispose();
+  }, [player]);
+  useLayoutEffect(() => {
+    renderer.current?.update({
+      dark,
+      live: active && !reduced,
+      onFrame: (p, paint) => {
+        if (paint && inputRef.current) applyPlaceholderAccent(inputRef.current, p);
+      },
+    });
+    renderer.current?.paint();
+  }, [player, revision, active, dark, reduced, inputRef]);
   return (
     <span className="avatar" aria-hidden="true">
       <span className="avatar-object">
-        <span className="signal-anchor" />
-        <SignalField
-          config={{
-            ...config,
-            boundary: "none",
-            dispatchTarget: "avatar",
-            effects: { ...config.effects, input: false, selection: false, container: false },
-          }}
-          state={mode}
-          pulse={pulse}
-          working={working}
-          selected="avatar"
-          active={active}
-          animate={!reduced}
-          dark={dark}
-          standalone
-        />
+        <canvas ref={canvas} className="native-shader" />
       </span>
     </span>
   );

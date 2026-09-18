@@ -175,7 +175,11 @@ async fn dispatch(
 ) -> Result<protocol::Action, String> {
     let result = async {
         let request = protocol::action_request(&form)?;
-        protocol::action(evaluate(&state, request).await?)
+        // A terminal evaluates requests in order. Keep long-running actions
+        // off the navigation connection so hiding or reopening stays responsive.
+        let stream = UnixStream::connect(&state.client.socket).await?;
+        let client = vrs::Client::new(Connection::new(stream));
+        protocol::action(client.request(request).await?.contents?)
     }
     .await;
     result.map_err(|error: anyhow::Error| {
@@ -206,10 +210,10 @@ async fn ui_config(state: tauri::State<'_, State>) -> Result<protocol::UiConfig,
 #[tauri::command]
 fn show(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
-        center_in_primary_monitor(&window);
-        #[cfg(target_os = "macos")]
-        app.show().map_err(|error| error.to_string())?;
-        window.show().map_err(|error| error.to_string())?;
+        if !window.is_visible().map_err(|error| error.to_string())? {
+            center_in_primary_monitor(&window);
+            window.show().map_err(|error| error.to_string())?;
+        }
         window.set_focus().map_err(|error| error.to_string())?;
     }
     Ok(())
@@ -226,7 +230,12 @@ fn hide(app: tauri::AppHandle) {
 
 #[tauri::command]
 fn on_blur(app: tauri::AppHandle) {
-    hide(app);
+    if app
+        .get_webview_window("main")
+        .is_some_and(|window| !window.is_focused().unwrap_or(false))
+    {
+        hide(app);
+    }
 }
 
 fn main() -> Result<()> {

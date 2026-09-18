@@ -26,8 +26,8 @@
         "transparent": true,
         "decorations": false,
         "shadow": false,
-        "width": 608,
-        "height": 640,
+        "width": 688,
+        "height": 560,
         "center": true,
         "acceptFirstMouse": true,
         "backgroundThrottling": "disabled"

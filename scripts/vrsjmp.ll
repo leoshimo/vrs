@@ -103,6 +103,20 @@
   (publish :vrsjmp :config_changed)
   next)
 
+(defn! appearance_page ()
+  (+ (push_page 'appearance_items "Search appearance…") '(:title "Palette Appearance")))
+
+(defn! appearance_items (query)
+  (def config (get_ui_config))
+  (def choices '(("Neutral" :theme :neutral) ("Warm" :theme :warm) ("Cool" :theme :cool)
+                ("System" :appearance :system) ("Light" :appearance :light) ("Dark" :appearance :dark)))
+  (fuzzy_match query (map choices (fn (choice)
+    (def key (get choice 1))
+    (def value (get choice 2))
+    `(:title ,(get choice 0)
+      :aside ,(if (eq? (get config key) value) "Selected" "")
+      :on_click (begin (set_ui_config (list ,key ,value)) :refresh))))))
+
 (defn! action_record (id)
   (get (filter action_runs (fn (record) (eq? (get record :id) id))) 0))
 
@@ -113,6 +127,9 @@
   (if (and! record (err? result))
     (set action_runs (push action_runs
       (+ record (list :error (display result))))))
+  (if (and! record (not? (eq? (get record :receiver) nil)))
+    (try (send (get record :receiver)
+      (list :vrsjmp_action id (if (err? result) (list :error (display result)) :ok)))))
   :ok)
 
 (defn! execute_action (record)
@@ -433,12 +450,9 @@
         (if (empty? args) true
           (not? (empty? (entity_sources (get (get args 0) :type)))))))))
     (fn (name)
-      (def choose `(call_interactively ',name))
-      (+ (make_item (command_title name)
-           (if (eq? name 'save_page) '(save_page (active_tab)) choose))
-         `(:actions
-           ,(if (empty? (get (meta (eval name)) :args)) '()
-              (list (make_item "Choose…" choose))))))))
+      (make_item (command_title name)
+        (if (eq? name 'save_page) '(save_page (active_tab))
+          `(call_interactively ',name))))))
 
 (defn! save_page (page)
   "Save to Read Later"
@@ -896,6 +910,7 @@
 
    # misc
    (list (make_item "Restart vrsd" '(exec "pkill" "-ax" "vrsd"))
+         (make_item "Palette Appearance" '(appearance_page))
          (make_item "Toggle Darkmode" '(toggle_darkmode))
          (make_item "Toggle Color Filter" '(toggle_color_filters))
          (make_item "Toggle Desktop" '(toggle_desktop))
@@ -935,4 +950,24 @@
     (if (eq? (get result 0) :push_page) result :close)
     (if (eq? result :refresh) :refresh :close)))
 
-(spawn_srv! :vrsjmp :interface '(root_page get_items on_click enqueue_input finish_action get_ui_config set_ui_config))
+(defn! on_click_wait (item receiver)
+  "Run an item and report completion of any background actions to the caller."
+  (def before action_runs)
+  (def response (on_click item))
+  (def started (filter action_runs (fn (record)
+    (def previous (get (filter before (fn (old) (eq? (get old :id) (get record :id)))) 0))
+    (or! (not? previous) (and! (get previous :error) (not? (get record :error)))))))
+  (if (empty? started) response
+    (begin
+      (def ids (map started (fn (record) (get record :id))))
+      (set action_runs (map action_runs (fn (record)
+        (if (contains? ids (get record :id))
+          (if (get record :error)
+            (begin
+              (try (send receiver (list :vrsjmp_action (get record :id) (list :error (get record :error)))))
+              record)
+            (+ record (list :receiver receiver)))
+          record))))
+      (list :pending_actions :ids ids :response response))))
+
+(spawn_srv! :vrsjmp :interface '(root_page get_items on_click on_click_wait enqueue_input finish_action get_ui_config set_ui_config))

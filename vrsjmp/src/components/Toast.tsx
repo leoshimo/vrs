@@ -2,7 +2,7 @@ export function Toast({ message, dismiss }: { message: string; dismiss: () => vo
   if (!message) return null;
   return (
     <div
-      className="toast surface flex items-start gap-3 rounded-[14px] px-4 py-3 text-xs"
+      className="toast surface flex items-start gap-3 rounded-[16px] px-[18px] py-3"
       role="alert"
     >
       <span className="max-h-20 min-w-0 flex-1 overflow-auto whitespace-pre-wrap break-words select-text">

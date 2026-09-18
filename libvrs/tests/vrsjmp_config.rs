@@ -7,14 +7,14 @@ async fn fixture(path: &Path) -> (Runtime, Arc<Client>) {
         .unwrap().into_iter().filter(|form| matches!(form, Form::List(values)
             if values.first() == Some(&Form::symbol("defn!"))
                 && matches!(values.get(1), Some(Form::Symbol(name))
-                    if ["validate_ui_config", "get_ui_config", "set_ui_config"].contains(&name.as_str()))))
+                    if ["validate_ui_config", "get_ui_config", "set_ui_config", "appearance_items", "appearance_page", "push_page"].contains(&name.as_str()))))
         .map(|form| form.to_string()).collect::<Vec<_>>().join("\n");
     let source = format!(
         r#"
         (def ui_config_path {})
         (def ui_config '(:theme :neutral :appearance :system))
         {definitions}
-        (spawn_srv! :vrsjmp :interface '(get_ui_config set_ui_config))
+        (spawn_srv! :vrsjmp :interface '(get_ui_config set_ui_config appearance_items appearance_page))
     "#,
         Form::string(path.to_str().unwrap())
     );
@@ -107,5 +107,44 @@ async fn configuration_persists_before_notifying_and_rejects_invalid_updates() {
         .unwrap(),
         Form::from_expr("(:theme :cool :appearance :dark)").unwrap()
     );
+    std::fs::remove_file(path).unwrap();
+}
+
+#[tokio::test]
+async fn appearance_menu_updates_config_and_keeps_the_page_open() {
+    let path = std::env::temp_dir().join(format!("vrsjmp-menu-{}.ll", std::process::id()));
+    let (_runtime, client) = fixture(&path).await;
+    assert_eq!(evaluate(&client, "(begin (bind_srv :vrsjmp) (appearance_page))").await.unwrap(),
+        Form::from_expr("(:push_page :get_items appearance_items :prompt \"Search appearance…\" :title \"Palette Appearance\")").unwrap());
+    for (query, key, expected) in [
+        ("Warm", ":theme", ":warm"),
+        ("Dark", ":appearance", ":dark"),
+        ("Cool", ":theme", ":cool"),
+        ("Light", ":appearance", ":light"),
+        ("System", ":appearance", ":system"),
+        ("Neutral", ":theme", ":neutral"),
+    ] {
+        let command = format!("(begin (bind_srv :vrsjmp) (eval (get (get (appearance_items \"{query}\") 0) :on_click)))");
+        assert_eq!(
+            evaluate(&client, &command).await.unwrap(),
+            Form::keyword("refresh")
+        );
+        let actual = evaluate(
+            &client,
+            &format!("(begin (bind_srv :vrsjmp) (get (get_ui_config) {key}))"),
+        )
+        .await
+        .unwrap();
+        assert_eq!(actual, Form::from_expr(expected).unwrap());
+        let selected = evaluate(
+            &client,
+            &format!(
+                "(begin (bind_srv :vrsjmp) (get (get (appearance_items \"{query}\") 0) :aside))"
+            ),
+        )
+        .await
+        .unwrap();
+        assert_eq!(selected, Form::string("Selected"));
+    }
     std::fs::remove_file(path).unwrap();
 }
