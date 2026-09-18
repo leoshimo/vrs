@@ -2,16 +2,19 @@
 # Things owns persistence and sync. Arguments are data, never AppleScript source.
 
 (defn! get_things_tasks ()
-  "(get_things_tasks) - Read open Things tasks for local search"
+  "(get_things_tasks) - Read open Things tasks, newest first, for local search"
   (def result (exec "osascript" "-l" "JavaScript" "-" :stdin """
     const tasks = Application('Things3').toDos;
     // Bulk property reads avoid one Apple event per task.
     const ids = tasks.id(), titles = tasks.name(), notes = tasks.notes(), statuses = tasks.status();
-    if (![titles, notes, statuses].every(values => values.length === ids.length)) {
+    const created = tasks.creationDate();
+    if (![titles, notes, statuses, created].every(values => values.length === ids.length)) {
       throw new Error('Things changed while reading tasks; try again');
     }
-    JSON.stringify(ids.map((id, i) => ({id, title: titles[i], notes: notes[i] || '', status: statuses[i]}))
-      .filter(task => task.status === 'open'));
+    JSON.stringify(ids.map((id, i) => ({id, title: titles[i], notes: notes[i] || '',
+      status: statuses[i], created_at: created[i].getTime() / 1000}))
+      .filter(task => task.status === 'open')
+      .sort((a, b) => b.created_at - a.created_at));
     """))
   (if (not? (eq? (get result :exit) 0))
     (error (str "Could not read Things: " (get result :stderr))))
