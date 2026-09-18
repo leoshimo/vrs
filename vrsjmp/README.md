@@ -17,7 +17,7 @@ Theme configuration persists in `~/.vrsjmp-ui.ll` and updates connected clients:
 
 ```lisp
 (bind_srv :vrsjmp)
-(set_ui_config '(:theme :warm :appearance :dark))
+(set_ui_config '(:theme :warm))
 ```
 
-Themes: `:neutral`, `:warm`, `:cool`. Appearance: `:system`, `:light`, `:dark`.
+Themes: `:neutral`, `:warm`, `:cool`. Light and dark follow the system setting.

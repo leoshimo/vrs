@@ -5,7 +5,6 @@ use serde::Serialize;
 #[derive(Debug, Serialize, PartialEq)]
 pub struct UiConfig {
     pub theme: String,
-    pub appearance: String,
 }
 
 pub fn ui_config(value: Form) -> Result<UiConfig> {
@@ -25,7 +24,6 @@ pub fn ui_config(value: Form) -> Result<UiConfig> {
     };
     Ok(UiConfig {
         theme: setting("theme", &["neutral", "warm", "cool"], "neutral")?,
-        appearance: setting("appearance", &["system", "light", "dark"], "system")?,
     })
 }
 
@@ -278,18 +276,15 @@ mod tests {
             ui_config(Form::from_expr("(:theme :warm :appearance :dark)").unwrap()).unwrap(),
             UiConfig {
                 theme: "warm".into(),
-                appearance: "dark".into()
             }
         );
         assert_eq!(
             ui_config(Form::from_expr("()").unwrap()).unwrap(),
             UiConfig {
                 theme: "neutral".into(),
-                appearance: "system".into()
             }
         );
         assert!(ui_config(Form::from_expr("(:theme :unknown)").unwrap()).is_err());
-        assert!(ui_config(Form::from_expr("(:appearance 42)").unwrap()).is_err());
         assert!(ui_config(Form::keyword("config")).is_err());
     }
     #[test]

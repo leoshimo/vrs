@@ -70,7 +70,7 @@ function previewBridge(
   scenario: Scenario,
 ): Bridge & { emit: (event: string) => void; setConfig: (value: UiConfig) => void } {
   const listeners = new Map<string, Set<() => void>>();
-  let config: UiConfig = { theme: "neutral", appearance: "system" };
+  let config: UiConfig = { theme: "neutral" };
   const emit = (event: string) => listeners.get(event)?.forEach((fn) => fn());
   const root = page(
     scenario === "Read Later" ? "Read Later" : "Home",
@@ -134,7 +134,7 @@ function previewBridge(
 }
 export function Preview() {
   const [scenario, setScenario] = useState<Scenario>("Home");
-  const [config, setConfig] = useState<UiConfig>({ theme: "neutral", appearance: "system" });
+  const [config, setConfig] = useState<UiConfig>({ theme: "neutral" });
   const bridge = useMemo(() => previewBridge(scenario), [scenario]);
   const change = (next: UiConfig) => {
     setConfig(next);
@@ -159,7 +159,7 @@ export function Preview() {
             className="rounded border px-2 py-1 aria-pressed:bg-gray-200"
             onClick={() => {
               setScenario(name);
-              setConfig({ theme: "neutral", appearance: "system" });
+              setConfig({ theme: "neutral" });
             }}
           >
             {name}
@@ -176,17 +176,6 @@ export function Preview() {
           <option value="neutral">Neutral</option>
           <option value="warm">Warm</option>
           <option value="cool">Cool</option>
-        </select>
-        <select
-          aria-label="Appearance"
-          value={config.appearance}
-          onChange={(e) =>
-            change({ ...config, appearance: e.target.value as UiConfig["appearance"] })
-          }
-        >
-          <option value="system">System</option>
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
         </select>
       </div>
     </div>
