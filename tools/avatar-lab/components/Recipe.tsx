@@ -1,12 +1,13 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { useReducedMotion } from 'motion/react';
 import { Play, Pause, ArrowLeft, ArrowRight } from 'lucide-react';
 import { useMediaQuery } from './useMediaQuery';
-import { useSetup } from './SetupProvider';
+import { useSetup } from './useSetup';
 import { Button } from './ui/button';
-import { Choices, RangeControl } from './AvatarControls';
+import { Choices, RangeControl, SelectControl } from './AvatarControls';
 import { PreviewAppearance, usePreviewAppearance } from './PreviewAppearance';
+import { CompositionLesson } from './CompositionLesson';
+import { ResponseLesson } from './ResponseLesson';
 import { RecipeSphere } from './RecipeSphere';
 import { ShaderFunctionDiagrams } from './ShaderFunctionDiagrams';
 import { FlowLesson } from './FlowLesson';
@@ -23,7 +24,7 @@ import {
   number,
 } from './AnatomyParts';
 import { clamp } from './diagramDrag';
-import { compose, expression } from '@/lib/avatar/setup';
+import { assigned } from '@/lib/avatar/workspace';
 import {
   impulseSample,
   sampleDisplacement,
@@ -75,6 +76,7 @@ const chapters = [
     'A ridge travels around the sphere, changing its outline, sampling coordinates, and shading.',
   ],
 ];
+chapters.push(['Response curves', ''], ['Momentum', ''], ['Composition', '']);
 const operations = {
   translation: 'primitiveDrift',
   twist: 'primitiveTwist',
@@ -121,7 +123,7 @@ export function Recipe() {
     [step, setStep] = useState(0),
     [contentsOpen, setContentsOpen] = useState<boolean | null>(null);
   const wide = useMediaQuery('(min-width: 851px)'),
-    reduce = useReducedMotion();
+    reduce = useMediaQuery('(prefers-reduced-motion: reduce)');
   const [patch, setPatch] = useState<Partial<SignalConfig>>({}),
     [phase, setPhase] = useState(0),
     [playing, setPlaying] = useState(false);
@@ -135,7 +137,11 @@ export function Recipe() {
     playhead = useRef(phase);
   const [x, y] = point;
   const config: SignalConfig = {
-    ...compose(setup.appearance, expression(setup, 'idle').motions),
+    ...setup.appearance,
+    ...Object.assign(
+      {},
+      ...(assigned(setup, 'idle')?.patterns.map((p) => p.settings) ?? []),
+    ),
     ...patch,
     shape: 'pearl',
   };
@@ -237,10 +243,20 @@ export function Recipe() {
       if (r > 1) setPoint([x / r, y / r]);
     }
     requestAnimationFrame(() => {
-      chapter.current?.focus({ preventScroll: true });
-      document
-        .querySelector('.recipe-chapter')
-        ?.scrollIntoView({ block: 'start', behavior: 'instant' });
+      const heading = chapter.current;
+      heading?.focus({ preventScroll: true });
+      const bounds = heading?.getBoundingClientRect();
+      const headerBottom =
+        document.querySelector('.lab-header')?.getBoundingClientRect().bottom ??
+        0;
+      if (
+        bounds &&
+        (bounds.top < headerBottom || bounds.bottom > innerHeight)
+      ) {
+        heading
+          ?.closest('.recipe-chapter')
+          ?.scrollIntoView({ block: 'start', behavior: 'instant' });
+      }
     });
   }
   useEffect(() => {
@@ -406,398 +422,417 @@ export function Recipe() {
             </h1>
             <PreviewAppearance theme={theme} onChange={setTheme} />
           </header>
-          <p className="recipe-deck">{chapters[step][1]}</p>
-          <div className="recipe-controls">
-            {step === 3 && (
-              <RangeControl
-                label="Light offset"
-                value={angle}
-                min={-180}
-                max={180}
-                step={1}
-                format={(n) => `${n}°`}
-                onChange={(lightAngle) => set({ lightAngle })}
-              />
-            )}
-            {step === 4 && (
-              <RangeControl
-                label="Flow amount"
-                value={detail}
-                min={0}
-                max={3}
-                step={0.05}
-                onChange={(idleAmount) => set({ idleAmount })}
-              />
-            )}
-            {step === 5 && (
-              <>
-                <RangeControl
-                  label="Hemisphere weight"
-                  value={volume}
-                  min={0}
-                  max={2}
-                  step={0.05}
-                  onChange={(volume) => set({ volume })}
-                />
-                <RangeControl
-                  label="Gradient weight"
-                  value={strength}
-                  min={0}
-                  max={2}
-                  step={0.05}
-                  onChange={(lightStrength) => set({ lightStrength })}
-                />
-                <RangeControl
-                  label="Fill"
-                  value={fill}
-                  min={0}
-                  max={1}
-                  onChange={(fill) => set({ fill })}
-                />
-              </>
-            )}
-            {step === 6 && (
-              <>
-                <RangeControl
-                  label="Patch coverage"
-                  value={density}
-                  min={0}
-                  max={1}
-                  onChange={setDensity}
-                />
-                <RangeControl
-                  label="Cell size"
-                  value={config.pitch}
-                  min={0.6}
-                  max={6}
-                  step={0.1}
-                  onChange={(pitch) => set({ pitch })}
-                />
-                <Choices
-                  label="Matrix"
-                  value={String(config.matrix ?? 8)}
-                  options={[
-                    ['2', '2 × 2'],
-                    ['4', '4 × 4'],
-                    ['8', '8 × 8'],
-                  ]}
-                  onChange={(v) => set({ matrix: Number(v) as 2 | 4 | 8 })}
-                />
-              </>
-            )}
-            {step === 7 && (
-              <>
-                <Choices
-                  label="Palette"
-                  value={config.color === 'field' ? 'field' : 'opal'}
-                  options={[
-                    ['opal', 'Opal'],
-                    ['field', 'Instrument'],
-                  ]}
-                  onChange={(color) => set({ color })}
-                />
-                <RangeControl
-                  label="Saturation"
-                  value={config.saturation ?? 0.45}
-                  min={0}
-                  max={1}
-                  onChange={(saturation) => set({ saturation })}
-                />
-              </>
-            )}
-            {step === 8 && (
-              <RangeControl
-                label="Levels"
-                value={
-                  config.toneSteps && config.toneSteps > 1
-                    ? config.toneSteps
-                    : 4
-                }
-                min={2}
-                max={8}
-                step={1}
-                onChange={(toneSteps) => set({ toneSteps })}
-              />
-            )}
-            {step === 9 && (
-              <Choices
-                label="Operation"
-                value={operation}
-                options={
-                  Object.entries(coordinateNotes).map(([id, [name]]) => [
-                    id,
-                    name,
-                  ]) as [CoordinateOperation, string][]
-                }
-                onChange={setOperation}
-              />
-            )}
-            {(step === 9 || step >= 11) && (
-              <RangeControl
-                label="Amplitude"
-                value={amount}
-                min={0}
-                max={1.8}
-                step={0.05}
-                onChange={setAmount}
-              />
-            )}
-            {step === 12 && (
-              <>
-                <Choices
-                  label="Calculation"
-                  value={wavePart}
-                  options={[
-                    ['0', 'Distance'],
-                    ['1', 'Ridge'],
-                    ['2', 'Apply'],
-                  ]}
-                  onChange={setWavePart}
-                />
-                <RangeControl
-                  label="Duration"
-                  value={duration}
-                  min={0.6}
-                  max={8}
-                  step={0.1}
-                  onChange={setDuration}
-                />
-              </>
-            )}
-          </div>
-          {step >= 3 && clock}
-          <div
-            className="recipe-diagrams recipe-workbench"
-            data-pair={step === 8}
-          >
-            <aside className="recipe-local-preview">
-              {sphere(
-                step <= 1
-                  ? 'Circle mask'
-                  : step === 2
-                    ? 'Hemisphere height'
-                    : step === 3
-                      ? 'Directional gradient'
-                      : step === 4
-                        ? 'Flow · zero at mid-gray'
-                        : step === 5
-                          ? 'Combined coverage'
-                          : step === 8
-                            ? 'Continuous'
-                            : step === 11
-                              ? 'Tilt'
-                              : step === 12
-                                ? 'Ripple'
-                                : 'Lava',
-                step === 8 ? { toneSteps: 0 } : {},
-              )}
-              {step === 8 &&
-                sphere('Banded', {
-                  toneSteps:
-                    config.toneSteps && config.toneSteps > 1
-                      ? config.toneSteps
-                      : 4,
-                })}
-              {pointInputs}
-            </aside>
-            <div className="recipe-calculation">
-              {step <= 1 && (
-                <>
-                  <ShaderFunctionDiagrams
-                    step={0}
-                    part={step === 0 ? 'length' : 'edge'}
-                    x={x}
-                    y={y}
-                    angle={angle}
-                    onPick={pick}
-                  />
-                  {step === 0 ? (
-                    <>
-                      <p>
-                        Subtract 1 to measure the gap to the edge: negative
-                        inside, zero on the edge, positive outside.
-                      </p>
-                      <CodeValues
-                        rows={[
-                          [
-                            'distance = length(v) - 1.;',
-                            number(Math.hypot(x, y) - 1),
-                          ],
-                        ]}
+          {step === 15 ? (
+            <CompositionLesson setup={setup} dark={theme === 'dark'} />
+          ) : step >= 13 ? (
+            <ResponseLesson
+              key={step}
+              setup={setup}
+              dark={theme === 'dark'}
+              momentum={step === 14}
+            />
+          ) : (
+            <div
+              className="recipe-diagrams recipe-workbench"
+              data-pair={step === 8}
+            >
+              <aside className="recipe-local-preview">
+                {sphere(
+                  step <= 1
+                    ? 'Circle mask'
+                    : step === 2
+                      ? 'Hemisphere height'
+                      : step === 3
+                        ? 'Directional gradient'
+                        : step === 4
+                          ? 'Flow · zero at mid-gray'
+                          : step === 5
+                            ? 'Combined coverage'
+                            : step === 8
+                              ? 'Continuous'
+                              : step === 11
+                                ? 'Tilt'
+                                : step === 12
+                                  ? 'Ripple'
+                                  : 'Lava',
+                  step === 8 ? { toneSteps: 0 } : {},
+                )}
+                {step === 8 &&
+                  sphere('Banded', {
+                    toneSteps:
+                      config.toneSteps && config.toneSteps > 1
+                        ? config.toneSteps
+                        : 4,
+                  })}
+                {pointInputs}
+              </aside>
+              <div className="recipe-calculation">
+                <div className="recipe-intro">
+                  <p className="recipe-deck">{chapters[step][1]}</p>
+                  <div className="recipe-controls">
+                    {step === 3 && (
+                      <RangeControl
+                        label="Light offset"
+                        value={angle}
+                        min={-180}
+                        max={180}
+                        step={1}
+                        format={(n) => `${n}°`}
+                        onChange={(lightAngle) => set({ lightAngle })}
                       />
-                    </>
-                  ) : (
-                    <p className="recipe-language-note">
-                      <code>smoothstep</code>, <code>length</code>,{' '}
-                      <code>dot</code>, and <code>sqrt</code> are GLSL built-ins
-                      used by the shader.
+                    )}
+                    {step === 4 && (
+                      <RangeControl
+                        label="Flow amount"
+                        value={detail}
+                        min={0}
+                        max={3}
+                        step={0.05}
+                        onChange={(idleAmount) => set({ idleAmount })}
+                      />
+                    )}
+                    {step === 5 && (
+                      <>
+                        <RangeControl
+                          label="Hemisphere weight"
+                          value={volume}
+                          min={0}
+                          max={2}
+                          step={0.05}
+                          onChange={(volume) => set({ volume })}
+                        />
+                        <RangeControl
+                          label="Gradient weight"
+                          value={strength}
+                          min={0}
+                          max={2}
+                          step={0.05}
+                          onChange={(lightStrength) => set({ lightStrength })}
+                        />
+                        <RangeControl
+                          label="Fill"
+                          value={fill}
+                          min={0}
+                          max={1}
+                          onChange={(fill) => set({ fill })}
+                        />
+                      </>
+                    )}
+                    {step === 6 && (
+                      <>
+                        <RangeControl
+                          label="Patch coverage"
+                          value={density}
+                          min={0}
+                          max={1}
+                          onChange={setDensity}
+                        />
+                        <RangeControl
+                          label="Cell size"
+                          value={config.pitch}
+                          min={0.6}
+                          max={6}
+                          step={0.1}
+                          onChange={(pitch) => set({ pitch })}
+                        />
+                        <Choices
+                          label="Matrix"
+                          value={String(config.matrix ?? 8)}
+                          options={[
+                            ['2', '2 × 2'],
+                            ['4', '4 × 4'],
+                            ['8', '8 × 8'],
+                          ]}
+                          onChange={(v) =>
+                            set({ matrix: Number(v) as 2 | 4 | 8 })
+                          }
+                        />
+                      </>
+                    )}
+                    {step === 7 && (
+                      <>
+                        <Choices
+                          label="Palette"
+                          value={config.color === 'field' ? 'field' : 'opal'}
+                          options={[
+                            ['opal', 'Opal'],
+                            ['field', 'Instrument'],
+                          ]}
+                          onChange={(color) => set({ color })}
+                        />
+                        <RangeControl
+                          label="Saturation"
+                          value={config.saturation ?? 0.45}
+                          min={0}
+                          max={1}
+                          onChange={(saturation) => set({ saturation })}
+                        />
+                      </>
+                    )}
+                    {step === 8 && (
+                      <RangeControl
+                        label="Levels"
+                        value={
+                          config.toneSteps && config.toneSteps > 1
+                            ? config.toneSteps
+                            : 4
+                        }
+                        min={2}
+                        max={8}
+                        step={1}
+                        onChange={(toneSteps) => set({ toneSteps })}
+                      />
+                    )}
+                    {step === 9 && (
+                      <SelectControl
+                        label="Operation"
+                        value={operation}
+                        options={
+                          Object.entries(coordinateNotes).map(
+                            ([id, [name]]) => [id, name],
+                          ) as [CoordinateOperation, string][]
+                        }
+                        onChange={setOperation}
+                      />
+                    )}
+                    {(step === 9 || step >= 11) && (
+                      <RangeControl
+                        label="Amplitude"
+                        value={amount}
+                        min={0}
+                        max={1.8}
+                        step={0.05}
+                        onChange={setAmount}
+                      />
+                    )}
+                    {step === 12 && (
+                      <>
+                        <Choices
+                          label="Calculation"
+                          value={wavePart}
+                          options={[
+                            ['0', 'Distance'],
+                            ['1', 'Ridge'],
+                            ['2', 'Apply'],
+                          ]}
+                          onChange={setWavePart}
+                        />
+                        <RangeControl
+                          label="Duration"
+                          value={duration}
+                          min={0.6}
+                          max={8}
+                          step={0.1}
+                          onChange={setDuration}
+                        />
+                      </>
+                    )}
+                  </div>
+                  {step >= 3 && clock}
+                </div>
+                {step <= 1 && (
+                  <>
+                    <ShaderFunctionDiagrams
+                      step={0}
+                      part={step === 0 ? 'length' : 'edge'}
+                      x={x}
+                      y={y}
+                      angle={angle}
+                      onPick={pick}
+                    />
+                    {step === 0 ? (
+                      <>
+                        <p>
+                          Subtract 1 to measure the gap to the edge: negative
+                          inside, zero on the edge, positive outside.
+                        </p>
+                        <CodeValues
+                          rows={[
+                            [
+                              'distance = length(v) - 1.;',
+                              number(Math.hypot(x, y) - 1),
+                            ],
+                          ]}
+                        />
+                      </>
+                    ) : (
+                      <p className="recipe-language-note">
+                        <code>smoothstep</code>, <code>length</code>,{' '}
+                        <code>dot</code>, and <code>sqrt</code> are GLSL
+                        built-ins used by the shader.
+                      </p>
+                    )}
+                  </>
+                )}
+                {step === 2 && (
+                  <>
+                    <HemisphereSection x={x} y={y} onPick={pick} />
+                    <div className="recipe-math">
+                      <span>r² = x² + y² = {number(x * x + y * y)}</span>
+                      <span>z² = 1 − r² = {number(1 - x * x - y * y)}</span>
+                      <span>z = √(1 − r²) = {number(dome)}</span>
+                    </div>
+                    <p>
+                      <code>dot(v, v)</code> multiplies matching components and
+                      adds them: x × x + y × y. That gives r². The square root
+                      recovers z from z²; <code>max(0, …)</code> keeps points
+                      beyond the disk from taking a square root of a negative
+                      number.
                     </p>
-                  )}
-                </>
-              )}
-              {step === 2 && (
-                <>
-                  <HemisphereSection x={x} y={y} onPick={pick} />
-                  <div className="recipe-math">
-                    <span>r² = x² + y² = {number(x * x + y * y)}</span>
-                    <span>z² = 1 − r² = {number(1 - x * x - y * y)}</span>
-                    <span>z = √(1 − r²) = {number(dome)}</span>
-                  </div>
-                  <p>
-                    <code>dot(v, v)</code> multiplies matching components and
-                    adds them: x × x + y × y. That gives r². The square root
-                    recovers z from z²; <code>max(0, …)</code> keeps points
-                    beyond the disk from taking a square root of a negative
-                    number.
-                  </p>
-                  <CodeValues
-                    rows={[
-                      ['r2 = dot(v, v);', number(x * x + y * y)],
-                      ['dome = sqrt(max(0., 1. - r2));', number(dome)],
-                    ]}
-                  />
-                </>
-              )}
-              {step === 3 && (
-                <>
-                  <GradientLesson
+                    <CodeValues
+                      rows={[
+                        ['r2 = dot(v, v);', number(x * x + y * y)],
+                        ['dome = sqrt(max(0., 1. - r2));', number(dome)],
+                      ]}
+                    />
+                  </>
+                )}
+                {step === 3 && (
+                  <>
+                    <GradientLesson
+                      x={x}
+                      y={y}
+                      angle={(lightAngle * 180) / Math.PI}
+                      strength={strength}
+                      dark={theme === 'dark'}
+                      onPick={pick}
+                    />
+                  </>
+                )}
+                {step === 4 && (
+                  <FlowLesson
                     x={x}
                     y={y}
-                    angle={(lightAngle * 180) / Math.PI}
-                    strength={strength}
+                    phase={phase}
+                    detail={detail}
+                    onPick={pick}
+                  />
+                )}
+                {step === 5 && (
+                  <>
+                    <div className="recipe-terms">
+                      <span>
+                        Base <b>.400</b>
+                      </span>
+                      <span>
+                        Hemisphere <b>{number(0.25 * dome * volume)}</b>
+                      </span>
+                      <span>
+                        Gradient <b>{number(0.34 * projection * strength)}</b>
+                      </span>
+                      <span>
+                        Flow <b>{number(flow)}</b>
+                      </span>
+                    </div>
+                    <CodeValues
+                      rows={[
+                        [
+                          'tone = .40 + .25 * dome * volume + .34 * projection * strength + flow;',
+                          number(raw),
+                        ],
+                        [
+                          'tone = clamp((tone - .5) * contrast + .5, .015, .985);',
+                          number(contrasted),
+                        ],
+                        [
+                          fill < 0.5
+                            ? 'tone *= fill * 2.;'
+                            : 'tone = mix(tone, 1., (fill - .5) * 2.);',
+                          number(coverage),
+                        ],
+                      ]}
+                    />
+                    <p>
+                      The flow term gives the broad hemisphere and gradient
+                      extra peaks. Increasing fill moves coverage toward solid
+                      ink.
+                    </p>
+                  </>
+                )}
+                {step === 6 && (
+                  <PrintingLesson
+                    density={density}
+                    pitch={config.pitch}
+                    matrix={config.matrix ?? 8}
                     dark={theme === 'dark'}
+                  />
+                )}
+                {step === 7 && (
+                  <ColorLesson
+                    x={x}
+                    y={y}
+                    phase={phase}
+                    density={coverage}
+                    bands={0}
+                    saturation={config.saturation ?? 0.45}
+                    instrument={config.color === 'field'}
+                    dark={theme === 'dark'}
+                    showBands={false}
                     onPick={pick}
                   />
-                </>
-              )}
-              {step === 4 && (
-                <FlowLesson
-                  x={x}
-                  y={y}
-                  phase={phase}
-                  detail={detail}
-                  onPick={pick}
-                />
-              )}
-              {step === 5 && (
-                <>
-                  <div className="recipe-terms">
-                    <span>
-                      Base <b>.400</b>
-                    </span>
-                    <span>
-                      Hemisphere <b>{number(0.25 * dome * volume)}</b>
-                    </span>
-                    <span>
-                      Gradient <b>{number(0.34 * projection * strength)}</b>
-                    </span>
-                    <span>
-                      Flow <b>{number(flow)}</b>
-                    </span>
-                  </div>
-                  <CodeValues
-                    rows={[
-                      [
-                        'tone = .40 + .25 * dome * volume + .34 * projection * strength + flow;',
-                        number(raw),
-                      ],
-                      [
-                        'tone = clamp((tone - .5) * contrast + .5, .015, .985);',
-                        number(contrasted),
-                      ],
-                      [
-                        fill < 0.5
-                          ? 'tone *= fill * 2.;'
-                          : 'tone = mix(tone, 1., (fill - .5) * 2.);',
-                        number(coverage),
-                      ],
-                    ]}
+                )}
+                {step === 8 && (
+                  <BandLesson
+                    onDensity={pickCoverage}
+                    count={
+                      config.toneSteps && config.toneSteps > 1
+                        ? config.toneSteps
+                        : 4
+                    }
+                    density={coverage}
                   />
-                  <p>
-                    The flow term gives the broad hemisphere and gradient extra
-                    peaks. Increasing fill moves coverage toward solid ink.
-                  </p>
-                </>
-              )}
-              {step === 6 && (
-                <PrintingLesson
-                  density={density}
-                  pitch={config.pitch}
-                  matrix={config.matrix ?? 8}
-                  dark={theme === 'dark'}
-                />
-              )}
-              {step === 7 && (
-                <ColorLesson
-                  x={x}
-                  y={y}
-                  phase={phase}
-                  density={coverage}
-                  bands={0}
-                  saturation={config.saturation ?? 0.45}
-                  instrument={config.color === 'field'}
-                  dark={theme === 'dark'}
-                  showBands={false}
-                  onPick={pick}
-                />
-              )}
-              {step === 8 && (
-                <BandLesson
-                  onDensity={pickCoverage}
-                  count={
-                    config.toneSteps && config.toneSteps > 1
-                      ? config.toneSteps
-                      : 4
-                  }
-                  density={coverage}
-                />
-              )}
-              {step === 9 && (
-                <>
-                  <CoordinateLab
-                    sample={densityAt}
-                    operation={operation}
-                    amount={amount}
+                )}
+                {step === 9 && (
+                  <>
+                    <CoordinateLab
+                      sample={densityAt}
+                      operation={operation}
+                      amount={amount}
+                      phase={phase}
+                      x={x}
+                      y={y}
+                      onPick={pick}
+                    />
+                    <OperationValues
+                      operation={operation}
+                      amount={amount}
+                      phase={phase}
+                      x={x}
+                      y={y}
+                    />
+                  </>
+                )}
+                {step === 10 && (
+                  <ClockLesson
                     phase={phase}
+                    onPhase={scrub}
+                    x={x - clockDisplacement[0]}
+                    y={y - clockDisplacement[1]}
+                    lightOffset={(angle * Math.PI) / 180}
+                    detail={detail}
+                  />
+                )}
+                {step === 11 && (
+                  <ImpulseGraph
+                    time={phase}
+                    amplitude={amount}
+                    onTime={scrub}
+                  />
+                )}
+                {step === 12 && (
+                  <SurfaceWaveLesson
+                    phase={phase}
+                    amplitude={amount}
+                    part={Number(wavePart)}
                     x={x}
                     y={y}
                     onPick={pick}
+                    onPhase={scrub}
                   />
-                  <OperationValues
-                    operation={operation}
-                    amount={amount}
-                    phase={phase}
-                    x={x}
-                    y={y}
-                  />
-                </>
-              )}
-              {step === 10 && (
-                <ClockLesson
-                  phase={phase}
-                  onPhase={scrub}
-                  x={x - clockDisplacement[0]}
-                  y={y - clockDisplacement[1]}
-                  lightOffset={(angle * Math.PI) / 180}
-                  detail={detail}
-                />
-              )}
-              {step === 11 && (
-                <ImpulseGraph time={phase} amplitude={amount} onTime={scrub} />
-              )}
-              {step === 12 && (
-                <SurfaceWaveLesson
-                  phase={phase}
-                  amplitude={amount}
-                  part={Number(wavePart)}
-                  x={x}
-                  y={y}
-                  onPick={pick}
-                  onPhase={scrub}
-                />
-              )}
+                )}
+              </div>
             </div>
-          </div>
+          )}
           <footer className="recipe-navigation">
             <Button disabled={step === 0} onClick={() => go(step - 1)}>
               <ArrowLeft size={14} />

@@ -6,7 +6,7 @@ export const eventLabels: Record<EventName, string> = {
   typing: "Typing",
   working: "Working",
   open: "Open",
-  flourish: "Open · Flourish",
+  flourish: "Open · Dramatic entrance",
   submit: "Submit",
 };
 export type Motion = {
@@ -35,17 +35,19 @@ export function motionFromPreset(id: string): Motion {
 }
 export function family(m: Motion) {
   if (m.action === "loading")
-    return m.settings.loadingMotion === "surface"
-      ? "ripple"
-      : m.settings.loadingMotion === "agitated"
-        ? "stir"
-        : m.settings.loadingMotion === "eddy"
-          ? "eddies"
-          : m.settings.loadingMotion === "drift"
-            ? "drift"
-            : m.settings.loadingMotion === "quicker"
-              ? "lava"
-              : "sweep";
+    return m.settings.workingOrbit
+      ? "orbit"
+      : m.settings.loadingMotion === "surface"
+        ? "ripple"
+        : m.settings.loadingMotion === "agitated"
+          ? "stir"
+          : m.settings.loadingMotion === "eddy"
+            ? "eddies"
+            : m.settings.loadingMotion === "drift"
+              ? "drift"
+              : m.settings.loadingMotion === "quicker"
+                ? "lava"
+                : "sweep";
   return m.action;
 }
 export function makeDefaultSetup(): Setup {
@@ -83,7 +85,7 @@ export function makeDefaultSetup(): Setup {
       typing: "field-nudge",
       working: "working",
       open: "quick-open",
-      flourish: "surface-submit",
+      flourish: "entrance-print-ripple",
       submit: "sparks",
     },
   };
@@ -111,11 +113,24 @@ export function expression(setup: Setup, event: EventName) {
 export function eventConfig(setup: Setup, transient?: EventName | null) {
   return compose(setup.appearance, [
     ...expression(setup, "idle").motions,
-    ...expression(setup, "typing").motions,
-    ...expression(setup, "submit").motions,
+    ...expression(setup, "typing").motions.map(withoutAccent),
+    ...expression(setup, "submit").motions.map(withoutAccent),
     ...expression(setup, "working").motions,
     ...(transient ? expression(setup, transient).motions : []),
   ]);
+}
+function withoutAccent(motion: Motion): Motion {
+  const settings = { ...motion.settings };
+  for (const key of [
+    "activityColor",
+    "color",
+    "colorTiming",
+    "colorStrength",
+    "saturation",
+    "activitySaturation",
+  ] as const)
+    delete settings[key];
+  return { ...motion, settings };
 }
 // Compose each field contribution explicitly. Loading motions retain independent parameters.
 export function compose(base: SignalConfig, motions: Motion[]): SignalConfig {
@@ -144,7 +159,7 @@ export function compose(base: SignalConfig, motions: Motion[]): SignalConfig {
     for (const m of loading) {
       const f = family(m);
       if (f === "ripple") config.loopRipple = { ...m.settings };
-      else if (f === "lava") applyLoading(m.settings);
+      else if (f === "lava" || f === "orbit") applyLoading(m.settings);
       else {
         const key = f === "stir" ? "agitation" : f === "sweep" ? "wave" : (f as "drift" | "eddies");
         config.effectMix[key] = 1;

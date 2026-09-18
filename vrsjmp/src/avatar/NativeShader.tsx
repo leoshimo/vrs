@@ -115,6 +115,22 @@ export function NativeShader({
       const position = gl.getAttribLocation(program, "position");
       gl.enableVertexAttribArray(position);
       gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+      // Inactive driven-wave sampling uses an empty texture in the native renderer.
+      const emptyTexture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, emptyTexture);
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGBA,
+        1,
+        1,
+        0,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        new Uint8Array(4),
+      );
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
       const locations = new Map<string, WebGLUniformLocation | null>();
       const uploaded = new Map<string, number | number[]>();
       function uniform(key: string, value: number | number[]) {
@@ -201,6 +217,7 @@ export function NativeShader({
         intersection.disconnect();
         document.removeEventListener("visibilitychange", visibility);
         tick.current = () => {};
+        gl!.deleteTexture(emptyTexture);
         gl!.deleteBuffer(buffer);
         gl!.deleteProgram(program);
         gl!.deleteShader(vertex!);

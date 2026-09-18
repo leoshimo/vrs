@@ -11,14 +11,18 @@
 }
 .recipe-contents summary {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  line-height: 1;
   color: var(--muted);
   margin-bottom: 10px;
   font-size: 12px;
 }
 .recipe-contents summary::before {
   content: '▾';
-  margin-right: 6px;
+  width: 8px;
+  text-align: center;
+  flex: none;
 }
 .recipe-contents:not([open]) summary::before {
   content: '▸';
@@ -681,13 +685,15 @@ svg[data-draggable='true'] {
   margin: 0;
 }
 .recipe-deck {
-  margin: 12px 0;
+  margin: 0 0 12px;
   font-size: 13px;
   line-height: 1.55;
 }
 .recipe-workbench {
+  --recipe-preview-width: 176px;
   display: grid;
-  grid-template-columns: 176px minmax(0, 1fr);
+  grid-template-columns: var(--recipe-preview-width) minmax(0, 1fr);
+  margin-top: 14px;
   gap: 18px;
   align-items: start;
 }
@@ -882,7 +888,7 @@ svg[data-pickable='true'] {
     grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
   }
   .recipe-workbench {
-    grid-template-columns: 150px minmax(0, 1fr);
+    --recipe-preview-width: 150px;
     gap: 14px;
   }
   .recipe-sphere > div {
@@ -894,6 +900,7 @@ svg[data-pickable='true'] {
 }
 @media (max-width: 550px) {
   .recipe-workbench {
+    --recipe-preview-width: 166px;
     grid-template-columns: minmax(0, 1fr);
   }
   .recipe-local-preview {
@@ -903,7 +910,7 @@ svg[data-pickable='true'] {
     gap: 12px;
   }
   .recipe-sphere {
-    width: 166px;
+    width: var(--recipe-preview-width);
     flex: none;
   }
   .recipe-sphere > div {
@@ -945,7 +952,10 @@ svg[data-pickable='true'] {
   margin: 0;
 }
 .recipe-workbench[data-pair='true'] {
-  grid-template-columns: 352px minmax(0, 1fr);
+  grid-template-columns: calc(2 * var(--recipe-preview-width) + 10px) minmax(
+      0,
+      1fr
+    );
 }
 .recipe-workbench[data-pair='true'] .recipe-local-preview {
   display: grid;
@@ -978,7 +988,7 @@ svg[data-pickable='true'] {
     align-items: center;
   }
   .recipe-workbench[data-pair='true'] .recipe-sphere {
-    width: 166px;
+    width: var(--recipe-preview-width);
   }
 }
 .recipe-calculation .gradient-lesson > svg {
@@ -998,16 +1008,67 @@ svg[data-pickable='true'] {
   width: 100%;
   max-height: 160px;
 }
-.recipe-calculation .coordinate-lab + .code-values {
+.response-sphere {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 18px;
+  place-items: center;
+  height: 166px;
 }
-.recipe-calculation .coordinate-lab + .code-values > div {
-  align-items: start;
+.response-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 10px 0;
 }
-@media (max-width: 650px) {
-  .recipe-calculation .coordinate-lab + .code-values {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.response-lesson .recipe-calculation > svg {
+  display: block;
+  width: 100%;
+  max-height: 230px;
+  touch-action: none;
+  cursor: crosshair;
+}
+.response-legend {
+  display: flex;
+  gap: 18px;
+  font-size: 12px;
+}
+.response-legend span:first-child {
+  color: var(--lab-accent);
+}
+.response-legend span:last-child {
+  color: #789ba9;
+}
+.composition-notes p {
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 10px 0 18px;
+}
+.composition-notes .preview-chin {
+  border-radius: 6px;
+  margin-bottom: 15px;
+}
+.composition-notes table {
+  width: 100%;
+  font-size: 12px;
+  text-align: left;
+  border-collapse: collapse;
+}
+.composition-notes th {
+  color: var(--muted);
+  font-weight: 500;
+}
+.composition-notes td,
+.composition-notes th {
+  padding: 6px 8px 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.recipe-local-preview .effect-select {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.recipe-local-preview .effect-select select {
+  width: 100%;
+  max-width: none;
 }

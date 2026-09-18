@@ -6,6 +6,44 @@ const { makeDefaultSetup, compose, expression, validateSetup } =
   await import('./setup.ts');
 const { createSignalMotion, advanceSignalMotion } =
   await import('./signal-motion.ts');
+const { withTypingStudies, typingStudies } =
+  await import('./typing-studies.ts');
+test('typing studies retain saved edits and can be assigned and saved', () => {
+  const original = makeDefaultSetup();
+  const before = JSON.stringify(original);
+  const setup = withTypingStudies(original);
+  assert.equal(JSON.stringify(original), before);
+  assert.deepEqual(setup.events, original.events);
+  const edited = structuredClone(setup);
+  edited.expressions.find(
+    (e) => e.id === 'pressure-dimple',
+  ).motions[0].settings.typingEnergy = 0.2;
+  const loaded = withTypingStudies(edited);
+  assert.equal(loaded.expressions.length, setup.expressions.length);
+  assert.equal(
+    loaded.expressions.find((e) => e.id === 'pressure-dimple').motions[0]
+      .settings.typingEnergy,
+    0.2,
+  );
+  for (const study of typingStudies) {
+    setup.events.typing = study.id;
+    const saved = JSON.parse(JSON.stringify(setup));
+    validateSetup(saved);
+    const config = compose(
+      saved.appearance,
+      expression(saved, 'typing').motions,
+    );
+    assert.equal(config.typingMotion, 'pressure');
+    assert.equal(
+      config.pressureSpread,
+      study.motions[0].settings.pressureSpread,
+    );
+    assert.equal(
+      config.pressureOffset,
+      study.motions[0].settings.pressureOffset,
+    );
+  }
+});
 test('saved setup round-trips the full library and event assignments', () => {
   const setup = JSON.parse(JSON.stringify(makeDefaultSetup()));
   validateSetup(setup);

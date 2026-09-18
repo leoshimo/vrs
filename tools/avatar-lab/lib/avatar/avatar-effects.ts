@@ -1,6 +1,12 @@
 import type { Expression } from './avatar-expressions';
 // Effect names describe formulas. Expression names describe their particular use.
 export const effects = {
+  swirl: { name: 'Swirl', note: 'A loose current travels around the rim.' },
+  orbit: {
+    name: 'Orbit',
+    note: 'A single crest circles the rim while working.',
+  },
+  entrance: { name: 'Entrance', note: 'Reveals the avatar.' },
   lava: {
     name: 'Lava',
     note: 'Changes the directional gradient and coverage over time.',
@@ -70,9 +76,8 @@ export type EffectId = keyof typeof effects;
 export function expressionEffect(
   e: Pick<Expression, 'action' | 'settings'>,
 ): EffectId {
-  if (e.action === 'idle') return 'lava';
-  if (e.action === 'wake')
-    return e.settings.appearanceMode === 'fill' ? 'fill' : 'print';
+  if (e.action === 'idle') return e.settings.idleSwirl ? 'swirl' : 'lava';
+  if (e.action === 'wake') return 'entrance';
   if (e.action === 'dispatch') return e.settings.avatarDispatch ?? 'gather';
   if (e.action === 'typing' && e.settings.typingMotion === 'nudge')
     return 'nudge';
@@ -82,6 +87,7 @@ export function expressionEffect(
       : e.settings.typingMotion === 'pressure'
         ? 'pressure'
         : 'light';
+  if (e.settings.workingOrbit) return 'orbit';
   const motion = e.settings.loadingMotion;
   return motion === 'surface'
     ? 'surface'
@@ -128,7 +134,7 @@ const presetNames: Record<string, string> = {
   bloom: 'Bloom',
   sparks: 'Sparks',
   echo: 'Small echo',
-  'fill-wake': 'Fill wake',
+  'fill-wake': 'Fill',
   'print-wake': 'Printed reveal',
 };
 export function presetName(expression: Expression) {

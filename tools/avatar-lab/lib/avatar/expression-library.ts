@@ -13,9 +13,16 @@ export function groupedLibrary(setup: Setup) {
     .map((id) => ({
       id,
       name: effects[id].name,
-      entries: setup.expressions.filter(
-        (e) => e.motions.length === 1 && expressionEffect(e.motions[0]) === id,
-      ),
+      entries: setup.expressions
+        .filter(
+          (e) =>
+            e.motions.length === 1 && expressionEffect(e.motions[0]) === id,
+        )
+        .sort(
+          (a, b) =>
+            Number(b.id.startsWith('entrance-')) -
+            Number(a.id.startsWith('entrance-')),
+        ),
     }))
     .filter((group) => group.entries.length);
 }

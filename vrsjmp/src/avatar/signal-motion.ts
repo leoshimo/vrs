@@ -21,6 +21,7 @@ export type SignalMotion = {
   fieldSpeed: Spring;
   drift: number;
   releaseAge: number;
+  typingSparkAge: number;
   releasePhase: number;
   priorReleaseAge: number;
   priorReleasePhase: number;
@@ -52,6 +53,7 @@ export function createSignalMotion(seed = Math.random() * 0x100000000): SignalMo
     fieldSpeed: { value: 0.38, velocity: 0 },
     drift: 0,
     releaseAge: 10,
+    typingSparkAge: 10,
     releasePhase: 0,
     priorReleaseAge: 10,
     priorReleasePhase: 0,
@@ -90,12 +92,14 @@ export function advanceSignalMotion(
     loadingRate?: number;
     typingEnergy?: number;
     typingNudge?: boolean;
+    typingSparks?: boolean;
     dispatchEnergy?: number;
     settle?: number;
   } = {},
 ) {
   // Existing refs can survive a development hot update.
   m.fieldImpulseVelocity ??= 0;
+  m.typingSparkAge ??= 10;
   m.momentum ??= { value: 0, velocity: 0 };
   const targets = {
     // Typing is an event, not a sustained animation mode.
@@ -111,6 +115,7 @@ export function advanceSignalMotion(
     m.phase = 0;
     m.drift = 0;
     m.releaseAge = 10;
+    m.typingSparkAge = 10;
     m.priorReleaseAge = 10;
     m.flickVelocity = 0;
     m.fieldImpulseVelocity = 0;
@@ -151,8 +156,10 @@ export function advanceSignalMotion(
   }
   spring(m.wake, 0, step, 2.4 / Math.sqrt(settle));
   m.releaseAge += step;
+  m.typingSparkAge += step;
   m.priorReleaseAge += step;
   if (pulse !== m.pulse || mode !== m.mode) {
+    if (mode === "typing" && activity.typingSparks) m.typingSparkAge = 0;
     if (mode === "typing" && activity.typingNudge) {
       m.fieldImpulseVelocity = Math.min(3, m.fieldImpulseVelocity + 2.2 * typingEnergy);
     }

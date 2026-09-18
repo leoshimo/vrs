@@ -45,13 +45,15 @@ export function usePreviewAppearance() {
 export function PreviewAppearance({
   theme,
   onChange,
+  label = 'Preview',
 }: {
   theme: StudyTheme;
   onChange: (theme: StudyTheme) => void;
+  label?: string;
 }) {
   return (
     <fieldset className="study-choices">
-      <legend>Preview</legend>
+      <legend>{label}</legend>
       <div>
         {(['light', 'dark'] as const).map((value) => (
           <Button

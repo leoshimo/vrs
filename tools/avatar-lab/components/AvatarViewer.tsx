@@ -1,5 +1,4 @@
 'use client';
-import { appearanceMask } from '@/lib/avatar/appearance-mask';
 import { useLayoutEffect, useRef, type CSSProperties } from 'react';
 import { SignalField } from './SignalField';
 import type { SignalConfig } from '@/lib/avatar/signal-field';
@@ -64,17 +63,6 @@ export function AvatarViewer({
   }, [bar]);
   const presented = bar ? 42 : (displaySize ?? size);
   const magnification = bar ? 1 : zoom;
-  const wholeBar = bar && config.appearanceTarget === 'bar';
-  const maskStyle: CSSProperties = wholeBar
-    ? {
-        maskImage: appearanceMask(
-          appearance,
-          config.appearanceMode === 'fill' ? 'fill' : 'print',
-        ),
-        maskSize: config.appearanceMode === 'fill' ? '16px 16px' : '100% 100%',
-        opacity: appearance <= 0 ? 0 : 1,
-      }
-    : {};
   const avatar = (
     <div className="avatar-render-slot">
       <div className="avatar-object">
@@ -124,12 +112,8 @@ export function AvatarViewer({
       }
     >
       {bar ? (
-        <div className="avatar-viewer-input" data-whole-bar={wholeBar}>
-          <div
-            className="avatar-bar-surface"
-            aria-hidden="true"
-            style={maskStyle}
-          />
+        <div className="avatar-viewer-input">
+          <div className="avatar-bar-surface" aria-hidden="true" />
           {avatar}
           {onQueryChange ? (
             <input
@@ -153,12 +137,9 @@ export function AvatarViewer({
                 )
                   onType?.();
               }}
-              style={maskStyle}
             />
           ) : (
-            <span className="avatar-bar-placeholder" style={maskStyle}>
-              Search…
-            </span>
+            <span className="avatar-bar-placeholder">Search…</span>
           )}
         </div>
       ) : (

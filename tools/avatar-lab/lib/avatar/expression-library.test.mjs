@@ -9,7 +9,7 @@ const { groupedLibrary, workingEntry, motionAvailability, variantName } =
 test('library groups every single-motion expression once and retains its variants', () => {
   const setup = makeDefaultSetup();
   const groups = groupedLibrary(setup);
-  assert.equal(groups.length, 16);
+  assert.equal(groups.length, 17);
   assert.equal(new Set(groups.map((g) => g.id)).size, groups.length);
   assert.deepEqual(
     groups.flatMap((g) => g.entries.map((e) => e.id)).sort(),
@@ -47,6 +47,6 @@ test('motion picker uses saved library settings and reports event compatibility'
   assert.equal(status.drift, 'Working');
   assert.equal(status.nudge, 'Typing');
   assert.equal(status.sparks, 'Submit');
-  assert.equal(status.print, 'Open');
+  assert.equal(status.entrance, 'Open');
   assert.equal(workingEntry(groups.find((g) => g.id === 'sparks')), undefined);
 });
