@@ -73,31 +73,27 @@
 (def action_runs '())
 
 (def ui_config_path "~/.vrsjmp-ui.ll")
-(def ui_config '(:theme :neutral :appearance :system))
+(def ui_config '(:theme :neutral))
 
 (defn! validate_ui_config (config)
   (if (not? (list? config)) (error "UI configuration must be a property list"))
   (if (not? (contains? '(:neutral :warm :cool) (get config :theme)))
     (error "Theme must be :neutral, :warm, or :cool"))
-  (if (not? (contains? '(:system :light :dark) (get config :appearance)))
-    (error "Appearance must be :system, :light, or :dark"))
-  config)
+  (list :theme (get config :theme)))
 
 (defn! get_ui_config ()
-  "Read the palette's persisted theme and appearance."
+  "Read the palette's persisted theme."
   (def saved (try (fread ui_config_path)))
   (if (ok? saved) (set ui_config (validate_ui_config saved)))
   ui_config)
 
 (defn! set_ui_config (options)
-  "Set :theme (:neutral/:warm/:cool) or :appearance (:system/:light/:dark)."
+  "Set :theme (:neutral/:warm/:cool)."
   (if (not? (list? options)) (error "UI configuration must be a property list"))
   (def current (get_ui_config))
   (def theme (get options :theme))
-  (def appearance (get options :appearance))
   (def next (validate_ui_config
-    `(:theme ,(if (eq? theme nil) (get current :theme) theme)
-      :appearance ,(if (eq? appearance nil) (get current :appearance) appearance))))
+    `(:theme ,(if (eq? theme nil) (get current :theme) theme))))
   (fdump ui_config_path next)
   (set ui_config next)
   (publish :vrsjmp :config_changed)
@@ -108,8 +104,7 @@
 
 (defn! appearance_items (query)
   (def config (get_ui_config))
-  (def choices '(("Neutral" :theme :neutral) ("Warm" :theme :warm) ("Cool" :theme :cool)
-                ("System" :appearance :system) ("Light" :appearance :light) ("Dark" :appearance :dark)))
+  (def choices '(("Neutral" :theme :neutral) ("Warm" :theme :warm) ("Cool" :theme :cool)))
   (fuzzy_match query (map choices (fn (choice)
     (def key (get choice 1))
     (def value (get choice 2))

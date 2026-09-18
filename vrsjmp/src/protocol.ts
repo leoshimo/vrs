@@ -29,9 +29,8 @@ export type Snapshot = {
 };
 export type UiConfig = {
   theme: "neutral" | "warm" | "cool";
-  appearance: "system" | "light" | "dark";
 };
-export const defaultUiConfig: UiConfig = { theme: "neutral", appearance: "system" };
+export const defaultUiConfig: UiConfig = { theme: "neutral" };
 export type Transport = {
   begin(): Promise<Action>;
   query(page: Page, query: string): Promise<Item[]>;

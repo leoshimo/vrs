@@ -12,7 +12,7 @@ async fn fixture(path: &Path) -> (Runtime, Arc<Client>) {
     let source = format!(
         r#"
         (def ui_config_path {})
-        (def ui_config '(:theme :neutral :appearance :system))
+        (def ui_config '(:theme :neutral))
         {definitions}
         (spawn_srv! :vrsjmp :interface '(get_ui_config set_ui_config appearance_items appearance_page))
     "#,
@@ -60,11 +60,11 @@ async fn configuration_persists_before_notifying_and_rejects_invalid_updates() {
         evaluate(&client, "(begin (bind_srv :vrsjmp) (get_ui_config))")
             .await
             .unwrap(),
-        Form::from_expr("(:theme :neutral :appearance :system)").unwrap()
+        Form::from_expr("(:theme :neutral)").unwrap()
     );
     let updated = evaluate(
         &client,
-        "(begin (bind_srv :vrsjmp) (set_ui_config '(:theme :warm :appearance :dark)))",
+        "(begin (bind_srv :vrsjmp) (set_ui_config '(:theme :warm)))",
     )
     .await
     .unwrap();
@@ -105,7 +105,7 @@ async fn configuration_persists_before_notifying_and_rejects_invalid_updates() {
         )
         .await
         .unwrap(),
-        Form::from_expr("(:theme :cool :appearance :dark)").unwrap()
+        Form::from_expr("(:theme :cool)").unwrap()
     );
     std::fs::remove_file(path).unwrap();
 }
@@ -116,12 +116,13 @@ async fn appearance_menu_updates_config_and_keeps_the_page_open() {
     let (_runtime, client) = fixture(&path).await;
     assert_eq!(evaluate(&client, "(begin (bind_srv :vrsjmp) (appearance_page))").await.unwrap(),
         Form::from_expr("(:push_page :get_items appearance_items :prompt \"Search appearance…\" :title \"Palette Appearance\")").unwrap());
+    assert_eq!(
+        evaluate(&client, "(begin (bind_srv :vrsjmp) (map (appearance_items \"\") (fn (item) (get item :title))))").await.unwrap(),
+        Form::from_expr("(\"Neutral\" \"Warm\" \"Cool\")").unwrap()
+    );
     for (query, key, expected) in [
         ("Warm", ":theme", ":warm"),
-        ("Dark", ":appearance", ":dark"),
         ("Cool", ":theme", ":cool"),
-        ("Light", ":appearance", ":light"),
-        ("System", ":appearance", ":system"),
         ("Neutral", ":theme", ":neutral"),
     ] {
         let command = format!("(begin (bind_srv :vrsjmp) (eval (get (get (appearance_items \"{query}\") 0) :on_click)))");
@@ -146,5 +147,19 @@ async fn appearance_menu_updates_config_and_keeps_the_page_open() {
         .unwrap();
         assert_eq!(selected, Form::string("Selected"));
     }
+    std::fs::remove_file(path).unwrap();
+}
+
+#[tokio::test]
+async fn legacy_appearance_override_is_ignored_without_losing_the_theme() {
+    let path = std::env::temp_dir().join(format!("vrsjmp-legacy-config-{}.ll", std::process::id()));
+    std::fs::write(&path, "(:theme :warm :appearance :dark)").unwrap();
+    let (_runtime, client) = fixture(&path).await;
+    assert_eq!(
+        evaluate(&client, "(begin (bind_srv :vrsjmp) (get_ui_config))")
+            .await
+            .unwrap(),
+        Form::from_expr("(:theme :warm)").unwrap()
+    );
     std::fs::remove_file(path).unwrap();
 }

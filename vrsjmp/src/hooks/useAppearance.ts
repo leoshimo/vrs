@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import type { UiConfig } from "../protocol";
-export function useAppearance(config: UiConfig) {
+export function useAppearance() {
   const [dark, setDark] = useState(() => matchMedia("(prefers-color-scheme: dark)").matches);
   const [reduced, setReduced] = useState(
     () => matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -17,5 +16,5 @@ export function useAppearance(config: UiConfig) {
       motion.removeEventListener("change", updateMotion);
     };
   }, []);
-  return { dark: config.appearance === "system" ? dark : config.appearance === "dark", reduced };
+  return { dark, reduced };
 }

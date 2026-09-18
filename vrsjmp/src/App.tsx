@@ -64,7 +64,7 @@ export function App({ bridge }: { bridge: Bridge }) {
   const blurred = useRef(false);
   const reopen = useRef<(() => Promise<void>) | null>(null);
   const [pointerMoved] = useState(pointerSelection);
-  const { dark, reduced } = useAppearance(config);
+  const { dark, reduced } = useAppearance();
   reducedMotion.current = reduced;
   const lastView = useRef<Snapshot | undefined>(undefined);
   const view: Snapshot = presentedSnapshot(state, lastView.current);
