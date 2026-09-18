@@ -36,6 +36,13 @@ export type SignalConfig = {
   expression: number;
   language?: "porcelain" | "orbital" | "seal";
   color?: SignalColor;
+  activityColor?: SignalColor;
+  entranceRipple?: boolean;
+  idleSwirl?: number;
+  workingOrbit?: number;
+  orbitRate?: number;
+  swirlRate?: number;
+  typingSparks?: boolean;
   colorTiming?: "always" | "reactive";
   loadingMotion?:
     | "orbit"
@@ -65,6 +72,8 @@ export type SignalConfig = {
   interior?: "light" | "spheres";
   idleAmount?: number;
   typingEnergy?: number;
+  pressureSpread?: number;
+  pressureOffset?: number;
   dispatchEnergy?: number;
   settle?: number;
   coupling?: number;
@@ -157,6 +166,13 @@ export const defaultSignal: SignalConfig = {
   expression: 1.25,
   color: "mono",
   colorTiming: "reactive",
+  activityColor: "mono",
+  entranceRipple: false,
+  idleSwirl: 0,
+  workingOrbit: 0,
+  orbitRate: 1,
+  swirlRate: 0.8,
+  typingSparks: false,
   loadingMotion: "alternating",
   edgeSignal: "off",
   edgeMotion: "wave",
@@ -164,6 +180,8 @@ export const defaultSignal: SignalConfig = {
   interior: "light",
   idleAmount: 1.2,
   typingEnergy: 1.15,
+  pressureSpread: 3,
+  pressureOffset: 0.36,
   dispatchEnergy: 1.2,
   settle: 1.5,
   coupling: 1,
@@ -248,6 +266,35 @@ uniform float u_split,u_selectDuration;
 uniform float u_color,u_colorTiming,u_loadingMotion,u_edgeSignal,u_edgeMotion,u_releaseAge,u_releasePhase;
 uniform float u_priorReleaseAge,u_priorReleasePhase;
 uniform float u_typingStyle,u_inputStyle,u_interior,u_idleAmount,u_fill,u_wake,u_seed,u_transport,u_dispatchTarget,u_releaseStyle,u_releaseRadius,u_contrast,u_matrix,u_releaseMode;
+uniform vec2 u_pressureProfile, u_entranceRipple;
+uniform vec4 u_orbit;
+uniform float u_driven,u_flowOnly,u_drivenOrbit;
+uniform vec4 u_history[128],u_randomHistory[128],u_accents[4];
+uniform vec4 u_historySpans;
+uniform highp sampler2D u_waveCurves;
+uniform vec4 u_waveProfiles[8],u_waveInfluences[8];
+float waveAt(float delay,int row,float span){
+  float position=clamp(delay/max(.01,span)*127.,0.,127.);
+  float i=floor(position),y=(float(row)+.5)/8.;
+  float a=texture(u_waveCurves,vec2((i+.5)/128.,y)).r;
+  float b=texture(u_waveCurves,vec2((min(127.,i+1.)+.5)/128.,y)).r;
+  return mix(a,b,fract(position))*step(0.,delay)*step(delay,span);
+}
+vec4 responseAt(float delay){
+  vec4 position=clamp(delay*127./max(vec4(.01),u_historySpans),0.,127.);
+  vec4 outValue=vec4(0.);
+  for(int channel=0;channel<4;channel++){
+    int i=int(floor(position[channel]));
+    outValue[channel]=mix(u_history[i][channel],u_history[min(127,i+1)][channel],fract(position[channel]))*step(0.,delay)*step(delay,u_historySpans[channel]);
+  }
+  return outValue;
+}
+vec4 variationAt(float delay){
+  float position=clamp(delay*127./max(.01,u_historySpans.y),0.,127.);
+  int i=int(floor(position));
+  return mix(u_randomHistory[i],u_randomHistory[min(127,i+1)],fract(position));
+}
+uniform float u_activityColor, u_colorActivity, u_typingSparkAge;
 uniform float u_coupling,u_boundary,u_shapeNoise,u_toneSteps,u_colorStrength,u_rippleAccent,u_sparkCount,u_momentum,u_debugStage;
 uniform float u_saturation,u_activitySaturation,u_gravity,u_volume,u_lightStrength,u_lightAngle,u_driftAngle,u_waveOffset,u_fillWake,u_selectionMotion,u_selectionTint;
 uniform vec3 u_uiAccent,u_selectionInkColor;
@@ -313,38 +360,50 @@ float signalDistance(vec2 v,float phase){
   if(u_shape>.5){vec2 q=abs(v)-.62;return length(max(q,0.))+min(max(q.x,q.y),0.)-.24;}
   return length(v)-1.;
 }
-float activityLevel(){return clamp(u_tap*1.6+u_loading*.8+u_burst*.9*(1.-step(.5,u_dispatchTarget))+u_wake*.55,0.,1.);}
+float activityLevel(){if(u_driven>.5)return clamp(u_colorActivity,0.,1.);return clamp(u_colorActivity+u_tap*1.6+u_loading*.8+u_burst*.9*(1.-step(.5,u_dispatchTarget))+u_wake*.55,0.,1.);}
 float colorEnergy(){return u_colorTiming<.5?1.:activityLevel();}
-vec3 pigment(vec2 p,float phase){
+vec3 paletteInkSaturation(vec2 p,float phase,float palette,float saturation){
   float t=.5+.5*sin(p.x*1.8+p.y*.9+phase*.7);
   float s=.5+.5*cos(p.y*2.-p.x*.8-phase*.5);
-  vec3 a=u_color<1.5?vec3(.10,.68,.72):vec3(.95,.29,.15);
-  vec3 b=u_color<1.5?vec3(.43,.36,.94):vec3(.96,.63,.22);
-  vec3 c=u_color<1.5?vec3(.95,.40,.68):vec3(.71,.23,.54);
+  vec3 a=palette<1.5?vec3(.10,.68,.72):vec3(.95,.29,.15);
+  vec3 b=palette<1.5?vec3(.43,.36,.94):vec3(.96,.63,.22);
+  vec3 c=palette<1.5?vec3(.95,.40,.68):vec3(.71,.23,.54);
   vec3 col=mix(mix(a,b,t),c,s*.48);
-  if(u_color>2.5&&u_color<3.5)col=mix(vec3(.08,.42,.62),vec3(.85,.91,.68),smoothstep(.38,.62,t));
-  if(u_color>3.5&&u_color<4.5)col=mix(vec3(.80,.27,.17),vec3(.12,.65,.59),smoothstep(.38,.62,t));
-  if(u_color>4.5){
+  if(palette>2.5&&palette<3.5)col=mix(vec3(.08,.42,.62),vec3(.85,.91,.68),smoothstep(.38,.62,t));
+  if(palette>3.5&&palette<4.5)col=mix(vec3(.80,.27,.17),vec3(.12,.65,.59),smoothstep(.38,.62,t));
+  if(palette>4.5){
     float band=floor(clamp(t*.7+s*.3,0.,.999)*3.);
     col=band<1.?vec3(.08,.68,.79):band<2.?vec3(.91,.25,.52):vec3(.96,.81,.29);
   }
-  if(u_color>5.5){
+  if(palette>5.5){
     // Original gradients, inspired by color-coded instruments, not sampled brand colors.
     vec3 x=vec3(.18,.52,.89), y=vec3(.52,.77,.60), z=vec3(.97,.59,.27);
-    if(u_color>6.5&&u_color<7.5){x=vec3(.52,.68,.90);y=vec3(.76,.61,.83);z=vec3(.93,.80,.61);}
-    if(u_color>7.5){x=vec3(.27,.37,.87);y=vec3(.76,.41,.61);z=vec3(.94,.70,.40);}
+    if(palette>6.5&&palette<7.5){x=vec3(.52,.68,.90);y=vec3(.76,.61,.83);z=vec3(.93,.80,.61);}
+    if(palette>7.5){x=vec3(.27,.37,.87);y=vec3(.76,.41,.61);z=vec3(.94,.70,.40);}
     col=t<.5?mix(x,y,smoothstep(0.,.5,t)):mix(y,z,smoothstep(.5,1.,t));
   }
-  if(u_color>8.5&&u_color<12.5){
-    col=u_color<9.5?vec3(.39,.52,.64):u_color<10.5?vec3(.43,.57,.45):u_color<11.5?vec3(.62,.46,.59):vec3(.68,.55,.31);
+  if(palette>8.5&&palette<12.5){
+    col=palette<9.5?vec3(.39,.52,.64):palette<10.5?vec3(.43,.57,.45):palette<11.5?vec3(.62,.46,.59):vec3(.68,.55,.31);
     col*=.82+t*.25;
   }
-  if(u_color>12.5)col=u_color<13.5?mix(vec3(.53,.67,.70),vec3(.77,.73,.66),t):mix(vec3(.54,.51,.68),vec3(.76,.63,.56),t);
+  if(palette>12.5)col=palette<13.5?mix(vec3(.53,.67,.70),vec3(.77,.73,.66),t):mix(vec3(.54,.51,.68),vec3(.76,.63,.56),t);
   float luminance=dot(col,vec3(.2126,.7152,.0722));
-  col=mix(vec3(luminance),col,mix(u_saturation,u_activitySaturation,activityLevel()));
+  col=mix(vec3(luminance),col,saturation);
   return mix(col*.7,col+.12,u_dark);
 }
-vec3 signalInk(vec2 p,float phase){return mix(u_inkColor,pigment(p,phase),step(.5,u_color)*colorEnergy()*u_colorStrength);}
+vec3 paletteInk(vec2 p,float phase,float palette){return paletteInkSaturation(p,phase,palette,mix(u_saturation,u_activitySaturation,activityLevel()));}
+vec3 pigment(vec2 p,float phase){return paletteInk(p,phase,u_activityColor>.5?u_activityColor:u_color);}
+vec3 signalInk(vec2 p,float phase){
+  vec3 base=mix(u_inkColor,u_driven>.5?paletteInkSaturation(p,phase,u_color,u_saturation):paletteInk(p,phase,u_color),step(.5,u_color)*colorEnergy()*u_colorStrength);
+  if(u_driven>.5){
+    vec3 tint=vec3(0.);float strength=0.;
+    for(int i=0;i<4;i++){tint+=paletteInkSaturation(p,phase,u_accents[i].x,u_activitySaturation)*u_accents[i].y;strength+=u_accents[i].y;}
+    // Keep the light/dark ink's contrast while introducing the chosen hues.
+    if(strength>.0001){tint/=strength;float l=dot(tint,vec3(.2126,.7152,.0722));tint=mix(tint,tint+(base-vec3(l))*.65,.7);}
+    return mix(base,clamp(tint,0.,1.),min(.8,strength));
+  }
+  return mix(base,paletteInk(p,phase,u_activityColor),step(.5,u_activityColor)*activityLevel()*u_colorStrength);
+}
 float liveEdge(vec2 px,vec4 rect){
   bool leading=u_edgeSignal<1.5;
   float along=leading?(px.y-rect.y)/max(1.,rect.w):(px.x-rect.x)/max(1.,rect.z);
@@ -526,7 +585,7 @@ void main(){
       coverage=exp(-pow((front-progress*1.4+.2)/.17,2.))*envelope*.55*step(sd,0.);
     }else coverage=envelope*.28*step(sd,0.);
     vec3 commitInk=u_dark>.5?paper:ink;
-    commitInk=mix(commitInk,pigment((px-u_releaseRow.xy)/max(u_releaseRow.zw,vec2(1.)),u_releasePhase),step(.5,u_color));
+    commitInk=mix(commitInk,pigment((px-u_releaseRow.xy)/max(u_releaseRow.zw,vec2(1.)),u_releasePhase),step(.5,max(u_color,u_activityColor)));
     float mark=printed(coverage,px)*body*clip*.62;
     color=mix(color,commitInk,mark);
   }
@@ -549,7 +608,7 @@ void main(){
   poke*=u_typingStyle<3.5?mod(u_typingStyle,2.):0.;
   vec2 posed=v/(1.+poke);
   // Traveling cap wave on a sphere: angular distance from one off-center point.
-  float capHeight=0.;
+  float capHeight=surfaceHeight(v,u_entranceRipple.y,u_entranceRipple.x);
   if(u_surfaceWave.x>0.){
     float capPhase=u_surfaceWave.y< -1.5?u_time*4./max(.4,u_surfaceExpression.y):u_surfaceWave.y<0.?u_phase:u_surfaceWave.y;
     capHeight=surfaceHeight(v,mod(capPhase,4.),u_surfaceWave.x);
@@ -563,8 +622,19 @@ void main(){
   if(u_loadingMotion>13.5&&u_loading>.0001){
     capHeight+=surfaceHeight(v,mod(u_time*4./max(.4,u_surfaceExpression.y),4.),u_surfaceExpression.x)*clamp(u_loading,0.,1.);
   }
+  vec3 drivenSurface=vec3(0.);
+  if(u_driven>.5){
+    vec3 point=normalize(vec3(v,sqrt(max(0.,1.-dot(v,v)))));
+    for(int channel=0;channel<8;channel++){
+      if(u_waveInfluences[channel].w<.5)continue;
+      vec4 profile=u_waveProfiles[channel];
+      vec3 origin=normalize(vec3(profile.xy,.84));
+      float delay=acos(clamp(dot(point,origin),-1.,1.))/3.14159*max(.15,profile.z);
+      drivenSurface+=waveAt(delay,channel,profile.w)*.18*u_waveInfluences[channel].xyz;
+    }
+  }
   float loopHeight=surfaceHeightAt(v,mod(u_time*4./max(.4,u_loopRipple.y),4.),u_loopRipple.x,u_loopOrigin,u_loopProfile)*clamp(u_loading,0.,1.);
-  posed/=1.+capHeight*u_surfaceInfluence.x+loopHeight*u_loopInfluence.x;
+  posed/=1.+capHeight*u_surfaceInfluence.x+loopHeight*u_loopInfluence.x+drivenSurface.x;
   float distance=signalDistance(posed,u_phase);
   float edgeActivity=.12+min(1.,u_tap+u_loading*.6+u_burst+u_wake+u_momentum*.4);
   distance-=u_shapeNoise*edgeActivity*(.65*sin(a*3.+u_phase*1.4)+.35*sin(a*5.-u_phase*.9));
@@ -577,9 +647,9 @@ void main(){
   float flow=dot(v,u_poke+secondary)*.15;
   // Pressure folds a local patch; light-kick moves only the underlying volumes.
   if(u_typingStyle>3.5&&u_typingStyle<4.5){
-    vec2 origin=pokeDirection*.36;
+    vec2 origin=pokeDirection*clamp(u_pressureProfile.y,0.,.95);
     vec2 fromOrigin=v-origin;
-    displacement=fromOrigin*exp(-dot(fromOrigin,fromOrigin)*3.)*pokeLength*1.8*u_expression;
+    displacement=fromOrigin*exp(-dot(fromOrigin,fromOrigin)*max(.5,u_pressureProfile.x))*pokeLength*1.8*u_expression;
   }
   if(u_typingStyle>4.5)displacement=vec2(0.);
   if(u_typingStyle>5.5){
@@ -624,7 +694,7 @@ void main(){
     light+=normal*loadingWave*waveLoading*.48*max(0.,waveCoupling-1.);
     flow+=sin(dot(v,normal)*3.-cycle*2.)*loadingWave*waveLoading*.12*max(0.,waveCoupling-1.);
     flow+=waveLoading*loadingWave*.24;
-  }else if(u_mixing<.5&&u_loadingMotion<3.5){
+  }else if(u_mixing<.5&&u_loadingMotion<3.5&&u_orbit.y<.001){
     float strength=u_loadingMotion>2.5?.23:.08;
     displacement+=u_loading*strength*vec2(sin(v.y*3.+u_phase*3.),cos(v.x*2.7-u_phase*2.3));
     flow+=u_loading*strength*sin(v.y*3.+u_phase*2.);
@@ -655,6 +725,14 @@ void main(){
     light+=normal*ring*u_loading*.15;
     loadingWave=abs(ring);
   }
+  // A traveling crest hugs the rim; the structured version has one head.
+  float rim=exp(-pow((r-.78)/.19,2.));
+  float ringPhase=atan(v.y,v.x)-u_time*u_orbit.z;
+  float swirl=sin(ringPhase+.32*sin(u_time*.73))+ .3*sin(2.*ringPhase-u_time*.31);
+  float orbit=pow(.5+.5*cos(atan(v.y,v.x)-u_time*u_orbit.w),9.);
+  float ring= rim*(swirl*u_orbit.x*(u_driven>.5?1.:1.-clamp(u_loading,0.,1.)) + orbit*u_orbit.y*(u_driven>.5?1.:u_loading));
+  displacement+=vec2(-v.y,v.x)*ring*.16;
+  flow+=ring*.28*(1.-u_flowOnly);
   // Independent experimental operations; all zero in existing expressions.
   displacement+=u_primitives.x*.24*vec2(sin(u_phase*.9),cos(u_phase*.67));
   vec2 pq=v-vec2(.2*sin(u_phase),.2*cos(u_phase*.83));
@@ -663,13 +741,13 @@ void main(){
   displacement+=vec2(0.,u_gravity*.30*(1.-smoothstep(.15,1.1,r)));
   float driftAngle=u_mixCustom>.5?u_mixDriftAngle:u_driftAngle;
   vec2 driftDirection=vec2(cos(driftAngle),sin(driftAngle));
-  displacement+=v*(capHeight*u_surfaceInfluence.y+loopHeight*u_loopInfluence.y);
+  displacement+=v*(capHeight*u_surfaceInfluence.y+loopHeight*u_loopInfluence.y+drivenSurface.y);
   vec2 sampleV=v-displacement;
   vec2 samplePx=px-displacement*radius+driftDirection*driftTransport*radius*(u_mixing>.5?driftWeight:1.);
   float activity=1.+u_wake*.5;
   float detail=u_idleAmount*activity;
   float dome=sqrt(max(0.,1.-min(1.,dot(sampleV,sampleV))));
-  flow+=1.4*(capHeight*u_surfaceInfluence.z+loopHeight*u_loopInfluence.z);
+  flow+=1.4*(capHeight*u_surfaceInfluence.z+loopHeight*u_loopInfluence.z+drivenSurface.z);
   flow+=sin(sampleV.x*2.8+u_phase*1.4)*cos(sampleV.y*3.1-u_phase)*.09*detail;
   float tone=.40+.34*dot(sampleV,light)*u_lightStrength+.25*dome*u_volume+flow+releaseEnergy*.14;
   if(u_interior>.5){
@@ -695,6 +773,7 @@ void main(){
   // Bloom is illumination passing through the volume, with no outer ripple.
   float bloomFront=length(sampleV-vec2(-.22,.18))-clamp(u_releaseAge/.38,0.,1.)*1.65;
   float bloomLight=bloom?exp(-pow(bloomFront/.46,2.))*releaseEnergy:0.;
+  if(u_driven>.5)bloomLight=responseAt(length(sampleV-vec2(-.22,.18))*.16).w;
   tone+=bloomLight*.40;
   if(driftWeight>0.)tone+=sin(sampleV.x*3.4+driftTransport*3.4)*driftLoading*.10*driftWeight;
   tone=clamp((tone-.5)*u_contrast+.5,.015,.985);
@@ -705,7 +784,7 @@ void main(){
   tone=mix(tone,smoothstep(.10,.90,tone),1.-smoothstep(18.,35.,radius));
   vec3 orbInk=signalInk(sampleV,u_phase);
   if(u_primitives.w>0.)orbInk=mix(orbInk,pigment(sampleV,u_phase),u_primitives.w*(.5+.5*sin(sampleV.x*2.+u_phase)));
-  if(bloom)orbInk=mix(orbInk,pigment(sampleV.yx,u_releasePhase+2.4),clamp(bloomLight*.7,0.,.8)*step(.5,u_color));
+  if(bloom)orbInk=mix(orbInk,pigment(sampleV.yx,u_releasePhase+2.4),clamp(bloomLight*.7,0.,.8)*step(.5,max(u_color,u_activityColor)));
   if(u_shape>2.5&&u_shape<3.5){
     vec2 offset=twinOffset(u_phase);
     float first=1.-smoothstep(-.05,.05,blobDistance((posed-offset)/.74,u_phase));
@@ -756,18 +835,41 @@ void main(){
     float contour=signalDistance((px-u_signal.xy)/(max(1.,u_signal.z)*scale),phase)*scale;
     float halo=exp(-pow(contour/.065,2.))*smoothstep(0.,.05,age)*pow(1.-p,1.3)*.85*u_enableOrb*(1.-orbMask)*avatarRelease*step(2.5,u_releaseMode)*(1.-step(3.5,u_releaseMode));
     float haloInk=mix(halo,printed(halo,px),u_targets.x);
-    vec3 haloColor=mix(ink,pigment(v,phase+p*3.),step(.5,u_color));
+    vec3 haloColor=mix(ink,pigment(v,phase+p*3.),step(.5,max(u_color,u_activityColor)));
     color=haloColor*haloInk+color*(1.-haloInk);alpha=haloInk+alpha*(1.-haloInk);
   }
+  if(u_driven>.5){
+    float echoDelay=(r-1.)*.9;
+    float echo=responseAt(echoDelay).z*step(1.,r)*exp(-max(0.,r-1.)*6.);
+    float marks=0.;
+    for(int i=0;i<18;i++){
+      if(float(i)>=u_sparkCount)break;
+      float id=float(i),speed=.8+.5*fract(sin(id*27.31+4.)*43758.5);
+      float delay=(r-1.)/(1.7*speed);
+      vec4 response=responseAt(delay);vec4 noise=variationAt(delay)/max(.001,response.y);
+      float jitter=sin(id*13.7+noise.x*8.+noise.y*3.);
+      float angle=id*2.39996+jitter*.7+noise.z*2.;
+      float across=sin(atan(v.y,v.x)-angle)*r;
+      float front=cos(atan(v.y,v.x)-angle);
+      float width=.014+.025*fract(sin(id*17.+noise.w)*351.);
+      float mark=exp(-pow(across/width,2.))*step(.5,front)*response.y;
+      marks=max(marks,mark*step(1.,r)*exp(-max(0.,r-1.)*3.));
+    }
+    marks=printed(max(marks,echo*.65),px)*(1.-orbMask)*u_enableOrb;
+    vec3 tint=signalInk(v,u_phase);
+    color=tint*marks+color*(1.-marks);alpha=marks+alpha*(1.-marks);
+  }
   // A few short, printed flecks escape the contour; no ring and no particle system.
-  if(sparks&&u_releaseAge<.32){
-    float p=clamp(u_releaseAge/.32,0.,1.);
+  bool typingSpark=u_typingSparkAge<.24;
+  if((sparks&&u_releaseAge<.32)||typingSpark){
+    float p=clamp(typingSpark?u_typingSparkAge/.24:u_releaseAge/.32,0.,1.);
+    float count=typingSpark?4.:u_sparkCount;
     float envelope=pow(sin(p*3.14159),.7)*avatarRelease*u_enableOrb;
     vec2 local=(px-u_signal.xy)/max(1.,u_signal.z);
     float flecks=0.;
     for(int i=0;i<18;i++){
-      if(float(i)>=u_sparkCount)break;
-      float angle=float(i)*6.28318/max(1.,u_sparkCount)+u_seed*6.28318+sin(u_releasePhase+float(i)*2.1)*.34;
+      if(float(i)>=count)break;
+      float angle=float(i)*6.28318/max(1.,count)+u_seed*6.28318+sin(u_releasePhase+float(i)*2.1)*.34;
       vec2 dir=vec2(cos(angle),sin(angle));
       vec2 center=dir*(1.025+p*.30);
       vec2 offset=local-center;
@@ -777,12 +879,12 @@ void main(){
     }
     flecks*=1.-orbMask;
     float marks=printed(flecks,px);
-    vec3 sparkInk=mix(ink,pigment(local,u_releasePhase),step(.5,u_color));
+    vec3 sparkInk=mix(ink,pigment(local,u_releasePhase),step(.5,max(u_color,u_activityColor)));
     color=sparkInk*marks+color*(1.-marks);alpha=marks+alpha*(1.-marks);
   }
   float distanceFromSignal=length((px-u_signal.xy)/max(u_panel.zw,vec2(u_signal.z*2.)));
   float appearing=clamp(u_appearance*2.-distanceFromSignal*.75,0.,1.);
   float visible=step(rank8(floor(px/u_pitch)),appearing);if(u_appearance>=1.)visible=1.;if(u_appearance<=0.)visible=0.;
-  if(u_fillWake>.5)visible=1.;
+  if(u_fillWake>.5)visible=smoothstep(0.,.12,u_appearance);
   fragColor=vec4(color*visible,alpha*visible);
 }`;

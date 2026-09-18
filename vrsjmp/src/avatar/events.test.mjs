@@ -46,3 +46,16 @@ test("Nudge has an immediate small kick and loses its tail within 400ms", () => 
     advanceSignalMotion(typed, "typing", i + 2, true, 1 / 120, true, activity);
   assert.ok(typed.fieldImpulseVelocity <= 3);
 });
+
+test("typing sparks are brief and do not trigger a dispatch or surface ripple", () => {
+  const motion = createSignalMotion(42);
+  const activity = { typingNudge: true, typingSparks: true, typingEnergy: 0.45 };
+  advanceSignalMotion(motion, "typing", 1, true, 1 / 60, true, activity);
+  assert.equal(motion.typingSparkAge, 0);
+  assert.equal(motion.burst.value, 0);
+  assert.ok(motion.releaseAge > 10);
+  assert.equal(motion.pokeX.value, 0);
+  for (let i = 0; i < 20; i++) advanceSignalMotion(motion, "idle", 1, true, 1 / 60, true, activity);
+  assert.ok(motion.typingSparkAge > 0.24);
+  assert.ok(motion.fieldImpulseVelocity < 0.03);
+});

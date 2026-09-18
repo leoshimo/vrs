@@ -139,13 +139,13 @@ export function ControlGroup({
   children,
 }: {
   title: string;
-  note: string;
+  note?: string;
   children: React.ReactNode;
 }) {
   return (
     <section className="effect-control-group">
       <h3>{title}</h3>
-      <p>{note}</p>
+      {note && <p>{note}</p>}
       {children}
     </section>
   );
@@ -153,164 +153,164 @@ export function ControlGroup({
 export function AvatarControls({
   config,
   onChange,
-}: Props & { motion?: boolean; focusCircle?: boolean }) {
+  section,
+}: Props & { motion?: boolean; focusCircle?: boolean; section?: string }) {
   return (
     <div className="character-properties">
-      <ControlGroup title="Style" note="The palette and ink.">
-        <SelectControl
-          label="Palette"
-          value={config.color || 'mono'}
-          options={paletteOptions}
-          onChange={(color) => onChange({ color })}
-        />
-        <Choices
-          label="Color timing"
-          value={config.colorTiming || 'reactive'}
-          options={[
-            ['reactive', 'On activity'],
-            ['always', 'Always'],
-          ]}
-          onChange={(colorTiming) => onChange({ colorTiming })}
-        />
-        <RangeControl
-          label="Base saturation"
-          value={config.saturation ?? 0.45}
-          min={0}
-          max={1}
-          step={0.05}
-          format={percent}
-          onChange={(saturation) => onChange({ saturation })}
-          description="Zero is gray; higher values bring out hue."
-        />
-        <RangeControl
-          label="Activity saturation"
-          value={config.activitySaturation ?? 0.65}
-          min={0}
-          max={1}
-          step={0.05}
-          format={percent}
-          onChange={(activitySaturation) => onChange({ activitySaturation })}
-        />
-        <RangeControl
-          label="Accent strength"
-          value={config.colorStrength ?? 0.8}
-          min={0}
-          max={1}
-          step={0.05}
-          format={percent}
-          onChange={(colorStrength) => onChange({ colorStrength })}
-        />
-      </ControlGroup>
-      <ControlGroup
-        title="Field"
-        note="These values combine to determine how much ink prints at each point."
-      >
-        <RangeControl
-          label="Fill"
-          value={config.fill ?? 0.5}
-          min={0}
-          max={1}
-          step={0.025}
-          format={percent}
-          onChange={(fill) => onChange({ fill })}
-          description="Overall ink coverage, after the field is calculated."
-        />
-        <RangeControl
-          label="Dome contribution"
-          value={config.volume ?? 1}
-          min={0}
-          max={2}
-          step={0.05}
-          format={times}
-          onChange={(volume) => onChange({ volume })}
-          description="Adds coverage according to height on a hemisphere: greatest at its center, zero at the edge."
-        />
-        <RangeControl
-          label="Gradient strength"
-          value={config.lightStrength ?? 1}
-          min={0}
-          max={2}
-          step={0.05}
-          format={times}
-          onChange={(lightStrength) => onChange({ lightStrength })}
-          description="The difference in coverage from one side to the other."
-        />
-        <RangeControl
-          label="Gradient angle"
-          value={config.lightAngle ?? 0}
-          min={-180}
-          max={180}
-          step={5}
-          format={(v) => `${v}°`}
-          onChange={(lightAngle) => onChange({ lightAngle })}
-        />
-        <RangeControl
-          label="Contrast"
-          value={config.contrast ?? 1}
-          min={0.5}
-          max={2}
-          step={0.05}
-          format={times}
-          onChange={(contrast) => onChange({ contrast })}
-        />
-        <RangeControl
-          label="Vertical displacement"
-          value={config.gravity ?? 0}
-          min={0}
-          max={1}
-          step={0.05}
-          format={percent}
-          onChange={(gravity) => onChange({ gravity })}
-          description="Pulls the interior down; it does not simulate gravity."
-        />
-      </ControlGroup>
-      <ControlGroup
-        title="Print"
-        note="Converts the field into marks on a fixed grid."
-      >
-        <Choices
-          label="Print method"
-          value={config.texture}
-          options={[
-            ['bayer', 'Bayer'],
-            ['halftone', 'Halftone'],
-          ]}
-          onChange={(texture) => onChange({ texture })}
-        />
-        <RangeControl
-          label="Cell size"
-          value={config.pitch}
-          min={0.8}
-          max={3.5}
-          step={0.1}
-          format={(v) => `${v.toFixed(1)} px`}
-          onChange={(pitch) => onChange({ pitch })}
-          description="Spacing between printed marks."
-        />
-        {config.texture === 'bayer' && (
+      {(!section || section === 'Color') && (
+        <ControlGroup title="Color">
           <SelectControl
-            label="Matrix"
-            value={String(config.matrix ?? 8)}
-            options={[
-              ['2', '2 × 2'],
-              ['4', '4 × 4'],
-              ['8', '8 × 8'],
-            ]}
-            onChange={(v) => onChange({ matrix: Number(v) as 2 | 4 | 8 })}
+            label="Base palette"
+            value={config.color || 'mono'}
+            options={paletteOptions}
+            onChange={(color) => onChange({ color, colorTiming: 'always' })}
           />
-        )}
-        <SelectControl
-          label="Tone bands"
-          value={String(config.toneSteps ?? 0)}
-          options={[
-            ['0', 'Continuous'],
-            ['3', '3 tones'],
-            ['5', '5 tones'],
-            ['7', '7 tones'],
-          ]}
-          onChange={(v) => onChange({ toneSteps: Number(v) })}
-        />
-      </ControlGroup>
+          <SelectControl
+            label="Avatar accent"
+            value={config.activityColor ?? 'mono'}
+            options={paletteOptions}
+            onChange={(activityColor) =>
+              onChange({ activityColor, colorTiming: 'always' })
+            }
+          />
+          <RangeControl
+            label="Base saturation"
+            value={config.saturation ?? 0.45}
+            min={0}
+            max={1}
+            step={0.05}
+            format={percent}
+            onChange={(saturation) => onChange({ saturation })}
+            description="Zero is gray; higher values bring out hue."
+          />
+          <RangeControl
+            label="Accent saturation"
+            value={config.activitySaturation ?? 0.65}
+            min={0}
+            max={1}
+            step={0.05}
+            format={percent}
+            onChange={(activitySaturation) => onChange({ activitySaturation })}
+          />
+          <RangeControl
+            label="Base strength"
+            value={config.colorStrength ?? 0.8}
+            min={0}
+            max={1}
+            step={0.05}
+            format={percent}
+            onChange={(colorStrength) => onChange({ colorStrength })}
+          />
+        </ControlGroup>
+      )}
+      {(!section || section === 'Field') && (
+        <ControlGroup title="Field">
+          <RangeControl
+            label="Fill"
+            value={config.fill ?? 0.5}
+            min={0}
+            max={1}
+            step={0.025}
+            format={percent}
+            onChange={(fill) => onChange({ fill })}
+            description="Overall ink coverage, after the field is calculated."
+          />
+          <RangeControl
+            label="Dome contribution"
+            value={config.volume ?? 1}
+            min={0}
+            max={2}
+            step={0.05}
+            format={times}
+            onChange={(volume) => onChange({ volume })}
+            description="Adds coverage according to height on a hemisphere: greatest at its center, zero at the edge."
+          />
+          <RangeControl
+            label="Gradient strength"
+            value={config.lightStrength ?? 1}
+            min={0}
+            max={2}
+            step={0.05}
+            format={times}
+            onChange={(lightStrength) => onChange({ lightStrength })}
+            description="The difference in coverage from one side to the other."
+          />
+          <RangeControl
+            label="Gradient angle"
+            value={config.lightAngle ?? 0}
+            min={-180}
+            max={180}
+            step={5}
+            format={(v) => `${v}°`}
+            onChange={(lightAngle) => onChange({ lightAngle })}
+          />
+          <RangeControl
+            label="Contrast"
+            value={config.contrast ?? 1}
+            min={0.5}
+            max={2}
+            step={0.05}
+            format={times}
+            onChange={(contrast) => onChange({ contrast })}
+          />
+          <RangeControl
+            label="Vertical displacement"
+            value={config.gravity ?? 0}
+            min={0}
+            max={1}
+            step={0.05}
+            format={percent}
+            onChange={(gravity) => onChange({ gravity })}
+            description="Displaces the interior downward."
+          />
+        </ControlGroup>
+      )}
+      {(!section || section === 'Print') && (
+        <ControlGroup title="Print">
+          <Choices
+            label="Print method"
+            value={config.texture}
+            options={[
+              ['bayer', 'Bayer'],
+              ['halftone', 'Halftone'],
+            ]}
+            onChange={(texture) => onChange({ texture })}
+          />
+          <RangeControl
+            label="Cell size"
+            value={config.pitch}
+            min={0.8}
+            max={3.5}
+            step={0.1}
+            format={(v) => `${v.toFixed(1)} px`}
+            onChange={(pitch) => onChange({ pitch })}
+            description="Spacing between printed marks."
+          />
+          {config.texture === 'bayer' && (
+            <SelectControl
+              label="Matrix"
+              value={String(config.matrix ?? 8)}
+              options={[
+                ['2', '2 × 2'],
+                ['4', '4 × 4'],
+                ['8', '8 × 8'],
+              ]}
+              onChange={(v) => onChange({ matrix: Number(v) as 2 | 4 | 8 })}
+            />
+          )}
+          <SelectControl
+            label="Tone bands"
+            value={String(config.toneSteps ?? 0)}
+            options={[
+              ['0', 'Continuous'],
+              ['3', '3 tones'],
+              ['5', '5 tones'],
+              ['7', '7 tones'],
+            ]}
+            onChange={(v) => onChange({ toneSteps: Number(v) })}
+          />
+        </ControlGroup>
+      )}
     </div>
   );
 }
@@ -322,6 +322,40 @@ export function ExpressionControls({
 }: Props & { action: AvatarAction; hideVariant?: boolean }) {
   return (
     <div className="expression-properties">
+      {config.idleSwirl || config.workingOrbit ? (
+        <>
+          <RangeControl
+            label="Rim strength"
+            value={config.idleSwirl || config.workingOrbit || 1}
+            min={0.1}
+            max={2}
+            step={0.05}
+            onChange={(value) =>
+              onChange(
+                config.idleSwirl
+                  ? { idleSwirl: value }
+                  : { workingOrbit: value },
+              )
+            }
+          />
+          <RangeControl
+            label="Playback rate"
+            value={
+              config.idleSwirl
+                ? (config.swirlRate ?? 0.8)
+                : (config.orbitRate ?? 1)
+            }
+            min={0.2}
+            max={3}
+            step={0.1}
+            onChange={(value) =>
+              onChange(
+                config.idleSwirl ? { swirlRate: value } : { orbitRate: value },
+              )
+            }
+          />
+        </>
+      ) : null}
       {action === 'idle' && (
         <>
           <RangeControl
@@ -363,7 +397,7 @@ export function ExpressionControls({
             value={config.typingEnergy ?? 1.15}
             min={0.1}
             max={2.5}
-            step={0.05}
+            step={0.01}
             format={times}
             onChange={(typingEnergy) => onChange({ typingEnergy })}
             description={
@@ -372,6 +406,26 @@ export function ExpressionControls({
                 : 'Each trigger pushes the motion; repeated triggers retain its current movement.'
             }
           />
+          {config.typingMotion === 'pressure' && (
+            <>
+              <RangeControl
+                label="Concentration"
+                value={config.pressureSpread ?? 3}
+                min={0.5}
+                max={10}
+                step={0.1}
+                onChange={(pressureSpread) => onChange({ pressureSpread })}
+              />
+              <RangeControl
+                label="Distance from center"
+                value={config.pressureOffset ?? 0.36}
+                min={0}
+                max={0.95}
+                step={0.01}
+                onChange={(pressureOffset) => onChange({ pressureOffset })}
+              />
+            </>
+          )}
         </>
       )}
       {action === 'loading' && (
@@ -461,7 +515,7 @@ export function ExpressionControls({
                     step={0.1}
                     format={times}
                     onChange={(coupling) => onChange({ coupling })}
-                    description="Scales distortion and its influence on shading. A multiplier, not a physical force."
+                    description="Scales distortion and its influence on shading."
                   />
                 </>
               )}
@@ -515,16 +569,26 @@ export function ExpressionControls({
       )}
       {action === 'wake' && !hideVariant && (
         <Choices
-          label="Appearance"
+          label="Entrance"
           value={config.appearanceMode ?? 'fill'}
           options={[
-            ['fill', 'Fill wake'],
+            ['fill', 'Fill'],
             ['print', 'Printed reveal'],
           ]}
           onChange={(appearanceMode) => onChange({ appearanceMode })}
         />
       )}
-      {['dispatch', 'wake'].includes(action) && (
+      {action === 'wake' && config.entranceRipple && (
+        <RangeControl
+          label="Ripple strength"
+          value={config.surfaceAmplitude ?? 0.45}
+          min={0}
+          max={1}
+          step={0.05}
+          onChange={(surfaceAmplitude) => onChange({ surfaceAmplitude })}
+        />
+      )}
+      {action === 'dispatch' && (
         <RangeControl
           label="Decay scale"
           value={config.settle ?? 1.5}

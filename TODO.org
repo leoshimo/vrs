@@ -734,7 +734,7 @@ Extend to visual elements? UI:
 
 * design tooling
 
-** TODO Revisit the Expressions editor
+** DONE Revisit the Expressions editor
 
 Keep event assignments and the reusable motion library, but simplify how
 motions form a saved expression. Clarify the relationship between library

@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import '../styles/controls.css';
 @import '../styles/expressions.css';
+@import '../../../vrsjmp/src/palette-surface.css';
 @import '../styles/recipe.css';
 @custom-variant dark (&:where(.dark, .dark *));
 @theme inline {

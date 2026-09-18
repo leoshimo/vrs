@@ -10,6 +10,71 @@ export type Expression = {
 };
 export const expressions: Expression[] = [
   {
+    id: "swirl",
+    name: "Swirl",
+    action: "idle",
+    note: "A loose current travels around the rim.",
+    settings: { idleAmount: 0.7, idleSwirl: 0.8, swirlRate: 0.8 },
+  },
+  {
+    id: "orbit",
+    name: "Orbit",
+    action: "loading",
+    note: "One crest circles the rim.",
+    settings: {
+      loadingMotion: "orbit",
+      workingOrbit: 1,
+      orbitRate: 1.8,
+      loadingStrength: 0.8,
+      loadingRate: 1,
+    },
+  },
+  {
+    id: "nudge-sparks",
+    name: "Nudge + Sparks",
+    action: "typing",
+    note: "A short nudge with four escaping marks.",
+    settings: { typingMotion: "nudge", typingEnergy: 0.45, typingSparks: true },
+  },
+  {
+    id: "entrance-print",
+    name: "Printed",
+    action: "wake",
+    note: "Printed marks resolve into the avatar.",
+    duration: 0.42,
+    settings: { appearanceMode: "print", appearanceTarget: "avatar", entranceRipple: false },
+  },
+  {
+    id: "entrance-print-ripple",
+    name: "Printed + Ripple",
+    action: "wake",
+    note: "Printed marks resolve as a ridge crosses the sphere.",
+    duration: 0.62,
+    settings: {
+      appearanceMode: "print",
+      appearanceTarget: "avatar",
+      entranceRipple: true,
+      surfaceAmplitude: 0.45,
+      surfaceOriginX: -0.7,
+      surfaceOriginY: -0.6,
+    },
+  },
+  {
+    id: "entrance-fill-ripple",
+    name: "Fill + Ripple",
+    action: "wake",
+    note: "Ink fills the sphere as a ridge crosses it.",
+    duration: 0.62,
+    settings: {
+      appearanceMode: "fill",
+      appearanceTarget: "avatar",
+      entranceRipple: true,
+      surfaceAmplitude: 0.45,
+      surfaceOriginX: -0.7,
+      surfaceOriginY: -0.6,
+    },
+  },
+  {
     id: "rest",
     name: "Lava",
     action: "idle",
@@ -221,7 +286,7 @@ export const expressions: Expression[] = [
   },
   {
     id: "fill-wake",
-    name: "Fill wake",
+    name: "Fill",
     action: "wake",
     note: "Sparse ink reaches its resting fill.",
     settings: { appearanceMode: "fill" },
@@ -247,9 +312,11 @@ const surfaceKeys: (keyof SignalConfig)[] = [
   "surfaceShading",
 ];
 const keys: Record<AvatarAction, (keyof SignalConfig)[]> = {
-  idle: ["idleAmount"],
-  typing: ["typingMotion", "typingEnergy"],
+  idle: ["idleAmount", "idleSwirl", "swirlRate"],
+  typing: ["typingMotion", "typingEnergy", "pressureSpread", "pressureOffset", "typingSparks"],
   loading: [
+    "workingOrbit",
+    "orbitRate",
     "loadingMotion",
     "loadingStrength",
     "loadingRate",
@@ -260,7 +327,7 @@ const keys: Record<AvatarAction, (keyof SignalConfig)[]> = {
     ...surfaceKeys,
   ],
   dispatch: ["avatarDispatch", "dispatchEnergy", "sparkCount", "settle", ...surfaceKeys],
-  wake: ["appearanceMode", "settle", "appearanceTarget"],
+  wake: ["appearanceMode", "settle", "appearanceTarget", "entranceRipple", ...surfaceKeys],
 };
 export function expressionSettings(
   action: AvatarAction,
