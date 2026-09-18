@@ -12,6 +12,18 @@ debugger, and CLI documentation under identifiable chapter headings.
 
 ** Hypermedia Client - vrsjmp
 
+*** TODO Run VRSJMP in a web browser
+
+Reuse the VRSJMP UI in a browser, connected to a VRS runtime for pages,
+queries, actions, and live updates. Work out how browser access reaches
+the runtime and how desktop-specific actions behave.
+
+*** TODO Interactive VRSJMP hypermedia editor
+
+Invoke from the code editor to open a hypermedia definition in a web-based
+editor. Edit it alongside the real VRSJMP UI running in the browser, try its
+interactions, and write the changes back to the original source code.
+
 *** TODO Tokens in the vrsjmp input field
 
 Explore explicit input tokens for optional actions, e.g. attaching the current
@@ -823,6 +835,7 @@ I.e. killing connection does NOT terminate proc.
 * wishlist
 Record of "I want to be able to" thoughts
 ** Open a visual structured editor for building interfaces from source, with changes reflected in source
+See [[*Interactive VRSJMP hypermedia editor]].
 ** =(interactive)=-like mechanics for dealing with common user-input arguments
 E.g. =(completing-read)= and =(interactive "f")= in Emacs
 

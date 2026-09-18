@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type KeyboardEvent,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { flushSync } from "react-dom";
 import { Navigation } from "./navigation.mjs";
 import { createShowHandler } from "./transport.mjs";
@@ -13,7 +6,9 @@ import { menuEntries, defaultMenuSelection } from "./action-menu.mjs";
 import { defaultUiConfig, type Bridge, type Item, type Snapshot } from "./protocol";
 import { useAppearance } from "./hooks/useAppearance";
 import { useAvatarEvents } from "./hooks/useAvatarEvents";
-import { appearanceMask } from "./avatar/appearance-mask";
+import { pointerSelection } from "./pointer-selection.mjs";
+import { PalettePresence, presentedSnapshot } from "./palette-presence.mjs";
+import { animatePalette } from "./palette-motion";
 import { Avatar } from "./components/Avatar";
 import { SearchBar } from "./components/SearchBar";
 import { ActivityView } from "./components/ActivityView";
@@ -34,15 +29,42 @@ type Menu = { item: Item; row: number; query: string; selected: number };
 
 export function App({ bridge }: { bridge: Bridge }) {
   const [state, setState] = useState(initial);
-  const [navigation] = useState(() => new Navigation(bridge.transport, setState));
+  const palette = useRef<HTMLDivElement>(null);
+  const reducedMotion = useRef(false);
+  const [presence] = useState(() => new PalettePresence({
+    show: () => bridge.show(),
+    hide: () => bridge.transport.close(),
+    prepare: () => {
+      if (!palette.current) return;
+      if (palette.current.dataset.presence === "hidden" || !palette.current.dataset.presence) {
+        palette.current.style.opacity = "0";
+        palette.current.style.transform = reducedMotion.current ? "scale(1)" : "scale(.99)";
+      }
+      palette.current.style.visibility = "visible";
+    },
+    animate: (appearing: boolean) => animatePalette(palette.current, appearing, reducedMotion.current),
+  }));
+  const [navigation] = useState(() => new Navigation({
+    ...bridge.transport,
+    close: () => { void presence.hide().catch(console.error); },
+  }, setState));
   const [config, setConfig] = useState(defaultUiConfig);
   const [menu, setMenu] = useState<Menu | null>(null);
   const [message, setMessage] = useState("");
-  const [working, setWorking] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const presented = useRef(false);
+  const blurred = useRef(false);
+  const reopen = useRef<(() => Promise<void>) | null>(null);
+  const [pointerMoved] = useState(pointerSelection);
   const { dark, reduced } = useAppearance(config);
-  const avatar = useAvatarEvents(reduced);
+  reducedMotion.current = reduced;
+  const lastView = useRef<Snapshot | undefined>(undefined);
+  const view: Snapshot = presentedSnapshot(state, lastView.current);
+  useLayoutEffect(() => { lastView.current = view; }, [view]);
+  const lastMenu = useRef<Menu | null>(null);
+  useLayoutEffect(() => { if (state.visible) lastMenu.current = menu; }, [menu, state.visible]);
+  const shownMenu = state.visible ? menu : lastMenu.current;
+  const avatar = useAvatarEvents(reduced, state.visible, view.loading);
   const onOpen = useRef(avatar.open);
   onOpen.current = avatar.open;
   const selected = state.items[state.selected];
@@ -59,19 +81,19 @@ export function App({ bridge }: { bridge: Bridge }) {
     setMenu(null);
     focus();
   };
+  const openMenu = (row = state.selected) => {
+    const item = state.items[row];
+    if (state.loading || !item?.actions.some((action) => !action.primary)) return;
+    navigation.select(row);
+    setMenu({ item, row, query: "", selected: defaultMenuSelection(menuEntries(item)) });
+    focus();
+  };
   const toggleMenu = () => {
     if (menu) {
       closeMenu();
       return;
     }
-    if (state.loading || !selected?.actions.some((action) => !action.primary)) return;
-    setMenu({
-      item: selected,
-      row: state.selected,
-      query: "",
-      selected: defaultMenuSelection(menuEntries(selected)),
-    });
-    focus();
+    openMenu();
   };
   const activate = (row: number, action?: number) => {
     if (state.loading) return;
@@ -99,12 +121,15 @@ export function App({ bridge }: { bridge: Bridge }) {
     };
     const opening = createShowHandler(navigation, async () => {
       if (disposed) return;
+      blurred.current = false;
+      pointerMoved.reset();
       if (!presented.current) flushSync(() => onOpen.current());
-      await bridge.show();
+      await presence.show();
       if (disposed || !navigation.visible) return;
       presented.current = true;
       focus();
     });
+    reopen.current = opening;
     async function start() {
       for (const [event, callback] of [
         ["show-palette", () => void opening().catch(console.error)],
@@ -134,24 +159,40 @@ export function App({ bridge }: { bridge: Bridge }) {
     void start().catch((error) => setMessage(String(error)));
     return () => {
       disposed = true;
+      reopen.current = null;
       unlisten.forEach((off) => off());
       navigation.dispose();
+      presence.dispose();
     };
-  }, [bridge, navigation]);
+  }, [bridge, navigation, pointerMoved, presence]);
   useEffect(() => {
     if (!bridge.native) return;
+    let blurFrame = 0;
     const blur = () => {
-      setMenu(null);
-      navigation.suspend();
-      void bridge.blur().catch(console.error);
+      cancelAnimationFrame(blurFrame);
+      blurFrame = requestAnimationFrame(() => {
+        if (document.hasFocus() || !presented.current) return;
+        blurred.current = true;
+        setMenu(null);
+        navigation.suspend();
+        void presence.hide().catch(console.error);
+      });
+    };
+    const regainFocus = () => {
+      if (blurred.current && palette.current?.dataset.presence === "closing") {
+        blurred.current = false;
+        void reopen.current?.().catch(console.error);
+      }
+      focus();
     };
     window.addEventListener("blur", blur);
-    window.addEventListener("focus", focus);
+    window.addEventListener("focus", regainFocus);
     return () => {
+      cancelAnimationFrame(blurFrame);
       window.removeEventListener("blur", blur);
-      window.removeEventListener("focus", focus);
+      window.removeEventListener("focus", regainFocus);
     };
-  }, [bridge, navigation]);
+  }, [bridge, navigation, presence]);
   useEffect(() => {
     const interact = () => {
       if (navigation.visible) navigation.interact();
@@ -162,14 +203,6 @@ export function App({ bridge }: { bridge: Bridge }) {
     );
     return () => events.forEach((event) => window.removeEventListener(event, interact, true));
   }, [navigation]);
-  useEffect(() => {
-    if (!state.loading || !state.visible) {
-      setWorking(false);
-      return;
-    }
-    const timer = setTimeout(() => setWorking(true), 180);
-    return () => clearTimeout(timer);
-  }, [state.loading, state.visible]);
   useEffect(() => {
     if (state.loading || !state.visible || selected?.id !== menu?.item.id) setMenu(null);
   }, [state.loading, state.visible, selected?.id, menu?.item.id]);
@@ -183,10 +216,16 @@ export function App({ bridge }: { bridge: Bridge }) {
     const row = activeId ? document.getElementById(activeId) : null;
     const list = document.getElementById("activity-list");
     if (!row || !list) return;
-    const r = row.getBoundingClientRect(),
-      l = list.getBoundingClientRect();
-    if (r.top < l.top + 4) list.scrollTop -= l.top + 4 - r.top;
-    else if (r.bottom > l.bottom - 4) list.scrollTop += r.bottom - l.bottom + 4;
+    const revealSelection = () => {
+      const r = row.getBoundingClientRect(),
+        l = list.getBoundingClientRect();
+      if (r.top < l.top + 4) list.scrollTop -= l.top + 4 - r.top;
+      else if (r.bottom > l.bottom - 4) list.scrollTop += r.bottom - l.bottom + 4;
+    };
+    revealSelection();
+    const resize = new ResizeObserver(revealSelection);
+    resize.observe(list);
+    return () => resize.disconnect();
   }, [activeId, state.items]);
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.nativeEvent.isComposing) return;
@@ -226,15 +265,6 @@ export function App({ bridge }: { bridge: Bridge }) {
     if (menu) setMenu({ ...menu, query, selected: 0 });
     else navigation.search(query);
   };
-  const revealStyle: CSSProperties = reduced
-    ? {}
-    : avatar.flourish
-      ? {
-          maskImage: appearanceMask(avatar.progress, "print"),
-          maskSize: "100% 100%",
-          opacity: avatar.progress === 0 ? 0 : 1,
-        }
-      : { opacity: avatar.progress };
   return (
     <main
       className="palette-stage"
@@ -242,48 +272,38 @@ export function App({ bridge }: { bridge: Bridge }) {
       data-appearance={dark ? "dark" : "light"}
       data-reduced-motion={reduced}
       onKeyDown={onKeyDown}
+      onPointerMoveCapture={(event) => {
+        if (!pointerMoved(event)) event.stopPropagation();
+      }}
       onPointerDown={(event) => {
         if (event.target === event.currentTarget) navigation.close();
       }}
     >
       <div
-        className="palette flex w-full flex-col gap-2"
-        style={{ ...revealStyle, visibility: state.visible ? "visible" : "hidden" }}
+        ref={palette}
+        className="palette flex w-full flex-col"
         inert={!state.visible}
       >
         <SearchBar
           inputRef={input}
-          actions={
-            selected?.actions.some((action) => !action.primary) && (
-              <button
-                type="button"
-                className="search-actions flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[11px]"
-                disabled={state.loading}
-                onClick={toggleMenu}
-                aria-haspopup="listbox"
-                aria-expanded={Boolean(menu)}
-              >
-                Actions <kbd>⌘ K</kbd>
-              </button>
-            )
-          }
-          value={menu?.query ?? state.query}
+          pageTitle={shownMenu?.item.title ?? view.page?.title}
+          onBack={shownMenu ? closeMenu : view.canBack ? () => { navigation.back(); focus(); } : undefined}
+          value={shownMenu?.query ?? view.query}
           placeholder={
-            menu
+            shownMenu
               ? "Search actions…"
-              : state.page?.get_items === "root_items" && !state.page.on_cancel
+              : view.page?.get_items === "root_items" && !view.page.on_cancel
                 ? "Search…"
-                : (state.page?.prompt ?? "Search…")
+                : (view.page?.prompt ?? "Search…")
           }
           activeId={activeId}
-          loading={state.loading}
+          loading={view.loading}
           onChange={onChange}
           avatar={
             <Avatar
-              config={avatar.config}
-              mode={avatar.mode}
-              pulse={avatar.pulse}
-              working={working}
+              player={avatar.player}
+              revision={avatar.revision}
+              inputRef={input}
               active={state.visible}
               dark={dark}
               reduced={reduced}
@@ -291,59 +311,49 @@ export function App({ bridge }: { bridge: Bridge }) {
           }
         />
         <ActivityView
-          title={menu ? (selected?.title ?? "Actions") : (state.page?.title ?? "Home")}
-          back={
-            menu
-              ? closeMenu
-              : state.canBack
-                ? () => {
-                    navigation.back();
-                    focus();
-                  }
-                : undefined
-          }
-          showHeading={Boolean(menu) || state.canBack}
-          pageKey={
-            menu
-              ? `actions:${menu.item.id}`
-              : `${navigation.frames.length}:${state.page?.get_items}:${state.page?.args}`
-          }
+          active={state.visible}
           reduced={reduced}
+          pageKey={
+            shownMenu
+              ? `actions:${shownMenu.item.id}`
+              : `${view.page?.get_items}:${view.page?.args}:${view.items.length ? "rows" : view.loading ? "loading" : "empty"}`
+          }
         >
-          {menu ? (
+          {shownMenu ? (
             <ActionMenu
-              item={menu.item}
-              entries={entries}
-              selected={menu.selected}
+              item={shownMenu.item}
+              entries={menuEntries(shownMenu.item, shownMenu.query)}
+              selected={shownMenu.selected}
               onSelect={(selected) => {
-                if (menu.selected !== selected) setMenu({ ...menu, selected });
+                if (state.visible && shownMenu.selected !== selected) setMenu({ ...shownMenu, selected });
               }}
-              onActivate={(index) => activate(menu.row, index)}
+              onActivate={(index) => activate(shownMenu.row, index)}
             />
           ) : (
             <div
               id="activity-list"
               role="listbox"
-              aria-label={state.page?.title ?? "Commands"}
+              aria-label={view.page?.title ?? "Commands"}
               aria-busy={state.loading}
-              className="activity-list px-[6px] pb-[6px]"
+              className="activity-list"
             >
-              {state.items.map((item, index) => (
+              {view.items.map((item, index) => (
                 <ResultRow
                   key={`${item.id}:${index}`}
                   item={item}
                   index={index}
-                  selected={state.selected === index}
+                  selected={view.selected === index}
                   disabled={state.loading}
                   onSelect={() => {
                     if (state.selected !== index) navigation.select(index);
                   }}
                   onActivate={() => activate(index)}
+                  onActions={() => openMenu(index)}
                 />
               ))}
-              {!state.items.length && (
+              {!view.items.length && (
                 <div className="empty-state" role="status">
-                  {state.error ? (
+                  {view.error ? (
                     <>
                       <span>Couldn’t load items</span>
                       <button
@@ -353,7 +363,7 @@ export function App({ bridge }: { bridge: Bridge }) {
                         Try again
                       </button>
                     </>
-                  ) : state.loading ? (
+                  ) : view.loading ? (
                     "Working…"
                   ) : (
                     "No results"

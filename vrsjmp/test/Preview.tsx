@@ -60,6 +60,7 @@ const home = [
   item("Toggle Keyboard Backlight", "keyboard"),
   item("One primary action", "primary"),
   item("One additional action", "secondary"),
+  item("Save to Read Later", "save", undefined, "4 second request"),
 ];
 home[8].actions = [{ title: "Run", primary: true, on_click: "primary" }];
 home[9].actions = [{ title: "Inspect", primary: false, on_click: "inspect" }];
@@ -101,6 +102,7 @@ function previewBridge(
       },
       async query(p, query) {
         if (scenario === "Working") await new Promise((resolve) => setTimeout(resolve, 1800));
+        else if (p.get_items === "reading" && !query) await new Promise((resolve) => setTimeout(resolve, 800));
         if (scenario === "Error" || query === "error")
           throw new Error("The service could not complete this request. Try again.");
         const rows =
@@ -116,6 +118,11 @@ function previewBridge(
         );
       },
       async dispatch(form) {
+        if (form === "save") {
+          await new Promise((resolve) => setTimeout(resolve, 4000));
+          return { type: "close" };
+        }
+        if (form === "functions") return { type: "push_page", page: page("A long current page title that should stay on one line", "reading") };
         if (form === "read") return { type: "push_page", page: page("Read Later", "reading") };
         if (form === "tabs") return { type: "push_page", page: page("iCloud Tabs", "reading") };
         if (form === "copy") throw new Error("Preview message: copied the selected article URL.");
@@ -139,8 +146,8 @@ export function Preview() {
       style={{ background: `url(${wallpaper}) center/cover` }}
     >
       <div
-        className="w-full max-w-[608px] shrink-0"
-        style={{ height: "min(640px,calc(100dvh - 84px))" }}
+        className="w-full max-w-[688px] shrink-0"
+        style={{ height: "min(560px,calc(100dvh - 84px))" }}
       >
         <App key={scenario} bridge={bridge} />
       </div>

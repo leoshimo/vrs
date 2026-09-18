@@ -18,7 +18,7 @@ export function ActionMenu({
       id="activity-list"
       role="listbox"
       aria-label={`Actions for ${item.title}`}
-      className="activity-list px-[6px] pb-[6px]"
+      className="activity-list"
     >
       {entries.length ? (
         entries.map(({ command, index }, i) => (
@@ -29,7 +29,7 @@ export function ActionMenu({
             id={`action-${index}`}
             key={index}
             tabIndex={-1}
-            className="result-row flex min-h-[34px] w-full items-center gap-3 rounded-[14px] px-3 py-[6px] text-left text-sm"
+            className="result-row flex w-full items-center text-left"
             data-separator={
               (i > 0 && !command.primary && entries[i - 1].command.primary) || undefined
             }

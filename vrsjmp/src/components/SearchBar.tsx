@@ -1,7 +1,8 @@
 import type { ReactNode, Ref } from "react";
 export function SearchBar({
   avatar,
-  actions,
+  pageTitle,
+  onBack,
   value,
   placeholder,
   activeId,
@@ -10,7 +11,8 @@ export function SearchBar({
   inputRef,
 }: {
   avatar: ReactNode;
-  actions?: ReactNode;
+  pageTitle?: string;
+  onBack?: () => void;
   value: string;
   placeholder: string;
   activeId?: string;
@@ -20,13 +22,13 @@ export function SearchBar({
 }) {
   return (
     <div
-      className="search-bar surface flex h-12 items-center gap-2 rounded-[18px] py-[3px] pl-2 pr-3"
+      className="search-bar surface flex items-center"
       data-tauri-drag-region
     >
       {avatar}
       <input
         ref={inputRef}
-        className="min-w-0 flex-1 border-0 bg-transparent p-0 text-base outline-none"
+        className="min-w-0 flex-1 border-0 bg-transparent p-0 outline-none"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
@@ -42,7 +44,20 @@ export function SearchBar({
         autoCapitalize="off"
         spellCheck={false}
       />
-      {actions}
+      {onBack && (
+        <button
+          type="button"
+          className="page-tag"
+          onClick={onBack}
+          aria-label={`Back from ${pageTitle ?? "page"} (Escape)`}
+          title={pageTitle}
+        >
+          {!value && <span>{pageTitle}</span>}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+            <path d="m12 5-7 7 7 7M5 12h14" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }

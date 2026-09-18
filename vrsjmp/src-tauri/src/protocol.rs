@@ -116,7 +116,24 @@ pub fn action_request(item: &str) -> Result<Form> {
     if !matches!(item, Form::List(_)) {
         bail!("Expected an item");
     }
-    Ok(service_request("on_click", vec![quoted(item)]))
+    let request = service_request(
+        "on_click_wait",
+        vec![quoted(item), Form::List(vec![Form::symbol("self")])],
+    );
+    // Wait in this request's process, not in the palette service. Closing the
+    // window can discard the response without cancelling the captured action.
+    Form::from_expr(&format!(
+        r#"(let ((outcome {request}))
+          (if (and! (list? outcome) (eq? (get outcome 0) :pending_actions))
+            (begin
+              (def completed (map (get outcome :ids) (fn (id)
+                (get (recv (list :vrsjmp_action id '_)) 2))))
+              (def failure (get (filter completed (fn (value)
+                (and! (list? value) (eq? (get value 0) :error)))) 0))
+              (if failure failure (get outcome :response)))
+            outcome))"#
+    ))
+    .map_err(Into::into)
 }
 
 pub fn items(value: Form) -> Result<Vec<Item>> {
@@ -212,6 +229,11 @@ pub fn action(value: Form) -> Result<Action> {
     let Form::List(ref values) = value else {
         bail!("Unexpected action response: {value}");
     };
+    if values.first() == Some(&Form::keyword("error")) {
+        if let Some(Form::String(message)) = values.get(1) {
+            bail!("{message}");
+        }
+    }
     if values.first() != Some(&Form::keyword("push_page")) {
         bail!("Unexpected action response: {value}");
     }
