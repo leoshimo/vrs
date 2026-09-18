@@ -48,6 +48,7 @@ export function CompositionLesson({
         <div className="response-actions">
           <Button onClick={() => playback.act('typing')}>Type</Button>
           <Button onClick={() => playback.act('submit')}>Submit</Button>
+          <Button onClick={() => playback.act('complete')}>Complete</Button>
           <Button
             aria-pressed={playback.working}
             onClick={() => playback.act(playback.working ? 'idle' : 'working')}
@@ -68,7 +69,7 @@ export function CompositionLesson({
           <p>
             Each assignment drives a motion curve and a color curve. Idle holds
             its signal; Working holds while work is active. A keypress or
-            submission adds a pulse.
+            submission adds a Typing pulse. Complete fires when an action succeeds.
           </p>
           <table>
             <thead>

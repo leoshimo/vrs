@@ -21,7 +21,7 @@ test('comparisons isolate one expression and leave the assigned setup intact', (
   );
   advance(preview, 0.4);
   assert.equal(preview.signals().motion, 0);
-  preview.trigger('submit');
+  preview.trigger('complete');
   advance(preview, 0.08);
   assert.equal(preview.signals().motion, 0);
   preview.trigger('typing');

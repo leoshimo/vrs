@@ -27,7 +27,10 @@ const palettes = [
   "dusk",
 ];
 const waveKinds = ["ripple", "sparks", "echo", "bloom"];
-export type PlaybackAction = Assignment | "hide";
+export type PlaybackAction = Assignment | "submit" | "hide";
+export function inputAssignment(action: Assignment | "submit"): Assignment {
+  return action === "submit" ? "typing" : action;
+}
 type Drive = {
   motion: ResponseCurve;
   color: ResponseCurve;
@@ -133,6 +136,11 @@ export class ExpressionPlayer {
     if (action === "hide") {
       this.visible = false;
       return;
+    }
+    action = inputAssignment(action);
+    if (action === "complete") {
+      this.settle(assigned(this.setup, "working"));
+      this.working = false;
     }
     if (action === "idle" || action === "working") {
       this.settle(assigned(this.setup, "working"));

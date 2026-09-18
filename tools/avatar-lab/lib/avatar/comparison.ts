@@ -5,7 +5,7 @@ import {
   type AvatarExpression,
   type AvatarSetup,
 } from './workspace';
-import type { PlaybackAction } from '../../../../vrsjmp/src/avatar/expression-player';
+import { inputAssignment, type PlaybackAction } from '../../../../vrsjmp/src/avatar/expression-player';
 
 export type Comparison = { id: string | null; input: Assignment };
 export const comparisonKey = (p: Comparison) => `${p.input}:${p.id ?? 'none'}`;
@@ -13,8 +13,9 @@ export function comparisonAction(
   input: Assignment,
   action: PlaybackAction | 'reset' | 'resetHidden',
 ): PlaybackAction | null {
-  if (input === 'working' && ['idle', 'reset', 'resetHidden'].includes(action))
+  if (input === 'working' && ['idle', 'complete', 'reset', 'resetHidden'].includes(action))
     return 'idle';
+  if (action === 'submit') return input === inputAssignment(action) ? input : null;
   return input === action ? input : null;
 }
 export function defaultInput(e: AvatarExpression): Assignment {

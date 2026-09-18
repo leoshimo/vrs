@@ -58,13 +58,13 @@ test("initial page resolves before showing; cancelled openings stay hidden", asy
 });
 const item = title => ({ id: title, title, on_click: title });
 function setup() {
-    const queries = [], actions = [], starts = [], timers = new Map();
+    const queries = [], actions = [], starts = [], reasons = [], timers = new Map();
     let nextTimer = 0, closed = 0, now = 0;
     const nav = new Navigation({
         begin: () => new Promise((resolve, reject) => starts.push({resolve, reject})),
         query: (page, text) => new Promise((resolve, reject) => queries.push({page, text, resolve, reject})),
         dispatch: form => new Promise((resolve, reject) => actions.push({form, resolve, reject})),
-        close: () => closed++,
+        close: reason => { reasons.push(reason); closed++; },
     }, () => {}, {
         now: () => now,
         setTimeout: (fn, delay) => { timers.set(++nextTimer, {fn, at: now + delay}); return nextTimer; },
@@ -81,8 +81,30 @@ function setup() {
         }
         now = end;
     };
-    return {nav, queries, actions, starts, timers, advance, closed: () => closed};
+    return {nav, queries, actions, starts, timers, advance, reasons, closed: () => closed};
 }
+
+test("only a successful closing action requests a completion exit", async () => {
+    for (const result of [{type: "close"}, {type: "refresh"}, {type: "push_page", page: rootPage()}, new Error("failed")]) {
+        const t = setup(); t.nav.open();
+        t.queries[0].resolve([item("Save")]); await tick();
+        const pending = t.nav.activate();
+        assert.deepEqual(t.reasons, []);
+        if (result instanceof Error) t.actions[0].reject(result);
+        else t.actions[0].resolve(result);
+        await pending;
+        assert.deepEqual(t.reasons, result.type === "close" ? ["complete"] : []);
+    }
+});
+
+test("an action finishing after dismissal does not run Complete", async () => {
+    const t = setup(); t.nav.open();
+    t.queries[0].resolve([item("Save")]); await tick();
+    const pending = t.nav.activate();
+    t.nav.close();
+    t.actions[0].resolve({type: "close"}); await pending;
+    assert.deepEqual(t.reasons, ["dismiss"]);
+});
 
 test("activating a row selects it and Back restores query, results, and selection", async () => {
     const t = setup(); t.nav.open(rootPage(), "Read");

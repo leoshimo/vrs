@@ -22,6 +22,7 @@ import { applyPlaceholderAccent } from '@/lib/avatar/preview-colors';
 import { comparisonSetup, comparisonAction } from '@/lib/avatar/comparison';
 import { InputCurves } from './InputCurves';
 import { SignalTimeline } from '@/lib/avatar/signal-timeline';
+import { animatePalette } from '../../../vrsjmp/src/palette-motion';
 
 export type PreviewCommand = {
   serial: number;
@@ -75,6 +76,8 @@ export function ExpressionPreview({
   label?: string;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
+  const transition = useRef<ReturnType<typeof animatePalette> | null>(null);
   const candidateId = candidate?.id;
   const adjusted = useMemo(
     () =>
@@ -97,7 +100,10 @@ export function ExpressionPreview({
   const commandSerial = useRef<number | undefined>(command?.serial);
   useLayoutEffect(() => {
     renderer.current = registerPreview(canvas.current!, player.current!);
-    return () => renderer.current?.dispose();
+    return () => {
+      transition.current?.cancel();
+      renderer.current?.dispose();
+    };
   }, []);
   useLayoutEffect(() => {
     if (engine && player.current !== engine) {
@@ -113,7 +119,7 @@ export function ExpressionPreview({
     renderer.current?.update({
       dark,
       resolution: size,
-      live: live && !reduce,
+      live: live && !reduce && (Boolean(assignment) || shown !== false),
       paused,
       onFrame,
       trackTime: curves || Boolean(onSample),
@@ -130,10 +136,27 @@ export function ExpressionPreview({
       if (command.action === 'resetHidden') player.current.trigger('hide');
       renderer.current?.update({ player: player.current });
     } else player.current!.trigger(command.action);
+    if (!assignment && stage.current) {
+      transition.current?.cancel();
+      if (command.action === 'complete') {
+        transition.current = animatePalette(stage.current, false, reduce, 'complete');
+      } else if (command.action === 'hide' || command.action === 'resetHidden') {
+        stage.current.style.opacity = '0';
+        stage.current.style.visibility = 'hidden';
+        stage.current.dataset.presence = 'hidden';
+      } else if (stage.current.dataset.presence === 'hidden' || stage.current.dataset.presence === 'closing') {
+        stage.current.style.visibility = 'visible';
+        transition.current = animatePalette(stage.current, true, reduce);
+      }
+    }
     if (reduce) for (let i = 0; i < 16; i++) player.current!.frame(0.064);
     renderer.current?.update({});
     // Commands are delivered once; changing an expression does not repeat the gesture.
   }, [command, adjusted, reduce, assignment]);
+  useLayoutEffect(() => {
+    if (paused) transition.current?.pause();
+    else transition.current?.play();
+  }, [paused, command]);
   const style = {
     '--preview-size': `${bar ? 42 : 42 * zoom}px`,
     '--preview-ratio': (size + 80) / size,
@@ -146,7 +169,7 @@ export function ExpressionPreview({
   const Visual = onInspect ? 'button' : 'div';
   return (
     <div className="expression-render" data-bar={bar} data-dark={dark}>
-      <div className="expression-stage">
+      <div className="expression-stage" ref={stage}>
         <Visual
           className="preview-visual"
           onClick={onInspect}

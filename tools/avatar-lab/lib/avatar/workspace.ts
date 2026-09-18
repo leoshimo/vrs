@@ -139,7 +139,7 @@ function convert(old: Setup): AvatarSetup {
       working: byId(old.events.working),
       open: byId(old.events.open),
       openAfterIdle: byId(old.events.flourish),
-      submit: byId(old.events.submit),
+      complete: byId(old.events.submit),
     },
   };
   const addVariant = (
@@ -197,7 +197,7 @@ export const proposedAssignments: AvatarSetup['assignments'] = {
   working: 'working',
   open: 'printed-open',
   openAfterIdle: 'entrance-print-ripple',
-  submit: 'sparks',
+  complete: 'sparks',
 };
 export function simplifyWorkspace(setup: AvatarSetup): AvatarSetup {
   const defaults = [...assignedSetup().expressions, ...convert(makeLabSetup()).expressions];
@@ -225,8 +225,11 @@ export function simplifyWorkspace(setup: AvatarSetup): AvatarSetup {
     expressions,
     assignments: Object.fromEntries(
       assignmentNames.map((a) => {
+        const legacy = setup.assignments as AvatarSetup['assignments'] & { submit?: string | null };
+        const saved = a === 'complete' && !Object.hasOwn(legacy, 'complete')
+          ? legacy.submit : setup.assignments[a];
         const id = migrateOpen && a === 'open' && setup.assignments[a] === 'bloom'
-          ? 'printed-open' : setup.assignments[a];
+          ? 'printed-open' : saved;
         return [
           a,
           id === null || expressions.some((e) => e.id === id)

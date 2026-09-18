@@ -235,7 +235,7 @@ export class Navigation {
                 frame.items = [];
                 frame.selected = 0;
                 frame.loaded = false;
-                if (this.visible) this.close(false);
+                if (this.visible) this.close(false, "complete");
             } else if (result.type === "refresh") {
                 frame.loaded = false;
                 if (this.visible) this.search(frame.query, true, true);
@@ -283,9 +283,9 @@ export class Navigation {
     cancelPage(page) {
         if (page?.on_cancel) Promise.resolve(this.transport.dispatch(page.on_cancel)).catch(console.error);
     }
-    close(cancel = true) {
+    close(cancel = true, reason = "dismiss") {
         if (cancel) this.cancelPage(this.current?.page);
         this.suspend();
-        this.transport.close();
+        this.transport.close(reason);
     }
 }

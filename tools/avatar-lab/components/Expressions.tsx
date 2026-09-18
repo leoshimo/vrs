@@ -239,6 +239,12 @@ export function Expressions() {
           >
             {playback.working ? 'Idle' : 'Work'}
           </Button>
+          <Button
+            disabled={!playback.shown}
+            onClick={() => playback.act('complete')}
+          >
+            Complete
+          </Button>
         </fieldset>
         <fieldset className="routine-controls" aria-label="Playback">
           <legend>Playback</legend>
