@@ -1,16 +1,17 @@
 import type { Assignment, AvatarExpression } from './workspace';
 import type { PlaybackAction } from '../../../../vrsjmp/src/avatar/expression-player';
+import { completionExitMs } from '../../../../vrsjmp/src/palette-motion';
 export type PlaybackStep = {
   at: number;
   action: PlaybackAction;
   query?: string;
 };
 export type PlaybackPlan = { duration: number; steps: PlaybackStep[] };
-export type Routine = 'typing' | 'submit' | 'typing-submit' | 'entrances' | 'sequence';
+export type Routine = 'typing' | 'complete' | 'typing-submit' | 'entrances' | 'sequence';
 export const routineNames: [Routine, string][] = [
   ['typing', 'Typing'],
-  ['submit', 'Submit'],
-  ['typing-submit', 'Typing → Submit'],
+  ['complete', 'Complete'],
+  ['typing-submit', 'Typing → Complete'],
   ['entrances', 'Entrances'],
   ['sequence', 'Full'],
 ];
@@ -25,7 +26,16 @@ export function routinePlan(routine: Routine): PlaybackPlan {
     ],
   };
   if (routine === 'sequence') return sequencePlan();
-  if (routine === 'submit') return repeatPlan('submit');
+  if (routine === 'complete') return {
+    duration: 5000,
+    steps: [
+      { at: 0, action: 'open', query: '' },
+      { at: 700, action: 'submit' },
+      { at: 800, action: 'working' },
+      { at: 3200, action: 'complete' },
+      { at: 3200 + completionExitMs, action: 'hide' },
+    ],
+  };
   const typing = {
     duration: routine === 'typing' ? 5000 : 7500,
     steps: [700, 1050, 1500, 1750, 2300].map((at, i) => ({
@@ -38,7 +48,14 @@ export function routinePlan(routine: Routine): PlaybackPlan {
     ? typing
     : {
         ...typing,
-        steps: [...typing.steps, { at: 3900, action: 'submit' }],
+        steps: [
+          { at: 0, action: 'open', query: '' },
+          ...typing.steps,
+          { at: 3900, action: 'submit' },
+          { at: 4000, action: 'working' },
+          { at: 5500, action: 'complete' },
+          { at: 5500 + completionExitMs, action: 'hide' },
+        ],
       };
 }
 
@@ -103,8 +120,8 @@ export function sequencePlan(): PlaybackPlan {
       ),
       { at: 9500, action: 'submit' },
       { at: 11500, action: 'working' },
-      { at: 16500, action: 'idle' },
-      { at: 19500, action: 'hide' },
+      { at: 16500, action: 'complete' },
+      { at: 16500 + completionExitMs, action: 'hide' },
       { at: 21000, action: 'open', query: '' },
       { at: 23500, action: 'hide' },
     ],
@@ -129,7 +146,7 @@ export function repeatPlan(
       duration: 4000,
       steps: [0, 260, 620, 1000].map((at) => ({ at, action: assignment })),
     };
-  if (assignment === 'submit')
+  if (assignment === 'complete')
     return {
       duration: settle + 500,
       steps: [

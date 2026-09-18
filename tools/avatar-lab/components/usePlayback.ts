@@ -13,7 +13,8 @@ import {
   type Routine,
 } from '@/lib/avatar/playback';
 import { frameTask } from '@/lib/avatar/frame-clock';
-import type { PlaybackAction } from '../../../vrsjmp/src/avatar/expression-player';
+import { inputAssignment, type PlaybackAction } from '../../../vrsjmp/src/avatar/expression-player';
+import { completionExitMs } from '../../../vrsjmp/src/palette-motion';
 import type { PreviewCommand } from './ExpressionPreview';
 export type PlaybackMode = Routine | 'manual';
 
@@ -35,12 +36,14 @@ export function usePlayback(setup: AvatarSetup) {
   const clock = useRef(new PlaybackClock(routinePlan('sequence')));
   const pauseRef = useRef(false),
     remaining = useRef(0);
+  const completing = useRef(0);
   const driver = useRef<ReturnType<typeof frameTask> | null>(null);
   const send = useCallback(
     (action: PlaybackAction | 'reset' | 'resetHidden') => {
       setCommand((c) => ({ serial: c.serial + 1, action }));
       setTransient(null);
       remaining.current = 0;
+      completing.current = 0;
       if (action === 'reset' || action === 'resetHidden') {
         setShown(action === 'reset');
         setWorking(false);
@@ -50,9 +53,14 @@ export function usePlayback(setup: AvatarSetup) {
         if (action === 'idle' || action === 'working')
           setWorking(action === 'working');
         else {
-          setTransient(action);
+          const assignment = inputAssignment(action);
+          setTransient(assignment);
           remaining.current =
-            responseDuration(assigned(current.current, action)) * 1000;
+            responseDuration(assigned(current.current, assignment)) * 1000;
+          if (action === 'complete') {
+            setWorking(false);
+            completing.current = completionExitMs;
+          }
         }
       }
       driver.current?.wake();
@@ -62,6 +70,10 @@ export function usePlayback(setup: AvatarSetup) {
   useEffect(() => {
     const task = frameTask((delta) => {
       if (pauseRef.current) return false;
+      if (completing.current > 0) {
+        completing.current -= delta;
+        if (completing.current <= 0) send('hide');
+      }
       if (remaining.current > 0) {
         remaining.current -= delta;
         if (remaining.current <= 0) setTransient(null);
@@ -70,7 +82,7 @@ export function usePlayback(setup: AvatarSetup) {
         if (step.query !== undefined) setQuery(step.query);
         send(step.action);
       }
-      return clock.current.running || remaining.current > 0;
+      return clock.current.running || remaining.current > 0 || completing.current > 0;
     });
     driver.current = task;
     return () => {

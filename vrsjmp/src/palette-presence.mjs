@@ -1,11 +1,12 @@
 // Serialize native visibility changes; an interrupted exit must never hide a
 // window that has since reopened.
 export class PalettePresence {
-  constructor({ show, hide, prepare, animate }) {
+  constructor({ show, hide, prepare, animate, onHidden }) {
     this.showNative = show;
     this.hideNative = hide;
     this.prepare = prepare;
     this.animate = animate;
+    this.onHidden = onHidden;
     this.visible = false;
     this.revision = 0;
     this.native = Promise.resolve();
@@ -30,15 +31,16 @@ export class PalettePresence {
     await this.enqueue(this.showNative, revision);
     if (revision === this.revision) this.animation = this.animate(true);
   }
-  async hide() {
+  async hide(reason = "dismiss") {
     if (!this.visible) return;
     const revision = ++this.revision;
     this.visible = false;
     this.animation?.cancel();
-    const animation = this.animate(false);
+    const animation = this.animate(false, reason);
     this.animation = animation;
     await animation.finished;
     await this.enqueue(this.hideNative, revision);
+    if (revision === this.revision) this.onHidden?.();
   }
   dispose() {
     this.revision++;

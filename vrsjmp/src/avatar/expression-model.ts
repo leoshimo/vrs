@@ -6,7 +6,7 @@ export const assignmentNames = [
   "working",
   "open",
   "openAfterIdle",
-  "submit",
+  "complete",
 ] as const;
 export type Assignment = (typeof assignmentNames)[number];
 export const assignmentLabels: Record<Assignment, string> = {
@@ -15,7 +15,7 @@ export const assignmentLabels: Record<Assignment, string> = {
   working: "Working",
   open: "Open",
   openAfterIdle: "Open after idle",
-  submit: "Submit",
+  complete: "Complete",
 };
 export type MotionKind =
   | "lava"
@@ -98,7 +98,7 @@ export function previewAssignment(expression: AvatarExpression): Assignment {
   if (expression.patterns.some((p) => ["nudge", "tilt", "pressure", "ruffle"].includes(p.kind)))
     return "typing";
   if (expression.patterns.some((p) => ["sparks", "echo", "bloom", "gather"].includes(p.kind)))
-    return "submit";
+    return "complete";
   return "working";
 }
 export function remix(

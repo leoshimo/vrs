@@ -29,12 +29,16 @@ type Menu = { item: Item; row: number; query: string; selected: number };
 
 export function App({ bridge }: { bridge: Bridge }) {
   const [state, setState] = useState(initial);
+  const [rendered, setRendered] = useState(false);
+  const onComplete = useRef(() => {});
   const palette = useRef<HTMLDivElement>(null);
   const reducedMotion = useRef(false);
   const [presence] = useState(() => new PalettePresence({
     show: () => bridge.show(),
     hide: () => bridge.transport.close(),
+    onHidden: () => setRendered(false),
     prepare: () => {
+      setRendered(true);
       if (!palette.current) return;
       if (palette.current.dataset.presence === "hidden" || !palette.current.dataset.presence) {
         palette.current.style.opacity = "0";
@@ -42,11 +46,15 @@ export function App({ bridge }: { bridge: Bridge }) {
       }
       palette.current.style.visibility = "visible";
     },
-    animate: (appearing: boolean) => animatePalette(palette.current, appearing, reducedMotion.current),
+    animate: (appearing: boolean, reason?: "dismiss" | "complete") =>
+      animatePalette(palette.current, appearing, reducedMotion.current, reason),
   }));
   const [navigation] = useState(() => new Navigation({
     ...bridge.transport,
-    close: () => { void presence.hide().catch(console.error); },
+    close: (reason) => {
+      if (reason === "complete") onComplete.current();
+      void presence.hide(reason).catch(console.error);
+    },
   }, setState));
   const [config, setConfig] = useState(defaultUiConfig);
   const [menu, setMenu] = useState<Menu | null>(null);
@@ -64,7 +72,8 @@ export function App({ bridge }: { bridge: Bridge }) {
   const lastMenu = useRef<Menu | null>(null);
   useLayoutEffect(() => { if (state.visible) lastMenu.current = menu; }, [menu, state.visible]);
   const shownMenu = state.visible ? menu : lastMenu.current;
-  const avatar = useAvatarEvents(reduced, state.visible, view.loading);
+  const avatar = useAvatarEvents(reduced, state.visible || rendered, state.visible && view.loading);
+  onComplete.current = avatar.complete;
   const onOpen = useRef(avatar.open);
   onOpen.current = avatar.open;
   const selected = state.items[state.selected];
@@ -304,7 +313,7 @@ export function App({ bridge }: { bridge: Bridge }) {
               player={avatar.player}
               revision={avatar.revision}
               inputRef={input}
-              active={state.visible}
+              active={rendered}
               dark={dark}
               reduced={reduced}
             />

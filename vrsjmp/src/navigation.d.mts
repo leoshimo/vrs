@@ -25,5 +25,5 @@ export class Navigation {
   back(): void;
   suspend(): void;
   dispose(): void;
-  close(cancel?: boolean): void;
+  close(cancel?: boolean, reason?: "dismiss" | "complete"): void;
 }

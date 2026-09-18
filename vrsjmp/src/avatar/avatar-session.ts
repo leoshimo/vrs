@@ -34,4 +34,7 @@ export class AvatarSession {
   submit() {
     if (this.visible) this.trigger("submit");
   }
+  complete() {
+    if (this.visible) this.trigger("complete");
+  }
 }

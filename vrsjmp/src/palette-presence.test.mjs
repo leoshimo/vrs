@@ -9,20 +9,37 @@ const deferred = () => {
 };
 const tick = () => new Promise(resolve => setImmediate(resolve));
 function fixture(native = {}) {
-  const calls = [], animations = [];
+  const calls = [], animations = [], hidden = [];
   const presence = new PalettePresence({
     show: () => { calls.push("show"); return native.show?.(); },
     hide: () => { calls.push("hide"); return native.hide?.(); },
     prepare: () => calls.push("prepare"),
-    animate: appearing => {
+    onHidden: () => hidden.push(true),
+    animate: (appearing, reason) => {
       const done = deferred();
-      const animation = { appearing, finished: done.promise, finish: done.resolve, cancel: done.resolve };
+      const animation = { appearing, reason, finished: done.promise, finish: done.resolve, cancel: done.resolve };
       animations.push(animation);
       return animation;
     },
   });
-  return { presence, calls, animations };
+  return { presence, calls, animations, hidden };
 }
+
+test("completion keeps the renderer alive until native hide and can be interrupted", async () => {
+  const t = fixture();
+  await t.presence.show();
+  const closing = t.presence.hide("complete");
+  assert.equal(t.animations.at(-1).reason, "complete");
+  assert.equal(t.hidden.length, 0);
+  await t.presence.show();
+  await closing;
+  assert.equal(t.hidden.length, 0);
+  const completed = t.presence.hide("complete");
+  t.animations.at(-1).finish();
+  await completed;
+  assert.equal(t.hidden.length, 1);
+  assert.equal(t.calls.at(-1), "hide");
+});
 
 test("hide keeps the native window until the exit completes", async () => {
   const t = fixture();

@@ -35,7 +35,7 @@ export function assignedSetup(): AvatarSetup {
       working: "working",
       open: "printed-open",
       openAfterIdle: "entrance-print-ripple",
-      submit: "sparks",
+      complete: "sparks",
     },
     expressions: [
       expression("rest", "Lava", [{ kind: "lava", settings: { idleAmount: 1.6 } }]),

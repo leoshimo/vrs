@@ -36,7 +36,7 @@ export type Transport = {
   begin(): Promise<Action>;
   query(page: Page, query: string): Promise<Item[]>;
   dispatch(form: string): Promise<Action>;
-  close(): void;
+  close(reason?: "dismiss" | "complete"): void;
 };
 export type Bridge = {
   native: boolean;

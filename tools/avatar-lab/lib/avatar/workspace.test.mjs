@@ -30,7 +30,7 @@ test('simplified draft loads the proposal, removes copies and retains tuning', (
     custom: true,
   });
   previous.assignments.open = 'gather';
-  previous.assignments.submit = 'custom-remix';
+  previous.assignments.complete = 'custom-remix';
   const next = readWorkspace(null, null, JSON.stringify(previous));
   assert.deepEqual(next.assignments, proposedAssignments);
   assert.equal(next.expressions.length, 22);
@@ -101,20 +101,20 @@ test('every expression can be driven by every assignment without non-finite outp
       );
     }
 });
-test('successive submissions add waves to the same source signal', () => {
+test('successive completions add waves to the same source signal', () => {
   const setup = makeWorkspace();
-  setup.assignments.submit = 'surface-react';
+  setup.assignments.complete = 'surface-react';
   setup.expressions.find(
     (e) => e.id === 'surface-react',
   ).patterns[0].settings.surfaceDuration = 1;
   const p = new ExpressionPlayer(setup);
-  p.trigger('submit');
+  p.trigger('complete');
   step(p, 0.25);
-  p.trigger('submit');
-  assert.ok(p.inspect('submit', 0.03).ripple > 0);
-  assert.equal(p.inspect('submit', 0.22).ripple, 0);
+  p.trigger('complete');
+  assert.ok(p.inspect('complete', 0.03).ripple > 0);
+  assert.equal(p.inspect('complete', 0.22).ripple, 0);
   step(p, 0.1);
-  assert.ok(p.inspect('submit', 0.28).ripple > 0);
+  assert.ok(p.inspect('complete', 0.28).ripple > 0);
 });
 test('Sparks uses the same driver for Typing and gives successive bursts different angular signals', () => {
   const setup = makeWorkspace();
@@ -164,18 +164,18 @@ test('working release fades the same field without adding a new wave', () => {
   p.trigger('idle');
   const after = p.frame(0.008).u_mixAgitation[0];
   assert.ok(after > 0 && after < before);
-  assert.equal(p.inspect('submit').input, 0);
+  assert.equal(p.inspect('complete').input, 0);
   step(p, 1);
   assert.ok(p.frame(0).u_mixAgitation[0] < 0.001);
 });
 
 test('differently tuned ripples retain separate spatial channels while repeated taps share one curve', () => {
   const setup = makeWorkspace();
-  setup.assignments.submit = 'surface-react';
+  setup.assignments.complete = 'surface-react';
   const p = new ExpressionPlayer(setup);
-  p.trigger('submit');
+  p.trigger('complete');
   step(p, 0.1);
-  p.trigger('submit');
+  p.trigger('complete');
   const first = p.frame(0);
   assert.equal(
     first['u_waveInfluences[0]']
@@ -187,7 +187,7 @@ test('differently tuned ripples retain separate spatial channels while repeated 
   setup.expressions.find(
     (e) => e.id === 'surface-react',
   ).patterns[0].settings.surfaceOriginX = 0.8;
-  p.trigger('submit');
+  p.trigger('complete');
   step(p, 0.03);
   const next = p.frame(0);
   assert.deepEqual(next['u_waveProfiles[0]'].slice(0, 3), oldOrigin);
@@ -205,4 +205,18 @@ test('subtle Open migrates the former default once while retaining later choices
   assert.equal(next.assignments.open, 'printed-open');
   next.assignments.open = 'bloom';
   assert.equal(readWorkspace(JSON.stringify(next)).assignments.open, 'bloom');
+});
+
+test('saved Submit assignment migrates to Complete while Typing and appearance stay intact', () => {
+  const original = makeWorkspace();
+  original.assignments.submit = 'echo';
+  delete original.assignments.complete;
+  original.assignments.typing = 'pressure-dimple';
+  const migrated = readWorkspace(JSON.stringify(original));
+  assert.equal(migrated.assignments.complete, 'echo');
+  assert.equal(migrated.assignments.typing, 'pressure-dimple');
+  assert.equal(Object.hasOwn(migrated.assignments, 'submit'), false);
+  assert.deepEqual(migrated.appearance, original.appearance);
+  migrated.assignments.complete = null;
+  assert.equal(readWorkspace(JSON.stringify(migrated)).assignments.complete, null);
 });

@@ -27,5 +27,9 @@ export function useAvatarEvents(reduced: boolean, visible: boolean, working: boo
       session.submit();
       setRevision((n) => n + 1);
     },
+    complete: () => {
+      session.complete();
+      setRevision((n) => n + 1);
+    },
   };
 }

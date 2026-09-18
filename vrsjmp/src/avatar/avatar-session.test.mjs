@@ -64,6 +64,36 @@ test("reduced motion completes a printed entrance without leaving an invisible a
   assert.equal(session.player.frame(0).u_appearance, 1);
   assert.equal(session.player.frame(0).u_enableOrb, 1);
 });
+
+test("Submit adds the same input as Typing without emitting Complete", () => {
+  const typed = new AvatarSession(), submitted = new AvatarSession();
+  typed.open(0); submitted.open(0);
+  advance(typed.player, 1); advance(submitted.player, 1);
+  typed.type(); submitted.submit();
+  advance(typed.player, 0.08); advance(submitted.player, 0.08);
+  assert.deepEqual(submitted.player.frame(0), typed.player.frame(0));
+  assert.ok(submitted.player.signals("typing").motion > 0);
+  assert.equal(submitted.player.signals("complete").motion, 0);
+});
+
+test("Complete releases Working and remains rendered until the exit finishes", () => {
+  const session = new AvatarSession();
+  session.open(0);
+  session.working(true);
+  advance(session.player, 2);
+  session.complete();
+  advance(session.player, 0.08);
+  assert.equal(session.player.working, false);
+  assert.ok(session.player.signals("complete").motion > 0);
+  assert.equal(session.player.frame(0).u_enableOrb, 1);
+  const time = session.player.time;
+  advance(session.player, 0.12);
+  assert.ok(session.player.time > time);
+  session.hide(2300);
+  assert.equal(session.player.frame(0).u_enableOrb, 0);
+  session.complete();
+  assert.equal(session.player.visible, false);
+});
 test("flat input history keeps advancing without redrawing the inactive avatar", () => {
   const setup = assignedSetup();
   for (const key of Object.keys(setup.assignments))

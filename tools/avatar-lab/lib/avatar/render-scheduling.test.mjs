@@ -84,15 +84,15 @@ test('offscreen advancement matches rendered motion without building shader pack
 test('a triggered comparison can sleep after settling and wake for another input', () => {
   const setup = comparisonSetup(makeWorkspace(), {
     id: 'sparks',
-    input: 'submit',
+    input: 'complete',
   });
   const player = new ExpressionPlayer(setup);
   assert.equal(player.needsAnimation(), false);
-  player.trigger('submit');
+  player.trigger('complete');
   assert.equal(player.needsAnimation(), true);
   for (let i = 0; i < 360; i++) player.advance(1 / 60);
   assert.equal(player.needsAnimation(), false);
-  player.trigger('submit');
+  player.trigger('complete');
   assert.equal(player.needsAnimation(), true);
   player.trigger('hide');
   assert.equal(player.needsAnimation(), false);
@@ -145,7 +145,7 @@ test('timeline keeps assignment signals separate, bounded, and paints only new s
   unsubscribe();
 });
 test('entrances affect only their assigned comparison and Working receives its release', () => {
-  for (const input of ['idle', 'typing', 'submit', 'working']) {
+  for (const input of ['idle', 'typing', 'complete', 'working']) {
     assert.equal(comparisonAction(input, 'open'), null);
     assert.equal(comparisonAction(input, 'openAfterIdle'), null);
     assert.equal(comparisonAction(input, 'hide'), null);

@@ -35,7 +35,7 @@ test('sequence hides before each entrance and can run successive cycles', () => 
     assert.ok(plan.duration > elapsed);
   }
 });
-test('repeat leaves time to see an entrance and submits two overlapping impulses', () => {
+test('repeat leaves time to see an entrance and completes two overlapping impulses', () => {
   const setup = makeWorkspace();
   const entrance = setup.expressions.find(
     (e) => e.id === setup.assignments.openAfterIdle,
@@ -47,8 +47,8 @@ test('repeat leaves time to see an entrance and submits two overlapping impulses
   );
   assert.ok(plan.steps[2].at - plan.steps[1].at >= entrance.duration * 1000);
   const submit = repeatPlan(
-    'submit',
-    setup.expressions.find((e) => e.id === setup.assignments.submit),
+    'complete',
+    setup.expressions.find((e) => e.id === setup.assignments.complete),
   );
   assert.equal(submit.steps.length, 2);
   assert.ok(submit.steps[1].at < 400);
@@ -74,16 +74,16 @@ test('playback clock resumes, loops, and emits each step once across frame bound
   const first = clock.advance(1200, true);
   assert.deepEqual(
     first.map((s) => s.action),
-    ['typing', 'typing'],
+    ['open', 'typing', 'typing'],
   );
   // A pause leaves the clock untouched; the next advance starts at that position.
   assert.equal(clock.elapsed, 1200);
   const second = clock.advance(3000, true);
   assert.equal(second.filter((s) => s.action === 'submit').length, 1);
   const end = clock.advance(plan.duration - 4200, true);
-  assert.equal(end.length, 0);
+  assert.deepEqual(end.map((s) => s.action), ['complete', 'hide', 'open']);
   assert.equal(clock.elapsed, 0);
-  assert.deepEqual(clock.advance(1200, false), first);
+  assert.deepEqual(clock.advance(1200, false), first.slice(1));
   const rest = clock.advance(plan.duration, false);
   assert.equal(rest.filter((s) => s.action === 'submit').length, 1);
   assert.equal(clock.running, false);
