@@ -574,23 +574,21 @@
   (def title (trim_text (apply join (+ '("-")
     (filter (split "-" query) (fn (part)
       (set index (+ index 1)) (not? (eq? index 1))))))))
-  (def create (if (eq? title "") '(error "Task title is empty")
-                 `(things_add ,title "")))
-  (+ (list (+ (make_item "Add to Things Inbox" create)
-              `(:subtitle ,(if (eq? title "") nil title))))
+  (+ (if (eq? title "") '()
+       (list (+ (make_item "Add to Things Inbox" `(things_add ,title ""))
+                `(:subtitle ,title))))
      (matching_task_items title)))
 
 (defn! matching_task_items (query)
-  (if (eq? query "") '()
-    (begin
-      # Read Things once per interaction; each subsequent keystroke stays local.
-      (if (eq? things_cache nil) (set things_cache (get_things_tasks)))
-      (map (fuzzy_match query things_cache (fn (task)
-               (list (get task :title) (get task :notes) (display task))))
-        (fn (task)
-          (def excerpt (match_excerpt query (get task :notes)))
-          (+ (make_item (get task :title) `(open_things_task ',task))
-             `(:subtitle ,(if excerpt excerpt (get task :notes)) :aside "Things")))))))
+  # Read Things once per interaction; each subsequent keystroke stays local.
+  (if (eq? things_cache nil) (set things_cache (get_things_tasks)))
+  (def tasks (if (eq? query "") things_cache
+    (fuzzy_match query things_cache (fn (task)
+      (list (get task :title) (get task :notes) (display task))))))
+  (map tasks (fn (task)
+    (def excerpt (if (eq? query "") nil (match_excerpt query (get task :notes))))
+    (+ (make_item (get task :title) `(open_things_task ',task))
+       `(:subtitle ,(if excerpt excerpt (get task :notes)) :aside "Things")))))
 
 (defn! feedbin_call (message)
   "Let transport errors reach the palette toast rather than masquerading as no results"
