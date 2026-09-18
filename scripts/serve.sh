@@ -4,7 +4,7 @@
 #
 # Usage:
 #   ./scripts/serve.sh          # release runtime and GUI
-#   ./scripts/serve.sh dev      # debug runtime and GUI
+#   ./scripts/serve.sh dev      # debug runtime and GUI with hot reload
 #   ./scripts/serve.sh headless # release runtime only
 
 set -u
@@ -21,7 +21,9 @@ fi
 
 if [ "$MODE" != "headless" ]; then
     pnpm --dir vrsjmp install --frozen-lockfile || exit $?
-    pnpm --dir vrsjmp build || exit $?
+    if [ "$MODE" != "dev" ]; then
+        pnpm --dir vrsjmp build || exit $?
+    fi
 fi
 
 # Editor commands and script shebangs use the installed client. Match its
@@ -64,7 +66,13 @@ until cargo run --locked $CARGO_ARGS --bin vrsctl -- --command ':healthcheck' >/
     sleep 1
 done
 
-if [ "$MODE" != "headless" ]; then
+if [ "$MODE" = "dev" ]; then
+    pnpm --dir vrsjmp tauri dev -- --locked &
+    VRSJMP_PID=$!
+    # Let Tauri own Vite and the GUI watcher. A startup failure or closing
+    # the dev runner also stops the daemon through the EXIT trap.
+    wait "$VRSJMP_PID"
+elif [ "$MODE" != "headless" ]; then
     cargo run --locked $CARGO_ARGS --bin vrsjmp --features vrsjmp/custom-protocol &
     VRSJMP_PID=$!
     wait "$VRSD_PID" "$VRSJMP_PID"
