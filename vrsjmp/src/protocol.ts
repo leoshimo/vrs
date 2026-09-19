@@ -39,6 +39,7 @@ export type Transport = {
 };
 export type Bridge = {
   native: boolean;
+  preview?: boolean;
   transport: Transport;
   show(): Promise<void>;
   blur(): Promise<void>;

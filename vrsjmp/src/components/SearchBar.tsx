@@ -58,6 +58,7 @@ export function SearchBar({
           </svg>
         </button>
       )}
+      {import.meta.env.DEV && <span className="dev-badge" title="Development build">dev</span>}
     </div>
   );
 }

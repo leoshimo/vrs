@@ -175,7 +175,7 @@ export function App({ bridge }: { bridge: Bridge }) {
     };
   }, [bridge, navigation, pointerMoved, presence]);
   useEffect(() => {
-    if (!bridge.native) return;
+    if (!bridge.native || bridge.preview) return;
     let blurFrame = 0;
     const blur = () => {
       cancelAnimationFrame(blurFrame);
