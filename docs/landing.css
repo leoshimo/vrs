@@ -31,8 +31,6 @@ body { font-size:18px; }
 .project-footer { margin-top:60px; padding:19px 0; border-top:1px solid var(--line); font:12px/1.5 var(--serif); color:var(--muted); display:flex; align-items:center; justify-content:space-between; gap:20px; }
 .project-footer>span { margin-left:auto; }
 .project-footer a { color:inherit; text-decoration-color:var(--line); }
-#motion-switch { font:inherit; color:inherit; padding:4px 0; border:0; background:none; cursor:pointer; }
-#motion-switch:hover { text-decoration:underline; }
 @media(prefers-color-scheme:dark) {
   .logomark,.tour-cue { filter:grayscale(1) contrast(8) invert(1); mix-blend-mode:screen; }
   .ink-motion { filter:invert(1); }

@@ -305,10 +305,10 @@ def book_layout(document, source, output):
         body = (ROOT / LANDING).read_text().replace('$NAV', masthead).replace('$COPY', article)
     else:
         source_link = f'{REPOSITORY}/blob/main/{quote(source.relative_to(ROOT).as_posix())}'
+        sidebar = ('<aside class="document-sidebar">' + toc +
+                   f'<a class="github-source" href="{source_link}">View source</a></aside>')
         body = (masthead + '<main id="content" class="page-grid">'
-                f'<header class="document-title">{title}'
-                f'<a class="markdown-source" href="{source_link}">Markdown '
-                '<span aria-hidden="true">↗</span></a></header>' + toc +
+                f'<header class="document-title">{title}</header>' + sidebar +
                 f'<article class="document">{article}</article></main>')
     before, rest = document.split('<body>', 1)
     _, after = rest.rsplit('</body>', 1)

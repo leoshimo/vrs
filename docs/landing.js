@@ -2,14 +2,13 @@ import {inkEffect} from '../assets/visuals/ink.js';
 
 const dark = matchMedia('(prefers-color-scheme: dark)');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-const button = document.querySelector('#motion-switch');
 const well = document.querySelector('.orb-well');
 const canvas = document.querySelector('#live-orb');
 const ink = inkEffect(document.querySelector('#hero-mark'));
 const exporting = new URLSearchParams(location.search).has('export');
 if (exporting) document.body.dataset.export = 'true';
-let override, orbLoading;
-const paused = () => override ?? reduced.matches;
+let orbLoading;
+const paused = () => reduced.matches;
 
 // Keep the fallback available if WebGL is unavailable or the context is lost.
 new MutationObserver(() => {
@@ -17,8 +16,6 @@ new MutationObserver(() => {
 }).observe(canvas, {attributes: true, attributeFilter: ['data-failed']});
 
 async function syncMotion() {
-  button.textContent = paused() ? 'Play motion' : 'Pause motion';
-  button.hidden = false;
   ink.setPaused(paused());
   if (!paused() && !orbLoading) {
     orbLoading = import('../assets/visuals/sphere.js').catch(() => { well.dataset.ready = 'false'; });
@@ -30,8 +27,7 @@ async function syncMotion() {
   await ink.ready;
   document.body.dataset.visualsReady = 'true';
 }
-button.addEventListener('click', () => { override = !paused(); syncMotion(); });
-reduced.addEventListener('change', () => { override = undefined; syncMotion(); });
+reduced.addEventListener('change', syncMotion);
 dark.addEventListener('change', syncMotion);
 syncMotion();
 

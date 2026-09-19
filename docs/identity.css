@@ -10,8 +10,6 @@
 .site-masthead nav { gap:26px; }
 .site-masthead nav a { font:400 15px/1.4 var(--serif); padding:8px 0; }
 .github { display:flex; align-items:center; margin-left:auto; color:var(--ink); padding:7px; margin-right:-7px; }
-.markdown-source { display:inline-block; font:14px/1.5 var(--serif); color:var(--muted); margin:-12px 0 32px; }
-.document-title h1 { margin-bottom:25px; }
 @media (max-width:760px) {
   .site-masthead { height:58px; gap:22px; }
   .site-masthead nav { gap:20px; }
@@ -25,3 +23,14 @@
 }
 
 @media(prefers-color-scheme:dark) { .wordmark img { filter:grayscale(1) contrast(8) invert(1); mix-blend-mode:screen; } }
+
+.document-sidebar { grid-column:2; grid-row:1 / span 2; position:sticky; top:36px; align-self:start; max-height:calc(100vh - 72px); overflow-y:auto; scrollbar-width:thin; }
+.document-sidebar .contents { position:static; max-height:none; overflow:visible; padding-bottom:0; }
+.github-source { display:block; margin-top:22px; padding-top:14px; border-top:1px solid var(--line); font:13px/1.5 var(--serif); color:var(--muted); text-decoration:none; }
+.github-source:hover { text-decoration:underline; }
+@media(max-width:959px) {
+  .document-sidebar { position:static; max-height:none; overflow:visible; margin-bottom:28px; }
+  .document-sidebar .contents { margin-bottom:0; padding-block:12px; }
+  .github-source { margin-top:12px; padding:0; border:0; }
+}
+@media print { .document-sidebar { display:none; } }
