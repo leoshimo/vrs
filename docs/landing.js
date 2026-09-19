@@ -32,14 +32,21 @@ dark.addEventListener('change', syncMotion);
 syncMotion();
 
 const tagline = document.querySelector('.landing-copy p:first-child');
+const hero = document.querySelector('.hero');
 function fitTagline() {
   tagline.style.removeProperty('--fitted-tagline');
   const range = document.createRange(); range.selectNodeContents(tagline);
   const width = range.getBoundingClientRect().width;
-  const available = document.querySelector('.hero').clientWidth - 4;
+  const available = hero.clientWidth - 4;
   if (width > available) {
     tagline.style.setProperty('--fitted-tagline', (parseFloat(getComputedStyle(tagline).fontSize) * available / width) + 'px');
   }
 }
-new ResizeObserver(fitTagline).observe(document.querySelector('.hero'));
+let fittedWidth;
+new ResizeObserver(([entry]) => {
+  if (entry.contentRect.width === fittedWidth) return;
+  fittedWidth = entry.contentRect.width;
+  // Font sizing changes the hero's height; defer writes and react only to width.
+  requestAnimationFrame(fitTagline);
+}).observe(hero);
 document.fonts.ready.then(fitTagline);
