@@ -131,6 +131,15 @@ input:focus-visible {
 .page-tag span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .page-tag svg { flex: none; }
 .page-tag:hover { color: var(--ink); }
+.dev-badge {
+  flex: none;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  color: var(--muted-ink);
+  font-size: 10px;
+  line-height: 14px;
+}
 .activity-list {
   --list-row-count: 9;
   --list-row-height: var(--row-height);

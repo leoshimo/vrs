@@ -25,11 +25,16 @@ struct State {
     client: Client,
 }
 
+struct PreviewMode(bool);
+
 #[derive(Parser)]
 struct Args {
     /// Unix socket for vrsd; defaults to the release/debug-specific socket.
     #[arg(long)]
     socket: Option<PathBuf>,
+    /// Keep the palette open on focus loss without registering a global shortcut.
+    #[arg(long)]
+    preview: bool,
 }
 
 impl State {
@@ -208,13 +213,25 @@ async fn ui_config(state: tauri::State<'_, State>) -> Result<protocol::UiConfig,
 }
 
 #[tauri::command]
-fn show(app: tauri::AppHandle) -> Result<(), String> {
+fn preview_mode(preview: tauri::State<'_, PreviewMode>) -> bool {
+    preview.0
+}
+
+#[tauri::command]
+fn show(app: tauri::AppHandle, preview: tauri::State<'_, PreviewMode>) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
         if !window.is_visible().map_err(|error| error.to_string())? {
             center_in_primary_monitor(&window);
+            if preview.0 {
+                window
+                    .set_focusable(false)
+                    .map_err(|error| error.to_string())?;
+            }
             window.show().map_err(|error| error.to_string())?;
         }
-        window.set_focus().map_err(|error| error.to_string())?;
+        if !preview.0 {
+            window.set_focus().map_err(|error| error.to_string())?;
+        }
     }
     Ok(())
 }
@@ -229,10 +246,11 @@ fn hide(app: tauri::AppHandle) {
 }
 
 #[tauri::command]
-fn on_blur(app: tauri::AppHandle) {
-    if app
-        .get_webview_window("main")
-        .is_some_and(|window| !window.is_focused().unwrap_or(false))
+fn on_blur(app: tauri::AppHandle, preview: tauri::State<'_, PreviewMode>) {
+    if !preview.0
+        && app
+            .get_webview_window("main")
+            .is_some_and(|window| !window.is_focused().unwrap_or(false))
     {
         hide(app);
     }
@@ -244,6 +262,7 @@ fn main() -> Result<()> {
 
     let context = tauri::generate_context!();
     tauri::Builder::default()
+        .manage(PreviewMode(args.preview))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _, event| {
@@ -273,12 +292,21 @@ fn main() -> Result<()> {
                 "CMD+SPACE" // release
             };
 
-            app.global_shortcut().register(binding)?;
+            if !args.preview {
+                app.global_shortcut().register(binding)?;
+            }
 
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            set_query, dispatch, root_page, ui_config, show, hide, on_blur
+            set_query,
+            dispatch,
+            root_page,
+            ui_config,
+            preview_mode,
+            show,
+            hide,
+            on_blur
         ])
         .run(context)
         .expect("error while running tauri application");
