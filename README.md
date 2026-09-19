@@ -3,7 +3,7 @@
     <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)" srcset="assets/visuals/readme-dark.png">
     <source media="(prefers-reduced-motion: reduce)" srcset="assets/visuals/readme-light.png">
     <source media="(prefers-color-scheme: dark)" srcset="assets/visuals/readme-dark.gif">
-    <img src="assets/visuals/readme-light.gif" alt="VRS" width="880" height="232">
+    <img src="assets/visuals/readme-light.gif" alt="VRS" width="880">
   </picture>
 </p>
 

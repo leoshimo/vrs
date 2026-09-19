@@ -13,6 +13,17 @@ const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'vrs-site-check-'));
 const site = path.join(temporary, 'site');
 const result = spawnSync('uv', ['run', '--locked', 'tools/docs/build.py', '--output', site], {cwd:root, encoding:'utf8'});
 assert.equal(result.status, 0, result.stderr);
+// GitHub constrains image width, but preserves an explicit HTML height.
+// Exercise the actual README markup with that sizing behavior.
+const readme = await fs.readFile(path.join(root,'README.md'),'utf8');
+const picture = readme.match(/<picture>[\s\S]*?<\/picture>/)[0];
+for(const theme of ['light','dark']) for(const ext of ['gif','png']) {
+  const file = `assets/visuals/readme-${theme}.${ext}`;
+  await fs.copyFile(path.join(root,file),path.join(site,file));
+}
+await fs.writeFile(path.join(site,'readme-check.html'),
+  '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">'+
+  '<style>body{margin:0;padding:32px}img{max-width:100%}</style>'+picture);
 const server = await serve(site, '/vrs/');
 const reports = [], failures = [];
 let browser;
@@ -46,11 +57,13 @@ try {
             const repl=await page.locator('.repl').boundingBox(), tour=await page.locator('.tour-link').boundingBox();
             assert(repl.x+repl.width<=tour.x, `${name} ${width}: REPL/tour collision`);
             assert.equal(await page.locator('.wordmark').count(),0);
-            assert.equal(await page.locator('#motion-switch').textContent(),'Play motion');
+            assert.equal(await page.locator('#motion-switch').count(),0);
             assert(await page.locator('.orb-fallback').isVisible());
           } else {
-            assert.equal(await page.locator('.markdown-source').getAttribute('href'), `https://github.com/leoshimo/vrs/blob/main/docs/${document}.md`);
+            assert.equal(await page.locator('.document-sidebar .github-source').getAttribute('href'), `https://github.com/leoshimo/vrs/blob/main/docs/${document}.md`);
             assert(await page.locator('.wordmark').isVisible());
+            assert.equal(await page.locator('.document-title a').count(),0);
+            assert.equal(await page.locator('.github-source').textContent(),'View source');
           }
           if(name==='chromium' && [1280,375].includes(width)) await page.screenshot({path:path.join(artifacts,`${document}-${theme}-${width}.png`)});
           reports.push({engine:name,document,theme,width,...layout});
@@ -71,13 +84,14 @@ try {
     }
     await page.goto(server.url+'docs/index.html');
     await page.keyboard.press(name==='webkit' && process.platform==='darwin' ? 'Alt+Tab' : 'Tab'); assert.equal(await page.evaluate(()=>document.activeElement.textContent),'Tour');
-    // Motion is opt-in when the system asks for reduced motion.
-    await page.locator('#motion-switch').click();
+    // Motion follows the system preference, including changes while open.
+    await page.emulateMedia({reducedMotion:'no-preference'});
     await page.waitForFunction(()=>document.querySelector('.orb-well').dataset.ready==='true');
     const motion=page.locator('.ink-motion');
     const before=await motion.getAttribute('data-phase'); await page.waitForTimeout(250);
     assert.notEqual(await motion.getAttribute('data-phase'),before);
-    await page.locator('#motion-switch').click();
+    await page.emulateMedia({reducedMotion:'reduce'});
+    await page.waitForTimeout(100);
     const stopped=await motion.getAttribute('data-phase'); await page.waitForTimeout(150);
     assert.equal(await motion.getAttribute('data-phase'),stopped);
     await page.emulateMedia({colorScheme:'light',reducedMotion:'no-preference'});
@@ -97,7 +111,16 @@ try {
     await fallback.goto(server.url+'docs/index.html'); await fallback.waitForFunction(()=>document.body.dataset.visualsReady==='true');
     assert(await fallback.locator('.orb-fallback').isVisible());
     assert.equal(await fallback.locator('.orb-well').getAttribute('data-ready'),'false');
-    console.log(`${name}: 60 page layouts, navigation, pause, reduced motion, no-JS, and WebGL fallback passed`);
+    for(const width of [320,375,1280]) for(const colorScheme of ['light','dark']) for(const reducedMotion of ['reduce','no-preference']) {
+      await page.setViewportSize({width,height:900});
+      await page.emulateMedia({colorScheme,reducedMotion});
+      await page.goto(server.url+'readme-check.html');
+      const expected=`readme-${colorScheme}.${reducedMotion==='reduce'?'png':'gif'}`;
+      await page.waitForFunction(expected=>{const i=document.querySelector('picture img');return i.complete&&i.naturalWidth>0&&i.currentSrc.endsWith(expected);},expected);
+      const ratio=await page.locator('picture img').evaluate(i=>{const r=i.getBoundingClientRect();return{displayed:r.width/r.height,intrinsic:i.naturalWidth/i.naturalHeight};});
+      assert(Math.abs(ratio.displayed-ratio.intrinsic)<.005,`${name} README distorted at ${width}px`);
+    }
+    console.log(`${name}: 60 page layouts, navigation, reduced motion, no-JS, WebGL fallback, and README proportions passed`);
     await browser.close(); browser=undefined;
   }
 } catch(error) {

@@ -44,8 +44,8 @@ files are checked in so normal docs builds do not depend on either tool.
 - `assets/visuals/source/`: original artwork and generation prompts. Keep these
   originals; the exporter generates the cropped distribution assets.
 
-The browser follows system light/dark appearance. Reduced motion starts paused;
-visitors can explicitly play or pause. A static sphere remains available without
+The browser follows system light/dark appearance. Animation follows the system’s
+reduced-motion preference, including changes made while the page is open. A static sphere remains available without
 JavaScript or WebGL. Navigation marks stay static.
 
 ## Review
@@ -60,7 +60,7 @@ npm test
 
 The browser checks build the production site beneath `/vrs/`, inspect all five
 pages in light/dark at six widths in Chromium and WebKit, and exercise navigation,
-copying, motion controls, reduced motion, no JavaScript, and missing WebGL.
+copying, reduced motion, no JavaScript, missing WebGL, and README banner proportions.
 Screenshots and the report go into ignored `tools/visuals/artifacts/`.
 Check the branch README on GitHub as well: its image selection is controlled by
 GitHub's Markdown renderer, separately from the documentation site.
