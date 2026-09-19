@@ -1,66 +1,51 @@
 'use client';
 import { RangeControl, SelectControl, Choices } from './AvatarControls';
 import { paletteOptions } from '@/lib/avatar/avatar-palettes';
+import { motionNames, type AvatarExpression } from '@/lib/avatar/workspace';
 import {
-  motionNames,
-  type AvatarExpression,
-  type Pattern,
-} from '@/lib/avatar/workspace';
-import type { SignalConfig } from '@/lib/avatar/signal-field';
-
-type Knob = [keyof SignalConfig, string, number, number, number, number];
-const knobs: Partial<Record<Pattern['kind'], Knob[]>> = {
-  lava: [['idleAmount', 'Flow', 0, 2.4, 0.1, 1.6]],
-  nudge: [['typingEnergy', 'Strength', 0.05, 1.5, 0.05, 0.6]],
-  pressure: [
-    ['typingEnergy', 'Strength', 0.05, 1.5, 0.05, 0.28],
-    ['pressureSpread', 'Concentration', 0.5, 10, 0.1, 3],
-    ['pressureOffset', 'Distance from center', 0, 0.95, 0.05, 0.36],
-  ],
-  tilt: [['typingEnergy', 'Strength', 0.05, 2, 0.05, 1]],
-  ruffle: [['typingEnergy', 'Strength', 0.05, 2, 0.05, 0.5]],
-  swirl: [
-    ['idleSwirl', 'Strength', 0, 2, 0.05, 0.8],
-    ['swirlRate', 'Speed', 0.1, 3, 0.1, 0.8],
-  ],
-  orbit: [
-    ['workingOrbit', 'Strength', 0, 2, 0.05, 1],
-    ['orbitRate', 'Speed', 0.1, 3, 0.1, 1.8],
-  ],
-  ripple: [
-    ['surfaceAmplitude', 'Strength', 0, 1.5, 0.05, 0.45],
-    ['surfaceDuration', 'Travel time', 0.15, 10, 0.05, 0.65],
-    ['surfaceWidth', 'Width', 0.1, 0.8, 0.02, 0.32],
-    ['surfaceOriginX', 'Origin X', -1, 1, 0.05, -0.7],
-    ['surfaceOriginY', 'Origin Y', -1, 1, 0.05, -0.6],
-  ],
-  sparks: [
-    ['dispatchEnergy', 'Strength', 0.1, 2, 0.1, 0.8],
-    ['sparkCount', 'Count', 3, 18, 1, 11],
-  ],
-  bloom: [['dispatchEnergy', 'Strength', 0.1, 2, 0.1, 0.8]],
-  gather: [['dispatchEnergy', 'Strength', 0.1, 2, 0.1, 1]],
-  echo: [['dispatchEnergy', 'Strength', 0.1, 2, 0.1, 1]],
-};
-const movingKnobs: Knob[] = [
-  ['loadingStrength', 'Strength', 0, 2.5, 0.05, 1],
-  ['loadingRate', 'Speed', 0.1, 3, 0.05, 1],
-  ['coupling', 'Distortion', 0.1, 3, 0.1, 1],
-];
+  effectSettings,
+  parameters,
+  readPattern,
+} from '../../../vrsjmp/src/avatar/effect-settings';
 export function ExpressionInspector({
   expression,
+  original,
   onChange,
   sustained = false,
 }: {
   expression: AvatarExpression;
+  original?: AvatarExpression;
   onChange: (e: AvatarExpression) => void;
   sustained?: boolean;
 }) {
-  function pattern(index: number, patch: Partial<SignalConfig>) {
+  function pattern(index: number, patch: Record<string, number>) {
     onChange({
       ...expression,
       patterns: expression.patterns.map((p, i) =>
-        i === index ? { ...p, settings: { ...p.settings, ...patch } } : p,
+        i === index ? readPattern(p.kind, { ...p.settings, ...patch }) : p,
+      ),
+    });
+  }
+  function resetField(key: 'revealStart' | 'distortionOnly') {
+    if (!original) return;
+    const next = { ...expression };
+    if (key === 'revealStart') next.revealStart = original.revealStart;
+    else next.distortionOnly = original.distortionOnly;
+    if (!Object.hasOwn(original, key)) delete next[key];
+    onChange(next);
+  }
+  function resetPattern(index: number, key: string) {
+    const baseline = original?.patterns[index];
+    if (!baseline || baseline.kind !== expression.patterns[index].kind) return;
+    const settings: Record<string, number> = {
+      ...expression.patterns[index].settings,
+      [key]: (baseline.settings as Record<string, number>)[key],
+    };
+    if (!Object.hasOwn(baseline.settings, key)) delete settings[key];
+    onChange({
+      ...expression,
+      patterns: expression.patterns.map((p, i) =>
+        i === index ? readPattern(p.kind, settings) : p,
       ),
     });
   }
@@ -80,6 +65,7 @@ export function ExpressionInspector({
                 : 'Duration'
             }
             value={expression.duration}
+            defaultValue={original?.duration}
             min={0.1}
             max={2}
             step={0.01}
@@ -87,10 +73,37 @@ export function ExpressionInspector({
             onChange={(duration) => onChange({ ...expression, duration })}
           />
         )}
-      {expression.patterns.some((p) => p.kind === 'printed' || p.kind === 'fill') && (
+      {!sustained &&
+        expression.patterns.some(
+          (p) => !['printed', 'fill', 'ripple'].includes(p.kind),
+        ) && (
+          <RangeControl
+            label="Rise"
+            value={
+              expression.attack ??
+              expression.duration * (expression.momentum ? 0.3 : 0.1)
+            }
+            defaultValue={
+              original
+                ? (original.attack ??
+                  original.duration * (original.momentum ? 0.3 : 0.1))
+                : undefined
+            }
+            min={0.01}
+            max={expression.duration * 0.9}
+            step={0.01}
+            format={(v) => `${v.toFixed(2)} s`}
+            onChange={(attack) => onChange({ ...expression, attack })}
+          />
+        )}
+      {expression.patterns.some(
+        (p) => p.kind === 'printed' || p.kind === 'fill',
+      ) && (
         <RangeControl
           label="Initial coverage"
           value={expression.revealStart ?? 0}
+          defaultValue={original ? (original.revealStart ?? 0) : undefined}
+          onReset={() => resetField('revealStart')}
           min={0}
           max={1}
           step={0.01}
@@ -101,27 +114,53 @@ export function ExpressionInspector({
       {expression.patterns.map((p, index) => (
         <section className="pattern-controls" key={`${p.kind}-${index}`}>
           {expression.patterns.length > 1 && <h3>{motionNames[p.kind]}</h3>}
-          {(
-            knobs[p.kind] ??
-            (['stir', 'drift', 'eddies', 'sweep'].includes(p.kind)
-              ? movingKnobs
-              : [])
-          ).map(([key, label, min, max, step, fallback]) => (
-            <RangeControl
-              key={key}
-              label={label}
-              value={Number(p.settings[key] ?? fallback)}
-              min={min}
-              max={max}
-              step={step === 1 ? 1 : 0.01}
-              format={(v) => Number(v.toFixed(2)).toString()}
-              onChange={(value) => pattern(index, { [key]: value })}
-            />
-          ))}
+          {Object.entries(effectSettings[p.kind]).map(
+            ([key, [label, min, max, step]]) =>
+              key === 'direction' && p.kind === 'sweep' ? (
+                <SelectControl
+                  key={key}
+                  label="Direction"
+                  value={String(parameters(p).direction)}
+                  options={[
+                    ['0', 'Alternating'],
+                    ['1', 'Left'],
+                    ['2', 'Right'],
+                    ['3', 'Up'],
+                    ['4', 'Down'],
+                  ]}
+                  onChange={(v) => pattern(index, { direction: Number(v) })}
+                />
+              ) : (
+                <RangeControl
+                  key={key}
+                  label={label}
+                  value={parameters(p)[key]}
+                  defaultValue={
+                    original?.patterns[index]?.kind === p.kind
+                      ? parameters(original.patterns[index])[key]
+                      : undefined
+                  }
+                  onReset={() => resetPattern(index, key)}
+                  min={min}
+                  max={max}
+                  step={step === 1 ? 1 : 0.01}
+                  format={(v) => Number(v.toFixed(2)).toString()}
+                  onChange={(value) => pattern(index, { [key]: value })}
+                />
+              ),
+          )}
           {['swirl', 'orbit'].includes(p.kind) && (
             <Choices
               label="Shading"
               value={expression.distortionOnly ? 'flow' : 'crest'}
+              defaultValue={
+                original
+                  ? original.distortionOnly
+                    ? 'flow'
+                    : 'crest'
+                  : undefined
+              }
+              onReset={() => resetField('distortionOnly')}
               options={[
                 ['flow', 'Field only'],
                 ['crest', 'Field + crest'],
@@ -137,6 +176,7 @@ export function ExpressionInspector({
         <Choices
           label="Color"
           value={expression.color.mode}
+          defaultValue={original?.color.mode}
           options={[
             ['none', 'Off'],
             ['accent', 'Avatar accent'],
@@ -152,6 +192,7 @@ export function ExpressionInspector({
               <SelectControl
                 label="Palette"
                 value={expression.color.palette}
+                defaultValue={original?.color.palette}
                 options={paletteOptions}
                 onChange={(palette) =>
                   onChange({
@@ -164,6 +205,7 @@ export function ExpressionInspector({
             <RangeControl
               label="Strength"
               value={expression.color.strength}
+              defaultValue={original?.color.strength}
               min={0}
               max={0.8}
               step={0.05}
@@ -178,6 +220,7 @@ export function ExpressionInspector({
             <RangeControl
               label="Rise"
               value={expression.color.attack}
+              defaultValue={original?.color.attack}
               min={0.02}
               max={0.3}
               step={0.01}
@@ -192,6 +235,7 @@ export function ExpressionInspector({
             <RangeControl
               label="Duration"
               value={expression.color.duration}
+              defaultValue={original?.color.duration}
               min={0.1}
               max={1.5}
               step={0.01}

@@ -75,17 +75,18 @@ test('surface wave joins at rest, scales linearly, and stays bounded across the 
         const one = surfaceSample(x, y, phase, 1).height;
         const two = surfaceSample(x, y, phase, 2).height;
         assert.ok(Number.isFinite(one));
-        assert.ok(Math.abs(one) <= 0.16);
+        assert.ok(Math.abs(one) <= 0.18);
         assert.ok(Math.abs(two - 2 * one) < 1e-10);
       }
     }
 });
-test('light-kick demonstration is the critically damped one-impulse response', async () => {
+test('Tilt demonstration uses the shared pulse envelope', async () => {
   const { impulseSample } = await import('./field-explainer.ts');
-  const peak = impulseSample(1 / 13, 1);
-  assert.ok(Math.abs(peak.velocity) < 1e-10);
-  assert.ok(peak.value > impulseSample(0.5, 1).value);
-  assert.equal(impulseSample(0, 1).value, 0);
-  assert.equal(impulseSample(0, 1).velocity, 16);
-  assert.ok(impulseSample(1, 1).value < 0.001);
+  const { pulseEnvelope } =
+    await import('../../../../vrsjmp/src/avatar/response-curve.ts');
+  for (const time of [0, 0.03, 0.12, 0.24, 1])
+    assert.equal(
+      impulseSample(time, 0.8).value,
+      pulseEnvelope(time / 0.24, 0.1) * 0.8,
+    );
 });

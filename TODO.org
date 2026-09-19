@@ -753,20 +753,15 @@ motions form a saved expression. Clarify the relationship between library
 presets, combinations, and event assignments. Improve editing and comparison
 while keeping the interactive bar preview and appearance controls accessible.
 
-** TODO Avatar primitive composer
+** TODO Effect primitive composer
 
-Explore a standalone avatar composer after consolidating the
-expression gallery and recipe. Compose coordinate transforms, coverage
-variation, palette movement, and surface deformation with clocks and event
-envelopes. Show each operation's inputs and outputs alongside the combined
-avatar, and make operation order explicit where it changes the result.
+Compose coordinate transforms, coverage variation, palette movement, and surface
+deformation with clocks and input curves. Show each operation's inputs and outputs
+alongside the combined avatar, including where operation order changes the result.
 
-Reuse the shader, motion calculations, and expression definitions used by the
-gallery and recipe. Expressions should be authored configurations of these
-ingredients. Keep this tooling independently runnable from the runtime and GUI.
-
-Deferred beyond the current redesign and cleanup. Retire the existing mixer
-of named expression presets rather than carrying it into the consolidated tool.
+Build on Avatar Lab's shared renderer, Recipe, sequencer, and pinned comparisons.
+The lab currently edits named effects; composing their underlying primitives is
+still pending.
 
 * shell
 ** TODO CLI Client Shell

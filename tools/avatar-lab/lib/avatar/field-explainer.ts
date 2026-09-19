@@ -1,3 +1,4 @@
+import { pulseEnvelope } from '../../../../vrsjmp/src/avatar/response-curve.ts';
 // Same rank order and half-step normalization as printed() in signal-field.ts.
 export function bayerThreshold(x: number, y: number, size: number) {
   const b2 = (a: number, b: number) =>
@@ -110,33 +111,42 @@ export function palettePigment(
 export const rgbCSS = (rgb: number[]) =>
   `rgb(${rgb.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255)).join(' ')})`;
 
-// The same traveling spherical cap used by surfaceHeight() in the renderer.
+export function rippleAtAngle(
+  angle: number,
+  phase: number,
+  amplitude: number,
+  travel = 3,
+) {
+  const time = (phase / 4) * travel;
+  const delay = (angle / Math.PI) * travel;
+  const pulseDuration = Math.max(0.1, (0.32 * travel) / 3.14);
+  return {
+    time,
+    delay,
+    pulseDuration,
+    height:
+      pulseEnvelope((time - delay) / pulseDuration, 0.35) * amplitude * 0.18,
+  };
+}
 export function surfaceSample(
   x: number,
   y: number,
   phase: number,
   amplitude: number,
+  travel = 3,
 ) {
   const z = Math.sqrt(Math.max(0, 1 - x * x - y * y));
   const length = Math.hypot(x, y, z) || 1;
   const originLength = Math.hypot(-0.3, -0.45, 0.84);
   const dot = (x * -0.3 + y * -0.45 + z * 0.84) / (length * originLength);
   const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
-  const front = phase * 0.82;
-  const distance = angle - front;
-  const envelope =
-    Math.exp(-((distance / 0.32) ** 2)) *
-    smooth(0, 0.22, phase) *
-    (1 - smooth(2.8, 3.8, phase));
-  const height = Math.sin(distance * 12) * envelope * amplitude * 0.16;
-  return { z, angle, front, distance, envelope, height };
+  return {
+    z,
+    angle,
+    front: (phase / 4) * Math.PI,
+    ...rippleAtAngle(angle, phase, amplitude, travel),
+  };
 }
 export function impulseSample(time: number, amplitude: number) {
-  const initialVelocity = 16 * amplitude;
-  const decay = Math.exp(-13 * time);
-  return {
-    initialVelocity,
-    value: initialVelocity * time * decay,
-    velocity: initialVelocity * (1 - 13 * time) * decay,
-  };
+  return { value: pulseEnvelope(time / 0.24, 0.1) * amplitude };
 }

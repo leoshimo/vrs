@@ -61,18 +61,23 @@ test("reduced motion completes a printed entrance without leaving an invisible a
   const session = new AvatarSession();
   session.reduced = true;
   session.open(0);
-  assert.equal(session.player.frame(0).u_appearance, 1);
-  assert.equal(session.player.frame(0).u_enableOrb, 1);
+  assert.equal(session.player.frame().u_appearance, 1);
+  assert.equal(session.player.frame().u_enableOrb, 1);
 });
 
-test("Submit adds the same input as Typing without emitting Complete", () => {
-  const typed = new AvatarSession(), submitted = new AvatarSession();
-  typed.open(0); submitted.open(0);
-  advance(typed.player, 1); advance(submitted.player, 1);
-  typed.type(); submitted.submit();
-  advance(typed.player, 0.08); advance(submitted.player, 0.08);
-  assert.deepEqual(submitted.player.frame(0), typed.player.frame(0));
-  assert.ok(submitted.player.signals("typing").motion > 0);
+test("Submit has its own input while retaining the assigned Nudge", () => {
+  const typed = new AvatarSession(),
+    submitted = new AvatarSession();
+  typed.open(0);
+  submitted.open(0);
+  advance(typed.player, 1);
+  advance(submitted.player, 1);
+  typed.type();
+  submitted.submit();
+  advance(typed.player, 0.08);
+  advance(submitted.player, 0.08);
+  assert.deepEqual(submitted.player.frame(), typed.player.frame());
+  assert.ok(submitted.player.signals("submit").motion > 0);
   assert.equal(submitted.player.signals("complete").motion, 0);
 });
 
@@ -85,19 +90,20 @@ test("Complete releases Working and remains rendered until the exit finishes", (
   advance(session.player, 0.08);
   assert.equal(session.player.working, false);
   assert.ok(session.player.signals("complete").motion > 0);
-  assert.equal(session.player.frame(0).u_enableOrb, 1);
+  assert.equal(session.player.frame().u_enableOrb, 1);
   const time = session.player.time;
   advance(session.player, 0.12);
   assert.ok(session.player.time > time);
   session.hide(2300);
-  assert.equal(session.player.frame(0).u_enableOrb, 0);
+  assert.equal(session.player.frame().u_enableOrb, 0);
   session.complete();
   assert.equal(session.player.visible, false);
 });
 test("flat input history keeps advancing without redrawing the inactive avatar", () => {
   const setup = assignedSetup();
+  const lava = setup.assignments.idle;
   for (const key of Object.keys(setup.assignments))
-    setup.assignments[key] = key === "typing" ? "rest" : null;
+    setup.assignments[key] = key === "typing" ? lava : null;
   const player = new ExpressionPlayer(setup);
   const state = { live: true, paused: false, visible: true, dirty: false, trackTime: true };
   for (let i = 0; i < 120; i++) {
@@ -119,7 +125,6 @@ test("flat input history keeps advancing without redrawing the inactive avatar",
   assert.equal(player.time, time);
 });
 
-
 test("normal Open briefly fills the print without a ripple or resetting the field", () => {
   const player = new ExpressionPlayer(assignedSetup());
   advance(player, 1);
@@ -127,12 +132,12 @@ test("normal Open briefly fills the print without a ripple or resetting the fiel
   player.trigger("hide");
   player.trigger("open");
   assert.equal(player.phase, phase);
-  assert.equal(player.frame(0).u_appearance, 0.72);
+  assert.equal(player.frame().u_appearance, 0.72);
   advance(player, 0.075);
-  assert.ok(player.frame(0).u_appearance > 0.8);
+  assert.ok(player.frame().u_appearance > 0.8);
   assert.equal(player.inspect("open").ripple, 0);
   advance(player, 0.08);
-  assert.equal(player.frame(0).u_appearance, 1);
+  assert.equal(player.frame().u_appearance, 1);
   player.trigger("openAfterIdle");
-  assert.equal(player.frame(0).u_appearance, 0);
+  assert.equal(player.frame().u_appearance, 0);
 });

@@ -60,6 +60,7 @@ export function InputCurves({
               className="input-curves"
               viewBox="0 0 160 28"
               preserveAspectRatio="none"
+              fill="none"
               role="img"
               aria-label={`${assignmentLabels[a]} motion and color, last four seconds`}
             >

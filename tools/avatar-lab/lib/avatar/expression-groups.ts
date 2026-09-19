@@ -3,6 +3,7 @@ const order = {
   idle: ['Flow', 'Shape', 'Light', 'Marks', 'Reveal'],
   working: ['Flow', 'Shape', 'Light', 'Marks', 'Reveal'],
   typing: ['Flow', 'Shape', 'Light', 'Marks', 'Reveal'],
+  submit: ['Shape', 'Light', 'Marks', 'Flow', 'Reveal'],
   complete: ['Marks', 'Shape', 'Light', 'Flow', 'Reveal'],
   open: ['Reveal', 'Light', 'Shape', 'Marks', 'Flow'],
   openAfterIdle: ['Reveal', 'Light', 'Shape', 'Marks', 'Flow'],

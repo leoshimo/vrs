@@ -6,6 +6,7 @@ import { ShaderCode } from './ShaderCode';
 import {
   bayerThreshold,
   impulseSample,
+  rippleAtAngle,
   sampleDisplacement,
   surfaceSample,
   toneBand,
@@ -497,7 +498,9 @@ export function SurfaceWaveLesson({
   y = 0.1,
   onPick,
   onPhase,
+  duration = 3,
 }: {
+  duration?: number;
   phase: number;
   amplitude: number;
   part: number;
@@ -506,13 +509,15 @@ export function SurfaceWaveLesson({
   onPick?: (x: number, y: number) => void;
   onPhase?: (v: number) => void;
 }) {
-  const sample = surfaceSample(x, y, phase, amplitude);
+  const sample = surfaceSample(x, y, phase, amplitude, duration);
   const path = (withWave: boolean) =>
     Array.from({ length: 121 }, (_, i) => {
       const angle = -Math.PI / 2 + (i * Math.PI) / 120,
         x = Math.sin(angle),
         z = Math.cos(angle);
-      const h = withWave ? surfaceSample(x, 0, phase, amplitude).height : 0;
+      const h = withWave
+        ? surfaceSample(x, 0, phase, amplitude, duration).height
+        : 0;
       return `${i ? 'L' : 'M'}${165 + x * (1 + h) * 125} ${155 - z * (1 + h) * 120}`;
     }).join(' ');
   return (
@@ -572,30 +577,14 @@ export function SurfaceWaveLesson({
             role="img"
             aria-label="The localized ridge moves with its wave front"
             {...dragDiagram(
-              onPhase
-                ? (px) => onPhase((clamp((px - 20) / 290) * Math.PI) / 0.82)
-                : undefined,
+              onPhase ? (px) => onPhase(clamp((px - 20) / 290) * 4) : undefined,
             )}
           >
             <path d="M20 95H310" stroke="currentColor" opacity=".3" />
             <path
               d={Array.from({ length: 151 }, (_, i) => {
-                const a = (i / 150) * Math.PI,
-                  d = a - sample.front,
-                  e = Math.exp(-((d / 0.32) ** 2));
-                const h =
-                  Math.sin(d * 12) *
-                  e *
-                  amplitude *
-                  0.16 *
-                  (phase < 0.22
-                    ? (phase / 0.22) ** 2 * (3 - (2 * phase) / 0.22)
-                    : 1) *
-                  (phase > 2.8
-                    ? 1 -
-                      Math.min(1, phase - 2.8) ** 2 *
-                        (3 - 2 * Math.min(1, phase - 2.8))
-                    : 1);
+                const a = (i / 150) * Math.PI;
+                const h = rippleAtAngle(a, phase, amplitude, duration).height;
                 return `${i ? 'L' : 'M'}${20 + (i / 150) * 290} ${95 - h * 250}`;
               }).join(' ')}
               stroke="var(--lab-accent)"
@@ -626,8 +615,8 @@ export function SurfaceWaveLesson({
                   `z = ${number(sample.z)}`,
                 ],
                 [
-                  'origin = normalize(vec3(u_surfaceOrigin, .84));',
-                  'u_surfaceOrigin = (-.3, -.45)',
+                  'origin = normalize(vec3(originXY, .84));',
+                  'originXY = (-.3, -.45)',
                 ],
                 [
                   'angle = acos(clamp(dot(point, origin), -1., 1.));',
@@ -636,15 +625,10 @@ export function SurfaceWaveLesson({
               ]
             : part === 1
               ? [
-                  ['width; wavelength; damping;', '.32 rad; π/6 rad; 0'],
-                  ['front = phase * .82;', `${number(sample.front)} rad`],
-                  ['distance = angle - front;', number(sample.distance)],
+                  ['time = phase / 4 * travel;', `${number(sample.time)} s`],
+                  ['delay = angle / π * travel;', `${number(sample.delay)} s`],
                   [
-                    'envelope = exp(-pow(distance / width, 2.)) * fadeIn * fadeOut;',
-                    number(sample.envelope),
-                  ],
-                  [
-                    'height = sin(distance * 2π / wavelength) * envelope * exp(-damping * front) * amplitude * .16;',
+                    'height = signal(time - delay) * .18;',
                     number(sample.height),
                   ],
                 ]
@@ -669,7 +653,7 @@ export function SurfaceWaveLesson({
         {part === 0
           ? 'Lift each 2D position onto a unit hemisphere. Both vectors have length 1, so their dot product gives the cosine of the angle between them. acos turns that into distance measured around the sphere.'
           : part === 1
-            ? 'The front travels outward. A sine makes crests and troughs; a Gaussian envelope confines them to a narrow band. The start and end fades bring the height back to zero.'
+            ? 'Each point reads the same pulse with a delay proportional to its angular distance. Increasing travel time slows the ridge; increasing pulse width broadens it.'
             : 'The same height feeds three places: the boundary test, the sample coordinates, and the ink coverage. That shared value makes the silhouette and printed interior react together.'}
       </p>
     </>
@@ -678,10 +662,12 @@ export function SurfaceWaveLesson({
 export function ImpulseGraph({
   time,
   amplitude,
+  expression,
   onTime,
 }: {
   time: number;
   amplitude: number;
+  expression: number;
   onTime?: (n: number) => void;
 }) {
   const s = impulseSample(time, amplitude);
@@ -694,7 +680,7 @@ export function ImpulseGraph({
         )}
         viewBox="0 0 440 160"
         role="img"
-        aria-label="Spring displacement rises rapidly after a kick, then decays to rest"
+        aria-label="Response rises after a tap, then returns to zero"
       >
         <path d="M20 125H420" stroke="currentColor" opacity=".3" />
         <path
@@ -730,15 +716,13 @@ export function ImpulseGraph({
       </svg>
       <CodeValues
         rows={[
-          ['initialVelocity = 16 * amplitude;', number(s.initialVelocity)],
-          ['value = initialVelocity * t * exp(-13 * t);', number(s.value)],
           [
-            'velocity = initialVelocity * (1 - 13 * t) * exp(-13 * t);',
-            number(s.velocity),
+            'response = pulseEnvelope(time / .24, .1) * amplitude;',
+            number(s.value),
           ],
           [
-            'light += u_poke * .65 * u_expression;',
-            `x + ${number(s.value * 0.65 * 1.25)}`,
+            'light += vec2(.25, .10) * response * .65 * expression;',
+            `(${number(s.value * 0.25 * 0.65 * expression)}, ${number(s.value * 0.1 * 0.65 * expression)})`,
           ],
         ]}
       />
@@ -752,6 +736,8 @@ export function ClockLesson({
   y = 0.1,
   detail = 1.9,
   lightOffset = 0,
+  lightRate = 1,
+  flowRate = 1,
 }: {
   phase: number;
   onPhase?: (v: number) => void;
@@ -759,21 +745,32 @@ export function ClockLesson({
   y?: number;
   detail?: number;
   lightOffset?: number;
+  lightRate?: number;
+  flowRate?: number;
 }) {
   const curves: [string, (t: number) => number][] = [
     [
       'Gradient direction',
-      (t) => (t - 0.7 + 0.24 * Math.sin(t * 1.7) + lightOffset + 1) / 10,
+      (t) =>
+        (t * lightRate -
+          0.7 +
+          0.24 * Math.sin(t * lightRate * 1.7) +
+          lightOffset +
+          1) /
+        10,
     ],
     [
       `Flow at (${number(x)}, ${number(y)})`,
       (t) =>
         0.5 +
-        Math.sin(x * 2.8 + t * 1.4) * Math.cos(y * 3.1 - t) * 0.09 * detail,
+        Math.sin(x * 2.8 + t * flowRate * 1.4) *
+          Math.cos(y * 3.1 - t * flowRate) *
+          0.09 *
+          detail,
     ],
     [
       'Palette coordinate',
-      (t) => 0.5 + 0.5 * Math.sin(x * 1.8 + y * 0.9 + t * 0.7),
+      (t) => 0.5 + 0.5 * Math.sin(x * 1.8 + y * 0.9 + t * flowRate * 0.7),
     ],
   ];
   return (

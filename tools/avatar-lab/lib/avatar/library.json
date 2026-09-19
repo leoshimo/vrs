@@ -1,0 +1,704 @@
+[
+  {
+    "id": "submit-gather",
+    "name": "Gather \u2014 Tap",
+    "description": "A short inward tuck.",
+    "patterns": [
+      {
+        "kind": "gather",
+        "settings": {
+          "strength": 0.35
+        }
+      }
+    ],
+    "duration": 0.36,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.35,
+      "attack": 0.07,
+      "duration": 0.32
+    },
+    "attack": 0.12
+  },
+  {
+    "id": "submit-ripple",
+    "name": "Ripple \u2014 Tap",
+    "description": "A small ridge crosses the surface.",
+    "patterns": [
+      {
+        "kind": "ripple",
+        "settings": {
+          "strength": 0.18,
+          "travel": 0.36,
+          "width": 0.24
+        }
+      }
+    ],
+    "duration": 0.36,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.35,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "submit-flick",
+    "name": "Tilt \u2014 Flick",
+    "description": "A brief change of light direction.",
+    "patterns": [
+      {
+        "kind": "tilt",
+        "settings": {
+          "strength": 0.55
+        }
+      }
+    ],
+    "duration": 0.36,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.35,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "complete-bloom",
+    "name": "Bloom \u2014 Soft",
+    "description": "Coverage rises gently, then settles.",
+    "patterns": [
+      {
+        "kind": "bloom",
+        "settings": {
+          "strength": 0.48
+        }
+      }
+    ],
+    "duration": 0.3,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.35,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "complete-settle",
+    "name": "Gather \u2014 Settle",
+    "description": "A broad, shallow contraction.",
+    "patterns": [
+      {
+        "kind": "gather",
+        "settings": {
+          "strength": 0.22
+        }
+      }
+    ],
+    "duration": 0.4,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.35,
+      "attack": 0.07,
+      "duration": 0.32
+    },
+    "attack": 0.12
+  },
+  {
+    "id": "complete-glint",
+    "name": "Bloom \u2014 Glint",
+    "description": "A narrow sweep of light.",
+    "patterns": [
+      {
+        "kind": "bloom",
+        "settings": {
+          "strength": 0.75
+        }
+      }
+    ],
+    "duration": 0.12,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.35,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "rest",
+    "name": "Lava",
+    "description": "A flowing field with rotating light.",
+    "patterns": [
+      {
+        "kind": "lava",
+        "settings": {
+          "flowStrength": 2,
+          "flowSpeed": 2,
+          "lightRotation": 1
+        }
+      }
+    ],
+    "duration": 0.3,
+    "color": {
+      "mode": "none",
+      "palette": "spectrum",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "lava-slower",
+    "name": "Lava \u2014 Slower",
+    "description": "Slower flow and light rotation.",
+    "patterns": [
+      {
+        "kind": "lava",
+        "settings": {
+          "flowStrength": 1.6,
+          "flowSpeed": 0.4,
+          "lightRotation": 0.4
+        }
+      }
+    ],
+    "duration": 0.3,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "lava-softer",
+    "name": "Lava \u2014 Softer",
+    "description": "Less variation in the flow field.",
+    "patterns": [
+      {
+        "kind": "lava",
+        "settings": {
+          "flowStrength": 0.65,
+          "flowSpeed": 1,
+          "lightRotation": 1
+        }
+      }
+    ],
+    "duration": 0.3,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "lava-calm",
+    "name": "Lava \u2014 Calm",
+    "description": "Less variation, slower flow and light.",
+    "patterns": [
+      {
+        "kind": "lava",
+        "settings": {
+          "flowStrength": 0.65,
+          "flowSpeed": 0.4,
+          "lightRotation": 0.4
+        }
+      }
+    ],
+    "duration": 0.3,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "field-nudge",
+    "name": "Nudge",
+    "description": "Briefly accelerates the field, then returns to its normal pace.",
+    "patterns": [
+      {
+        "kind": "nudge",
+        "settings": {
+          "strength": 1.04
+        }
+      }
+    ],
+    "duration": 0.24,
+    "color": {
+      "mode": "none",
+      "palette": "spectrum",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    },
+    "momentum": false
+  },
+  {
+    "id": "nudge-momentum",
+    "name": "Momentum",
+    "description": "Taps build speed; the field coasts between them.",
+    "patterns": [
+      {
+        "kind": "nudge",
+        "settings": {
+          "strength": 0.6
+        }
+      }
+    ],
+    "duration": 0.24,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    },
+    "momentum": true
+  },
+  {
+    "id": "pressure-dimple",
+    "name": "Dimple",
+    "description": "A localized radial displacement compresses the field.",
+    "patterns": [
+      {
+        "kind": "pressure",
+        "settings": {
+          "strength": 0.28,
+          "spread": 7.5,
+          "offset": 0.3
+        }
+      }
+    ],
+    "duration": 0.24,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "light",
+    "name": "Tilt",
+    "description": "A quick change of illumination.",
+    "patterns": [
+      {
+        "kind": "tilt",
+        "settings": {
+          "strength": 1.15
+        }
+      }
+    ],
+    "duration": 0.24,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "agitation-kick",
+    "name": "Ruffle",
+    "description": "A brief ruffle through the interior.",
+    "patterns": [
+      {
+        "kind": "ruffle",
+        "settings": {
+          "strength": 1
+        }
+      }
+    ],
+    "duration": 0.24,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "drift",
+    "name": "Drift",
+    "description": "A steady current at a slight angle.",
+    "patterns": [
+      {
+        "kind": "drift",
+        "settings": {
+          "strength": 1,
+          "speed": 1,
+          "distortion": 1,
+          "angle": 20
+        }
+      }
+    ],
+    "duration": 0.3,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "eddies",
+    "name": "Eddies",
+    "description": "A wandering, rotating pocket.",
+    "patterns": [
+      {
+        "kind": "eddies",
+        "settings": {
+          "strength": 1.85,
+          "speed": 2.4,
+          "distortion": 1.7
+        }
+      }
+    ],
+    "duration": 0.3,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "restless",
+    "name": "Stir",
+    "description": "Overlapping waves agitate the field.",
+    "patterns": [
+      {
+        "kind": "stir",
+        "settings": {
+          "strength": 0.55,
+          "speed": 2.45,
+          "distortion": 1
+        }
+      }
+    ],
+    "duration": 0.3,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "swirl",
+    "name": "Swirl",
+    "description": "A loose current travels around the rim.",
+    "patterns": [
+      {
+        "kind": "swirl",
+        "settings": {
+          "strength": 0.8,
+          "speed": 0.8
+        }
+      }
+    ],
+    "duration": 0.3,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "orbit",
+    "name": "Orbit",
+    "description": "One crest circles the rim.",
+    "patterns": [
+      {
+        "kind": "orbit",
+        "settings": {
+          "strength": 1,
+          "speed": 1.8
+        }
+      }
+    ],
+    "duration": 0.3,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "alternating",
+    "name": "Sweep",
+    "description": "A wave arrives from either side.",
+    "patterns": [
+      {
+        "kind": "sweep",
+        "settings": {
+          "strength": 1,
+          "speed": 1,
+          "distortion": 1
+        }
+      }
+    ],
+    "duration": 0.3,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "surface-react",
+    "name": "Ripple",
+    "description": "A small, quick ridge for a brief reaction.",
+    "patterns": [
+      {
+        "kind": "ripple",
+        "settings": {
+          "strength": 1,
+          "travel": 2.5,
+          "width": 0.32,
+          "originX": -0.4,
+          "originY": -0.45,
+          "silhouette": 1,
+          "displacement": 1,
+          "shading": 1
+        }
+      }
+    ],
+    "duration": 0.3,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "gather",
+    "name": "Gather",
+    "description": "Draw inward, then coast.",
+    "patterns": [
+      {
+        "kind": "gather",
+        "settings": {
+          "strength": 1.2
+        }
+      }
+    ],
+    "duration": 0.48,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    },
+    "attack": 0.12
+  },
+  {
+    "id": "bloom",
+    "name": "Bloom",
+    "description": "An internal flash of pigment.",
+    "patterns": [
+      {
+        "kind": "bloom",
+        "settings": {
+          "strength": 1.2
+        }
+      }
+    ],
+    "duration": 0.3,
+    "color": {
+      "mode": "none",
+      "palette": "spectrum",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "sparks",
+    "name": "Sparks",
+    "description": "Short marks escape the surface.",
+    "patterns": [
+      {
+        "kind": "sparks",
+        "settings": {
+          "strength": 0.8,
+          "count": 11
+        }
+      }
+    ],
+    "duration": 0.3,
+    "color": {
+      "mode": "none",
+      "palette": "spectrum",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "echo",
+    "name": "Echo",
+    "description": "A short contour follows the shape, then fades.",
+    "patterns": [
+      {
+        "kind": "echo",
+        "settings": {
+          "strength": 1
+        }
+      }
+    ],
+    "duration": 0.3,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "fill-wake",
+    "name": "Fill",
+    "description": "Sparse ink reaches its resting fill.",
+    "patterns": [
+      {
+        "kind": "fill",
+        "settings": {}
+      }
+    ],
+    "duration": 0.3,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "entrance-print",
+    "name": "Printed",
+    "description": "Printed marks resolve into the avatar.",
+    "patterns": [
+      {
+        "kind": "printed",
+        "settings": {}
+      }
+    ],
+    "duration": 0.3,
+    "color": {
+      "mode": "none",
+      "palette": "opal",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "printed-open",
+    "name": "Printed \u2014 Subtle",
+    "description": "The last few marks resolve quickly.",
+    "patterns": [
+      {
+        "kind": "printed",
+        "settings": {}
+      }
+    ],
+    "duration": 0.15,
+    "color": {
+      "mode": "none",
+      "palette": "spectrum",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    },
+    "revealStart": 0.72
+  },
+  {
+    "id": "working",
+    "name": "Stir + Ripple",
+    "description": "Irregular flow with a repeating surface wave.",
+    "patterns": [
+      {
+        "kind": "stir",
+        "settings": {
+          "strength": 0.55,
+          "speed": 2.45,
+          "distortion": 1
+        }
+      },
+      {
+        "kind": "ripple",
+        "settings": {
+          "strength": 0.28,
+          "travel": 5,
+          "width": 0.32,
+          "originX": -0.3,
+          "originY": -0.45
+        }
+      }
+    ],
+    "duration": 0.3,
+    "color": {
+      "mode": "accent",
+      "palette": "spectrum",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  },
+  {
+    "id": "entrance-print-ripple",
+    "name": "Printed + Ripple",
+    "description": "Printed marks resolve as a ridge crosses the sphere.",
+    "patterns": [
+      {
+        "kind": "printed",
+        "settings": {}
+      },
+      {
+        "kind": "ripple",
+        "settings": {
+          "strength": 0.45,
+          "travel": 0.3,
+          "width": 0.32,
+          "originX": -0.7,
+          "originY": -0.6
+        }
+      }
+    ],
+    "duration": 0.3,
+    "color": {
+      "mode": "none",
+      "palette": "spectrum",
+      "strength": 0.3,
+      "attack": 0.07,
+      "duration": 0.32
+    }
+  }
+]

@@ -1,3 +1,4 @@
+import { parameters } from "./effect-settings";
 import { ResponseCurve, advanceMomentum, type Momentum } from "./response-curve";
 import {
   assigned,
@@ -6,10 +7,9 @@ import {
   type AvatarExpression,
   type AvatarSetup,
 } from "./expression-model";
-import type { SignalConfig } from "./signal-field";
 export type Uniforms = Record<string, number | number[]>;
 export const historyLength = 128;
-const palettes = [
+export const paletteNames = [
   "mono",
   "aurora",
   "ember",
@@ -27,10 +27,7 @@ const palettes = [
   "dusk",
 ];
 const waveKinds = ["ripple", "sparks", "echo", "bloom"];
-export type PlaybackAction = Assignment | "submit" | "hide";
-export function inputAssignment(action: Assignment | "submit"): Assignment {
-  return action === "submit" ? "typing" : action;
-}
+export type PlaybackAction = Assignment | "hide";
 type Drive = {
   motion: ResponseCurve;
   color: ResponseCurve;
@@ -41,7 +38,11 @@ type Drive = {
 type WaveSignal = { curve: ResponseCurve; profile: number[]; influence: number[]; last: number };
 export class ExpressionPlayer {
   time = 0;
-  phase = 0;
+  get phase() {
+    return this.flowPhase;
+  }
+  private lightPhase = 0;
+  private flowPhase = 0;
   visible = true;
   working = false;
   momentum: Momentum = { speed: 0, phase: 0 };
@@ -58,7 +59,9 @@ export class ExpressionPlayer {
   private randomHistory = Array.from({ length: 4 }, () => new ResponseCurve());
   private seed = 12345;
   private waves = new Map<string, WaveSignal>();
-  private profiles: Record<string, Partial<SignalConfig>> = {};
+  private phases = new Map<string, number>();
+  private printOffset = [0, 0];
+  private inputs: { at: number; action: PlaybackAction; working: boolean; visible: boolean }[] = [];
   setup: AvatarSetup;
   constructor(setup: AvatarSetup) {
     this.setup = setup;
@@ -71,34 +74,19 @@ export class ExpressionPlayer {
     for (const p of e.patterns) {
       const channel = waveKinds.indexOf(p.kind);
       if (channel < 0) continue;
-      const amount =
-        p.kind === "ripple"
-          ? (p.settings.surfaceAmplitude ?? 0.45)
-          : (p.settings.dispatchEnergy ?? 0.8);
+      const s = parameters(p);
+      const amount = s.strength;
       // The source signal is sampled at a spatial delay in the shader. New taps
       // add to this curve; they never replace the wave already traveling outward.
       const duration =
         p.kind === "ripple"
-          ? Math.max(
-              0.1,
-              ((p.settings.surfaceWidth ?? 0.32) * (p.settings.surfaceDuration ?? 0.65)) / 3.14,
-            )
+          ? Math.max(0.1, ((s.width ?? 0.32) * (parameters(p).travel ?? 0.65)) / 3.14)
           : e.duration;
       this.history[channel].add(this.time, duration, amount * scale, 0.35);
       if (p.kind === "ripple") {
-        const travel = Math.min(15, p.settings.surfaceDuration ?? 0.65);
-        const profile = [
-          p.settings.surfaceOriginX ?? -0.7,
-          p.settings.surfaceOriginY ?? -0.6,
-          travel,
-          travel + duration + 0.1,
-        ];
-        const influence = [
-          p.settings.surfaceSilhouette ?? 1,
-          p.settings.surfaceDisplacement ?? 1,
-          p.settings.surfaceShading ?? 1,
-          1,
-        ];
+        const travel = Math.min(15, parameters(p).travel ?? 0.65);
+        const profile = [s.originX ?? -0.7, s.originY ?? -0.6, travel, travel + duration + 0.1];
+        const influence = [s.silhouette ?? 1, s.displacement ?? 1, s.shading ?? 1, 1];
         const key = JSON.stringify([profile, influence]);
         let wave = this.waves.get(key);
         if (!wave) {
@@ -128,22 +116,22 @@ export class ExpressionPlayer {
           4,
           expression.duration,
           expression.color.duration * 4,
-          ...expression.patterns.map((p) => (p.settings.surfaceDuration ?? 0) + 1),
+          ...expression.patterns.map((p) => (parameters(p).travel ?? 0) + 1),
         ),
     );
   }
   trigger(action: PlaybackAction) {
+    this.inputs.push({ at: this.time, action, working: this.working, visible: this.visible });
     if (action === "hide") {
       this.visible = false;
       return;
     }
-    action = inputAssignment(action);
     if (action === "complete") {
-      this.settle(assigned(this.setup, "working"));
+      if (this.working) this.settle(assigned(this.setup, "working"));
       this.working = false;
     }
     if (action === "idle" || action === "working") {
-      this.settle(assigned(this.setup, "working"));
+      if (this.working) this.settle(assigned(this.setup, "working"));
       this.working = action === "working";
       const e = assigned(this.setup, action);
       if (e?.patterns.some((p) => p.kind === "printed" || p.kind === "fill")) {
@@ -165,7 +153,7 @@ export class ExpressionPlayer {
     if (!e) return;
     this.settle(e);
     const drive = this.drives[action];
-    drive.motion.add(this.time, e.duration, 1, e.momentum ? 0.3 : 0.1);
+    drive.motion.add(this.time, e.duration, 1, e.attack === undefined ? (e.momentum ? 0.3 : 0.1) : Math.min(0.9, e.attack / e.duration));
     drive.color.add(
       this.time,
       e.color.duration,
@@ -173,6 +161,35 @@ export class ExpressionPlayer {
       Math.min(0.9, e.color.attack / e.color.duration),
     );
     this.emit(e);
+  }
+  fork(setup: AvatarSetup) {
+    const copy = new ExpressionPlayer(setup);
+    const start = Math.max(0, this.time - 20);
+    const events = this.inputs.filter((event) => event.at >= start);
+    copy.time = start;
+    copy.working = events[0]?.working ?? this.working;
+    copy.visible = events[0]?.visible ?? this.visible;
+    const advanceTo = (time: number) => {
+      while (copy.time < time - 1e-8) {
+        if (!copy.visible) {
+          copy.time = time;
+          break;
+        }
+        copy.advance(Math.min(1 / 120, time - copy.time));
+      }
+    };
+    for (const event of events) {
+      advanceTo(event.at);
+      copy.trigger(event.action);
+    }
+    advanceTo(this.time);
+    copy.time = this.time;
+    // Start comparisons at the current field pose; their rates can then diverge.
+    copy.setPose(this.lightPhase, this.flowPhase);
+    copy.printOffset = [...this.printOffset];
+    copy.seed = this.seed;
+    for (const [key, phase] of this.phases) if (copy.phases.has(key)) copy.phases.set(key, phase);
+    return copy;
   }
   inspect(assignment: Assignment, time = this.time) {
     const drive = this.drives[assignment];
@@ -209,105 +226,172 @@ export class ExpressionPlayer {
     });
   }
   needsAnimation() {
-    return (
-      this.visible &&
-      Boolean(
-        assigned(this.setup, "idle") ||
-        (this.working && assigned(this.setup, "working")) ||
-        this.time < this.settleUntil ||
-        this.momentum.speed > 0.0001,
+    if (!this.visible) return false;
+    if (this.time < this.settleUntil || this.momentum.speed > 0.0001) return true;
+    return assignmentNames.some((assignment) => {
+      const expression = assigned(this.setup, assignment);
+      if (!expression) return false;
+      const held = assignment === "idle" || (assignment === "working" && this.working) ? 1 : 0;
+      const drive = this.drives[assignment];
+      if (
+        Math.abs(drive.held - held) > 0.0001 ||
+        (expression.color.mode !== "none" && Math.abs(drive.colorHeld - held) > 0.0001)
       )
-    );
+        return true;
+      return Boolean(
+        held &&
+        expression.patterns.some((pattern) => {
+          const settings = parameters(pattern);
+          if (pattern.kind === "lava") return settings.flowSpeed > 0 || settings.lightRotation > 0;
+          if (settings.strength === 0) return false;
+          return (
+            waveKinds.includes(pattern.kind) ||
+            pattern.kind === "nudge" ||
+            (["stir", "eddies", "drift", "sweep", "swirl", "orbit"].includes(pattern.kind) &&
+              settings.speed > 0)
+          );
+        }),
+      );
+    });
   }
   advance(delta: number) {
-    this.evaluate(delta);
-  }
-  config(): SignalConfig {
-    // Static appearance is shared. Every motion supplies its own dynamic values.
-    return {
-      ...this.setup.appearance,
-      effects: {
-        ...this.setup.appearance.effects,
-        input: false,
-        selection: false,
-        container: false,
-        placeholder: false,
-      },
-      boundary: "none",
-      shape: "pearl",
-      colorTiming: "always",
-    };
-  }
-  private evaluate(delta: number) {
+    if (!this.visible) return;
     const dt = Math.max(0, Math.min(0.064, delta));
-    if (this.visible) this.time += dt;
-    const amounts: Record<string, number> = {};
-    const settings: Record<string, Partial<SignalConfig>> = {};
-    const paletteWeights = new Map<number, number>();
-    let push = 0,
-      directNudge = 0,
-      flowOnly = 0,
-      flowTotal = 0;
+    this.time += dt;
+    while (this.inputs.length > 1 && this.inputs[1].at < this.time - 20) this.inputs.shift();
     for (const assignment of assignmentNames) {
       const e = assigned(this.setup, assignment);
       if (!e) continue;
       const d = this.drives[assignment];
-      const held = assignment === "idle" ? 1 : assignment === "working" && this.working ? 1 : 0;
-      d.held += (held - d.held) * (1 - Math.exp(-dt * 10));
-      const level = d.held + d.motion.sample(this.time);
-      if (held && d.held > 0.01 && this.time >= d.next) {
-        this.emit(e, d.held);
-        d.next =
-          this.time + Math.max(0.35, ...e.patterns.map((p) => p.settings.surfaceDuration ?? 1.5));
-      }
+      const held = assignment === "idle" || (assignment === "working" && this.working) ? 1 : 0;
+      d.held += (held - d.held) * (1 - Math.exp(-dt * (held ? 10 : 6)));
       d.colorHeld +=
         (held - d.colorHeld) *
         (1 - Math.exp((-dt * 3) / Math.max(0.05, held ? e.color.attack : e.color.duration)));
-      let color = d.color.sample(this.time) + d.colorHeld * e.color.strength;
-      if (e.color.mode === "none") color = 0;
-      const palette = palettes.indexOf(
-        e.color.mode === "custom"
-          ? e.color.palette
-          : (this.setup.appearance.activityColor ?? "opal"),
-      );
-      if (palette > 0) paletteWeights.set(palette, (paletteWeights.get(palette) ?? 0) + color);
-      for (const p of e.patterns) {
-        const key = p.kind;
-        amounts[key] = (amounts[key] ?? 0) + level;
-        if (level > 0.0001) this.profiles[key] = p.settings;
-        settings[key] = this.profiles[key] ?? p.settings;
-        if (key === "nudge") {
-          const energy = p.settings.typingEnergy ?? 0.6;
-          if (e.momentum) push += level * energy * 34;
-          else directNudge += level * energy * 2;
-        }
-        if (key === "swirl" || key === "orbit") {
-          flowTotal += level;
-          if (e.distortionOnly) flowOnly += level;
-        }
+      if (held && d.held > 0.01 && this.time >= d.next) {
+        this.emit(e, d.held);
+        d.next = this.time + Math.max(0.35, ...e.patterns.map((p) => parameters(p).travel ?? 1.5));
       }
     }
-    const priorMomentumPhase = this.momentum.phase;
-    advanceMomentum(this.momentum, push, dt, 7, 2.2);
-    const lavaSpeed = (amounts.lava ?? 0) * 0.38 * Number(settings.lava?.loadingRate ?? 1);
-    this.phase +=
-      dt * (lavaSpeed + 2.4 * (1 - Math.exp(-directNudge / 2.4))) +
-      this.momentum.phase -
-      priorMomentumPhase;
-    return { amounts, settings, paletteWeights, flowOnly, flowTotal };
+    const contributions = this.contributions();
+    const priorMomentum = this.momentum.phase;
+    advanceMomentum(this.momentum, contributions.push, dt, 7, 2.2);
+    const nudge =
+      dt * 2.4 * (1 - Math.exp(-contributions.nudge / 2.4)) + this.momentum.phase - priorMomentum;
+    this.lightPhase += dt * contributions.lightSpeed + nudge;
+    this.flowPhase += dt * contributions.flowSpeed + nudge;
+    for (const c of contributions.effects) {
+      this.phases.set(c.key, (this.phases.get(c.key) ?? 0) + dt * c.speed);
+      if (c.kind === 6) {
+        this.printOffset[0] += dt * c.amount * c.speed * Math.cos(c.options[2]);
+        this.printOffset[1] += dt * c.amount * c.speed * Math.sin(c.options[2]);
+      }
+    }
+    for (const [key, wave] of this.waves)
+      if (this.time - wave.last > wave.profile[3]) this.waves.delete(key);
   }
-  frame(delta: number): Uniforms {
-    const { amounts, settings, paletteWeights, flowOnly, flowTotal } = this.evaluate(delta);
-    const amount = (key: string, setting: keyof SignalConfig, fallback: number) =>
-      (amounts[key] ?? 0) * Number(settings[key]?.[setting] ?? fallback);
+  setPose(light: number, flow = light) {
+    this.lightPhase = light;
+    this.flowPhase = flow;
+  }
+  private contributions() {
+    const effects: {
+      key: string;
+      kind: number;
+      amount: number;
+      speed: number;
+      coupling: number;
+      phase: number;
+      options: number[];
+    }[] = [];
+    const paletteWeights = new Map<number, number>();
+    let push = 0,
+      nudge = 0,
+      lightSpeed = 0,
+      flowSpeed = 0,
+      flowStrength = 0,
+      lava = false,
+      sparkCount = 0;
+    for (const assignment of assignmentNames) {
+      const expression = assigned(this.setup, assignment);
+      if (!expression) continue;
+      const d = this.drives[assignment];
+      const level = d.held + d.motion.sample(this.time);
+      if (expression.color.mode !== "none") {
+        const palette = paletteNames.indexOf(
+          expression.color.mode === "custom"
+            ? expression.color.palette
+            : (this.setup.appearance.activityColor ?? "opal"),
+        );
+        const color = d.color.sample(this.time) + d.colorHeld * expression.color.strength;
+        if (palette > 0) paletteWeights.set(palette, (paletteWeights.get(palette) ?? 0) + color);
+      }
+      expression.patterns.forEach((p, index) => {
+        const s = parameters(p);
+        if (p.kind === "lava") {
+          lava = true;
+          flowStrength += level * s.flowStrength;
+          lightSpeed += level * 0.38 * s.lightRotation;
+          flowSpeed += level * 0.38 * s.flowSpeed;
+        }
+        if (p.kind === "nudge") {
+          if (expression.momentum) push += level * s.strength * 34;
+          else nudge += level * s.strength * 2;
+        }
+        if (p.kind === "sparks") sparkCount = Math.max(sparkCount, s.count);
+        const kind = [
+          "",
+          "pressure",
+          "tilt",
+          "ruffle",
+          "stir",
+          "eddies",
+          "drift",
+          "sweep",
+          "swirl",
+          "orbit",
+          "gather",
+        ].indexOf(p.kind);
+        if (kind < 1 || level < 0.00001) return;
+        const key = `${assignment}:${expression.id}:${index}:${p.kind}`;
+        const strength = s.strength;
+        const speed = s.speed ?? 0;
+        effects.push({
+          key,
+          kind,
+          amount: level * strength,
+          speed,
+          coupling: s.distortion ?? 1,
+          phase: this.phases.get(key) ?? 0,
+          options: [
+            s.spread ?? 3,
+            s.offset ?? 0.36,
+            p.kind === "sweep" ? (s.direction ?? 0) : ((s.angle ?? 20) * Math.PI) / 180,
+            Number(Boolean(expression.distortionOnly)),
+          ],
+        });
+      });
+    }
+    return {
+      effects,
+      paletteWeights,
+      push,
+      nudge,
+      lightSpeed,
+      flowSpeed,
+      flowStrength: lava ? flowStrength : (this.setup.appearance.idleAmount ?? 1.6),
+      sparkCount,
+    };
+  }
+  // Sampling never advances time, emits a pulse, or consumes history.
+  frame(): Uniforms {
+    const { effects, paletteWeights, flowStrength, sparkCount } = this.contributions();
     const rippleTravel = Math.max(
       0.3,
-      ...this.setup.expressions
-        .filter((e) => Object.values(this.setup.assignments).includes(e.id))
+      ...Object.values(this.setup.assignments)
+        .filter((e): e is AvatarExpression => e !== null)
         .flatMap((e) =>
-          e.patterns
-            .filter((p) => p.kind === "ripple")
-            .map((p) => p.settings.surfaceDuration ?? 0.65),
+          e.patterns.filter((p) => p.kind === "ripple").map((p) => parameters(p).travel ?? 0.65),
         ),
     );
     const spans = [Math.min(16, rippleTravel + 0.8), 0.6, 0.8, 0.8];
@@ -321,8 +405,6 @@ export class ExpressionPlayer {
       for (const c of this.randomHistory)
         random.push(c.sample(this.time - (i * spans[1]) / (historyLength - 1)));
     }
-    for (const [key, wave] of this.waves)
-      if (this.time - wave.last > wave.profile[3]) this.waves.delete(key);
     const waveTexture = Array.from({ length: 128 * 8 }, () => 0),
       waveProfiles = Array.from({ length: 32 }, () => 0),
       waveInfluences = Array.from({ length: 32 }, () => 0);
@@ -338,19 +420,18 @@ export class ExpressionPlayer {
       .slice(0, 4)
       .flatMap(([id, weight]) => [id, weight, 0, 0]);
     while (accents.length < 16) accents.push(0);
-    const pressure = amount("pressure", "typingEnergy", 0.28);
-    const tilt = amount("tilt", "typingEnergy", 1) * 0.25;
-    const ripple =
-      settings.ripple ?? this.entrance?.patterns.find((p) => p.kind === "ripple")?.settings ?? {};
     const age = this.time - this.opened;
     const reveal = this.entrance?.patterns.find((p) => p.kind === "printed" || p.kind === "fill");
     const revealStart = Math.max(0, Math.min(1, this.entrance?.revealStart ?? 0));
     const appearance = reveal
       ? revealStart + (1 - revealStart) * Math.min(1, age / Math.max(0.1, this.entrance!.duration))
       : 1;
-    const loading = Math.min(1, amounts.orbit ?? 0);
+    const channels = effects.slice(0, 32);
+    const effectData = channels.flatMap((c) => [c.kind, c.amount, c.phase, c.coupling]);
+    const effectOptions = channels.flatMap((c) => c.options);
+    while (effectData.length < 128) effectData.push(0);
+    while (effectOptions.length < 128) effectOptions.push(0);
     return {
-      u_driven: 1,
       waveTexture,
       "u_waveProfiles[0]": waveProfiles,
       "u_waveInfluences[0]": waveInfluences,
@@ -358,109 +439,17 @@ export class ExpressionPlayer {
       "u_history[0]": packet,
       "u_randomHistory[0]": random,
       "u_accents[0]": accents,
-      u_phase: this.phase,
-      u_seed: 0.37,
-      u_time: this.time,
-      u_wake: 0,
-      u_momentum: 0,
-      u_releaseAge: 10,
-      u_priorReleaseAge: 10,
-      u_typingSparkAge: 10,
-      u_releasePhase: 0,
-      u_priorReleasePhase: 0,
-      u_burst: amount("gather", "dispatchEnergy", 1),
-      u_echo: 0,
-      u_releaseMode: 0,
-      u_dispatchTarget: 0,
-      u_tap: amount("ruffle", "typingEnergy", 0.5),
-      u_attack: 0,
-      u_dispatch: 0,
-      u_colorActivity: Math.min(
-        1,
-        [...paletteWeights.values()].reduce((a, b) => a + b, 0),
-      ),
-      u_poke: [
-        pressure * Math.cos(this.phase * 1.3) + tilt,
-        pressure * Math.sin(this.phase * 1.3) + tilt * 0.4,
-      ],
-      u_poke2: [0, 0],
-      u_typingStyle: pressure > 0.001 ? 4 : (amounts.ruffle ?? 0) > 0.001 ? 6 : 5,
-      u_pressureProfile: [
-        settings.pressure?.pressureSpread ?? 3,
-        settings.pressure?.pressureOffset ?? 0.36,
-      ],
-      u_mixing: 1,
-      u_mixCustom: 1,
-      u_lavaMix: 1,
-      u_loading: 0,
-      u_loadingMotion: 1,
-      u_effectMix: [1, 1, 1],
-      u_mixWaveWeight: 1,
-      u_mixDrift: [
-        amount("drift", "loadingStrength", 1),
-        settings.drift?.coupling ?? 1,
-        this.time,
-        this.time * (settings.drift?.loadingRate ?? 1),
-      ],
-      u_mixEddies: [
-        amount("eddies", "loadingStrength", 1),
-        settings.eddies?.coupling ?? 1,
-        this.time * (settings.eddies?.loadingRate ?? 1),
-        0,
-      ],
-      u_mixAgitation: [
-        amount("stir", "loadingStrength", 1),
-        settings.stir?.coupling ?? 1,
-        this.time * (settings.stir?.loadingRate ?? 1),
-        0,
-      ],
-      u_mixWave: [
-        amount("sweep", "loadingStrength", 1),
-        settings.sweep?.coupling ?? 1,
-        this.time * (settings.sweep?.loadingRate ?? 1),
-        0,
-      ],
-      u_mixWaveMode: [
-        "orbit",
-        "alternating",
-        "bands",
-        "strong",
-        "right-left",
-        "drift",
-        "quicker",
-        "agitated",
-        "left-right",
-        "top-bottom",
-        "bottom-top",
-        "random",
-      ].indexOf(settings.sweep?.loadingMotion ?? "alternating"),
-      u_mixDriftAngle: ((settings.drift?.driftAngle ?? 20) * Math.PI) / 180,
-      u_orbit: [
-        amount("swirl", "idleSwirl", 0.8),
-        amount("orbit", "workingOrbit", 1),
-        settings.swirl?.swirlRate ?? 0.8,
-        settings.orbit?.orbitRate ?? 1.8,
-      ],
-      u_flowOnly: flowTotal ? flowOnly / flowTotal : 0,
-      u_loopRipple: [0, 4],
-      u_entranceRipple: [0, 0],
-      u_surfaceWave: [0, 0],
-      u_surfaceExpression: [
-        ripple.surfaceAmplitude ?? 0.45,
-        Math.min(15, ripple.surfaceDuration ?? 0.65),
-      ],
-      u_surfaceOrigin: [ripple.surfaceOriginX ?? -0.7, ripple.surfaceOriginY ?? -0.6],
-      u_surfaceInfluence: [
-        ripple.surfaceSilhouette ?? 1,
-        ripple.surfaceDisplacement ?? 1,
-        ripple.surfaceShading ?? 1,
-      ],
-      u_sparkCount: settings.sparks?.sparkCount ?? 11,
+      "u_effects[0]": effectData,
+      "u_effectOptions[0]": effectOptions,
+      u_effectCount: channels.length,
+      u_phase: this.flowPhase,
+      u_lavaPhase: [this.lightPhase, this.flowPhase],
+      u_printOffset: [...this.printOffset],
+      u_idleAmount: flowStrength,
+      u_sparkCount: sparkCount,
       u_appearance: appearance,
       u_fillWake: Number(reveal?.kind === "fill"),
-      u_idleAmount: settings.lava?.idleAmount ?? this.setup.appearance.idleAmount ?? 1.6,
       u_enableOrb: Number(this.visible),
-      u_drivenOrbit: loading,
     };
   }
 }

@@ -24,6 +24,7 @@ import {
   number,
 } from './AnatomyParts';
 import { clamp } from './diagramDrag';
+import { parameters } from '../../../vrsjmp/src/avatar/effect-settings';
 import { assigned } from '@/lib/avatar/workspace';
 import {
   impulseSample,
@@ -66,10 +67,13 @@ const chapters = [
     'Group coverage into levels, then blend those levels into the coverage and pigment.',
   ],
   ['Coordinates', 'Move the coordinates used to sample the field.'],
-  ['Clock', 'An advancing phase drives the gradient, flow, and palette.'],
+  [
+    'Clock',
+    'Flow and light have separate phases. These plots show fixed speeds; during playback, speed edits change the increment without resetting either phase.',
+  ],
   [
     'Tilt',
-    'A keypress gives a damped spring a kick. The spring briefly shifts the light direction.',
+    'A tap creates a short response. Tilt uses its strength to shift the light direction, then returns to the original direction.',
   ],
   [
     'Ripple',
@@ -138,10 +142,17 @@ export function Recipe() {
   const [x, y] = point;
   const config: SignalConfig = {
     ...setup.appearance,
-    ...Object.assign(
-      {},
-      ...(assigned(setup, 'idle')?.patterns.map((p) => p.settings) ?? []),
-    ),
+    ...(() => {
+      const lava = assigned(setup, 'idle')?.patterns.find(
+        (p) => p.kind === 'lava',
+      );
+      const values = lava ? parameters(lava) : {};
+      return {
+        idleAmount: values.flowStrength ?? 2,
+        flowRate: values.flowSpeed ?? 2,
+        lightRotationRate: values.lightRotation ?? 1,
+      };
+    })(),
     ...patch,
     shape: 'pearl',
   };
@@ -150,18 +161,26 @@ export function Recipe() {
     angle = config.lightAngle ?? 0,
     fill = config.fill ?? 0.5,
     detail = config.idleAmount ?? 1.9;
+  const lightPhase = phase * (config.lightRotationRate ?? 1);
+  const flowPhase = phase * (config.flowRate ?? 1);
   const lightAngle =
-    phase - 0.7 + 0.24 * Math.sin(phase * 1.7) + (angle * Math.PI) / 180;
+    lightPhase -
+    0.7 +
+    0.24 * Math.sin(lightPhase * 1.7) +
+    (angle * Math.PI) / 180;
   const dome = Math.sqrt(Math.max(0, 1 - x * x - y * y)),
     projection = x * Math.cos(lightAngle) + y * Math.sin(lightAngle);
   const flow =
-    Math.sin(x * 2.8 + phase * 1.4) * Math.cos(y * 3.1 - phase) * 0.09 * detail;
+    Math.sin(x * 2.8 + flowPhase * 1.4) *
+    Math.cos(y * 3.1 - flowPhase) *
+    0.09 *
+    detail;
   function densityAt(px: number, py: number) {
     const dome = Math.sqrt(Math.max(0, 1 - px * px - py * py));
     const proj = px * Math.cos(lightAngle) + py * Math.sin(lightAngle);
     const f =
-      Math.sin(px * 2.8 + phase * 1.4) *
-      Math.cos(py * 3.1 - phase) *
+      Math.sin(px * 2.8 + flowPhase * 1.4) *
+      Math.cos(py * 3.1 - flowPhase) *
       0.09 *
       detail;
     const tone = clamp(
@@ -329,7 +348,10 @@ export function Recipe() {
     ...(step === 9 ? { [operations[operation]]: amount } : {}),
     ...(step === 11
       ? {
-          inspectPoke: [impulse.value, 0] as [number, number],
+          inspectPoke: [impulse.value * 0.25, impulse.value * 0.1] as [
+            number,
+            number,
+          ],
           typingMotion: 'light',
         }
       : {}),
@@ -337,9 +359,8 @@ export function Recipe() {
       ? {
           surfaceWave: amount,
           surfacePhase: phase,
+          surfaceDuration: duration,
           surfaceWidth: 0.32,
-          surfaceWavelength: Math.PI / 6,
-          surfaceDamping: 0,
           surfaceOriginX: -0.3,
           surfaceOriginY: -0.45,
           surfaceSilhouette: 1,
@@ -483,7 +504,7 @@ export function Recipe() {
                     )}
                     {step === 4 && (
                       <RangeControl
-                        label="Flow amount"
+                        label="Flow strength"
                         value={detail}
                         min={0}
                         max={3}
@@ -515,6 +536,28 @@ export function Recipe() {
                           min={0}
                           max={1}
                           onChange={(fill) => set({ fill })}
+                        />
+                      </>
+                    )}
+                    {step === 10 && (
+                      <>
+                        <RangeControl
+                          label="Light rotation"
+                          value={config.lightRotationRate ?? 1}
+                          min={0}
+                          max={3}
+                          step={0.05}
+                          onChange={(lightRotationRate) =>
+                            set({ lightRotationRate })
+                          }
+                        />
+                        <RangeControl
+                          label="Flow speed"
+                          value={config.flowRate ?? 1}
+                          min={0}
+                          max={3}
+                          step={0.05}
+                          onChange={(flowRate) => set({ flowRate })}
                         />
                       </>
                     )}
@@ -703,7 +746,7 @@ export function Recipe() {
                   <FlowLesson
                     x={x}
                     y={y}
-                    phase={phase}
+                    phase={flowPhase}
                     detail={detail}
                     onPick={pick}
                   />
@@ -761,7 +804,7 @@ export function Recipe() {
                   <ColorLesson
                     x={x}
                     y={y}
-                    phase={phase}
+                    phase={flowPhase}
                     density={coverage}
                     bands={0}
                     saturation={config.saturation ?? 0.45}
@@ -788,7 +831,7 @@ export function Recipe() {
                       sample={densityAt}
                       operation={operation}
                       amount={amount}
-                      phase={phase}
+                      phase={flowPhase}
                       x={x}
                       y={y}
                       onPick={pick}
@@ -796,26 +839,43 @@ export function Recipe() {
                     <OperationValues
                       operation={operation}
                       amount={amount}
-                      phase={phase}
+                      phase={flowPhase}
                       x={x}
                       y={y}
                     />
                   </>
                 )}
                 {step === 10 && (
-                  <ClockLesson
-                    phase={phase}
-                    onPhase={scrub}
-                    x={x - clockDisplacement[0]}
-                    y={y - clockDisplacement[1]}
-                    lightOffset={(angle * Math.PI) / 180}
-                    detail={detail}
-                  />
+                  <>
+                    <ClockLesson
+                      phase={phase}
+                      onPhase={scrub}
+                      x={x - clockDisplacement[0]}
+                      y={y - clockDisplacement[1]}
+                      lightOffset={(angle * Math.PI) / 180}
+                      lightRate={config.lightRotationRate ?? 1}
+                      flowRate={config.flowRate ?? 1}
+                      detail={detail}
+                    />
+                    <CodeValues
+                      rows={[
+                        [
+                          'lightPhase += dt * .38 * lightRotation;',
+                          number(lightPhase),
+                        ],
+                        [
+                          'flowPhase += dt * .38 * flowSpeed;',
+                          number(flowPhase),
+                        ],
+                      ]}
+                    />
+                  </>
                 )}
                 {step === 11 && (
                   <ImpulseGraph
                     time={phase}
                     amplitude={amount}
+                    expression={config.expression}
                     onTime={scrub}
                   />
                 )}
@@ -824,6 +884,7 @@ export function Recipe() {
                     phase={phase}
                     amplitude={amount}
                     part={Number(wavePart)}
+                    duration={duration}
                     x={x}
                     y={y}
                     onPick={pick}

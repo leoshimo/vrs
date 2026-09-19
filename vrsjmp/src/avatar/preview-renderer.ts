@@ -2,7 +2,7 @@ import { signalFragment } from "./signal-field";
 import { advancePreview } from "./preview-frame";
 import { frameTask } from "./frame-clock";
 import { neutralInk } from "./preview-colors";
-import { initialSignalUniforms, signalUniforms } from "./SignalField";
+import { appearanceUniforms } from "./appearance-uniforms";
 import { ExpressionPlayer, type Uniforms } from "./expression-player";
 
 type Preview = {
@@ -18,7 +18,7 @@ type Preview = {
   onFrame?: (player: ExpressionPlayer, paint: boolean) => void;
 };
 const previews = new Set<Preview>();
-let render: ((p: Preview, delta: number) => void) | undefined;
+let render: ((p: Preview) => void) | undefined;
 let driver: ReturnType<typeof frameTask> | undefined;
 function createRenderer() {
   const source = document.createElement("canvas");
@@ -90,20 +90,19 @@ function createRenderer() {
       else gl!.uniform1fv(location, v);
     }
   }
-  return (p: Preview, delta: number) => {
+  return (p: Preview) => {
     const size = p.resolution + 80;
     if (source.width !== size) {
       source.width = size;
       source.height = size;
       gl.viewport(0, 0, size, size);
     }
-    const config = p.player.config();
-    const dynamic = p.player.frame(delta);
+    const config = p.player.setup.appearance;
+    const dynamic = p.player.frame();
     wavePixels.set(dynamic.waveTexture as number[]);
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 128, 8, gl.RED, gl.FLOAT, wavePixels);
     upload({
-      ...initialSignalUniforms,
-      ...signalUniforms(config, true, p.dark),
+      ...appearanceUniforms(config, p.dark),
       ...dynamic,
       u_resolution: [size, size],
       u_pixelRatio: 1,
@@ -128,7 +127,7 @@ function createRenderer() {
 function paint(p: Preview) {
   try {
     render ??= createRenderer();
-    render(p, 0);
+    render(p);
     p.onFrame?.(p.player, true);
     p.dirty = false;
   } catch (error) {
