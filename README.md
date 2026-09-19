@@ -7,8 +7,6 @@
   </picture>
 </p>
 
-<p align="center">A personal programming environment that brings me joy.</p>
-
 > In the multiverse, you can live up to your ultimate potential. We discovered a
 > way to temporarily link your consciousness to another version of yourself,
 > accessing all of their memories and skills.
