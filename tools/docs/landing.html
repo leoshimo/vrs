@@ -1,0 +1,27 @@
+$NAV
+<main id="content" class="landing">
+  <section class="hero" aria-labelledby="project-title">
+    <h1 id="project-title" class="sr-only">VRS</h1>
+    <div class="lockup" aria-hidden="true">
+      <div class="orb-well">
+        <picture class="orb-fallback">
+          <source media="(prefers-color-scheme: dark)" srcset="../assets/visuals/sphere-dark.png">
+          <img src="../assets/visuals/sphere-light.png" width="640" height="640" alt="">
+        </picture>
+        <canvas id="live-orb"></canvas>
+      </div>
+      <div class="identity"><div class="hero-mark" id="hero-mark">
+        <img class="logomark" src="../assets/visuals/logomark.png" width="1303" height="426" alt="">
+      </div></div>
+    </div>
+    <div class="landing-copy">$COPY</div>
+  </section>
+  <div class="landing-bottom">
+    <code class="repl"><span>vrs&gt;</span> (format "Hello, {}!" "computer")<br><span class="result">"Hello, computer!"</span></code>
+    <a class="tour-link" href="tour.html"><img class="tour-cue" src="../assets/visuals/manicule.png" width="36" height="16" alt="">Take the tour</a>
+  </div>
+  <footer class="project-footer">
+    <button id="motion-switch" type="button" hidden>Pause motion</button>
+    <span>Built at the <a href="https://www.recurse.com/">Recurse Center</a>.</span>
+  </footer>
+</main>

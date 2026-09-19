@@ -3,9 +3,9 @@ name: Documentation
 on:
   push:
     branches: [main]
-    paths: ['docs/**', 'README.md', 'assets/**', 'tools/docs/**', '.github/workflows/docs.yml']
+    paths: ['docs/**', 'README.md', 'assets/**', 'tools/docs/**', 'tools/visuals/**', '.github/workflows/docs.yml']
   pull_request:
-    paths: ['docs/**', 'README.md', 'assets/**', 'tools/docs/**', '.github/workflows/docs.yml']
+    paths: ['docs/**', 'README.md', 'assets/**', 'tools/docs/**', 'tools/visuals/**', '.github/workflows/docs.yml']
   workflow_dispatch:
 
 permissions:
@@ -31,6 +31,24 @@ jobs:
         run: uv run --locked tools/docs/build.py --test
       - name: Build and check links
         run: uv run --locked tools/docs/build.py
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tools/visuals/package-lock.json
+      - name: Install visual checks
+        working-directory: tools/visuals
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium webkit
+      - name: Review the generated site in browsers
+        working-directory: tools/visuals
+        run: npm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: site-review
+          path: tools/visuals/artifacts
       - uses: actions/upload-pages-artifact@v4
         with:
           path: _site

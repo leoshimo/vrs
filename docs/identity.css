@@ -1,0 +1,27 @@
+/* Shared identity: Charter, one logomark per composition, quiet navigation. */
+:root { --paper:#fbfaf5; --ink:#252c28; --muted:#6b7067; --line:#d9dbd2; --accent:#35613b; --code:#f0f1e9; }
+@media (prefers-color-scheme:dark) {
+  :root { --paper:#171b17; --ink:#e8eae2; --muted:#a8b09f; --line:#394234; --accent:#b4d4a5; --code:#242a21; }
+}
+[hidden] { display:none!important; }
+.site-masthead { height:62px; margin:28px auto 42px; padding:0; gap:28px; }
+.wordmark { display:flex; align-items:center; flex:none; width:57px; height:34px; }
+.wordmark img { width:57px; filter:grayscale(1) contrast(8); mix-blend-mode:multiply; }
+.site-masthead nav { gap:26px; }
+.site-masthead nav a { font:400 15px/1.4 var(--serif); padding:8px 0; }
+.github { display:flex; align-items:center; margin-left:auto; color:var(--ink); padding:7px; margin-right:-7px; }
+.markdown-source { display:inline-block; font:14px/1.5 var(--serif); color:var(--muted); margin:-12px 0 32px; }
+.document-title h1 { margin-bottom:25px; }
+@media (max-width:760px) {
+  .site-masthead { height:58px; gap:22px; }
+  .site-masthead nav { gap:20px; }
+}
+@media (max-width:480px) {
+  .site-masthead { height:54px; gap:16px; margin-top:16px; }
+  .wordmark,.wordmark img { width:48px; }
+  .site-masthead nav { gap:16px; }
+  .site-masthead nav a { font-size:14px; }
+  .github svg { width:18px; height:18px; }
+}
+
+@media(prefers-color-scheme:dark) { .wordmark img { filter:grayscale(1) contrast(8) invert(1); mix-blend-mode:screen; } }
