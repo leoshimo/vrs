@@ -1,42 +1,14 @@
-import {
-  assignmentNames,
-  previewAssignment,
-  type Assignment,
-  type AvatarExpression,
-  type AvatarSetup,
-} from './workspace';
-import { inputAssignment, type PlaybackAction } from '../../../../vrsjmp/src/avatar/expression-player';
-
-export type Comparison = { id: string | null; input: Assignment };
-export const comparisonKey = (p: Comparison) => `${p.input}:${p.id ?? 'none'}`;
-export function comparisonAction(
-  input: Assignment,
-  action: PlaybackAction | 'reset' | 'resetHidden',
-): PlaybackAction | null {
-  if (input === 'working' && ['idle', 'complete', 'reset', 'resetHidden'].includes(action))
-    return 'idle';
-  if (action === 'submit') return input === inputAssignment(action) ? input : null;
-  return input === action ? input : null;
-}
-export function defaultInput(e: AvatarExpression): Assignment {
-  return e.patterns.every((p) => p.kind === 'lava')
-    ? 'idle'
-    : previewAssignment(e);
-}
-export function comparisonSetup(
-  setup: AvatarSetup,
-  p: Comparison,
-): AvatarSetup {
+import type { Assignment, AvatarExpression } from './workspace';
+export type Comparison = {
+  key: string;
+  input: Assignment;
+  expression: AvatarExpression | null;
+};
+export function comparisonSetup<
+  T extends { assignments: Record<Assignment, AvatarExpression | null> },
+>(setup: T, input: Assignment, expression?: AvatarExpression): T {
   return {
     ...setup,
-    assignments: Object.fromEntries(
-      assignmentNames.map((a) => [a, a === p.input ? p.id : null]),
-    ) as AvatarSetup['assignments'],
+    assignments: { ...setup.assignments, [input]: expression ?? null },
   };
-}
-export function assignmentComparisons(setup: AvatarSetup): Comparison[] {
-  return assignmentNames.flatMap((input) => {
-    const id = setup.assignments[input];
-    return id ? [{ id, input }] : [];
-  });
 }

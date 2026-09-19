@@ -1,0 +1,214 @@
+{
+  "appearance": {
+    "shape": "pearl",
+    "placement": "leading",
+    "breathe": true,
+    "selection": "fill",
+    "texture": "bayer",
+    "effects": {
+      "indicator": true,
+      "selection": false,
+      "input": false,
+      "container": false,
+      "placeholder": false
+    },
+    "edge": "wave",
+    "amount": 0.22,
+    "pitch": 2.5,
+    "expression": 1.25,
+    "color": "mono",
+    "activityColor": "mono",
+    "toneSteps": 5,
+    "colorStrength": 0.5,
+    "fill": 0.5,
+    "contrast": 1.25,
+    "matrix": 8,
+    "saturation": 0.5,
+    "activitySaturation": 0.5,
+    "gravity": 0.1,
+    "volume": 1.5,
+    "lightStrength": 0.95,
+    "lightAngle": -180,
+    "uiSurface": "porcelain"
+  },
+  "assignments": {
+    "idle": {
+      "id": "rest",
+      "name": "Lava",
+      "description": "A flowing field with rotating light.",
+      "patterns": [
+        {
+          "kind": "lava",
+          "settings": {
+            "flowStrength": 1.66,
+            "flowSpeed": 2,
+            "lightRotation": 1
+          }
+        }
+      ],
+      "duration": 0.3,
+      "color": {
+        "mode": "none",
+        "palette": "spectrum",
+        "strength": 0.3,
+        "attack": 0.07,
+        "duration": 0.32
+      },
+      "custom": false
+    },
+    "typing": {
+      "id": "field-nudge",
+      "name": "Nudge",
+      "description": "Briefly accelerates the field, then returns to its normal pace.",
+      "patterns": [
+        {
+          "kind": "nudge",
+          "settings": {
+            "strength": 1.04
+          }
+        }
+      ],
+      "duration": 0.24,
+      "color": {
+        "mode": "none",
+        "palette": "spectrum",
+        "strength": 0.3,
+        "attack": 0.07,
+        "duration": 0.32
+      },
+      "custom": false,
+      "momentum": false
+    },
+    "submit": {
+      "id": "field-nudge",
+      "name": "Nudge",
+      "description": "Briefly accelerates the field, then returns to its normal pace.",
+      "patterns": [
+        {
+          "kind": "nudge",
+          "settings": {
+            "strength": 1.04
+          }
+        }
+      ],
+      "duration": 0.24,
+      "color": {
+        "mode": "none",
+        "palette": "spectrum",
+        "strength": 0.3,
+        "attack": 0.07,
+        "duration": 0.32
+      },
+      "custom": false,
+      "momentum": false
+    },
+    "working": {
+      "id": "working",
+      "name": "Stir + Ripple",
+      "description": "Irregular flow with a repeating surface wave.",
+      "patterns": [
+        {
+          "kind": "stir",
+          "settings": {
+            "strength": 0.55,
+            "speed": 2.45,
+            "distortion": 1
+          }
+        },
+        {
+          "kind": "ripple",
+          "settings": {
+            "strength": 0.28,
+            "travel": 5,
+            "width": 0.32,
+            "originX": -0.3,
+            "originY": -0.45
+          }
+        }
+      ],
+      "duration": 0.3,
+      "color": {
+        "mode": "accent",
+        "palette": "spectrum",
+        "strength": 0.3,
+        "attack": 0.07,
+        "duration": 0.32
+      },
+      "custom": false
+    },
+    "open": {
+      "id": "printed-open",
+      "name": "Printed — Subtle",
+      "description": "",
+      "patterns": [
+        {
+          "kind": "printed",
+          "settings": {}
+        }
+      ],
+      "duration": 0.15,
+      "color": {
+        "mode": "none",
+        "palette": "spectrum",
+        "strength": 0.3,
+        "attack": 0.07,
+        "duration": 0.32
+      },
+      "revealStart": 0.72,
+      "custom": false
+    },
+    "openAfterIdle": {
+      "id": "entrance-print-ripple",
+      "name": "Printed + Ripple",
+      "description": "Printed marks resolve as a ridge crosses the sphere.",
+      "patterns": [
+        {
+          "kind": "printed",
+          "settings": {}
+        },
+        {
+          "kind": "ripple",
+          "settings": {
+            "strength": 0.45,
+            "travel": 0.3,
+            "width": 0.32,
+            "originX": -0.7,
+            "originY": -0.6
+          }
+        }
+      ],
+      "duration": 0.3,
+      "color": {
+        "mode": "none",
+        "palette": "spectrum",
+        "strength": 0.3,
+        "attack": 0.07,
+        "duration": 0.32
+      },
+      "custom": false
+    },
+    "complete": {
+      "id": "sparks",
+      "name": "Sparks",
+      "description": "Short marks escape the surface.",
+      "patterns": [
+        {
+          "kind": "sparks",
+          "settings": {
+            "strength": 0.8,
+            "count": 11
+          }
+        }
+      ],
+      "duration": 0.3,
+      "color": {
+        "mode": "none",
+        "palette": "spectrum",
+        "strength": 0.3,
+        "attack": 0.07,
+        "duration": 0.32
+      },
+      "custom": false
+    }
+  }
+}

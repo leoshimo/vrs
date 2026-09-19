@@ -6,7 +6,7 @@ const { FrameClock } = await import('./frame-clock.ts');
 const { SignalTimeline } = await import('./signal-timeline.ts');
 const { neutralInk } = await import('./preview-colors.ts');
 const { makeWorkspace } = await import('./workspace.ts');
-const { comparisonSetup, comparisonAction } = await import('./comparison.ts');
+const { comparisonSetup } = await import('./comparison.ts');
 const { ExpressionPlayer } =
   await import('../../../../vrsjmp/src/avatar/expression-player.ts');
 
@@ -76,16 +76,18 @@ test('offscreen advancement matches rendered motion without building shader pack
       a.trigger('idle');
       b.trigger('idle');
     }
-    a.frame(1 / 60);
+    a.advance(1 / 60);
+    a.frame();
     b.advance(1 / 60);
   }
-  assert.deepEqual(a.frame(0), b.frame(0));
+  assert.deepEqual(a.frame(), b.frame());
 });
 test('a triggered comparison can sleep after settling and wake for another input', () => {
   const setup = comparisonSetup(makeWorkspace(), {
     id: 'sparks',
     input: 'complete',
   });
+  setup.assignments.idle = null;
   const player = new ExpressionPlayer(setup);
   assert.equal(player.needsAnimation(), false);
   player.trigger('complete');
@@ -102,10 +104,9 @@ test('Working release retains long-travel waves until they leave the sphere', ()
     id: 'working',
     input: 'working',
   });
+  setup.assignments.idle = null;
   const expression = setup.expressions.find((e) => e.id === 'working');
-  expression.patterns.find(
-    (p) => p.kind === 'ripple',
-  ).settings.surfaceDuration = 8;
+  expression.patterns.find((p) => p.kind === 'ripple').settings.travel = 8;
   const player = new ExpressionPlayer(setup);
   player.trigger('working');
   for (let i = 0; i < 60; i++) player.advance(1 / 60);
@@ -144,15 +145,6 @@ test('timeline keeps assignment signals separate, bounded, and paints only new s
   assert.equal(notifications, 2);
   unsubscribe();
 });
-test('entrances affect only their assigned comparison and Working receives its release', () => {
-  for (const input of ['idle', 'typing', 'complete', 'working']) {
-    assert.equal(comparisonAction(input, 'open'), null);
-    assert.equal(comparisonAction(input, 'openAfterIdle'), null);
-    assert.equal(comparisonAction(input, 'hide'), null);
-  }
-  assert.equal(comparisonAction('open', 'open'), 'open');
-  assert.equal(comparisonAction('working', 'idle'), 'idle');
-});
 test('monochrome preview ink has no color cast in either appearance', () => {
   for (const dark of [false, true]) {
     const [r, g, b] = neutralInk(dark);
@@ -164,12 +156,12 @@ test('monochrome preview ink has no color cast in either appearance', () => {
   setup.appearance.activityColor = 'spectrum';
   const player = new ExpressionPlayer(setup);
   for (let i = 0; i < 60; i++) player.advance(1 / 60);
-  assert.equal(player.frame(0).u_colorActivity, 0);
+  assert.equal(player.signals().color, 0);
   player.trigger('working');
   for (let i = 0; i < 60; i++) player.advance(1 / 60);
-  assert.ok(player.frame(0).u_colorActivity > 0);
+  assert.ok(player.signals().color > 0);
   player.trigger('idle');
   for (let i = 0; i < 240; i++) player.advance(1 / 60);
-  assert.ok(player.frame(0).u_colorActivity < 0.0001);
-  assert.ok(player.frame(0)['u_accents[0]'].every((n) => n === 0));
+  assert.ok(player.signals().color < 0.0001);
+  assert.ok(player.frame()['u_accents[0]'].every((n) => n === 0));
 });

@@ -1,16 +1,28 @@
 'use client';
-import { Pin, X } from 'lucide-react';
+/* oxlint-disable jsx-a11y/no-noninteractive-element-interactions -- Native drag target; move buttons provide the keyboard alternative. */
+import type { RefObject } from 'react';
+import type { ExpressionPlayer } from '../../../vrsjmp/src/avatar/expression-player';
+import { Pin, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   assignmentNames,
   assignmentLabels,
   type Assignment,
   type AvatarSetup,
+  type AvatarExpression,
 } from '@/lib/avatar/workspace';
-import type { Comparison } from '@/lib/avatar/comparison';
 import { ExpressionPreview, type PreviewCommand } from './ExpressionPreview';
 export function ExpressionComparison({
   setup,
-  comparison,
+  expression: e,
+  onDragStart,
+  onDrop,
+  onMove,
+  canMoveLeft,
+  canMoveRight,
+  reference,
+  input,
+  heading,
+  matches,
   pinned,
   selected,
   dark,
@@ -26,9 +38,18 @@ export function ExpressionComparison({
   onInput,
 }: {
   setup: AvatarSetup;
-  comparison: Comparison;
-  pinned: boolean;
-  selected: boolean;
+  expression?: AvatarExpression;
+  onDragStart?: () => void;
+  onDrop?: () => void;
+  onMove?: (direction: number) => void;
+  canMoveLeft?: boolean;
+  canMoveRight?: boolean;
+  reference: RefObject<ExpressionPlayer | null>;
+  input: Assignment;
+  heading?: 'Candidate' | 'Assigned';
+  matches?: boolean;
+  pinned?: boolean;
+  selected?: boolean;
   dark: boolean;
   resolution: number;
   curves: boolean;
@@ -38,33 +59,59 @@ export function ExpressionComparison({
   paused: boolean;
   onInspect: () => void;
   onPin: () => void;
-  onClose: () => void;
-  onInput: (input: Assignment) => void;
+  onClose?: () => void;
+  onInput?: (input: Assignment) => void;
 }) {
-  const e = setup.expressions.find((e) => e.id === comparison.id);
   const name = e?.name ?? 'No effect';
+  const previewLabel = heading ? `${heading}: ${name}` : name;
   return (
     <figure
       className="pinned-preview"
       data-appearance={dark ? 'dark' : 'light'}
       data-selected={selected}
+      data-matches={matches}
+      aria-label={heading ? `${heading} preview` : `Pinned ${name}`}
+      onDragOver={onDrop ? (event) => event.preventDefault() : undefined}
+      onDrop={onDrop}
     >
+      {heading && <span className="comparison-role">{heading}</span>}
       <div className="comparison-tools">
+        {pinned && (
+          <>
+            <button
+              aria-label={`Move ${name} left`}
+              disabled={!canMoveLeft}
+              onClick={() => onMove?.(-1)}
+            >
+              <ChevronLeft size={13} />
+            </button>
+            <button
+              aria-label={`Move ${name} right`}
+              disabled={!canMoveRight}
+              onClick={() => onMove?.(1)}
+            >
+              <ChevronRight size={13} />
+            </button>
+          </>
+        )}
         <button
-          aria-label={`${pinned ? 'Unpin' : 'Pin'} preview ${name}`}
+          aria-label={`${pinned ? 'Unpin' : 'Pin'} preview ${previewLabel}`}
           aria-pressed={pinned}
           onClick={onPin}
         >
           <Pin size={13} />
         </button>
-        <button aria-label={`Close preview ${name}`} onClick={onClose}>
-          <X size={14} />
-        </button>
+        {onClose && (
+          <button aria-label={`Close preview ${name}`} onClick={onClose}>
+            <X size={14} />
+          </button>
+        )}
       </div>
       <ExpressionPreview
         setup={setup}
         candidate={e}
-        assignment={comparison.input}
+        reference={reference}
+        assignment={input}
         command={command}
         dark={dark}
         size={resolution}
@@ -74,27 +121,44 @@ export function ExpressionComparison({
         curves={curves}
         working={working}
         shown={shown}
-        label={`${name} preview`}
+        label={`${previewLabel} preview`}
         onInspect={onInspect}
+        overlay={matches && <span className="comparison-match">Assigned</span>}
         caption={
           <>
-            <button className="pinned-preview-name" onClick={onInspect}>
+            <button
+              className="pinned-preview-name"
+              draggable={pinned}
+              onDragStart={(event) => {
+                event.dataTransfer.setData('text/plain', name);
+                onDragStart?.();
+              }}
+              onClick={onInspect}
+            >
               {name}
             </button>
-            <label className="comparison-input">
-              <span>Input</span>
-              <select
-                aria-label={`${name} input`}
-                value={comparison.input}
-                onChange={(event) => onInput(event.target.value as Assignment)}
-              >
-                {assignmentNames.map((a) => (
-                  <option key={a} value={a}>
-                    {assignmentLabels[a]}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {onInput ? (
+              <label className="comparison-input">
+                <span>Assignment</span>
+                <select
+                  aria-label={`${name} assignment`}
+                  value={input}
+                  onChange={(event) =>
+                    onInput(event.target.value as Assignment)
+                  }
+                >
+                  {assignmentNames.map((a) => (
+                    <option key={a} value={a}>
+                      {assignmentLabels[a]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <div className="comparison-input">
+                <span>{assignmentLabels[input]}</span>
+              </div>
+            )}
           </>
         }
       />

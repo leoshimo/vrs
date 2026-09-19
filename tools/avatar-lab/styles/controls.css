@@ -25,14 +25,17 @@
   min-width: 0;
 }
 .study-choices legend {
-  margin-bottom: 5px;
+  margin-bottom: 6px;
   font-size: 12px;
   color: var(--muted);
 }
 .study-choices > div {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--wash);
 }
 .avatar-range {
   display: block;
@@ -49,11 +52,34 @@
   color: var(--muted);
   flex: none;
 }
+.control-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.control-reset {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.control-reset:hover,
+.control-reset:focus-visible {
+  color: var(--text);
+}
+.study-choices legend .control-reset,
+.effect-select > span .control-reset {
+  margin-left: 8px;
+}
 .avatar-range input {
   display: block;
   width: 100%;
   height: 18px;
-  margin: 5px 0 0;
+  margin: 6px 0 0;
   accent-color: var(--lab-accent);
 }
 .avatar-range small {
@@ -110,4 +136,17 @@ input[type='text'],
   border-radius: 5px;
   padding: 4px 6px;
   min-width: 0;
+}
+
+.lab .study-choices button[data-slot='button'] {
+  background: transparent;
+  border-color: transparent;
+  min-height: 26px;
+  padding: 3px 9px;
+  border-radius: 5px;
+}
+.lab .study-choices button[aria-pressed='true'] {
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 1px 3px #00000012;
 }

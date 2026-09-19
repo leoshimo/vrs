@@ -2,7 +2,6 @@
 import { useSyncExternalStore } from 'react';
 import { Expressions } from './Expressions';
 import { Recipe } from './Recipe';
-import { useMediaQuery } from './useMediaQuery';
 function subscribePage(notify: () => void) {
   window.addEventListener('hashchange', notify);
   return () => window.removeEventListener('hashchange', notify);
@@ -18,13 +17,10 @@ export function Lab() {
     pageSnapshot,
     () => 'expressions',
   );
-  const dark = useMediaQuery('(prefers-color-scheme: dark)');
   return (
-    <div
-      className={`lab${dark ? ' dark' : ''}`}
-      data-theme={dark ? 'dark' : 'light'}
-    >
+    <div className="lab" data-page={page}>
       <header className="lab-header">
+        <span className="lab-title">Avatar Lab</span>
         <nav aria-label="Tools">
           <a
             href="#expressions"

@@ -25,7 +25,10 @@ export function ResponseLesson({
       assignments: {
         ...setup.assignments,
         working: null,
-        typing: momentum ? 'nudge-momentum' : 'surface-react',
+        typing:
+          setup.expressions.find(
+            (e) => e.id === (momentum ? 'nudge-momentum' : 'surface-react'),
+          ) ?? null,
       },
     }),
     [setup, momentum],

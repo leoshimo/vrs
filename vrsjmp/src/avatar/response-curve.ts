@@ -1,6 +1,11 @@
-// A sampled signal holds the sum of all interactions. No per-interaction
-// animation objects survive after their contribution has been written.
+// Interactions add their responses to a shared, sampled signal.
 export const sampleRate = 120;
+export function pulseEnvelope(progress: number, attack = 0.15) {
+  if (progress < 0 || progress > 1) return 0;
+  const rise = Math.min(1, progress / Math.max(0.01, attack));
+  const fall = Math.max(0, (1 - progress) / Math.max(0.01, 1 - attack));
+  return rise * rise * (3 - 2 * rise) * fall * fall * (3 - 2 * fall);
+}
 const capacity = 4096;
 export class ResponseCurve {
   private values = new Float64Array(capacity);
@@ -15,11 +20,7 @@ export class ResponseCurve {
         this.stamps[index] = tick;
         this.values[index] = 0;
       }
-      const p = offset / count;
-      const rise = Math.min(1, p / Math.max(0.01, attack));
-      const fall = Math.max(0, (1 - p) / Math.max(0.01, 1 - attack));
-      this.values[index] +=
-        amplitude * (rise * rise * (3 - 2 * rise)) * (fall * fall * (3 - 2 * fall));
+      this.values[index] += amplitude * pulseEnvelope(offset / count, attack);
     }
   }
   sample(time: number) {

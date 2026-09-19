@@ -1,21 +1,25 @@
 'use client';
-import { Check, Pin } from 'lucide-react';
+import { ExpressionActions } from './ExpressionActions';
 export function ExpressionRow({
   name,
   description,
   selected,
-  assigned,
+  matches,
   pinned,
   onSelect,
+  assignmentLabel,
   onPin,
+  onApply,
 }: {
   name: string;
   description?: string;
   selected: boolean;
-  assigned: boolean;
-  pinned?: boolean;
+  matches: boolean;
+  pinned: boolean;
   onSelect: () => void;
-  onPin?: () => void;
+  assignmentLabel: string;
+  onPin: () => void;
+  onApply: () => void;
 }) {
   return (
     <div className="expression-row" data-selected={selected}>
@@ -24,23 +28,12 @@ export function ExpressionRow({
         aria-pressed={selected}
         onClick={onSelect}
       >
-        <span>
-          {name}
-          {assigned && <Check size={13} aria-label="Assigned" />}
-        </span>
+        <span>{name}</span>
         {description && <small>{description}</small>}
       </button>
-      {onPin && (
-        <button
-          className="expression-pin"
-          aria-label={`${pinned ? 'Unpin' : 'Pin'} ${name}`}
-          aria-pressed={pinned}
-          title={pinned ? 'Unpin' : 'Pin'}
-          onClick={onPin}
-        >
-          <Pin size={15} />
-        </button>
-      )}
+      <ExpressionActions
+        {...{ name, assignmentLabel, matches, pinned, onApply, onPin }}
+      />
     </div>
   );
 }

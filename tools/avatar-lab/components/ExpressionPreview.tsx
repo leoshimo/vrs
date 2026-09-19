@@ -2,10 +2,12 @@
 /* oxlint-disable jsx-a11y/prefer-tag-over-role -- Canvas is the rendered image. */
 import {
   useLayoutEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
   type ReactNode,
+  type RefObject,
 } from 'react';
 import { useMediaQuery } from './useMediaQuery';
 import { registerPreview } from '@/lib/avatar/preview-renderer';
@@ -13,23 +15,24 @@ import {
   ExpressionPlayer,
   type PlaybackAction,
 } from '../../../vrsjmp/src/avatar/expression-player';
-import {
-  type Assignment,
-  type AvatarExpression,
-  type AvatarSetup,
-} from '@/lib/avatar/workspace';
+import { type Assignment, type AvatarExpression } from '@/lib/avatar/workspace';
+import type { AvatarSetup } from '../../../vrsjmp/src/avatar/expression-model';
 import { applyPlaceholderAccent } from '@/lib/avatar/preview-colors';
-import { comparisonSetup, comparisonAction } from '@/lib/avatar/comparison';
+import { comparisonSetup } from '@/lib/avatar/comparison';
 import { InputCurves } from './InputCurves';
 import { SignalTimeline } from '@/lib/avatar/signal-timeline';
 import { animatePalette } from '../../../vrsjmp/src/palette-motion';
 
 export type PreviewCommand = {
   serial: number;
-  action: PlaybackAction | 'reset' | 'resetHidden';
+  events: {
+    serial: number;
+    action: PlaybackAction | 'reset' | 'resetHidden';
+  }[];
 };
 export function ExpressionPreview({
   setup,
+  reference,
   candidate,
   assignment,
   command,
@@ -47,12 +50,14 @@ export function ExpressionPreview({
   shown,
   engine,
   caption,
+  overlay,
   status,
   onSample,
   onInspect,
   label = 'Avatar preview',
 }: {
   setup: AvatarSetup;
+  reference?: RefObject<ExpressionPlayer | null>;
   candidate?: AvatarExpression;
   assignment?: Assignment;
   command?: PreviewCommand;
@@ -70,6 +75,7 @@ export function ExpressionPreview({
   shown?: boolean;
   engine?: ExpressionPlayer;
   caption?: ReactNode;
+  overlay?: ReactNode;
   status?: string;
   onSample?: (player: ExpressionPlayer, paint: boolean) => void;
   onInspect?: () => void;
@@ -78,13 +84,9 @@ export function ExpressionPreview({
   const canvas = useRef<HTMLCanvasElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const transition = useRef<ReturnType<typeof animatePalette> | null>(null);
-  const candidateId = candidate?.id;
   const adjusted = useMemo(
-    () =>
-      assignment
-        ? comparisonSetup(setup, { id: candidateId ?? null, input: assignment })
-        : setup,
-    [setup, candidateId, assignment],
+    () => (assignment ? comparisonSetup(setup, assignment, candidate) : setup),
+    [setup, candidate, assignment],
   );
   const player = useRef<ExpressionPlayer | null>(null);
   player.current ??= engine ?? new ExpressionPlayer(adjusted);
@@ -98,28 +100,45 @@ export function ExpressionPreview({
     if (bar && paint && input.current) applyPlaceholderAccent(input.current, p);
   };
   const commandSerial = useRef<number | undefined>(command?.serial);
+  const notifySample = useEffectEvent(() => onSample?.(player.current!, false));
+  const initialize = useEffectEvent(() => {
+    notifySample();
+    if (shown === false && stage.current) {
+      stage.current.style.opacity = '0';
+      stage.current.style.visibility = 'hidden';
+      stage.current.dataset.presence = 'hidden';
+    }
+  });
   useLayoutEffect(() => {
+    initialize();
     renderer.current = registerPreview(canvas.current!, player.current!);
     return () => {
       transition.current?.cancel();
       renderer.current?.dispose();
     };
   }, []);
+  const synchronize = useEffectEvent(() => {
+    if (!engine && reference?.current) {
+      player.current = reference.current.fork(adjusted);
+      renderer.current?.update({ player: player.current });
+    }
+  });
+  // Keep comparisons at the same pose when an assignment is applied or selected.
+  useLayoutEffect(() => {
+    synchronize();
+  }, [setup.assignments, assignment, candidate?.id]);
   useLayoutEffect(() => {
     if (engine && player.current !== engine) {
       player.current = engine;
       renderer.current?.update({ player: engine });
     }
     player.current!.setup = adjusted;
-    if (working !== undefined)
-      player.current!.working =
-        assignment && assignment !== 'working' ? false : working;
-    if (shown !== undefined)
-      player.current!.visible = assignment ? true : shown;
+    if (working !== undefined) player.current!.working = working;
+    if (shown !== undefined) player.current!.visible = shown;
     renderer.current?.update({
       dark,
       resolution: size,
-      live: live && !reduce && (Boolean(assignment) || shown !== false),
+      live: live && !reduce && shown !== false,
       paused,
       onFrame,
       trackTime: curves || Boolean(onSample),
@@ -127,29 +146,37 @@ export function ExpressionPreview({
   });
   useLayoutEffect(() => {
     if (!command || commandSerial.current === command.serial) return;
-    commandSerial.current = command.serial;
-    if (assignment) {
-      const action = comparisonAction(assignment, command.action);
-      if (action) player.current!.trigger(action);
-    } else if (command.action === 'reset' || command.action === 'resetHidden') {
-      player.current = new ExpressionPlayer(adjusted);
-      if (command.action === 'resetHidden') player.current.trigger('hide');
-      renderer.current?.update({ player: player.current });
-    } else player.current!.trigger(command.action);
-    if (!assignment && stage.current) {
-      transition.current?.cancel();
-      if (command.action === 'complete') {
-        transition.current = animatePalette(stage.current, false, reduce, 'complete');
-      } else if (command.action === 'hide' || command.action === 'resetHidden') {
-        stage.current.style.opacity = '0';
-        stage.current.style.visibility = 'hidden';
-        stage.current.dataset.presence = 'hidden';
-      } else if (stage.current.dataset.presence === 'hidden' || stage.current.dataset.presence === 'closing') {
-        stage.current.style.visibility = 'visible';
-        transition.current = animatePalette(stage.current, true, reduce);
+    for (const event of command.events.filter(
+      (e) => e.serial > (commandSerial.current ?? -1),
+    )) {
+      if (event.action === 'reset' || event.action === 'resetHidden') {
+        player.current = new ExpressionPlayer(adjusted);
+        if (event.action === 'resetHidden') player.current.trigger('hide');
+        renderer.current?.update({ player: player.current });
+      } else player.current!.trigger(event.action);
+      if (stage.current) {
+        if (event.action === 'resetHidden') {
+          transition.current?.cancel();
+          stage.current.style.opacity = '0';
+          stage.current.style.visibility = 'hidden';
+          stage.current.dataset.presence = 'hidden';
+        } else if (event.action === 'hide') {
+          transition.current?.cancel();
+          transition.current = animatePalette(stage.current, false, reduce);
+        } else if (
+          player.current!.visible &&
+          (stage.current.dataset.presence === 'hidden' ||
+            stage.current.dataset.presence === 'closing')
+        ) {
+          transition.current?.cancel();
+          stage.current.style.visibility = 'visible';
+          transition.current = animatePalette(stage.current, true, reduce);
+        }
       }
     }
-    if (reduce) for (let i = 0; i < 16; i++) player.current!.frame(0.064);
+    commandSerial.current = command.serial;
+    notifySample();
+    if (reduce) for (let i = 0; i < 16; i++) player.current!.advance(0.064);
     renderer.current?.update({});
     // Commands are delivered once; changing an expression does not repeat the gesture.
   }, [command, adjusted, reduce, assignment]);
@@ -169,18 +196,16 @@ export function ExpressionPreview({
   const Visual = onInspect ? 'button' : 'div';
   return (
     <div className="expression-render" data-bar={bar} data-dark={dark}>
-      <div className="expression-stage" ref={stage}>
+      <div className="expression-stage">
         <Visual
           className="preview-visual"
           onClick={onInspect}
           aria-label={
             onInspect ? `Edit ${candidate?.name ?? 'No effect'}` : undefined
           }
-          style={{
-            visibility: !assignment && shown === false ? 'hidden' : undefined,
-          }}
         >
           <div
+            ref={stage}
             className={bar ? 'shared-bar' : 'shared-avatar-preview'}
             data-surface={setup.appearance.uiSurface ?? 'porcelain'}
             data-dark={dark}
@@ -212,6 +237,7 @@ export function ExpressionPreview({
               />
             )}
           </div>
+          {overlay && <span className="preview-overlay">{overlay}</span>}
         </Visual>
         {caption && <div className="preview-caption">{caption}</div>}
       </div>

@@ -3,7 +3,7 @@
 @import '../styles/expressions.css';
 @import '../../../vrsjmp/src/palette-surface.css';
 @import '../styles/recipe.css';
-@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant dark (@media (prefers-color-scheme: dark));
 @theme inline {
   --color-background: var(--panel);
   --color-foreground: var(--text);
@@ -80,15 +80,17 @@ summary {
   font-size: 13px;
   line-height: 1.5;
 }
-.lab[data-theme='dark'] {
-  --page: #181b19;
-  --panel: #202420;
-  --wash: #2a302a;
-  --text: #e2e5dc;
-  --muted: #a4ada1;
-  --line: #3a4239;
-  --lab-accent: #e5b07f;
-  color-scheme: dark;
+@media (prefers-color-scheme: dark) {
+  .lab {
+    --page: #181b19;
+    --panel: #202420;
+    --wash: #2a302a;
+    --text: #e2e5dc;
+    --muted: #a4ada1;
+    --line: #3a4239;
+    --lab-accent: #e5b07f;
+    color-scheme: dark;
+  }
 }
 .lab-header {
   position: sticky;
@@ -96,27 +98,44 @@ summary {
   z-index: 20;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 32px;
   height: 56px;
-  padding: 8px 24px;
+  padding: 0 max(24px, calc((100vw - 1392px) / 2));
   border-bottom: 1px solid var(--line);
   background: var(--page);
 }
+.lab[data-page='expressions'] .lab-header {
+  position: relative;
+  z-index: auto;
+}
 .lab-header nav {
   display: flex;
-  gap: 4px;
+  gap: 24px;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  align-items: stretch;
 }
 .lab-header a {
-  padding: 6px 10px;
-  border-radius: 6px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
   color: var(--muted);
   text-decoration: none;
   font-weight: 600;
+  line-height: 20px;
 }
 .lab-header a[aria-current] {
-  background: var(--wash);
   color: var(--text);
+}
+.lab-header a[aria-current]::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 2px;
+  background: var(--text);
 }
 .lab-header .study-choices {
   display: flex;
@@ -188,4 +207,11 @@ svg {
 [data-slot='tooltip-content'] svg {
   fill: #30372f;
   background: #30372f;
+}
+
+.lab-title {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 650;
+  white-space: nowrap;
 }
