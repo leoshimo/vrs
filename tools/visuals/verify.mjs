@@ -18,6 +18,22 @@ assert.equal(result.status, 0, result.stderr);
 // Exercise the actual README markup with that sizing behavior.
 const readme = await fs.readFile(path.join(root,'README.md'),'utf8');
 const picture = readme.match(/<picture>[\s\S]*?<\/picture>/)[0];
+const vennPicture = [...readme.matchAll(/<picture>[\s\S]*?<\/picture>/g)][1][0];
+const originalVenn = await sharp(path.join(root,'assets/visuals/source/venn.png')).ensureAlpha().raw().toBuffer();
+for(const dark of [false,true]) {
+  const file = `assets/vrs-venn${dark?'-dark':''}.png`;
+  const {data,info} = await sharp(path.join(root,file)).ensureAlpha().raw().toBuffer({resolveWithObject:true});
+  assert.equal(data.length,originalVenn.length);
+  assert.equal(data[3],0,`${file}: exterior paper remains`);
+  // Sample clear paper inside each lobe and the central intersection.
+  for(const [x,y] of [[625,215],[145,460],[1100,480],[300,1000],[925,1000],[625,800]]) {
+    assert.equal(data[(y*info.width+x)*4+3],255,`${file}: circle fill erased`);
+  }
+  for(let i=0;i<data.length;i+=4) if(data[i+3]) {
+    for(let c=0;c<3;c++) assert.equal(data[i+c],dark?255-originalVenn[i+c]:originalVenn[i+c],`${file}: artwork changed`);
+  }
+  await fs.copyFile(path.join(root,file),path.join(site,file));
+}
 for(const theme of ['light','dark']) for(const ext of ['gif','png']) {
   const file = `assets/visuals/readme-${theme}.${ext}`;
   const {data,info} = await sharp(path.join(root,file),{animated:true}).ensureAlpha().raw().toBuffer({resolveWithObject:true});
@@ -34,7 +50,7 @@ for(const theme of ['light','dark']) for(const ext of ['gif','png']) {
 }
 await fs.writeFile(path.join(site,'readme-check.html'),
   '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">'+
-  '<style>body{margin:0;padding:32px;background:#fff}img{max-width:100%}@media(prefers-color-scheme:dark){body{background:#0d1117}}</style>'+picture);
+  '<style>body{margin:0;padding:32px;background:#fff}img{max-width:100%}@media(prefers-color-scheme:dark){body{background:#0d1117}}</style><div id="readme-header">'+picture+'</div><div id="readme-venn">'+vennPicture+'</div>');
 const server = await serve(site, '/vrs/');
 const reports = [], failures = [];
 let browser;
@@ -128,8 +144,12 @@ try {
       await page.goto(server.url+'readme-check.html');
       const expected=`readme-${colorScheme}.${reducedMotion==='reduce'?'png':'gif'}`;
       await page.waitForFunction(expected=>{const i=document.querySelector('picture img');return i.complete&&i.naturalWidth>0&&i.currentSrc.endsWith(expected);},expected);
-      const ratio=await page.locator('picture img').evaluate(i=>{const r=i.getBoundingClientRect();return{displayed:r.width/r.height,intrinsic:i.naturalWidth/i.naturalHeight};});
+      const ratio=await page.locator('#readme-header img').evaluate(i=>{const r=i.getBoundingClientRect();return{displayed:r.width/r.height,intrinsic:i.naturalWidth/i.naturalHeight};});
       assert(Math.abs(ratio.displayed-ratio.intrinsic)<.005,`${name} README distorted at ${width}px`);
+      const vennExpected=`vrs-venn${colorScheme==='dark'?'-dark':''}.png`;
+      await page.waitForFunction(expected=>{const i=document.querySelector('#readme-venn img');return i.complete&&i.naturalWidth>0&&i.currentSrc.endsWith(expected);},vennExpected);
+      const vennRatio=await page.locator('#readme-venn img').evaluate(i=>{const r=i.getBoundingClientRect();return r.width/r.height;});
+      assert(Math.abs(vennRatio-1)<.005,`${name} Venn distorted at ${width}px`);
       if(name==='chromium' && width===1280) await page.screenshot({path:path.join(artifacts,`readme-${colorScheme}-${reducedMotion}.png`)});
     }
     console.log(`${name}: 60 page layouts, navigation, reduced motion, no-JS, WebGL fallback, and README proportions passed`);

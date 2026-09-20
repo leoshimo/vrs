@@ -12,11 +12,16 @@
   {
     "id": "venn-monochrome",
     "prompt": "Use case: infographic-diagram.\nCreate one refined new version of the VRS influences Venn diagram, for a personal programming environment's README and design documentation.\nInput image 1 is the ORIGINAL DIAGRAM: preserve its five-circle topology, all the wording, and the relative semantic placement of every label. Input image 2 is the SELECTED VRS LOGOMARK: use this exact distinctive lowercase filled mark at the center, preserving its broad soft shapes and retained-ink edges, not the original blackletter mark. Input image 3 is the WEBSITE STYLE REFERENCE only: use its quiet Charter serif typography, warm paper, monochrome ink and fine Bayer dither language. Do not reproduce the website or its sphere.\nComposition: a single generous square diagram, about 1400 by 1400 or larger. Five overlapping equal circular fields arranged as a compact flower: Emacs at top, Unix at upper-left, Hypermedia at upper-right, Plan 9 at lower-left, Erlang at lower-right. All five converge around the central VRS logomark. Plenty of internal breathing room and margins. Make this a genuinely useful readable diagram, not a decorative poster.\nAesthetic: monochrome warm black ink on flat warm off-white paper (#faf9f5). Replace the candy-colored circles with very light ordered Bayer stipple fields and clean restrained continuous circular outlines. Use density differences and subtle cumulative intersections so every circle can be followed. Keep grain fine and quiet; labels must be crisp, clear and untextured with breathing room. No gradients, glow, shadows, 3D, random distressed paper, colour, decorative icons, caption, title, key, legend, arrows, or added prose. An unusual computing logomark inside an otherwise classical book diagram.\nTypography: circle names in substantial bold Charter-like serif, subordinate concept labels in smaller regular Charter-like serif. The names and text should be noticeably larger and more readable relative to their circles than the original. Main mark is strongly filled black, approximately a quarter of the diagram width. Avoid any texture competing with the central mark.\nText to include exactly once, spelled exactly:\nEmacs\nUnix\nHypermedia\nPlan 9\nErlang\nMoldable\nExtensible\nInteractive\nGeneral Purpose Clients\nPolyglot\nProgram Composition\nPer-Process Namespace\nNetwork Transparent\nMessage Passing\nDistributed\nUserspace Concurrency\nUniform Interfaces\nPlacement guidance from the original: Moldable beneath Emacs; Extensible toward upper-left overlap; Interactive and General Purpose Clients in the upper-right overlap; Polyglot in the left overlap; Program Composition lower-left of the center; Per-Process Namespace further down in Plan 9; Network Transparent and Message Passing in the lower overlap; Distributed below the central mark; Userspace Concurrency at lower-right in Erlang; Uniform Interfaces directly under VRS. Circle names are on outer lobes, never touching outlines.\nPreserve the original conceptual content. Do not invent or remove labels. The sole central branding is the supplied VRS logomark.",
-    "source": "../vrs-venn.png",
+    "source": "source/venn.png",
     "references": [
       "assets/vrs-venn.png at d0d5351f922a5653ae38979d73f615d8912afa16",
       "assets/visuals/logomark.png",
       "Rendered landing page at d0d5351f922a5653ae38979d73f615d8912afa16"
-    ]
+    ],
+    "exports": [
+      "../vrs-venn.png",
+      "../vrs-venn-dark.png"
+    ],
+    "processing": "tools/visuals/venn.mjs removes only exterior paper connected to the image border; circle fills are preserved. Dark mode inverts the RGB channels with the same alpha mask."
   }
 ]
