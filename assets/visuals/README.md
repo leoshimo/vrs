@@ -5,7 +5,8 @@
   `source/manicule.png`. CSS points it toward the tour label.
 - `readme-{light,dark}.{gif,png}`: README banners, rendered from the same sphere
   and lettering effects as the website, with transparent backgrounds. Light mode
-  uses dark ink; dark mode uses light ink. PNGs serve reduced-motion readers.
+  uses dark ink; dark mode uses light ink. GIFs repeat a seamless twelve-second
+  cycle; PNGs serve reduced-motion readers.
 - `sphere-{light,dark}.png`: the website's no-JavaScript/no-WebGL fallback.
 - `../vrs-venn.png` and `../vrs-venn-dark.png`: the influences diagram with only
   the exterior paper removed. Circle fills and intersections remain opaque.

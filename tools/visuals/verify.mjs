@@ -36,7 +36,8 @@ for(const dark of [false,true]) {
 }
 for(const theme of ['light','dark']) for(const ext of ['gif','png']) {
   const file = `assets/visuals/readme-${theme}.${ext}`;
-  const {data,info} = await sharp(path.join(root,file),{animated:true}).ensureAlpha().raw().toBuffer({resolveWithObject:true});
+  const image = sharp(path.join(root,file),{animated:true});
+  const {data,info} = await image.ensureAlpha().raw().toBuffer({resolveWithObject:true});
   const frameHeight = 232, frameBytes = info.width * frameHeight * 4;
   for(let start=0;start<data.length;start+=frameBytes) {
     for(const pixel of [0,info.width-1,info.width*(frameHeight-1),info.width*frameHeight-1]) {
@@ -45,6 +46,27 @@ for(const theme of ['light','dark']) for(const ext of ['gif','png']) {
     let visible=0;
     for(let i=start+3;i<start+frameBytes;i+=4) if(data[i]>0) visible++;
     assert(visible>1000,`${file}: missing artwork in frame ${start/frameBytes}`);
+  }
+  if(ext==='gif') {
+    const metadata = await image.metadata();
+    assert.equal(metadata.loop,0,`${file}: does not repeat indefinitely`);
+    assert(metadata.pages>1,`${file}: animation missing`);
+    // Measure visible changes after decoding the final GIF. Transparent RGB
+    // does not contribute, and the loop join should behave like any other step.
+    const difference = (a,b) => {
+      let total=0;
+      for(let i=0;i<frameBytes;i+=4) {
+        const ai=a*frameBytes+i, bi=b*frameBytes+i;
+        const aa=data[ai+3], ba=data[bi+3];
+        total+=Math.abs(aa-ba);
+        for(let c=0;c<3;c++) total+=Math.abs(data[ai+c]*aa/255-data[bi+c]*ba/255);
+      }
+      return total/frameBytes;
+    };
+    const steps=Array.from({length:metadata.pages-1},(_,i)=>difference(i,i+1)).sort((a,b)=>a-b);
+    assert(steps[Math.floor(steps.length/2)]>.01,`${file}: animation is frozen`);
+    const seam=difference(metadata.pages-1,0), typical=steps[Math.floor(steps.length*.95)];
+    assert(seam<=typical*1.5,`${file}: visible loop jump (${seam} vs typical ${typical})`);
   }
   await fs.copyFile(path.join(root,file),path.join(site,file));
 }
