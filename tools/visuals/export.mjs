@@ -16,6 +16,19 @@ const run = (command, args) => {
 };
 // Fixed export recipe. Edit here, then run export-visuals; no command flags.
 const size = {width: 880, height: 232}, frameCount = 80, fps = 10;
+// GIF has one-bit alpha. Ordered coverage retains faint ink and soft edges
+// without introducing a light or dark matte around the artwork.
+const bayer2 = (x,y) => 2*(x%2)+3*(y%2)-4*(x%2)*(y%2);
+const alphaRank = (x,y) => (16*bayer2(x,y)+4*bayer2(x>>1,y>>1)+bayer2(x>>2,y>>2)+.5)/64;
+async function captureGifFrame(page, filename) {
+  const screenshot = await page.screenshot({omitBackground:true});
+  const {data,info} = await sharp(screenshot).ensureAlpha().raw().toBuffer({resolveWithObject:true});
+  for(let y=0;y<info.height;y++) for(let x=0;x<info.width;x++) {
+    const a=(y*info.width+x)*4+3;
+    data[a]=data[a]/255>alphaRank(x,y)?255:0;
+  }
+  await sharp(data,{raw:info}).png().toFile(filename);
+}
 run('ffmpeg', ['-version']);
 for (const [name, box] of [['n16', {left:119, top:274, width:1303, height:426}],
                          ['manicule', {left:161, top:191, width:1395, height:612}]]) {
@@ -36,17 +49,20 @@ try {
     await page.goto(server.url + 'docs/index.html?export=1');
     await page.waitForFunction(() => document.body.dataset.visualsReady === 'true' && window.orbReady);
     await page.evaluate(() => document.fonts.ready);
+    // Preserve the renderers' alpha instead of baking the website paper into the banner.
+    await page.addStyleTag({content: 'html, body { background: transparent !important; }'});
     await page.clock.pauseAt(new Date('2026-09-18T12:00:02Z'));
-    await page.screenshot({path: path.join(assets, `readme-${theme}.png`)});
+    await page.screenshot({path: path.join(assets, `readme-${theme}.png`), omitBackground: true});
     const sphere = await page.locator('#live-orb').evaluate(canvas => canvas.toDataURL('image/png').split(',')[1]);
     await fs.writeFile(path.join(assets, `sphere-${theme}.png`), Buffer.from(sphere, 'base64'));
     const frames = path.join(temporary, theme); await fs.mkdir(frames);
     for (let i = 0; i < frameCount; i++) {
-      await page.screenshot({path: path.join(frames, String(i).padStart(3, '0') + '.png')});
+      await captureGifFrame(page,path.join(frames, String(i).padStart(3, '0') + '.png'));
       await page.clock.runFor(1000 / fps);
     }
     run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-framerate', String(fps), '-i', path.join(frames, '%03d.png'),
-      '-vf', 'split[s0][s1];[s0]palettegen=max_colors=32:stats_mode=diff[p];[s1][p]paletteuse=dither=none',
+      '-vf', 'split[s0][s1];[s0]palettegen=max_colors=32:reserve_transparent=1:stats_mode=diff[p];[s1][p]paletteuse=dither=none:alpha_threshold=128',
+      '-gifflags', '-offsetting-transdiff',
       '-loop', '0', path.join(assets, `readme-${theme}.gif`)]);
     console.log(`Exported ${theme}: PNG, GIF, sphere fallback`);
     await page.close();
