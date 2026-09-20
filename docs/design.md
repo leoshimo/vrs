@@ -260,6 +260,12 @@ when the worker must remain busy or asleep. Waiting is cheap, not durable:
 runtime termination loses that state. Pubsub reaches subscribers on connected
 nodes; a subscriber can also call a remote service.
 
+Durable execution should preserve this programming model. A program would still
+wait for an event, sleep, or call a function in sequence; the runtime would
+preserve enough progress to resume after an interruption. Persistence and
+recovery belong beneath that interface, including rules for external effects
+that may already have occurred.
+
 
 <a id="hypermedia-keeps-applications-out-of-clients"></a>
 
@@ -361,7 +367,7 @@ expression also gives the programmer a concrete case to investigate.
 
 Retry and Dismiss use the existing item format and action expressions. Recovery
 needed shared execution logic, but no special recovery protocol in each client
-or bespoke UI for each service. The [manual](manual.md#failed-actions) describes its limits: this is a
+or bespoke UI for each service. The [implementation](../scripts/vrsjmp.ll) offers
 manual retry of the whole captured call, not a checkpoint or a rollback.
 
 This representation is powerful for both users and programs. Other programs

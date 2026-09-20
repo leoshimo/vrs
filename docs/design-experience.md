@@ -192,8 +192,8 @@ it applicable across service calls.
 
 It is still a manual retry of the whole call. Only the outer arguments are
 captured; queries inside the function run again. Earlier effects can be
-repeated, and the record is lost when the service restarts. The [manual](manual.md#failed-actions) gives
-the precise limits. Durable execution is a different problem.
+repeated, and the record is lost when the service restarts. See the
+[implementation](../scripts/vrsjmp.ll). Durable execution is a different problem.
 
 
 <a id="let-the-clients-learn-what-is-available"></a>
