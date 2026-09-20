@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
+import assert from 'node:assert/strict';
 import {serve} from './server.mjs';
 import {exportVenn} from './venn.mjs';
 
@@ -16,7 +17,8 @@ const run = (command, args) => {
   return result.stdout;
 };
 // Fixed export recipe. Edit here, then run export-visuals; no command flags.
-const size = {width: 880, height: 232}, frameCount = 80, fps = 10;
+const size = {width: 880, height: 232}, duration = 12, fps = 10;
+const frameCount = duration * fps;
 // GIF has one-bit alpha. Ordered coverage retains faint ink and soft edges
 // without introducing a light or dark matte around the artwork.
 const bayer2 = (x,y) => 2*(x%2)+3*(y%2)-4*(x%2)*(y%2);
@@ -28,7 +30,9 @@ async function captureGifFrame(page, filename) {
     const a=(y*info.width+x)*4+3;
     data[a]=data[a]/255>alphaRank(x,y)?255:0;
   }
-  await sharp(data,{raw:info}).png().toFile(filename);
+  const png = await sharp(data,{raw:info}).png().toBuffer();
+  if (filename) await fs.writeFile(filename,png);
+  return png;
 }
 run('ffmpeg', ['-version']);
 await exportVenn();
@@ -54,14 +58,39 @@ try {
     // Preserve the renderers' alpha instead of baking the website paper into the banner.
     await page.addStyleTag({content: 'html, body { background: transparent !important; }'});
     await page.clock.pauseAt(new Date('2026-09-18T12:00:02Z'));
+    // Use the frozen sphere renderer's existing preview API; its shader stays
+    // unchanged. Move its two pose coordinates around a closed ellipse.
+    await page.evaluate(() => {
+      window.setOrbView({paused:true, onFrame(player) {
+        window.exportOrb = player;
+        window.exportPose ??= [player.lightPhase,player.flowPhase];
+      }});
+    });
+    await page.clock.runFor(20);
+    await page.waitForFunction(() => window.exportOrb);
+    async function renderFrame(index) {
+      await page.evaluate(({index,frameCount,duration}) => {
+        const position = (index % frameCount) / frameCount, angle = position * Math.PI * 2;
+        const [light,flow] = window.exportPose;
+        window.exportOrb.setPose(light + .75 * Math.sin(angle), flow + 1.5 * (1 - Math.cos(angle)));
+        window.setOrbView({paused:true});
+        window.renderInkAt(position * duration,duration);
+      }, {index,frameCount,duration});
+      await page.clock.runFor(20);
+    }
+    await renderFrame(0);
     await page.screenshot({path: path.join(assets, `readme-${theme}.png`), omitBackground: true});
     const sphere = await page.locator('#live-orb').evaluate(canvas => canvas.toDataURL('image/png').split(',')[1]);
     await fs.writeFile(path.join(assets, `sphere-${theme}.png`), Buffer.from(sphere, 'base64'));
     const frames = path.join(temporary, theme); await fs.mkdir(frames);
+    let firstFrame;
     for (let i = 0; i < frameCount; i++) {
-      await captureGifFrame(page,path.join(frames, String(i).padStart(3, '0') + '.png'));
-      await page.clock.runFor(1000 / fps);
+      await renderFrame(i);
+      const captured = await captureGifFrame(page,path.join(frames, String(i).padStart(3, '0') + '.png'));
+      if (i === 0) firstFrame = captured;
     }
+    await renderFrame(frameCount);
+    assert.deepEqual(await captureGifFrame(page),firstFrame,`${theme}: renderer does not return to its first frame`);
     run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-framerate', String(fps), '-i', path.join(frames, '%03d.png'),
       '-vf', 'split[s0][s1];[s0]palettegen=max_colors=32:reserve_transparent=1:stats_mode=diff[p];[s1][p]paletteuse=dither=none:alpha_threshold=128',
       '-gifflags', '-offsetting-transdiff',

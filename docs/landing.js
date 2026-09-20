@@ -6,7 +6,10 @@ const well = document.querySelector('.orb-well');
 const canvas = document.querySelector('#live-orb');
 const ink = inkEffect(document.querySelector('#hero-mark'));
 const exporting = new URLSearchParams(location.search).has('export');
-if (exporting) document.body.dataset.export = 'true';
+if (exporting) {
+  document.body.dataset.export = 'true';
+  window.renderInkAt = (seconds, duration) => ink.renderAt(seconds, duration);
+}
 let orbLoading;
 const paused = () => reduced.matches;
 
