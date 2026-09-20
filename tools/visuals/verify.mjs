@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
+import sharp from 'sharp';
 import {serve} from './server.mjs';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const artifacts = fileURLToPath(new URL('./artifacts/', import.meta.url));
@@ -19,11 +20,21 @@ const readme = await fs.readFile(path.join(root,'README.md'),'utf8');
 const picture = readme.match(/<picture>[\s\S]*?<\/picture>/)[0];
 for(const theme of ['light','dark']) for(const ext of ['gif','png']) {
   const file = `assets/visuals/readme-${theme}.${ext}`;
+  const {data,info} = await sharp(path.join(root,file),{animated:true}).ensureAlpha().raw().toBuffer({resolveWithObject:true});
+  const frameHeight = 232, frameBytes = info.width * frameHeight * 4;
+  for(let start=0;start<data.length;start+=frameBytes) {
+    for(const pixel of [0,info.width-1,info.width*(frameHeight-1),info.width*frameHeight-1]) {
+      assert.equal(data[start+pixel*4+3],0,`${file}: opaque background in frame ${start/frameBytes}`);
+    }
+    let visible=0;
+    for(let i=start+3;i<start+frameBytes;i+=4) if(data[i]>0) visible++;
+    assert(visible>1000,`${file}: missing artwork in frame ${start/frameBytes}`);
+  }
   await fs.copyFile(path.join(root,file),path.join(site,file));
 }
 await fs.writeFile(path.join(site,'readme-check.html'),
   '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">'+
-  '<style>body{margin:0;padding:32px}img{max-width:100%}</style>'+picture);
+  '<style>body{margin:0;padding:32px;background:#fff}img{max-width:100%}@media(prefers-color-scheme:dark){body{background:#0d1117}}</style>'+picture);
 const server = await serve(site, '/vrs/');
 const reports = [], failures = [];
 let browser;
@@ -119,6 +130,7 @@ try {
       await page.waitForFunction(expected=>{const i=document.querySelector('picture img');return i.complete&&i.naturalWidth>0&&i.currentSrc.endsWith(expected);},expected);
       const ratio=await page.locator('picture img').evaluate(i=>{const r=i.getBoundingClientRect();return{displayed:r.width/r.height,intrinsic:i.naturalWidth/i.naturalHeight};});
       assert(Math.abs(ratio.displayed-ratio.intrinsic)<.005,`${name} README distorted at ${width}px`);
+      if(name==='chromium' && width===1280) await page.screenshot({path:path.join(artifacts,`readme-${colorScheme}-${reducedMotion}.png`)});
     }
     console.log(`${name}: 60 page layouts, navigation, reduced motion, no-JS, WebGL fallback, and README proportions passed`);
     await browser.close(); browser=undefined;

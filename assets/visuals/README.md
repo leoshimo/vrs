@@ -4,7 +4,8 @@
 - `manicule.png`: original generated engraved pointer, cropped and reduced from
   `source/manicule.png`. CSS points it toward the tour label.
 - `readme-{light,dark}.{gif,png}`: README banners, rendered from the same sphere
-  and lettering effects as the website. PNGs serve reduced-motion readers.
+  and lettering effects as the website, with transparent backgrounds. Light mode
+  uses dark ink; dark mode uses light ink. PNGs serve reduced-motion readers.
 - `sphere-{light,dark}.png`: the website's no-JavaScript/no-WebGL fallback.
 - `source/prompts.json`: generation prompts for the selected artwork. The raster
   sources are preserved; prompts document provenance, not deterministic regeneration.

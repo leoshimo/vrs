@@ -23,9 +23,12 @@ tools/visuals/export-visuals
 
 This crops the preserved source artwork, builds the production site in a
 temporary directory, captures the actual landing renderer with a fixed browser
-clock, and writes light/dark PNGs, eight-second GIFs, and sphere fallbacks into
+clock, and writes transparent light/dark PNGs, eight-second GIFs, and sphere fallbacks into
 `assets/visuals/`. The export recipe lives in `export.mjs`; there are no command
 configuration flags. Commit regenerated assets with changes to the effects.
+
+PNGs retain smooth alpha. GIFs use ordered Bayer coverage for their one-bit
+transparency, preserving faint ink without a baked-in background or edge halo.
 
 The Playwright version and browser revision are pinned by `package-lock.json`.
 Frame timing and artwork are fixed. GPU rendering and ffmpeg versions can still
