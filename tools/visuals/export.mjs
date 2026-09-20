@@ -6,6 +6,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
 import {serve} from './server.mjs';
+import {exportVenn} from './venn.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const assets = path.join(root, 'assets/visuals');
@@ -30,6 +31,7 @@ async function captureGifFrame(page, filename) {
   await sharp(data,{raw:info}).png().toFile(filename);
 }
 run('ffmpeg', ['-version']);
+await exportVenn();
 for (const [name, box] of [['n16', {left:119, top:274, width:1303, height:426}],
                          ['manicule', {left:161, top:191, width:1395, height:612}]]) {
   let image = sharp(path.join(assets, 'source', name + '.png')).extract(box);

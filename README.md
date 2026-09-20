@@ -30,7 +30,10 @@ Inspired by systems I love - Emacs, Erlang, Unix, Plan 9, and Hypermedia - combi
 Built at the [Recurse Center](https://www.recurse.com/).
 
 <p align="center">
-  <img width="450" src="assets/vrs-venn.png" alt="VRS influences and design">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/vrs-venn-dark.png">
+    <img width="450" src="assets/vrs-venn.png" alt="VRS influences and design">
+  </picture>
 </p>
 
 <!-- TODO: Move the Venn diagram into Design with explanatory context. -->

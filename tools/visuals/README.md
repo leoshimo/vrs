@@ -38,6 +38,8 @@ files are checked in so normal docs builds do not depend on either tool.
 ## Update
 
 - `ink.js`: the selected lettering effect. The static N16 image is its input.
+- `venn.mjs`: removes only the border-connected paper around the preserved Venn
+  source, keeping the circles filled and exporting matching light/dark PNGs.
 - `sphere.js`: the frozen standalone sphere renderer selected in Avatar Lab.
   It is unchanged from the approved study. To adopt a later Avatar Lab effect,
   replace this reviewed standalone bundle and run the export and browser checks.
