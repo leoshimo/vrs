@@ -354,7 +354,7 @@ def build(destination):
             identity = os.path.relpath('docs/identity.css', output.parent)
             document = document.replace('</head>', f'<link rel="stylesheet" href="{identity}">\n</head>')
             if name == 'docs/index.md' and LANDING is not None:
-                document = document.replace('</head>', '<meta name="description" content="A personal programming environment that brings me joy.">\n<link rel="stylesheet" href="landing.css">\n<script src="landing.js" type="module"></script>\n</head>')
+                document = document.replace('</head>', '<meta name="description" content="A personal programming environment built for joy.">\n<link rel="stylesheet" href="landing.css">\n<script src="landing.js" type="module"></script>\n</head>')
             document = book_layout(document, source, output)
             blocks = []
 

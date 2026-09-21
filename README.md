@@ -17,13 +17,11 @@
 
 ## What is this?
 
-[vrs](https://github.com/leoshimo/vrs) is a personal programming runtime - a sandbox for building my “endgame” software platform.
+[VRS](https://github.com/leoshimo/vrs) is a live programming environment for personal computing.
 
-The goal is to create a computing environment that brings me joy.
+It’s a foundation for my digital homesteading practice, where I want building and maintenance to feel like play.
 
-Each piece - the language, runtime, tools, and more - is designed as part of one holistic experience.
-
-I live on a collection of personal software running on vrs every day, evolving the runtime as I go.
+Each component — its language, runtime, tools, and more — is designed as part of one holistic experience, in pursuit of my “endgame” personal computing platform.
 
 Inspired by systems I love - Emacs, Erlang, Unix, Plan 9, and Hypermedia - combining their powerful ideas into something that feels just right for me.
 

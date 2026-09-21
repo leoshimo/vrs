@@ -1,5 +1,5 @@
 # VRS
 
-A personal programming environment that brings me joy.
+A personal programming environment built for joy.
 
 Under heavy construction, in perpetuity.
