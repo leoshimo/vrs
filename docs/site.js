@@ -15,7 +15,9 @@ if (toc) {
   }
 
   function update() {
-    const current = headings.filter(h => h.getBoundingClientRect().top < 150).at(-1);
+    // The last section may never reach the top threshold on a short final page.
+    const atEnd = scrollY + innerHeight >= document.documentElement.scrollHeight - 2;
+    const current = atEnd ? headings.at(-1) : headings.filter(h => h.getBoundingClientRect().top < 150).at(-1);
     links.forEach(a => { a.classList.remove('current'); a.removeAttribute('aria-current'); });
     toc.querySelectorAll('li.active').forEach(li => li.classList.remove('active'));
     const link = current && links.find(a => a.getAttribute('href') === '#' + current.id);

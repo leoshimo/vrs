@@ -1,0 +1,36 @@
+/* Shared identity: Charter, one logomark per composition, quiet navigation. */
+:root { --paper:#fbfaf5; --ink:#252c28; --muted:#6b7067; --line:#d9dbd2; --accent:#35613b; --code:#f0f1e9; }
+@media (prefers-color-scheme:dark) {
+  :root { --paper:#171b17; --ink:#e8eae2; --muted:#a8b09f; --line:#394234; --accent:#b4d4a5; --code:#242a21; }
+}
+[hidden] { display:none!important; }
+.site-masthead { height:62px; margin:28px auto 42px; padding:0; gap:28px; }
+.wordmark { display:flex; align-items:center; flex:none; width:57px; height:34px; }
+.wordmark img { width:57px; filter:grayscale(1) contrast(8); mix-blend-mode:multiply; }
+.site-masthead nav { gap:26px; }
+.site-masthead nav a { font:400 15px/1.4 var(--serif); padding:8px 0; }
+.github { display:flex; align-items:center; margin-left:auto; color:var(--ink); padding:7px; margin-right:-7px; }
+@media (max-width:760px) {
+  .site-masthead { height:58px; gap:22px; }
+  .site-masthead nav { gap:20px; }
+}
+@media (max-width:480px) {
+  .site-masthead { height:54px; gap:16px; margin-top:16px; }
+  .wordmark,.wordmark img { width:48px; }
+  .site-masthead nav { gap:16px; }
+  .site-masthead nav a { font-size:14px; }
+  .github svg { width:18px; height:18px; }
+}
+
+@media(prefers-color-scheme:dark) { .wordmark img { filter:grayscale(1) contrast(8) invert(1); mix-blend-mode:screen; } }
+
+.document-sidebar { grid-column:2; grid-row:1 / span 2; position:sticky; top:36px; align-self:start; max-height:calc(100vh - 72px); overflow-y:auto; scrollbar-width:thin; }
+.document-sidebar .contents { position:static; max-height:none; overflow:visible; padding-bottom:0; }
+.github-source { display:block; margin-top:22px; padding-top:14px; border-top:1px solid var(--line); font:13px/1.5 var(--serif); color:var(--muted); text-decoration:none; }
+.github-source:hover { text-decoration:underline; }
+@media(max-width:959px) {
+  .document-sidebar { position:static; max-height:none; overflow:visible; margin-bottom:28px; }
+  .document-sidebar .contents { margin-bottom:0; padding-block:12px; }
+  .github-source { margin-top:12px; padding:0; border:0; }
+}
+@media print { .document-sidebar { display:none; } }

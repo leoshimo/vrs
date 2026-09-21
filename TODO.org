@@ -2,6 +2,25 @@
 
 * roadmap
 
+** Visual identity
+
+*** TODO Make the landing REPL real
+Accept editable expressions and show VRS results in place. Decide how the
+runtime will connect to the static GitHub Pages site.
+
+*** TODO Explore a 3D CRT landing graphic
+Keep the surrounding website. Put the sphere and logomark inside a sculpted
+all-in-one computer in the center, using the Bayer shader treatment.
+Revisit the curved casing and keyboard silhouette. Miss Minutes and manicules
+are additional references.
+
+*** TODO Explore a chromeless LCD landing graphic
+An animated center graphic with custom segments, alongside the sphere.
+No display housing or dashboard chrome.
+
+*** TODO Move the Venn diagram into Design
+Explain the influences in context; it currently follows Recurse Center in README.
+
 ** TODO Clean up the consolidated manual
 
 After reviewing the READMEs and choosing the design essay, make a focused pass
