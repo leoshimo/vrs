@@ -330,6 +330,16 @@ Publications now reach subscribers on connected nodes. Implemented in
 =dfa65254=, with tests for cross-node delivery, loop prevention, and reconnects.
 Completing a todo on one machine can trigger a subscriber on another.
 
+** TODO Explore a unified multi-device filesystem
+
+Let programs refer to files on another connected machine without manually
+staging a local copy first. Use queued PDF delivery to BOOX as a motivating
+case: a document may live on one machine while the delivery process runs on
+another. Explore how references identify the owning device and path, and how
+reads or transfers behave when that device is offline. Decide whether a shared
+filesystem is needed or whether explicit remote file references are sufficient;
+this is a design idea, not an implementation plan.
+
 ** TODO Hypermedia Client
 Goal: Build CLI Hypermedia Client over VRS
 See also - "Revisit Client Connection"
@@ -344,6 +354,11 @@ See Also: CLI Client Shell
 - [ ] DOM API - Get Element with ID
 
 ** TODO Supervisors and Links
+** TODO Process monitor
+
+Explore process monitoring alongside supervision and the existing process-manager
+demo; settle the scope before choosing an interface.
+
 ** TODO Supervision Trees
 Goal: Spawn Link to be notified of errors in spawn-ed processes
 
@@ -398,6 +413,7 @@ Similar to =read= and =input()= working in shell + python respectively
 Current Lyric execution yields cooperatively for I/O and runtime waits.
 CPU-bound code is not preempted and can occupy a worker thread. Add an
 evaluation budget or scheduling mechanism that keeps other processes responsive.
+Consider an opcode-count budget that yields after a bounded amount of execution.
 This was previously described as supported behavior in DESIGN; it is future work.
 
 - Start a process that infinite loops, =(loop 5)=
@@ -414,6 +430,12 @@ search terms, predicates, sorting, limits, and pagination that sources can
 handle without callers knowing how each source retrieves its data. Decide
 how queries compose across sources and how unsupported query features are
 reported; preserve the simple type-only query.
+
+** TODO Enumerate entity sources
+
+=entity_sources= currently lists sources for a specified type. Explore a query
+for all registered entity types and their sources, including local overrides.
+Settle the desired listing scope before adding another API.
 
 ** TODO Extend entity actions to recognized shapes and context
 
@@ -435,6 +457,34 @@ Give VRs capability to see (web pages, screen), Hear (user, text) and prompt for
 input (text, voice, selection)
 ** TODO Sqlite IO for S-Expressions
 * lyric lang
+** TODO Floating-point numbers
+
+Add floating-point values and arithmetic, with readable literals and output.
+
+** TODO Conditional loops and break
+
+Explore conditional loops and an explicit way to leave a loop.
+
+** TODO Back help with metadata
+
+Have =help= read documentation through =meta= so documentation has one metadata
+interface rather than a separate lookup path.
+
+** TODO Revisit evaluation scopes and API names
+
+Review =eval=, =eval_callsite=, and =eval_global=: make the selected environment
+clear, including evaluation during macro expansion. Consider names or an
+explicit environment API. Use the service macros' inspection of caller-defined
+functions and =bind_srv='s installation of process-global bindings as concrete
+requirements. Decide whether caller-scope evaluation should remain exclusive
+to macro expansion, and document how this relates to lexical scope.
+
+** TODO Script imports and load paths
+
+Explore imports and configurable load paths for finding reusable scripts.
+Consider an imports directory. Sharing load paths across peers is a separate,
+speculative extension.
+
 ** TODO Tighten contracts as a program settles
 
 Keep the freedom to start with dynamic values and add checks once the domain
