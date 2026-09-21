@@ -278,6 +278,14 @@ Add service discovery, status and process inspection, and management actions
 such as starting, stopping, and restarting services. Explore further runtime
 inspection and control features through ordinary VRS services and messages.
 
+** TODO Observe history across services and client processes
+
+Build a debugger view for browsing history across services and client processes:
+discover targets, inspect recent calls/submissions, and filter by service or PID.
+Consider whether this belongs in =vrs dbg= or a more general log-observation
+tool. Build on [[*Client and service history / command logs]]; the initial viewer
+does not require results, execution statuses, or a merged global timeline.
+
 ** TODO Investigate algebraic effects and built-in testing
 
 Explore an algebraic effect system for calls with side effects, and a built-in
@@ -396,6 +404,77 @@ Learnings:
    - REPL always wants text - it'd rather have error message v.s. "cannot
      serialize" error
 - How to reconcile with Hypermedia API?
+
+*** TODO Carry source locations through ordinary client requests
+
+Revisit =eval_source= so source locations can reach the connection process
+without requiring consumers such as history to special-case an executable
+wrapper. For now, special-case =eval_source= when deriving the submitted code
+for history, while evaluating the original request to retain source locations.
+
+History can follow actual request boundaries. The current editor transcript
+mode submits forms separately; separate history entries are acceptable for v1.
+Document that behavior rather than changing transcript evaluation for history.
+
+** TODO Client and service history / command logs
+
+Explore callable history/introspection for three distinct kinds of activity:
+- Expressions submitted through a client connection (a possible =history=).
+- Function requests and events processed by a service instance.
+- Meaningful UI actions, distinct from rendering queries and protocol calls.
+
+Use cases: inspect operations processed by a service by name in the debugger;
+retrieve recorded expressions from the editor and turn them into source; inspect
+a live session's recent work. Decide capture points, instance identity and scope,
+ordering, results/errors, and bounded retention. Compare recording in the owning
+process, a companion process, or a subscriber; keep cross-session access explicit.
+Recording operations does not itself guarantee that replay reproduces their effects.
+
+Build on [[file:scripts/cmd_macro.ll][command recording]] and relate this to
+[[*More source-embedded debug tools]], [[*Runtime hooks inspired by Ruby TracePoint]],
+and [[*Personal Timeline service]]. Keep the capture/query contract open.
+
+*** TODO Reconcile richer request history with debugging
+
+For the proposed minimal history v1, append one submitted client request or
+handled service message per entry. Do not capture results or maintain
+running/completed/error status yet.
+
+Later, revisit configurable capture modes (requests, results, errors, etc.) and
+how these relate to dbg! tracing. Decide crash/cancellation semantics and
+correlation before adding lifecycle status; avoid creating a second competing
+debug/trace model. Keep one received client submission per history entry;
+editor transcript mode may produce separate submissions for separate forms.
+
+*** TODO Track function-call lifetimes with RAII-style guards
+
+Explore a Lyric resource/lifetime mechanism for tracking function-call start,
+success, failure, and cancellation. A guard could ensure a started call is
+accounted for when evaluation returns, errors, or is interrupted. Reconcile
+this with =dbg!= and [[*Explore RAII handles and resource lifetimes]], including
+process exit, without adding result/status tracking to minimal history v1.
+
+*** TODO Retain service history across process replacements
+
+Consider retrieving service history across the PIDs used by successive service
+instances. Redefinition currently replaces the process; PID-keyed history alone
+does not carry the old entries into a lookup of the current service instance.
+Decide service identity, instance boundaries, ordering, and bounded retention.
+For v1, a service-name history query resolves the current PID through =find_srv=.
+
+*** TODO Revisit native PID-keyed history storage after a minimal version
+
+The initial implementation uses a bounded native history store keyed by PID,
+with Lyric capture hooks in the client-session and service loops. =history=
+accepts an optional PID or service name, and =history_append= is for runtime
+internal use. Client submissions and handled service calls are retained as code
+forms; standalone history queries are excluded. History is always enabled with
+no count argument, and currently retains up to 20 entries per process with
+per-process and runtime memory bounds. See [[file:docs/manual.md::#history][History]].
+
+Revisit an ordinary Lyric recorder/helper process behind the same API. Compare
+bootstrap/lifecycle, memory and mailbox bounds, and read availability while the
+target process is busy or dead before making self-hosting a requirement.
 
 ** TODO Controlling Terminal Mechanics for Connection
 

@@ -664,6 +664,44 @@ After changing the functions, reevaluate `spawn_srv!` to replace the service
 under its existing name. Existing bindings resolve calls to the replacement.
 Run `bind_srv` again to pick up new function names or changed signatures.
 
+### History
+
+VRS retains recent history entries for each process.
+
+| Expression | Purpose |
+| --- | --- |
+| `(history)` | Read the current process's history. |
+| `(history pid)` | Read another process's history. |
+| `(history :counter)` | Read a service's history. |
+| `(history_append expression)` | For runtime internal use: append a history entry. |
+
+Each client connection has a dedicated process, separate from the services it calls.
+Their histories capture different parts of an interaction.
+
+For example, a client submits this call to the counter service:
+
+```vrs
+(add_count (+ 1 1))
+```
+
+**Client history** records the code submitted through that client connection,
+preserving the original expression:
+
+```vrs
+(history)
+# => ((add_count (+ 1 1)))
+```
+
+**Service history** records requests handled by the service, with the argument
+values it receives:
+
+```vrs
+(history :counter)
+# => ((add_count 2))
+```
+
+History queries themselves are excluded.
+
 <a id="events-and-subscriptions"></a>
 
 ### Pubsub
