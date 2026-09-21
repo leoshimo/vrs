@@ -253,11 +253,11 @@ fn native<T: Extern, L: Locals>(
     }
 }
 pub(crate) fn bind_builtins<T: Extern, L: Locals>(env: &mut Env<T, L>) {
-    env.bind_native(SymbolId::from("eval_caller"), native(
-        "(eval_caller FORM) - During macro expansion, evaluate source in the macro call's scope",
+    env.bind_native(SymbolId::from("eval_callsite"), native(
+        "(eval_callsite FORM) - During macro expansion, evaluate source in the macro call's scope",
         |_, args| match args {
-            [value] => Ok(NativeFnOp::Exec(vec![Inst::PushConst(value.clone()), Inst::EvalCaller])),
-            _ => Err(fail("eval_caller expects one source form")),
+            [value] => Ok(NativeFnOp::Exec(vec![Inst::PushConst(value.clone()), Inst::EvalCallsite])),
+            _ => Err(fail("eval_callsite expects one source form")),
         },
     ));
     env.bind_native(

@@ -18,7 +18,7 @@ where
     /// Register a lexical transformer in the process's macro namespace.
     DefineMacro(Val<T, L>),
     /// Evaluate source on the stack in the active macro invocation's caller scope.
-    EvalCaller,
+    EvalCallsite,
     /// Push constant form onto stack
     PushConst(Val<T, L>),
     /// Push value bound to given symbol onto stack
@@ -112,7 +112,6 @@ fn is_call<T: Extern, L: Locals>(v: &Val<T, L>) -> bool {
                         | "loop"
                         | "match"
                         | "defmacro"
-                        | "for_syntax"
                 )
         }
         None => true,
@@ -172,8 +171,6 @@ fn compile_inner<T: Extern, L: Locals>(v: &Val<T, L>) -> Result<Bytecode<T, L>> 
                         ])
                     }
                     "defmacro" => return Ok(vec![Inst::DefineMacro(v.clone())]),
-                    // Compatibility spelling; helpers are ordinary runtime definitions now.
-                    "for_syntax" => return compile_begin(args),
                     _ => (),
                 }
             }
@@ -596,7 +593,7 @@ impl<T: Extern, L: Locals> std::fmt::Display for Inst<T, L> {
             Inst::DefineMacro(form) => write!(f, "defmacro {form}"),
             Inst::Expand(once) => write!(f, "expand once={once}"),
             Inst::ValidateExpansion => write!(f, "validate_expansion"),
-            Inst::EvalCaller => write!(f, "eval_caller"),
+            Inst::EvalCallsite => write!(f, "eval_callsite"),
             Inst::PushConst(c) => write!(f, "pushco {c}"),
             Inst::GetSym(s) => write!(f, "getsym {s}"),
             Inst::DefSym(s) => write!(f, "defsym {s}"),

@@ -68,10 +68,9 @@ async fn ordinary_helpers_and_captured_state_are_available() {
             .unwrap(),
         Value::Int(1)
     );
-    // The old wrapper remains compatible, but no longer creates a separate phase.
     assert_eq!(
         eval(
-            "(begin (for_syntax (def n 0) (defn! bump () (set n (+ n 1))))
+            "(begin (def n 0) (defn! bump () (set n (+ n 1)))
       (defmacro m () (bump)) (list (m!) n))"
         )
         .await
@@ -88,14 +87,14 @@ async fn expansion_runs_at_each_executed_call_and_can_inspect_caller_locals() {
       (defn! helper () name)
       (defmacro inspect (expr)
         (set expansions (+ expansions 1))
-        (list 'quote (list (helper) (eval_caller expr))))
+        (list 'quote (list (helper) (eval_callsite expr))))
       (defn! run (name) (inspect! name))
       (list expansions (run 20) (run 30) expansions))";
     assert_eq!(
         eval(source).await.unwrap(),
         Value::from_expr("(0 (10 20) (10 30) 2)").unwrap()
     );
-    assert!(eval("(eval_caller 'name)")
+    assert!(eval("(eval_callsite 'name)")
         .await
         .unwrap_err()
         .to_string()
@@ -161,9 +160,8 @@ fn transformers_suspend_and_resume_on_the_calling_fiber() {
 #[tokio::test]
 async fn expansion_native_aliases_and_compiler_metadata_work() {
     let source = "(begin
-      (for_syntax
-        (def mapper map)
-        (defn! twice (x) (interactive :number) (+ x x)))
+      (def mapper map)
+      (defn! twice (x) (interactive :number) (+ x x))
       (defmacro doubled (& values) `(quote ,(apply mapper (list values twice))))
       (doubled! 1 2 3))";
     assert_eq!(
