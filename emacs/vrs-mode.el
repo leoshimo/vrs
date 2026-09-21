@@ -99,7 +99,7 @@ PREFIXES are ordered from outermost to innermost; preserve spaces/comments."
                        (point) (progn (forward-sexp) (point)))))
             (skip-chars-forward " \t")
             (if (or (eolp) (looking-at "#")
-                    (member head '("begin" "defmacro" "for_syntax" "lambda" "loop"))
+                    (member head '("begin" "defmacro" "lambda" "loop"))
                     (string-suffix-p "!" head))
                 body
               (current-column)))))))))
@@ -138,7 +138,7 @@ PREFIXES are ordered from outermost to innermost; preserve spaces/comments."
 
 (defconst vrs-font-lock-keywords
   `((,(concat "(" (regexp-opt '("begin" "cond" "def" "defmacro" "eval"
-                                "fn" "for_syntax" "if" "lambda" "let" "loop"
+                                "fn" "if" "lambda" "let" "loop"
                                 "match" "quasiquote" "quote" "set" "try"
                                 "unquote" "unquote-splicing" "yield") t)
               "\\_>")

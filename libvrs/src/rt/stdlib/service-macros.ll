@@ -28,7 +28,7 @@
   (if (not? (list? interface)) (error ":interface must be a list"))
   (map interface (fn (name)
     (if (not? (symbol? name)) (error ":interface entries must be symbols"))
-    (def callable (eval_caller name))
+    (def callable (eval_callsite name))
     (if (not? (lambda? callable)) (error "exported service value must be a lambda"))
     # Keep ordinary parameter names readable. Rename a parameter if it would
     # shadow the handler, and capture wildcard arguments for the direct call.
@@ -53,7 +53,7 @@
     (if (contains? seen topic) (error "duplicate service topic"))
     (set seen (push seen topic))
     (if (not? (symbol? handler)) (error "topic handler must be a symbol"))
-    (def callable (eval_caller handler))
+    (def callable (eval_callsite handler))
     (if (not? (lambda? callable)) (error "topic handler must be a lambda"))
     (if (not? (eq? (len (get (meta callable) :args)) 1))
       (error "topic handler must accept exactly one payload argument"))
@@ -66,9 +66,9 @@
 (defmacro srv (name & options)
   "(srv! NAME [:interface EXPR] [:topics EXPR] [:ready PID-EXPR]) - Serve calls and topic handlers in the current process. The interface defaults to an empty list."
   (def parsed (vrs/service_options options true))
-  (def interface (eval_caller (get parsed :interface)))
+  (def interface (eval_callsite (get parsed :interface)))
   (def clauses (vrs/service_clauses interface))
-  (def topics (eval_caller (get parsed :topics)))
+  (def topics (eval_callsite (get parsed :topics)))
   (def service (gensym "service"))
   (def topic_clauses (vrs/topic_clauses topics service))
   (def subscriptions (map topics (fn (entry) `(subscribe ,(get entry 0)))))
@@ -108,10 +108,10 @@
 (defmacro spawn_srv (name & options)
   "(spawn_srv! NAME [:interface EXPR] [:topics EXPR]) - Return the child's PID after local subscriptions and registration. The interface defaults to an empty list. Raise an error if it exits before readiness. No startup deadline or health check."
   (def parsed (vrs/service_options options false))
-  (def interface (eval_caller (get parsed :interface)))
+  (def interface (eval_callsite (get parsed :interface)))
   # Validate before spawning so errors reach the caller instead of losing readiness.
   (vrs/service_clauses interface)
-  (def topics (eval_caller (get parsed :topics)))
+  (def topics (eval_callsite (get parsed :topics)))
   (vrs/topic_clauses topics nil)
   (def service (gensym "service"))
   (def parent (gensym "parent"))

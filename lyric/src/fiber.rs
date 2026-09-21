@@ -501,11 +501,13 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                     .ok_or_else(|| Error::UnexpectedStack("missing macro result".into()))?;
                 crate::macros::validate_result(value, &self.expansion_budget())?;
             }
-            Inst::EvalCaller => {
+            Inst::EvalCallsite => {
                 let caller = self
                     .active_expansion()
                     .ok_or_else(|| {
-                        Error::Macro("eval_caller is only available during macro expansion".into())
+                        Error::Macro(
+                            "eval_callsite is only available during macro expansion".into(),
+                        )
                     })?
                     .caller
                     .clone();
