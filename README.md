@@ -1,5 +1,10 @@
 <p align="center">
-    <img width="450" src="https://raw.github.com/leoshimo/vrs/main/assets/vrs-venn.png">
+  <picture>
+    <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)" srcset="assets/visuals/readme-dark.png">
+    <source media="(prefers-reduced-motion: reduce)" srcset="assets/visuals/readme-light.png">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/visuals/readme-dark.gif">
+    <img src="assets/visuals/readme-light.gif" alt="VRS" width="880">
+  </picture>
 </p>
 
 > In the multiverse, you can live up to your ultimate potential. We discovered a
@@ -23,6 +28,15 @@ I live on a collection of personal software running on vrs every day, evolving t
 Inspired by systems I love - Emacs, Erlang, Unix, Plan 9, and Hypermedia - combining their powerful ideas into something that feels just right for me.
 
 Built at the [Recurse Center](https://www.recurse.com/).
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/vrs-venn-dark.png">
+    <img width="450" src="assets/vrs-venn.png" alt="VRS influences and design">
+  </picture>
+</p>
+
+<!-- TODO: Move the Venn diagram into Design with explanatory context. -->
 
 ## Status
 

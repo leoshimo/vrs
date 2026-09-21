@@ -34,9 +34,12 @@ class ExportTests(unittest.TestCase):
         for name in ('docs', 'assets', 'scripts'):
             (self.root / name).mkdir()
         self.sources = ('docs/index.md', 'docs/other.md')
-        self.assets = ('docs/site.css', 'docs/site.js')
+        self.assets = ('docs/site.css', 'docs/site.js', 'docs/identity.css', 'assets/visuals/logomark.png')
         (self.root / 'docs/site.css').write_text('body { color: black; }')
         (self.root / 'docs/site.js').write_text('// fixture')
+        (self.root / 'docs/identity.css').write_text('/* identity fixture */')
+        (self.root / 'assets/visuals').mkdir()
+        (self.root / 'assets/visuals/logomark.png').write_bytes(b'fixture')
         (self.root / 'README.md').write_text('# Source repository')
         (self.root / 'scripts/tool.ll').write_text('(+ 1 2)')
         (self.root / 'assets/a picture.svg').write_text('<svg xmlns="http://www.w3.org/2000/svg"/>')
@@ -78,7 +81,7 @@ Path({str(self.marker)!r}).write_text("export executed code")
 
 [Back](index.md)
 ''')
-        for name, value in [('ROOT', self.root), ('SOURCES', self.sources), ('ASSETS', self.assets)]:
+        for name, value in [('ROOT', self.root), ('SOURCES', self.sources), ('ASSETS', self.assets), ('LANDING', None), ('VISUAL_SOURCES', {})]:
             p = patch.object(docs, name, value)
             p.start()
             self.addCleanup(p.stop)
@@ -141,9 +144,15 @@ Path({str(self.marker)!r}).write_text("export executed code")
             self.build()
         self.assertEqual(first, self.snapshot())
         markup = (self.site / 'docs/tour.html').read_text()
-        self.assertIn('href="https://github.com/leoshimo/vrs">GitHub</a>', markup)
+        self.assertIn('href="https://github.com/leoshimo/vrs" aria-label="VRS on GitHub"', markup)
+        self.assertIn('href="https://github.com/leoshimo/vrs/blob/main/docs/tour.md"', markup)
         self.assertNotIn('download>Source</a>', markup)
         self.assertNotIn('Markdown source', markup)
+        self.assertIn('class="github-source"', markup)
+        self.assertIn('>View source</a>', markup)
+        title = re.search(r'<header class="document-title">(.*?)</header>', markup, re.S)[1]
+        self.assertNotIn('<a ', title)
+        self.assertNotIn('↗', title)
         self.assertIn('aria-current="page">Tour</a>', markup)
         self.assertIn('<article class="document">', markup)
         self.assertNotIn('href="tour.md"', markup)
@@ -221,6 +230,29 @@ class UtilityTests(unittest.TestCase):
             docs.watch(rebuild, scan=scan, sleep=lambda _: None)
         self.assertEqual(2, len(calls))
         self.assertEqual(1, output.getvalue().count('Build failed'))
+
+
+class LandingTests(unittest.TestCase):
+    def test_production_landing_and_assets_work_under_project_prefix(self):
+        before = {name: (docs.ROOT / name).read_bytes() for name in docs.SOURCES}
+        with tempfile.TemporaryDirectory() as directory:
+            site = Path(directory) / 'vrs'
+            with redirect_stdout(io.StringIO()):
+                docs.build(site)
+            home = (site / 'docs/index.html').read_text()
+            self.assertIn('Under heavy construction, in perpetuity.', home)
+            self.assertIn('class="orb-fallback"', home)
+            self.assertIn('prefers-color-scheme: dark', home)
+            self.assertNotIn('class="wordmark"', home)
+            self.assertIn('>Take the tour</a>', home)
+            self.assertTrue((site / 'assets/visuals/ink.js').is_file())
+            self.assertTrue((site / 'assets/visuals/sphere.js').is_file())
+            docs.check_site(site)
+            # A missing dark fallback must fail link validation, including srcset.
+            (site / 'assets/visuals/sphere-dark.png').unlink()
+            with self.assertRaisesRegex(ValueError, 'sphere-dark.png'):
+                docs.check_site(site)
+        self.assertEqual(before, {name: (docs.ROOT / name).read_bytes() for name in docs.SOURCES})
 
 
 if __name__ == '__main__':
