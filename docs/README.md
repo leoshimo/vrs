@@ -1,15 +1,17 @@
 # Building the documentation
 
-The documentation is Markdown, rendered with markdown-it-py.
-`TODO.org` remains in the repository; links to it open its source on GitHub.
-The landing copy lives in `index.md`; its composition lives in
-`tools/docs/landing.html`, `landing.css`, and `landing.js`. The selected visual
-assets and regeneration instructions are in [`tools/visuals`](../tools/visuals/README.md).
+Edit the Markdown pages in `docs/`. The sphere landing page combines
+[`index.md`](index.md) with the template in
+[`tools/docs/landing.html`](../tools/docs/landing.html); its styles and behavior
+live in `docs/landing.css` and `docs/landing.js`. The selected visual assets and
+regeneration instructions are in [`tools/visuals`](../tools/visuals/README.md).
 
 The exporter lives in [`tools/docs/build.py`](../tools/docs/build.py). It adds
 the shared page layout, navigation, repository link, and code highlighting.
 [`site.css`](site.css) styles the pages; [`site.js`](site.js) handles the contents
-and copy buttons. Examples are displayed, never evaluated during export.
+and copy buttons. All generated pages and copied assets go into `_site/`,
+which Git ignores. Source files stay in place; source links open GitHub.
+Examples are displayed, never evaluated during export.
 
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then run:
 
@@ -21,19 +23,13 @@ uv run --locked tools/docs/build.py --serve 8769 # Preview and rebuild on edits
 The builder declares its dependencies inline. uv uses `tools/docs/build.py.lock`
 and manages Python and its environment; no virtualenv setup is needed.
 
-Open <http://127.0.0.1:8769/>. Refresh the browser after an edit. A failed build
+The preview serves `_site/`. Open <http://127.0.0.1:8769/> and refresh the browser
+after an edit. A failed build
 leaves the last good preview in place and reports the error in the terminal.
 Use another port if 8769 is already occupied.
 
-To refresh the HTML copies beside the source files, including `docs/tour.html`:
-
-```sh
-uv run --locked tools/docs/build.py --in-place
-```
-
-`--in-place` also works with `--serve` or `--watch`. Use `--output PATH` for a
-different build directory.
-Keep generated HTML edits out of the authoring loop; the next export replaces them.
+Use `--watch` to rebuild without a server, or `--output PATH` for a separate
+build directory. Edit the Markdown sources; the next build replaces generated HTML.
 
 Link between pages using relative paths, such as `[Services](manual.md#services)`.
 Markdown headings receive stable slugs. An explicit `<a id="services"></a>`
