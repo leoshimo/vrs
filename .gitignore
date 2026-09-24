@@ -103,5 +103,4 @@ scratch.ll
 
 # Generated documentation site and Python bytecode.
 /_site/
-/docs/*.html
 __pycache__/

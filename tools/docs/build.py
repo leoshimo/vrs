@@ -377,7 +377,6 @@ def build(destination):
             target = site / output
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(document)
-            (site / name).write_text(source_texts[name])
         for name in (*ASSETS, *copied_assets):
             target = site / name
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -439,7 +438,6 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--test', action='store_true', help='Run the exporter tests')
     parser.add_argument('--output', type=Path, default=ROOT / '_site', help='Output directory (default: _site)')
-    parser.add_argument('--in-place', action='store_true', help='Also refresh HTML copies beside source documents')
     parser.add_argument('--serve', type=int, metavar='PORT', help='Serve on localhost and rebuild when sources change')
     parser.add_argument('--watch', action='store_true', help='Rebuild on changes without starting an HTTP server')
     args = parser.parse_args()
@@ -450,14 +448,10 @@ def main():
         raise SystemExit(0 if result.wasSuccessful() else 1)
     destination = args.output.resolve()
     if destination == ROOT or any((ROOT / name).is_relative_to(destination) for name in (*SOURCES, *ASSETS)):
-        parser.error('Use a separate output directory; --in-place refreshes repository HTML safely.')
+        parser.error('Use an output directory separate from source files, such as _site.')
 
     def rebuild():
         build(destination)
-        if args.in_place:
-            for name in SOURCES:
-                output = Path(name).with_suffix('.html')
-                shutil.copy2(destination / output, ROOT / output)
 
     rebuild()
     server = None

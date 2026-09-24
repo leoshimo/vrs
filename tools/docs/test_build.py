@@ -101,8 +101,8 @@ Path({str(self.marker)!r}).write_text("export executed code")
         self.assertEqual(first, self.snapshot())
         self.assertFalse(self.marker.exists())
         self.assertEqual(before, {name: (self.root / name).read_bytes() for name in self.sources})
-        for name, value in before.items():
-            self.assertEqual(value, (self.site / name).read_bytes())
+        for name in self.sources:
+            self.assertFalse((self.site / name).exists())
         markup = (self.site / 'docs/index.html').read_text()
         block = re.search(r'<pre[^>]*class="src src-vrs"[^>]*>(.*?)</pre>', markup, re.S)[1]
         self.assertEqual('(print "<&>") # source characters, not HTML\n', ''.join(Text(block).parts))
@@ -161,7 +161,7 @@ Path({str(self.marker)!r}).write_text("export executed code")
         self.assertIn('id="try-it-2"', markup)
         block = re.search(r'<pre[^>]*class="src src-vrs"[^>]*>(.*?)</pre>', markup, re.S)[1]
         self.assertEqual(code, ''.join(Text(block).parts))
-        self.assertEqual(source.read_bytes(), (self.site / 'docs/tour.md').read_bytes())
+        self.assertFalse((self.site / 'docs/tour.md').exists())
 
     def test_broken_link_leaves_previous_site_unchanged(self):
         self.build()
