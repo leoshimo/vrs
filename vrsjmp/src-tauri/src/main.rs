@@ -256,6 +256,26 @@ fn on_blur(app: tauri::AppHandle, preview: tauri::State<'_, PreviewMode>) {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn configure_palette_spaces(window: &WebviewWindow) -> Result<()> {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+
+    let _main_thread = MainThreadMarker::new()
+        .context("Palette Spaces behavior must be configured on the main thread")?;
+    let native_window = window.ns_window()?;
+    // SAFETY: Tauri supplies the NSWindow owned by this live window. Setup runs
+    // on the main thread (checked above), and the pointer is only borrowed here.
+    let native_window = unsafe { native_window.cast::<NSWindow>().as_ref() }
+        .context("Palette has no native macOS window")?;
+    // Set this before the first show(), which can already make the window key.
+    // Activation should bring the palette here instead of switching Spaces.
+    native_window.setCollectionBehavior(
+        native_window.collectionBehavior() | NSWindowCollectionBehavior::MoveToActiveSpace,
+    );
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let args = Args::parse();
     let socket = args.socket.unwrap_or_else(vrs::runtime_socket);
@@ -276,6 +296,8 @@ fn main() -> Result<()> {
         )
         .setup(move |app| {
             let window = app.get_webview_window("main").unwrap();
+            #[cfg(target_os = "macos")]
+            configure_palette_spaces(&window)?;
             let notifications = window.clone();
             let mut client = Client::new(socket.clone());
             client.start(move |event| {
