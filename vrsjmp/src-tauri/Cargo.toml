@@ -19,6 +19,10 @@ anyhow = "1.0.104"
 clap = { version = "4.6.7", features = ["derive"] }
 tokio = "1.53.1"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = { version = "0.6.4", default-features = false, features = ["std"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSWindow"] }
+
 [features]
 # Embed the built frontend when running outside the Tauri dev server.
 custom-protocol = ["tauri/custom-protocol"]
