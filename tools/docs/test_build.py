@@ -33,8 +33,8 @@ class ExportTests(unittest.TestCase):
         self.site = self.root / 'public'
         for name in ('docs', 'assets', 'scripts'):
             (self.root / name).mkdir()
-        self.sources = ('docs/index.md', 'docs/other.md')
-        self.assets = ('docs/site.css', 'docs/site.js', 'docs/identity.css', 'assets/visuals/logomark.png')
+        self.sources = {'docs/index.md': 'docs/index.html', 'docs/other.md': 'docs/other.html'}
+        self.assets = {name: name for name in ('docs/site.css', 'docs/site.js', 'docs/identity.css', 'assets/visuals/logomark.png')}
         (self.root / 'docs/site.css').write_text('body { color: black; }')
         (self.root / 'docs/site.js').write_text('// fixture')
         (self.root / 'docs/identity.css').write_text('/* identity fixture */')
@@ -81,7 +81,7 @@ Path({str(self.marker)!r}).write_text("export executed code")
 
 [Back](index.md)
 ''')
-        for name, value in [('ROOT', self.root), ('SOURCES', self.sources), ('ASSETS', self.assets), ('LANDING', None), ('VISUAL_SOURCES', {})]:
+        for name, value in [('ROOT', self.root), ('SOURCES', self.sources), ('ASSETS', self.assets), ('LANDING', None)]:
             p = patch.object(docs, name, value)
             p.start()
             self.addCleanup(p.stop)
@@ -137,7 +137,7 @@ Path({str(self.marker)!r}).write_text("export executed code")
                           '[Rendered link](other.html#other)\n\n'
                           '## Try it\n\n```vrs\n' + code + '```\n\n'
                           '### Try it\n\nA *live* value.\n')
-        self.sources += ('docs/tour.md',)
+        self.sources['docs/tour.md'] = 'docs/tour.html'
         with patch.object(docs, 'SOURCES', self.sources):
             self.build()
             first = self.snapshot()

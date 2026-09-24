@@ -19,6 +19,6 @@ Do not hand-edit generated exports. Keep changes to the renderer and its exports
 in the same commit. Only the selected direction is shipped here; exploration
 rounds remain outside the product repository.
 
-Charter is already bundled under `docs/fonts/`, with its original
-[Bitstream redistribution notice](../../docs/fonts/charter-LICENSE.txt).
+Charter is already bundled under `tools/docs/assets/fonts/`, with its original
+[Bitstream redistribution notice](../../tools/docs/assets/fonts/charter-LICENSE.txt).
 No additional font is needed for the logomark, which is raster artwork.
