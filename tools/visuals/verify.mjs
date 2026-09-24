@@ -86,7 +86,7 @@ try {
     page.on('response', response => { if(response.status() >= 400) missing.push(response.url()); });
     for (const theme of ['light','dark']) {
       await page.emulateMedia({colorScheme:theme});
-      for (const document of ['index','tour','design','design-experience','manual']) {
+      for (const document of ['index','tour','design','manual']) {
         for (const width of [1280,960,760,480,375,320]) {
           await page.setViewportSize({width,height:900});
           await page.goto(server.url+'docs/'+document+'.html');
@@ -174,7 +174,7 @@ try {
       assert(Math.abs(vennRatio-1)<.005,`${name} Venn distorted at ${width}px`);
       if(name==='chromium' && width===1280) await page.screenshot({path:path.join(artifacts,`readme-${colorScheme}-${reducedMotion}.png`)});
     }
-    console.log(`${name}: 60 page layouts, navigation, reduced motion, no-JS, WebGL fallback, and README proportions passed`);
+    console.log(`${name}: 48 page layouts, navigation, reduced motion, no-JS, WebGL fallback, and README proportions passed`);
     await browser.close(); browser=undefined;
   }
 } catch(error) {

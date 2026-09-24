@@ -14,3 +14,11 @@ npm install --global pnpm@11.19.0
 ```
 
 Run `./scripts/serve.sh` for the release build.
+
+## Documentation
+
+Preview with:
+
+```sh
+uv run --locked tools/docs/build.py --serve 8769
+```

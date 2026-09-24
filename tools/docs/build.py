@@ -20,21 +20,25 @@ import time
 from urllib.parse import quote, unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCES = ('docs/index.md', 'docs/tour.md', 'docs/design.md',
-           'docs/design-experience.md', 'docs/manual.md')
-ASSETS = ('docs/site.css', 'docs/site.js',
-          'docs/fonts/charter-regular.woff2', 'docs/fonts/charter-bold.woff2',
-          'docs/fonts/charter-italic.woff2', 'docs/fonts/charter-bold-italic.woff2',
-          'docs/fonts/charter-LICENSE.txt')
-REPOSITORY = 'https://github.com/leoshimo/vrs'
-LANDING = Path('tools/docs/landing.html')
-VISUAL_SOURCES = {
+SOURCES = {
+    'tools/docs/index.md': 'docs/index.html',
+    'docs/tour.md': 'docs/tour.html',
+    'docs/design.md': 'docs/design.html',
+    'docs/manual.md': 'docs/manual.html',
+}
+ASSETS = {
+    **{f'tools/docs/assets/{name}': f'docs/{name}' for name in (
+        'site.css', 'site.js', 'identity.css', 'landing.css', 'landing.js',
+        'fonts/charter-regular.woff2', 'fonts/charter-bold.woff2',
+        'fonts/charter-italic.woff2', 'fonts/charter-bold-italic.woff2',
+        'fonts/charter-LICENSE.txt')},
+    **{f'assets/visuals/{name}': f'assets/visuals/{name}' for name in (
+        'logomark.png', 'manicule.png', 'sphere-light.png', 'sphere-dark.png')},
     'tools/visuals/sphere.js': 'assets/visuals/sphere.js',
     'tools/visuals/ink.js': 'assets/visuals/ink.js',
 }
-ASSETS += ('docs/identity.css', 'docs/landing.css', 'docs/landing.js',
-           'assets/visuals/logomark.png', 'assets/visuals/manicule.png',
-           'assets/visuals/sphere-light.png', 'assets/visuals/sphere-dark.png')
+REPOSITORY = 'https://github.com/leoshimo/vrs'
+LANDING = Path('tools/docs/landing.html')
 GITHUB_ICON = '''<svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true"><path fill="currentColor" d="M12 .7a11.3 11.3 0 0 0-3.57 22.02c.56.1.77-.24.77-.54v-2.1c-3.15.69-3.82-1.34-3.82-1.34-.51-1.31-1.26-1.66-1.26-1.66-1.03-.7.08-.69.08-.69 1.14.08 1.73 1.17 1.73 1.17 1.01 1.73 2.65 1.23 3.3.94.1-.73.4-1.23.72-1.51-2.51-.28-5.15-1.26-5.15-5.59 0-1.23.44-2.24 1.17-3.03-.12-.28-.51-1.43.11-2.99 0 0 .95-.3 3.11 1.16A10.8 10.8 0 0 1 12 6.16c.96 0 1.93.13 2.83.38 2.16-1.46 3.11-1.16 3.11-1.16.62 1.56.23 2.71.11 2.99.73.79 1.17 1.8 1.17 3.03 0 4.34-2.65 5.3-5.17 5.58.41.35.77 1.03.77 2.09v3.11c0 .3.21.65.78.54A11.3 11.3 0 0 0 12 .7Z"/></svg>'''
 
 
@@ -178,7 +182,7 @@ def highlight(code, language):
 
 
 def rewrite_links(document, source, output):
-    exports = {ROOT / name: Path(name).with_suffix('.html') for name in SOURCES}
+    exports = {ROOT / name: Path(target) for name, target in SOURCES.items()}
     assets = set()
 
     def rewrite(match):
@@ -193,7 +197,7 @@ def rewrite_links(document, source, output):
         if path in exports:
             target = os.path.relpath(exports[path], output.parent)
         elif path.suffix == '.html' and path.with_suffix('.md') in exports:
-            target = os.path.relpath(relative, output.parent)
+            target = os.path.relpath(exports[path.with_suffix('.md')], output.parent)
         elif relative.parts and relative.parts[0] == 'assets':
             if not path.is_file():
                 raise ValueError(f'{source.name}: missing asset: {raw}')
@@ -285,7 +289,7 @@ def book_layout(document, source, output):
         toc = ('<details id="table-of-contents" class="contents" open>'
                '<summary>Contents</summary><nav aria-label="Page contents">' +
                contents + '</nav></details>')
-    exports = {Path(name).stem: Path(name).with_suffix('.html') for name in SOURCES}
+    exports = {Path(target).stem: Path(target) for target in SOURCES.values()}
     index = os.path.relpath('docs/index.html', output.parent)
     links = []
     for name, label in (('tour', 'Tour'), ('design', 'Design'), ('manual', 'Manual')):
@@ -293,7 +297,7 @@ def book_layout(document, source, output):
             href = os.path.relpath(exports[name], output.parent)
             current = ' aria-current="page"' if output.stem.split('-')[0] == name else ''
             links.append(f'<a href="{href}"{current}>{label}</a>')
-    home = source.relative_to(ROOT).as_posix() == 'docs/index.md' and LANDING is not None
+    home = output == Path('docs/index.html') and LANDING is not None
     mark = os.path.relpath('assets/visuals/logomark.png', output.parent)
     brand = '' if home else (f'<a class="wordmark" href="{index}" aria-label="VRS home">'
                             f'<img src="{mark}" width="57" height="19" alt="vrs"></a>')
@@ -344,8 +348,8 @@ def build(destination):
         site.mkdir()
         source_texts = {name: (ROOT / name).read_text() for name in SOURCES}
         copied_assets = set()
-        for name in SOURCES:
-            source, output = ROOT / name, Path(name).with_suffix('.html')
+        for name, target in SOURCES.items():
+            source, output = ROOT / name, Path(target)
             document, assets = rewrite_links(render_markdown(source_texts[name]), source, output)
             copied_assets.update(assets)
             css = os.path.relpath('docs/site.css', output.parent)
@@ -353,7 +357,7 @@ def build(destination):
             document = document.replace('</head>', f'<link rel="stylesheet" href="{css}">\n<script src="{js}" defer></script>\n</head>')
             identity = os.path.relpath('docs/identity.css', output.parent)
             document = document.replace('</head>', f'<link rel="stylesheet" href="{identity}">\n</head>')
-            if name == 'docs/index.md' and LANDING is not None:
+            if output == Path('docs/index.html') and LANDING is not None:
                 document = document.replace('</head>', '<meta name="description" content="A personal programming environment built for joy.">\n<link rel="stylesheet" href="landing.css">\n<script src="landing.js" type="module"></script>\n</head>')
             document = book_layout(document, source, output)
             blocks = []
@@ -377,11 +381,7 @@ def build(destination):
             target = site / output
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(document)
-        for name in (*ASSETS, *copied_assets):
-            target = site / name
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(ROOT / name, target)
-        for source, output in VISUAL_SOURCES.items():
+        for source, output in {**ASSETS, **{name: name for name in copied_assets}}.items():
             target = site / output
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / source, target)
@@ -405,7 +405,7 @@ def build(destination):
 
 def fingerprint():
     # An editor may save by temporarily removing/replacing a file.
-    paths = [ROOT / name for name in (*SOURCES, *ASSETS, *VISUAL_SOURCES)]
+    paths = [ROOT / name for name in (*SOURCES, *ASSETS)]
     if LANDING is not None:
         paths.append(ROOT / LANDING)
     paths.extend(sorted((ROOT / 'assets').rglob('*')) if (ROOT / 'assets').exists() else [])

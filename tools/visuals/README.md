@@ -46,9 +46,9 @@ files are checked in so normal docs builds do not depend on either tool.
 - `sphere.js`: the frozen standalone sphere renderer selected in Avatar Lab.
   It is unchanged from the approved study. To adopt a later Avatar Lab effect,
   replace this reviewed standalone bundle and run the export and browser checks.
-- `docs/landing.css` and `docs/landing.js`: layout and progressive enhancement.
+- `tools/docs/assets/landing.css` and `tools/docs/assets/landing.js`: layout and progressive enhancement.
 - `tools/docs/landing.html`: landing markup; the two lines of copy are authored
-  in `docs/index.md`.
+  in `tools/docs/index.md`.
 - `assets/visuals/source/`: original artwork and generation prompts. Keep these
   originals; the exporter generates the cropped distribution assets.
 
@@ -66,7 +66,7 @@ npx playwright install chromium webkit
 npm test
 ```
 
-The browser checks build the production site beneath `/vrs/`, inspect all five
+The browser checks build the production site beneath `/vrs/`, inspect all four
 pages in light/dark at six widths in Chromium and WebKit, and exercise navigation,
 copying, reduced motion, no JavaScript, missing WebGL, and README banner proportions.
 Screenshots and the report go into ignored `tools/visuals/artifacts/`.
