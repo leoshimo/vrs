@@ -28,9 +28,7 @@ body { font-size:18px; }
 .tour-link:hover { text-decoration:underline; }
 .tour-cue { width:36px; flex:none; filter:grayscale(1) contrast(8); mix-blend-mode:multiply; transform:scaleX(-1); transition:translate .18s ease; }
 .tour-link:hover .tour-cue { translate:2px 0; }
-.project-footer { margin-top:60px; padding:19px 0; border-top:1px solid var(--line); font:12px/1.5 var(--serif); color:var(--muted); display:flex; align-items:center; justify-content:space-between; gap:20px; }
-.project-footer>span { margin-left:auto; }
-.project-footer a { color:inherit; text-decoration-color:var(--line); }
+.project-footer { margin-top:60px; }
 @media(prefers-color-scheme:dark) {
   .logomark,.tour-cue { filter:grayscale(1) contrast(8) invert(1); mix-blend-mode:screen; }
   .ink-motion { filter:invert(1); }
