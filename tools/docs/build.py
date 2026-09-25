@@ -305,15 +305,18 @@ def book_layout(document, source, output):
                 '<nav aria-label="Documentation">' + ''.join(links) + '</nav>' +
                 f'<a class="github" href="{REPOSITORY}" aria-label="VRS on GitHub">'
                 + GITHUB_ICON + '</a></header>')
+    author = '<span>Built by <a href="https://leoshimo.com/">leoshimo</a></span>'
     if home:
-        body = (ROOT / LANDING).read_text().replace('$NAV', masthead).replace('$COPY', article)
+        body = ((ROOT / LANDING).read_text().replace('$NAV', masthead)
+                .replace('$COPY', article).replace('$AUTHOR', author))
     else:
         source_link = f'{REPOSITORY}/blob/main/{quote(source.relative_to(ROOT).as_posix())}'
         sidebar = ('<aside class="document-sidebar">' + toc +
                    f'<a class="github-source" href="{source_link}">View source</a></aside>')
         body = (masthead + '<main id="content" class="page-grid">'
                 f'<header class="document-title">{title}</header>' + sidebar +
-                f'<article class="document">{article}</article></main>')
+                f'<article class="document">{article}</article></main>'
+                f'<footer class="project-footer document-footer">{author}</footer>')
     before, rest = document.split('<body>', 1)
     _, after = rest.rsplit('</body>', 1)
     return before + '<body>\n' + body + '\n</body>' + after
@@ -358,7 +361,14 @@ def build(destination):
             identity = os.path.relpath('docs/identity.css', output.parent)
             document = document.replace('</head>', f'<link rel="stylesheet" href="{identity}">\n</head>')
             if output == Path('docs/index.html') and LANDING is not None:
-                document = document.replace('</head>', '<meta name="description" content="A personal programming environment built for joy.">\n<link rel="stylesheet" href="landing.css">\n<script src="landing.js" type="module"></script>\n</head>')
+                document = re.sub(r'<title>.*?</title>',
+                                  '<title>VRS — A live programming environment for personal computing</title>',
+                                  document, count=1)
+                document = document.replace('</head>',
+                    '<meta name="description" content="Build and connect personal software across applications and devices '
+                    'with VRS, a live programming environment by leoshimo.">\n'
+                    '<link rel="stylesheet" href="landing.css">\n'
+                    '<script src="landing.js" type="module"></script>\n</head>')
             document = book_layout(document, source, output)
             blocks = []
 
