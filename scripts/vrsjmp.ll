@@ -14,36 +14,6 @@
         open -a "$xcode_app"
         """))
 
-(defn! toggle_desktop ()
-  "Toggle Finder desktop icon visibility"
-  (exec "bash" "-seuo" "pipefail"
-        :stdin """
-        create_desktop="$(defaults read com.apple.finder CreateDesktop 2>/dev/null || echo false)"
-
-        if [ "$create_desktop" = "true" ]; then
-            defaults write com.apple.finder CreateDesktop false
-        else
-            defaults write com.apple.finder CreateDesktop true
-        fi
-
-        killall Finder
-        """))
-
-(defn! toggle_dock_autohide ()
-  "Toggle automatic Dock hiding"
-  (exec "bash" "-seuo" "pipefail"
-        :stdin """
-        current="$(defaults read com.apple.Dock autohide)"
-
-        if [ "$current" -eq 1 ]; then
-            defaults write com.apple.Dock autohide -bool false
-        else
-            defaults write com.apple.Dock autohide -bool true
-        fi
-
-        killall Dock
-        """))
-
 # TODO: Move to scripts/init.ll w/ supervision tree
 (bind_srv :system_appearance)
 (bind_srv :os_browser)
@@ -906,8 +876,6 @@
          (make_item "Palette Appearance" '(appearance_page))
          (make_item "Toggle Darkmode" '(toggle_darkmode))
          (make_item "Toggle Color Filter" '(toggle_color_filters))
-         (make_item "Toggle Desktop" '(toggle_desktop))
-         (make_item "Toggle Dock" '(toggle_dock_autohide))
          (make_item "Toggle QuickShade" '(toggle_quick_shade))
          (make_item "Open in Wayback" '(active_tab_open_wayback))
          (make_item "Show Desktop" '(show_desktop))
