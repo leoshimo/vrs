@@ -783,6 +783,20 @@
       (make_item "macro: Clear Macros" '(clear_macros))
       ))))
 
+(defn! toggle_desktop ()
+  "Toggle Finder desktop icon visibility"
+  (exec "bash" "-seuo" "pipefail"
+        :stdin """
+        create_desktop="$(defaults read com.apple.finder CreateDesktop 2>/dev/null || echo true)"
+
+        case "$create_desktop" in
+            1|true|YES) defaults write com.apple.finder CreateDesktop -bool false ;;
+            *) defaults write com.apple.finder CreateDesktop -bool true ;;
+        esac
+
+        killall Finder
+        """))
+
 (defn! favorite_items ()
   "Returns list of static vrsjmp items"
   (+
@@ -880,6 +894,7 @@
          (make_item "Toggle QuickShade" '(toggle_quick_shade))
          (make_item "Open in Wayback" '(active_tab_open_wayback))
          (make_item "Show Desktop" '(show_desktop))
+         (make_item "Toggle Desktop Icons" '(toggle_desktop))
          (make_item "Toggle DND" '(toggle_do_not_disturb)))
 
    # Demo-only jump list; not part of the everyday palette.
