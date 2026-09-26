@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { createTransport } from "./transport.mjs";
 import type { Bridge, UiConfig } from "./protocol";
 
@@ -11,6 +12,14 @@ export async function nativeBridge(): Promise<Bridge> {
     show: () => invoke("show"),
     blur: () => invoke("on_blur"),
     config: () => invoke<UiConfig>("ui_config"),
-    listen: (event, callback) => listen(event, callback),
+    listen: (event, callback) => {
+      if (event === "palette-focus" || event === "palette-blur") {
+        return getCurrentWindow().listen(
+          event === "palette-focus" ? "tauri://focus" : "tauri://blur",
+          callback,
+        );
+      }
+      return listen(event, callback);
+    },
   };
 }

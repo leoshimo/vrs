@@ -176,11 +176,15 @@ export function App({ bridge }: { bridge: Bridge }) {
   }, [bridge, navigation, pointerMoved, presence]);
   useEffect(() => {
     if (!bridge.native || bridge.preview) return;
+    let disposed = false;
+    let focused = true;
     let blurFrame = 0;
+    const unlisten: (() => void)[] = [];
     const blur = () => {
+      focused = false;
       cancelAnimationFrame(blurFrame);
       blurFrame = requestAnimationFrame(() => {
-        if (document.hasFocus() || !presented.current) return;
+        if (disposed || focused || !presented.current) return;
         blurred.current = true;
         setMenu(null);
         navigation.suspend();
@@ -188,18 +192,29 @@ export function App({ bridge }: { bridge: Bridge }) {
       });
     };
     const regainFocus = () => {
+      focused = true;
+      cancelAnimationFrame(blurFrame);
       if (blurred.current && palette.current?.dataset.presence === "closing") {
         blurred.current = false;
         void reopen.current?.().catch(console.error);
       }
       focus();
     };
-    window.addEventListener("blur", blur);
-    window.addEventListener("focus", regainFocus);
+    // A nonactivating macOS panel can lose native keyboard focus while its
+    // web document still reports focus. Follow the native window instead.
+    for (const [event, callback] of [
+      ["palette-blur", blur],
+      ["palette-focus", regainFocus],
+    ] as const) {
+      void bridge.listen(event, callback).then((off) => {
+        if (disposed) off();
+        else unlisten.push(off);
+      }).catch(console.error);
+    }
     return () => {
+      disposed = true;
       cancelAnimationFrame(blurFrame);
-      window.removeEventListener("blur", blur);
-      window.removeEventListener("focus", regainFocus);
+      unlisten.forEach((off) => off());
     };
   }, [bridge, navigation, presence]);
   useEffect(() => {

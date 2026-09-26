@@ -20,8 +20,7 @@ clap = { version = "4.6.7", features = ["derive"] }
 tokio = "1.53.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-objc2 = { version = "0.6.4", default-features = false, features = ["std"] }
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSWindow"] }
+tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", rev = "acb3ec1c2d2334916c9b07c74d5a0be9356674e3" }
 
 [features]
 # Embed the built frontend when running outside the Tauri dev server.

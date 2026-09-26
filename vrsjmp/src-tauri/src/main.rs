@@ -8,6 +8,8 @@ use std::sync::Arc;
 use std::time::Duration;
 #[cfg(test)]
 mod client_tests;
+#[cfg(target_os = "macos")]
+mod macos;
 mod protocol;
 use tauri::{async_runtime::JoinHandle, Emitter, Manager, PhysicalPosition, WebviewWindow};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
@@ -218,8 +220,12 @@ fn preview_mode(preview: tauri::State<'_, PreviewMode>) -> bool {
 }
 
 #[tauri::command]
-fn show(app: tauri::AppHandle, preview: tauri::State<'_, PreviewMode>) -> Result<(), String> {
+async fn show(app: tauri::AppHandle, preview: tauri::State<'_, PreviewMode>) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
+        #[cfg(target_os = "macos")]
+        if !preview.0 {
+            return macos::show(window).await.map_err(|error| error.to_string());
+        }
         if !window.is_visible().map_err(|error| error.to_string())? {
             center_in_primary_monitor(&window);
             if preview.0 {
@@ -237,42 +243,32 @@ fn show(app: tauri::AppHandle, preview: tauri::State<'_, PreviewMode>) -> Result
 }
 
 #[tauri::command]
-fn hide(app: tauri::AppHandle) {
+async fn hide(
+    app: tauri::AppHandle,
+    _preview: tauri::State<'_, PreviewMode>,
+) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
-        let _ = window.hide();
+        #[cfg(target_os = "macos")]
+        if !_preview.0 {
+            return macos::hide(window).await.map_err(|error| error.to_string());
+        }
+        window.hide().map_err(|error| error.to_string())?;
     }
-    #[cfg(target_os = "macos")]
-    let _ = app.hide();
+    Ok(())
 }
 
 #[tauri::command]
-fn on_blur(app: tauri::AppHandle, preview: tauri::State<'_, PreviewMode>) {
+async fn on_blur(
+    app: tauri::AppHandle,
+    preview: tauri::State<'_, PreviewMode>,
+) -> Result<(), String> {
     if !preview.0
         && app
             .get_webview_window("main")
             .is_some_and(|window| !window.is_focused().unwrap_or(false))
     {
-        hide(app);
+        hide(app, preview).await?;
     }
-}
-
-#[cfg(target_os = "macos")]
-fn configure_palette_spaces(window: &WebviewWindow) -> Result<()> {
-    use objc2::MainThreadMarker;
-    use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
-
-    let _main_thread = MainThreadMarker::new()
-        .context("Palette Spaces behavior must be configured on the main thread")?;
-    let native_window = window.ns_window()?;
-    // SAFETY: Tauri supplies the NSWindow owned by this live window. Setup runs
-    // on the main thread (checked above), and the pointer is only borrowed here.
-    let native_window = unsafe { native_window.cast::<NSWindow>().as_ref() }
-        .context("Palette has no native macOS window")?;
-    // Set this before the first show(), which can already make the window key.
-    // Activation should bring the palette here instead of switching Spaces.
-    native_window.setCollectionBehavior(
-        native_window.collectionBehavior() | NSWindowCollectionBehavior::MoveToActiveSpace,
-    );
     Ok(())
 }
 
@@ -281,7 +277,10 @@ fn main() -> Result<()> {
     let socket = args.socket.unwrap_or_else(vrs::runtime_socket);
 
     let context = tauri::generate_context!();
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(target_os = "macos")]
+    let builder = builder.plugin(tauri_nspanel::init());
+    builder
         .manage(PreviewMode(args.preview))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -297,16 +296,16 @@ fn main() -> Result<()> {
         .setup(move |app| {
             let window = app.get_webview_window("main").unwrap();
             #[cfg(target_os = "macos")]
-            configure_palette_spaces(&window)?;
+            {
+                app.set_activation_policy(ActivationPolicy::Accessory);
+                macos::configure(&window, args.preview)?;
+            }
             let notifications = window.clone();
             let mut client = Client::new(socket.clone());
             client.start(move |event| {
                 let _ = notifications.emit(event, ());
             })?;
             app.manage(State::new(client));
-
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(ActivationPolicy::Accessory);
 
             let binding = if cfg!(debug_assertions) {
                 "CMD+CTRL+SHIFT+SPACE" // debug
