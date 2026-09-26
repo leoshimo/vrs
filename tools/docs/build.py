@@ -17,7 +17,7 @@ import shutil
 import tempfile
 import threading
 import time
-from urllib.parse import quote, unquote, urlsplit
+from urllib.parse import quote, unquote, urljoin, urlsplit
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCES = {
@@ -293,7 +293,7 @@ def book_layout(document, source, output):
                '<summary>Contents</summary><nav aria-label="Page contents">' +
                contents + '</nav></details>')
     exports = {Path(target).stem: Path(target) for target in SOURCES.values()}
-    index = os.path.relpath('docs/index.html', output.parent)
+    index = os.path.relpath('index.html', output.parent)
     links = []
     for name, label in (('tour', 'Tour'), ('design', 'Design'), ('manual', 'Manual')):
         if name in exports:
@@ -326,6 +326,27 @@ def book_layout(document, source, output):
     before, rest = document.split('<body>', 1)
     _, after = rest.rsplit('</body>', 1)
     return before + '<body>\n' + body + '\n</body>' + after
+
+
+def landing_at_root(document):
+    """Serve the full landing page at / while retaining the old docs URL."""
+    def rebase(value):
+        return urljoin('docs/', value) if urlsplit(value).path else value
+
+    def rewrite(match):
+        attribute, value = match[1], html.unescape(match[2])
+        if attribute == 'srcset':
+            candidates = [candidate.strip().split(maxsplit=1) for candidate in value.split(',')]
+            value = ', '.join(' '.join([rebase(parts[0]), *parts[1:]]) for parts in candidates if parts)
+        else:
+            value = rebase(value)
+        return f'{attribute}="{html.escape(value, quote=True)}"'
+
+    return re.sub(r'(href|src|srcset)="([^"]+)"', rewrite, document)
+
+
+def canonical_url(target):
+    return SITE_URL if target in {'index.html', 'docs/index.html'} else SITE_URL + quote(target)
 
 
 def check_site(directory):
@@ -366,7 +387,7 @@ def build(destination):
             document = document.replace('</head>', f'<link rel="stylesheet" href="{css}">\n<script src="{js}" defer></script>\n</head>')
             identity = os.path.relpath('docs/identity.css', output.parent)
             document = document.replace('</head>', f'<link rel="stylesheet" href="{identity}">\n</head>')
-            canonical = SITE_URL + quote(output.as_posix())
+            canonical = canonical_url(output.as_posix())
             document = document.replace('</head>', f'<link rel="canonical" href="{canonical}">\n</head>')
             if output.as_posix() in NOINDEX:
                 document = document.replace('</head>', '<meta name="robots" content="noindex">\n</head>')
@@ -406,12 +427,8 @@ def build(destination):
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / source, target)
         (site / '.nojekyll').touch()
-        (site / 'index.html').write_text(
-            '<!doctype html><html lang="en"><head><meta charset="utf-8">'
-            '<meta http-equiv="refresh" content="0; url=docs/index.html">'
-            f'<link rel="canonical" href="{SITE_URL}docs/index.html">'
-            '<title>VRS</title></head><body><a href="docs/index.html">VRS documentation</a></body></html>\n')
-        sitemap_urls = [SITE_URL + quote(target) for target in SOURCES.values() if target not in NOINDEX]
+        (site / 'index.html').write_text(landing_at_root((site / 'docs/index.html').read_text()))
+        sitemap_urls = [canonical_url(target) for target in SOURCES.values() if target not in NOINDEX]
         (site / 'sitemap.xml').write_text(
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
