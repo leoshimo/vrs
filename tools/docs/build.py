@@ -39,8 +39,7 @@ ASSETS = {
 }
 REPOSITORY = 'https://github.com/leoshimo/vrs'
 SITE_URL = 'https://vrs.computer/'
-# Keep the unfinished design placeholder out of search until it has content.
-NOINDEX = {'docs/design.html'}
+NOINDEX = set()
 LANDING = Path('tools/docs/landing.html')
 GITHUB_ICON = '''<svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true"><path fill="currentColor" d="M12 .7a11.3 11.3 0 0 0-3.57 22.02c.56.1.77-.24.77-.54v-2.1c-3.15.69-3.82-1.34-3.82-1.34-.51-1.31-1.26-1.66-1.26-1.66-1.03-.7.08-.69.08-.69 1.14.08 1.73 1.17 1.73 1.17 1.01 1.73 2.65 1.23 3.3.94.1-.73.4-1.23.72-1.51-2.51-.28-5.15-1.26-5.15-5.59 0-1.23.44-2.24 1.17-3.03-.12-.28-.51-1.43.11-2.99 0 0 .95-.3 3.11 1.16A10.8 10.8 0 0 1 12 6.16c.96 0 1.93.13 2.83.38 2.16-1.46 3.11-1.16 3.11-1.16.62 1.56.23 2.71.11 2.99.73.79 1.17 1.8 1.17 3.03 0 4.34-2.65 5.3-5.17 5.58.41.35.77 1.03.77 2.09v3.11c0 .3.21.65.78.54A11.3 11.3 0 0 0 12 .7Z"/></svg>'''
 

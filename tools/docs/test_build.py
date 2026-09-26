@@ -260,7 +260,7 @@ class LandingTests(unittest.TestCase):
             self.assertEqual(len(urls), len(set(urls)))
             self.assertIn(docs.SITE_URL, urls)
             self.assertNotIn(docs.SITE_URL + 'docs/index.html', urls)
-            self.assertNotIn(docs.SITE_URL + 'docs/design.html', urls)
+            self.assertIn(docs.SITE_URL + 'docs/design.html', urls)
             for target in docs.SOURCES.values():
                 markup = (site / target).read_text()
                 canonical = docs.SITE_URL if target == 'docs/index.html' else docs.SITE_URL + target
