@@ -83,7 +83,7 @@ a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px soli
 .site-masthead nav [aria-current] { text-decoration: underline; text-underline-offset: 6px; }
 
 .page-grid { display: grid; grid-template-columns: minmax(0, 1fr) 200px; column-gap: 64px; padding-bottom: 80px; }
-.project-footer { padding: 19px 0; border-top: 1px solid var(--line); font: 12px/1.5 var(--serif); color: var(--muted); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; }
+.project-footer { padding: 19px 0; border-top: 1px solid var(--line); font: 12px/1.5 var(--serif); color: var(--muted); display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 20px; text-align: right; }
 .project-footer a { color: inherit; text-decoration-color: var(--line); }
 .document-footer { margin-bottom: 32px; }
 .document-title { grid-column: 1; grid-row: 1; min-width: 0; }
