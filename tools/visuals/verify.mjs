@@ -89,7 +89,8 @@ try {
       for (const document of ['index','tour','design','manual']) {
         for (const width of [1280,960,760,480,375,320]) {
           await page.setViewportSize({width,height:900});
-          await page.goto(server.url+'docs/'+document+'.html');
+          await page.goto(document==='index' ? server.url : server.url+'docs/'+document+'.html');
+          if (document === 'index') assert.equal(page.url(),server.url,'Homepage navigated away from the root');
           await page.evaluate(() => document.fonts.ready);
           if (document === 'index') await page.waitForFunction(() => document.body.dataset.visualsReady === 'true');
           const layout = await page.evaluate(() => {
@@ -131,7 +132,14 @@ try {
       await page.waitForFunction(()=>document.querySelector('.copy-code').textContent==='Copied');
       assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),await page.locator('.code-block pre').first().textContent());
     }
+    await page.locator('.wordmark').click();
+    assert.equal(new URL(page.url()).pathname,new URL(server.url+'index.html').pathname);
+    // Existing links to the old landing URL still render the same page.
     await page.goto(server.url+'docs/index.html');
+    await page.waitForFunction(()=>document.body.dataset.visualsReady==='true');
+    assert.equal(await page.locator('.tour-link').getAttribute('href'),'tour.html');
+    assert.equal(await page.locator('link[rel="canonical"]').getAttribute('href'),'https://vrs.computer/');
+    await page.goto(server.url);
     await page.keyboard.press(name==='webkit' && process.platform==='darwin' ? 'Alt+Tab' : 'Tab'); assert.equal(await page.evaluate(()=>document.activeElement.textContent),'Tour');
     // Motion follows the system preference, including changes while open.
     await page.emulateMedia({reducedMotion:'no-preference'});
@@ -149,7 +157,8 @@ try {
     assert.deepEqual(errors,[]); assert.deepEqual(missing,[]);
     // No JS must preserve the composition and useful links at phone widths.
     const staticPage=await browser.newPage({javaScriptEnabled:false,viewport:{width:320,height:800}});
-    await staticPage.goto(server.url+'docs/index.html');
+    await staticPage.goto(server.url);
+    assert.equal(staticPage.url(),server.url,'No-JS homepage navigated away from the root');
     assert(await staticPage.locator('.orb-fallback').isVisible());
     assert(await staticPage.locator('.logomark').isVisible());
     assert(await staticPage.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No-JS overflow');
@@ -157,7 +166,7 @@ try {
     // WebGL unavailable: keep the PNG fallback while the logo still animates.
     const fallback=await browser.newPage({viewport:{width:1280,height:900},reducedMotion:'no-preference'});
     await fallback.addInitScript(()=>{const original=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...args){return type.startsWith('webgl')?null:original.call(this,type,...args);};});
-    await fallback.goto(server.url+'docs/index.html'); await fallback.waitForFunction(()=>document.body.dataset.visualsReady==='true');
+    await fallback.goto(server.url); await fallback.waitForFunction(()=>document.body.dataset.visualsReady==='true');
     assert(await fallback.locator('.orb-fallback').isVisible());
     assert.equal(await fallback.locator('.orb-well').getAttribute('data-ready'),'false');
     for(const width of [320,375,1280]) for(const colorScheme of ['light','dark']) for(const reducedMotion of ['reduce','no-preference']) {

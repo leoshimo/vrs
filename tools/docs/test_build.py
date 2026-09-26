@@ -247,15 +247,23 @@ class LandingTests(unittest.TestCase):
             self.assertIn('prefers-color-scheme: dark', home)
             self.assertNotIn('class="wordmark"', home)
             self.assertIn('>Take the tour</a>', home)
+            root_home = (site / 'index.html').read_text()
+            self.assertNotIn('http-equiv="refresh"', root_home)
+            self.assertEqual(Text(home).parts, Text(root_home).parts)
+            for link in ('docs/landing.css', 'docs/landing.js', 'docs/tour.html',
+                         'assets/visuals/logomark.png', 'assets/visuals/sphere-dark.png'):
+                self.assertIn(link, docs.Page(root_home).links)
+            self.assertIn(f'<link rel="canonical" href="{docs.SITE_URL}">', root_home)
+            self.assertIn('href="../index.html"', (site / 'docs/tour.html').read_text())
             sitemap = ElementTree.parse(site / 'sitemap.xml')
             urls = [node.text for node in sitemap.iter('{http://www.sitemaps.org/schemas/sitemap/0.9}loc')]
             self.assertEqual(len(urls), len(set(urls)))
-            self.assertIn(docs.SITE_URL + 'docs/index.html', urls)
-            self.assertNotIn(docs.SITE_URL, urls)
+            self.assertIn(docs.SITE_URL, urls)
+            self.assertNotIn(docs.SITE_URL + 'docs/index.html', urls)
             self.assertNotIn(docs.SITE_URL + 'docs/design.html', urls)
             for target in docs.SOURCES.values():
                 markup = (site / target).read_text()
-                canonical = docs.SITE_URL + target
+                canonical = docs.SITE_URL if target == 'docs/index.html' else docs.SITE_URL + target
                 self.assertIn(f'<link rel="canonical" href="{canonical}">', markup)
                 self.assertEqual(canonical in urls, 'name="robots" content="noindex"' not in markup)
                 self.assertIn('by <a href="https://leoshimo.com/">leoshimo</a>', markup)
