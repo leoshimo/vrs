@@ -537,6 +537,14 @@ via references captured.
 
 Thought: Allow but discourage passing lambdas
 
+** TODO Shell macro
+
+Add a =shell!= macro for embedding shell scripts without repeating
+=(exec "bash" "-seuo" "pipefail" :stdin ...)=.
+Decide whether to retain triple-quoted strings or introduce reader syntax for
+shell blocks; unquoted shell syntax needs an explicit delimiter or shell-aware
+parsing to identify the closing parenthesis. Look at Rash and scsh for precedent.
+
 ** TODO Pipeline Macros / Threading Operator
 
 Add a pipeline operator for composing expressions without deeply nested calls.
