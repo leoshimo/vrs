@@ -38,6 +38,9 @@ ASSETS = {
     'tools/visuals/ink.js': 'assets/visuals/ink.js',
 }
 REPOSITORY = 'https://github.com/leoshimo/vrs'
+SITE_URL = 'https://vrs.computer/'
+# Keep the unfinished design placeholder out of search until it has content.
+NOINDEX = {'docs/design.html'}
 LANDING = Path('tools/docs/landing.html')
 GITHUB_ICON = '''<svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true"><path fill="currentColor" d="M12 .7a11.3 11.3 0 0 0-3.57 22.02c.56.1.77-.24.77-.54v-2.1c-3.15.69-3.82-1.34-3.82-1.34-.51-1.31-1.26-1.66-1.26-1.66-1.03-.7.08-.69.08-.69 1.14.08 1.73 1.17 1.73 1.17 1.01 1.73 2.65 1.23 3.3.94.1-.73.4-1.23.72-1.51-2.51-.28-5.15-1.26-5.15-5.59 0-1.23.44-2.24 1.17-3.03-.12-.28-.51-1.43.11-2.99 0 0 .95-.3 3.11 1.16A10.8 10.8 0 0 1 12 6.16c.96 0 1.93.13 2.83.38 2.16-1.46 3.11-1.16 3.11-1.16.62 1.56.23 2.71.11 2.99.73.79 1.17 1.8 1.17 3.03 0 4.34-2.65 5.3-5.17 5.58.41.35.77 1.03.77 2.09v3.11c0 .3.21.65.78.54A11.3 11.3 0 0 0 12 .7Z"/></svg>'''
 
@@ -295,8 +298,10 @@ def book_layout(document, source, output):
     for name, label in (('tour', 'Tour'), ('design', 'Design'), ('manual', 'Manual')):
         if name in exports:
             href = os.path.relpath(exports[name], output.parent)
-            current = ' aria-current="page"' if output.stem.split('-')[0] == name else ''
-            links.append(f'<a href="{href}"{current}>{label}</a>')
+            if output.stem.split('-')[0] == name:
+                links.append(f'<span aria-current="page">{label}</span>')
+            else:
+                links.append(f'<a href="{href}">{label}</a>')
     home = output == Path('docs/index.html') and LANDING is not None
     mark = os.path.relpath('assets/visuals/logomark.png', output.parent)
     brand = '' if home else (f'<a class="wordmark" href="{index}" aria-label="VRS home">'
@@ -305,10 +310,11 @@ def book_layout(document, source, output):
                 '<nav aria-label="Documentation">' + ''.join(links) + '</nav>' +
                 f'<a class="github" href="{REPOSITORY}" aria-label="VRS on GitHub">'
                 + GITHUB_ICON + '</a></header>')
-    author = '<span>Built by <a href="https://leoshimo.com/">leoshimo</a></span>'
+    credit = ('<span>Built at the <a href="https://www.recurse.com/">Recurse Center</a> '
+              'by <a href="https://leoshimo.com/">leoshimo</a></span>')
     if home:
         body = ((ROOT / LANDING).read_text().replace('$NAV', masthead)
-                .replace('$COPY', article).replace('$AUTHOR', author))
+                .replace('$COPY', article).replace('$CREDIT', credit))
     else:
         source_link = f'{REPOSITORY}/blob/main/{quote(source.relative_to(ROOT).as_posix())}'
         sidebar = ('<aside class="document-sidebar">' + toc +
@@ -316,7 +322,7 @@ def book_layout(document, source, output):
         body = (masthead + '<main id="content" class="page-grid">'
                 f'<header class="document-title">{title}</header>' + sidebar +
                 f'<article class="document">{article}</article></main>'
-                f'<footer class="project-footer document-footer">{author}</footer>')
+                f'<footer class="project-footer document-footer">{credit}</footer>')
     before, rest = document.split('<body>', 1)
     _, after = rest.rsplit('</body>', 1)
     return before + '<body>\n' + body + '\n</body>' + after
@@ -360,6 +366,10 @@ def build(destination):
             document = document.replace('</head>', f'<link rel="stylesheet" href="{css}">\n<script src="{js}" defer></script>\n</head>')
             identity = os.path.relpath('docs/identity.css', output.parent)
             document = document.replace('</head>', f'<link rel="stylesheet" href="{identity}">\n</head>')
+            canonical = SITE_URL + quote(output.as_posix())
+            document = document.replace('</head>', f'<link rel="canonical" href="{canonical}">\n</head>')
+            if output.as_posix() in NOINDEX:
+                document = document.replace('</head>', '<meta name="robots" content="noindex">\n</head>')
             if output == Path('docs/index.html') and LANDING is not None:
                 document = re.sub(r'<title>.*?</title>',
                                   '<title>VRS — A live programming environment for personal computing</title>',
@@ -396,7 +406,18 @@ def build(destination):
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / source, target)
         (site / '.nojekyll').touch()
-        (site / 'index.html').write_text('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=docs/index.html"><title>VRS</title></head><body><a href="docs/index.html">VRS documentation</a></body></html>\n')
+        (site / 'index.html').write_text(
+            '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+            '<meta http-equiv="refresh" content="0; url=docs/index.html">'
+            f'<link rel="canonical" href="{SITE_URL}docs/index.html">'
+            '<title>VRS</title></head><body><a href="docs/index.html">VRS documentation</a></body></html>\n')
+        sitemap_urls = [SITE_URL + quote(target) for target in SOURCES.values() if target not in NOINDEX]
+        (site / 'sitemap.xml').write_text(
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+            ''.join(f'  <url><loc>{html.escape(url)}</loc></url>\n' for url in sitemap_urls) +
+            '</urlset>\n')
+        (site / 'robots.txt').write_text(f'User-agent: *\nAllow: /\n\nSitemap: {SITE_URL}sitemap.xml\n')
         count = check_site(site)
         if any((ROOT / name).read_text() != text for name, text in source_texts.items()):
             raise RuntimeError('A source changed during export; run the build again.')

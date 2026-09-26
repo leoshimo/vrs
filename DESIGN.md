@@ -2,4 +2,4 @@
 
 > **🚧 WIP — Under construction 🚧**
 
-[Design of VRS](docs/design.md)
+[Design of VRS](https://vrs.computer/docs/design.html)

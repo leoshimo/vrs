@@ -78,9 +78,9 @@ a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px soli
 .site-masthead { display: flex; align-items: center; gap: 32px; margin-top: 36px; margin-bottom: 42px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
 .wordmark { color: var(--ink); font: 700 24px/1 var(--serif); letter-spacing: -1px; text-decoration: none; }
 .site-masthead nav { display: flex; gap: 24px; }
-.site-masthead nav a { padding-block: 5px; font: 500 17px/1.4 var(--serif); color: var(--muted); text-decoration: none; }
-.site-masthead nav a:hover, .site-masthead nav a[aria-current] { color: var(--accent); }
-.site-masthead nav a[aria-current] { text-decoration: underline; text-underline-offset: 6px; }
+.site-masthead nav a, .site-masthead nav span { padding-block: 5px; font: 500 17px/1.4 var(--serif); color: var(--muted); text-decoration: none; }
+.site-masthead nav a:hover, .site-masthead nav [aria-current] { color: var(--accent); }
+.site-masthead nav [aria-current] { text-decoration: underline; text-underline-offset: 6px; }
 
 .page-grid { display: grid; grid-template-columns: minmax(0, 1fr) 200px; column-gap: 64px; padding-bottom: 80px; }
 .project-footer { padding: 19px 0; border-top: 1px solid var(--line); font: 12px/1.5 var(--serif); color: var(--muted); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; }
@@ -150,7 +150,7 @@ pre code { font-size: inherit; }
   .site-masthead, .page-grid, .document-footer { width: calc(100% - 40px); }
   .site-masthead { margin-top: 22px; margin-bottom: 30px; gap: 24px; padding-bottom: 16px; }
   .site-masthead nav { gap: 18px; }
-  .site-masthead nav a { padding-block: 10px; }
+  .site-masthead nav a, .site-masthead nav span { padding-block: 10px; }
   h1 { font-size: 38px; margin-bottom: 26px; }
   h2 { font-size: 28px; }
   h3 { font-size: 23px; }

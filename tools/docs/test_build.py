@@ -8,6 +8,7 @@ import re
 import shutil
 import tempfile
 import unittest
+from xml.etree import ElementTree
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('export_docs', Path(__file__).with_name('build.py'))
@@ -153,7 +154,8 @@ Path({str(self.marker)!r}).write_text("export executed code")
         title = re.search(r'<header class="document-title">(.*?)</header>', markup, re.S)[1]
         self.assertNotIn('<a ', title)
         self.assertNotIn('↗', title)
-        self.assertIn('aria-current="page">Tour</a>', markup)
+        self.assertIn('<span aria-current="page">Tour</span>', markup)
+        self.assertNotIn('href="tour.html"', markup)
         self.assertIn('<article class="document">', markup)
         self.assertNotIn('href="tour.md"', markup)
         self.assertEqual(2, markup.count('href="other.html#other"'))
@@ -245,6 +247,19 @@ class LandingTests(unittest.TestCase):
             self.assertIn('prefers-color-scheme: dark', home)
             self.assertNotIn('class="wordmark"', home)
             self.assertIn('>Take the tour</a>', home)
+            sitemap = ElementTree.parse(site / 'sitemap.xml')
+            urls = [node.text for node in sitemap.iter('{http://www.sitemaps.org/schemas/sitemap/0.9}loc')]
+            self.assertEqual(len(urls), len(set(urls)))
+            self.assertIn(docs.SITE_URL + 'docs/index.html', urls)
+            self.assertNotIn(docs.SITE_URL, urls)
+            self.assertNotIn(docs.SITE_URL + 'docs/design.html', urls)
+            for target in docs.SOURCES.values():
+                markup = (site / target).read_text()
+                canonical = docs.SITE_URL + target
+                self.assertIn(f'<link rel="canonical" href="{canonical}">', markup)
+                self.assertEqual(canonical in urls, 'name="robots" content="noindex"' not in markup)
+                self.assertIn('by <a href="https://leoshimo.com/">leoshimo</a>', markup)
+            self.assertIn(f'Sitemap: {docs.SITE_URL}sitemap.xml', (site / 'robots.txt').read_text())
             self.assertTrue((site / 'assets/visuals/ink.js').is_file())
             self.assertTrue((site / 'assets/visuals/sphere.js').is_file())
             docs.check_site(site)

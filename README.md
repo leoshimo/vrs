@@ -17,7 +17,7 @@
 
 ## What is this?
 
-[VRS](https://github.com/leoshimo/vrs) is a live programming environment for personal computing.
+[VRS](https://vrs.computer/) is a live programming environment for personal computing.
 
 It’s a foundation for my digital homesteading practice, where I want building and maintenance to feel like play.
 
@@ -25,7 +25,7 @@ Each component — its language, runtime, tools, and more — is designed as par
 
 Inspired by systems I love - Emacs, Erlang, Unix, Plan 9, and Hypermedia - combining their powerful ideas into something that feels just right for me.
 
-Built at the [Recurse Center](https://www.recurse.com/).
+Built at the [Recurse Center](https://www.recurse.com/) by [leoshimo](https://leoshimo.com/).
 
 <p align="center">
   <picture>
@@ -58,6 +58,6 @@ untrusted networks or users.
 
 ## Documentation
 
-- [A Tour of VRS](docs/tour.md)
-- [Design of VRS](docs/design.md)
-- [VRS Manual](docs/manual.md)
+- [A Tour of VRS](https://vrs.computer/docs/tour.html)
+- [Design of VRS](https://vrs.computer/docs/design.html)
+- [VRS Manual](https://vrs.computer/docs/manual.html)
