@@ -797,6 +797,17 @@
         killall Finder
         """))
 
+(defn! toggle_homerow ()
+  (exec "osascript"
+        "-e" "tell application \"System Events\""
+        "-e" "set isRunning to (exists (processes where name is \"Homerow\"))"
+        "-e" "end tell"
+        "-e" "if isRunning then"
+        "-e" "tell application \"Homerow\" to quit"
+        "-e" "else"
+        "-e" "tell application \"Homerow\" to activate"
+        "-e" "end if"))
+
 (defn! favorite_items ()
   "Returns list of static vrsjmp items"
   (+
@@ -892,6 +903,7 @@
          (make_item "Toggle Darkmode" '(toggle_darkmode))
          (make_item "Toggle Color Filter" '(toggle_color_filters))
          (make_item "Toggle QuickShade" '(toggle_quick_shade))
+         (make_item "Toggle Homerow" '(toggle_homerow))
          (make_item "Open in Wayback" '(active_tab_open_wayback))
          (make_item "Show Desktop" '(show_desktop))
          (make_item "Toggle Desktop Icons" '(toggle_desktop))
