@@ -583,14 +583,16 @@
         (set pages_collection_cache (str "feed:" (get (get pages 0) :id))))))
   pages_collection_cache)
 
+(def feedbin_limit 50)
+
 (defn! read_later_items (query)
   "List recent saved pages or search the indexed Pages collection"
   (def entries
     (if (eq? query "")
-      (feedbin_call '(:feedbin_saved_pages 20))
+      (feedbin_call `(:feedbin_saved_pages ,feedbin_limit))
       (let ((collection (pages_collection)))
         (if collection
-          (feedbin_call `(:feedbin_search_in ,collection ,query 20))
+          (feedbin_call `(:feedbin_search_in ,collection ,query ,feedbin_limit))
           '()))))
   (map (filter entries (fn (entry) (if (list? entry) (get entry :url) false))) (fn (entry)
     (def url (get entry :url))
