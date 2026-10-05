@@ -130,6 +130,43 @@ async fn local_file_remote_execution_persistent_client_and_reload() {
         .unwrap()
         .unwrap()
         .success());
+    let emacs = timeout(
+        Duration::from_secs(20),
+        Command::new("emacs")
+            .args(["-Q", "--batch", "-L"])
+            .arg(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../emacs"))
+            .args([
+                "-l",
+                "vrs-session-tests",
+                "--eval",
+                "(ert-run-tests-batch-and-exit 'vrs-local-and-remote-sessions-with-test-runtime)",
+            ])
+            .env(
+                "VRS_TEST_REMOTE_VRSCTL",
+                format!(
+                    "{} --socket {}",
+                    env!("CARGO_BIN_EXE_vrsctl"),
+                    socket.display()
+                ),
+            )
+            .kill_on_drop(true)
+            .output(),
+    )
+    .await
+    .unwrap();
+    match emacs {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            eprintln!("Emacs not installed; skipping remote editor test")
+        }
+        result => {
+            let output = result.unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
     serving.abort();
     std::fs::remove_dir_all(dir).unwrap();
 }

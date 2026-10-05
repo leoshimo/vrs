@@ -7,7 +7,7 @@
   "Buffer, modification tick, and bounds of the active native interaction.")
 
 (defvar vrs--chooser-settings nil
-  "Captured command and width, independent of buffer-local settings.")
+  "Captured session and width, independent of buffer-local settings.")
 
 (defun vrs--chooser-check ()
   "Reject a stale interaction before another request or source change."
@@ -28,7 +28,7 @@
   (let ((vrs--chooser-target
          (list (current-buffer) (buffer-chars-modified-tick)
                (car bounds) (cdr bounds)))
-        (vrs--chooser-settings (cons vrs-vrsctl-command vrs-result-width)))
+        (vrs--chooser-settings (cons (vrs--current-session) vrs-result-width)))
     (funcall function)))
 
 (defun vrs--chooser-request (source &optional format)

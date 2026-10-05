@@ -40,7 +40,7 @@
           (with-temp-buffer
             (insert source)
             (should (= 0 (vrs--run-region (point-min) (point-max)
-                                          vrs-vrsctl-command output errors "compact" 90))))
+                                          (vrs--current-session) output errors "compact" 90))))
           (with-current-buffer output (string-remove-suffix "\n" (buffer-string))))
       (kill-buffer output) (kill-buffer errors))))
 
@@ -68,7 +68,7 @@
     (let ((transient-mark-mode t))
       (cl-letf (((symbol-function 'vrs--run-region)
                  (lambda (start end command output _errors format width)
-                   (should (equal command "custom-vrsctl"))
+                   (should (equal (vrs--editor-session-base command) "custom-vrsctl"))
                    (should (equal (list format width) '("compact" 60)))
                    (should (equal (buffer-substring-no-properties start end)
                                   "(vrs/editor_choices (begin\n(def x 1)\n  (list x) # trailing comment\n) false)"))
@@ -200,7 +200,7 @@
               (vrs-mode) (insert source)
               (should-error (vrs-choose-field) :type 'user-error)
               (should (equal (buffer-string) source)))))
-      (vrs--close-session vrs-vrsctl-command))))
+      (vrs--close-session (vrs--current-session)))))
 
 (defconst vrs-test--native-fixture
   "(def native_hits '())
@@ -233,7 +233,7 @@
         (progn
           (vrs-test--request vrs-test--native-fixture)
           ;; Start a fresh client to test imported, not locally defined, metadata.
-          (vrs--close-session vrs-vrsctl-command)
+          (vrs--close-session (vrs--current-session))
           (vrs-test--request "(bind_srv :native_fixture)")
           (should (equal (vrs-test--request "(err? (try (find_srv :vrsjmp)))") "true"))
           (with-temp-buffer
@@ -296,7 +296,7 @@
             (vrs-test--select '("Failure")
               (should-error (vrs-execute-action) :type 'user-error))
             (should (equal (buffer-string) "'(:test/object :id 1)"))))
-      (vrs--close-session vrs-vrsctl-command))))
+      (vrs--close-session (vrs--current-session)))))
 
 (ert-deftest vrs-native-service-browser-discovers-unbound-interfaces-with-test-runtime ()
   (skip-unless (getenv "VRS_TEST_VRSCTL"))
@@ -305,7 +305,7 @@
         (progn
           (vrs-test--request vrs-test--native-fixture)
           (vrs-test--request "(spawn_srv! :native_empty :interface '())")
-          (vrs--close-session vrs-vrsctl-command)
+          (vrs--close-session (vrs--current-session))
           (should (equal (vrs-test--request "(vrs/editor_functions)") "()"))
           (with-temp-buffer
             (vrs-mode) (insert "(begin\n  \n  :after)") (goto-char 10)
@@ -333,7 +333,7 @@
             (vrs-mode)
             (vrs-test--select '(":native_fixture" "native_new") (vrs-browse-services))
             (should (equal (buffer-string) "(native_new value)"))))
-      (vrs--close-session vrs-vrsctl-command))))
+      (vrs--close-session (vrs--current-session)))))
 
 (ert-deftest vrs-native-cancels-a-pending-request-with-test-runtime ()
   (skip-unless (getenv "VRS_TEST_VRSCTL"))
@@ -345,12 +345,12 @@
             (unwind-protect
                 (should (condition-case nil (progn (vrs-choose-value) nil) (quit t)))
               (cancel-timer timer)))
-          (should-not (gethash vrs-vrsctl-command vrs--sessions))
+          (should-not (gethash (vrs--current-session) vrs--sessions))
           (should (equal (buffer-string) "(recv)"))
           (erase-buffer) (insert "'(hello)")
           (vrs-test--select '(0) (vrs-choose-value))
           (should (equal (buffer-string) "'hello")))
-      (vrs--close-session vrs-vrsctl-command))))
+      (vrs--close-session (vrs--current-session)))))
 
 (provide 'vrs-choose-tests)
 ;;; vrs-choose-tests.el ends here

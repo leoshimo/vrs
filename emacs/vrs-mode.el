@@ -9,8 +9,7 @@
   :group 'languages)
 
 (defcustom vrs-vrsctl-command "vrsctl"
-  "Base vrsctl command used by Lyric evaluation commands.
-Buffers using the same command share a persistent runtime session."
+  "Base vrsctl command used by Lyric evaluation commands."
   :type 'string
   :group 'vrs)
 
@@ -219,137 +218,7 @@ block strings, rather than reading and printing it as Emacs Lisp."
       (goto-char (car (vrs--prefixes-before (point))))
       (cons (point) end))))
 
-(defvar vrs--sessions (make-hash-table :test #'equal)
-  "Persistent vrsctl processes, keyed by their base command.")
-
-(defun vrs--close-session (command)
-  "Close COMMAND's connection and discard its session state."
-  (when-let* ((process (gethash command vrs--sessions)))
-    (remhash command vrs--sessions)
-    (dolist (child (list process (process-get process 'stderr)))
-      (when (and child (process-live-p child)) (delete-process child)))
-    (when-let* ((buffer (process-get process 'errors)))
-      (when (buffer-live-p buffer) (kill-buffer buffer)))))
-
-(defun vrs--session-filter (process chunk)
-  "Collect complete JSON replies from PROCESS, including split CHUNKs."
-  (let ((text (concat (process-get process 'partial) chunk)))
-    (while (string-match "\n" text)
-      (let ((line (substring text 0 (match-beginning 0))))
-        (setq text (substring text (match-end 0)))
-        (condition-case err
-            (process-put process 'response
-                         (json-parse-string line :object-type 'plist
-                                            :false-object :false :null-object nil))
-          (error
-           (process-put process 'response
-                        (list :type "error" :message
-                              (format "Invalid vrsctl session reply: %s"
-                                      (error-message-string err))))
-           (delete-process process)))))
-    (process-put process 'partial text)))
-
-(defun vrs--session (command)
-  "Return COMMAND's live session, starting one when needed."
-  (let ((process (gethash command vrs--sessions)))
-    (unless (and process (process-live-p process))
-      (vrs--close-session command)
-      (let* ((errors (generate-new-buffer " *VRS session errors*"))
-             (stderr (make-pipe-process :name "VRS errors" :buffer errors
-                                        :noquery t :sentinel #'ignore)))
-        (condition-case err
-            (setq process
-                  (make-process :name "VRS session"
-                                :command (list shell-file-name shell-command-switch
-                                               (concat "exec " command " rpc"))
-                                :connection-type 'pipe :coding 'utf-8-unix
-                                :filter #'vrs--session-filter :stderr stderr
-                                :noquery t :sentinel #'ignore))
-          (error
-           (delete-process stderr)
-           (kill-buffer errors)
-           (signal (car err) (cdr err))))
-        (process-put process 'errors errors)
-        (process-put process 'stderr stderr)
-        (process-put process 'partial "")
-        (puthash command process vrs--sessions)))
-    process))
-
-(defun vrs--run-region (start end command output errors &optional format width literal)
-  "Evaluate START to END in COMMAND's session, collecting OUTPUT and ERRORS.
-FORMAT, WIDTH, and LITERAL apply to this request.  LITERAL requests
-source that retains the returned value.  C-g closes the connection;
-ordinary evaluation errors leave the session available."
-  (let ((process (vrs--session command))
-        (inhibit-quit nil)
-        pending-input
-        completed)
-    (when (process-get process 'busy)
-      (user-error "This VRS session is busy; finish or cancel its current evaluation"))
-    (process-put process 'busy t)
-    (process-put process 'response nil)
-    (unwind-protect
-        (progn
-          (with-current-buffer (process-get process 'errors) (erase-buffer))
-          (process-send-string
-           process
-           (concat (json-serialize
-                    (list :source (buffer-substring-no-properties start end)
-                          :file (or buffer-file-name (format "<buffer:%s>" (buffer-name)))
-                          :line (line-number-at-pos start t)
-                          :column (save-excursion (goto-char start) (1+ (- (point) (line-beginning-position))))
-                          :format (or format "pretty") :width (or width 90)
-                          :literal (if literal t :false))
-                    :false-object :false)
-                   "\n"))
-          (while (and (process-live-p process)
-                      (not (process-get process 'response)))
-            (accept-process-output process 0.05)
-            ;; A daemon's terminal frames need keyboard input read explicitly;
-            ;; waiting only on the subprocess can leave C-g unprocessed.
-            (unless noninteractive
-              (when-let* ((event (read-event nil nil 0.01)))
-                (if (eq event ?\C-g)
-                    (signal 'quit nil)
-                  (push event pending-input)))))
-          (while (accept-process-output (process-get process 'stderr) 0.01))
-          (let* ((reply (process-get process 'response))
-                 (ok (and (equal (plist-get reply :type) "result")
-                          (stringp (plist-get reply :output)))))
-            (if ok
-                (with-current-buffer output (insert (plist-get reply :output)))
-              (let ((diagnostic (with-current-buffer (process-get process 'errors)
-                                  (buffer-string))))
-                (with-current-buffer errors
-                  (insert (or (plist-get reply :message)
-                              (unless (string-empty-p diagnostic) diagnostic)
-                              "VRS connection closed; the next evaluation starts a fresh session.")
-                          "\n"))))
-            (setq completed t)
-            (if ok 0 1)))
-      (process-put process 'busy nil)
-      (when completed
-        (setq unread-command-events
-              (nconc (nreverse pending-input) unread-command-events)))
-      (unless (and completed (process-live-p process))
-        (vrs--close-session command)))))
-
-(defun vrs-reset-session ()
-  "Start a fresh vrsctl connection, clearing this session's definitions.
-All buffers using the same `vrs-vrsctl-command' share this reset."
-  (interactive)
-  (let ((command vrs-vrsctl-command)
-        (output (generate-new-buffer " *VRS reset*"))
-        (errors (generate-new-buffer " *VRS reset errors*")))
-    (vrs--close-session command)
-    (unwind-protect
-        (with-temp-buffer
-          (insert "nil")
-          (unless (zerop (vrs--run-region (point-min) (point-max) command output errors))
-            (user-error "%s" (with-current-buffer errors (buffer-string))))
-          (message "Started a fresh VRS session"))
-      (kill-buffer output)
-      (kill-buffer errors))))
+(require 'vrs-session)
 
 (defun vrs--last-sexp-source ()
   "Return the exact Lyric expression preceding point."
@@ -364,16 +233,18 @@ value with any necessary quote; other non-nil values insert generated code."
     (user-error "vrs-result-width must be a positive integer"))
   (let ((output (generate-new-buffer " *VRS evaluation*"))
         (errors (get-buffer-create "*VRS Errors*"))
-        (command vrs-vrsctl-command))
+        (command vrs-vrsctl-command)
+        (session (vrs--current-session)))
     (unwind-protect
         (progn
           (with-current-buffer errors
             (let ((inhibit-read-only t)) (erase-buffer)))
+          (setq vrs--last-session session)
           (message "Evaluating VRS (C-g to cancel and reset session)…")
-          (let ((status (vrs--run-region start end command output errors
-                                        (if editor-format "editor" "pretty")
-                                        vrs-result-width
-                                        (eq replace 'literal))))
+          (let ((status (vrs--run-region start end session output errors
+                                         (if editor-format "editor" "pretty")
+                                         vrs-result-width
+                                         (eq replace 'literal))))
             (unless (equal status 0)
               (display-buffer errors)
               (user-error "VRS evaluation failed (status %s); see *VRS Errors*" status))
@@ -393,6 +264,8 @@ value with any necessary quote; other non-nil values insert generated code."
                     (erase-buffer)
                     (insert text)
                     (vrs-mode)
+                    (setq vrs--selected-session session)
+                    (setq-local vrs-vrsctl-command command)
                     (setq buffer-read-only t)
                     (goto-char (point-min)))
                   (display-buffer (current-buffer)))))))
@@ -442,12 +315,14 @@ with C-g or leaving the picker keeps the buffer unchanged."
   (barf-if-buffer-read-only)
   (let ((target (copy-marker (point) t))
         (command vrs-vrsctl-command)
+        (session (vrs--current-session))
         (width vrs-result-width))
     (unwind-protect
         (let ((text (with-temp-buffer
                       (vrs-mode)
                       (insert "(vrsjmp_browse_functions)")
                       (let ((vrs-vrsctl-command command)
+                            (vrs--selected-session session)
                             (vrs-result-width width))
                         (vrs--eval (point-min) (point-max) t))
                       (buffer-string))))
@@ -469,11 +344,13 @@ the shared VRS session are available during expansion."
   (interactive "P")
   (let ((source (vrs--last-sexp-source))
         (command vrs-vrsctl-command)
+        (session (vrs--current-session))
         (width vrs-result-width))
     (with-temp-buffer
       (insert (format "(%s (quote %s))"
                       (if repeat-outer "macroexpand" "macroexpand_1") source))
       (let ((vrs-vrsctl-command command)
+            (vrs--selected-session session)
             (vrs-result-width width))
         (vrs--eval (point-min) (point-max) nil)))))
 
@@ -494,6 +371,9 @@ the shared VRS session are available during expansion."
 (define-derived-mode vrs-mode prog-mode "VRS"
   "Major mode for editing Lyric programs and evaluating them with vrsctl."
   :syntax-table vrs-mode-syntax-table
+  (vrs--current-session)
+  (setq-local mode-name '(:eval (vrs--mode-name)))
+  (add-hook 'post-command-hook #'vrs--remember-session nil t)
   (setq-local font-lock-defaults '(vrs-font-lock-keywords))
   (setq-local comment-start "# ")
   (setq-local comment-end "")

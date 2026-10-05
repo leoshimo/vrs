@@ -4,6 +4,7 @@
 (require 'vrs-mode)
 (require 'cl-lib)
 (require 'vrs-choose-tests)
+(require 'vrs-session-tests)
 
 (defconst vrs-test--block-expression
   (concat
@@ -38,13 +39,14 @@
           (errors (generate-new-buffer " *VRS test errors*"))
           (command (concat "sh -c " (shell-quote-argument
                     "read request; printf diagnostic >&2; printf '%s\\n' '{\"type\":\"result\",\"output\":\"東京\\n\"}'; cat >/dev/null"))))
+      (puthash command "test" vrs--local-nodes)
       (unwind-protect
           (progn
-            (should (= 0 (vrs--run-region (point-min) (point-max) command output errors)))
+            (should (= 0 (vrs--run-region (point-min) (point-max) (vrs--current-session command) output errors)))
             (should (equal (with-current-buffer output (buffer-string))
                            "東京\n"))
             (should (equal (with-current-buffer errors (buffer-string)) "")))
-        (vrs--close-session command)
+        (vrs--close-session (vrs--current-session command))
         (kill-buffer output)
         (kill-buffer errors)))))
 
@@ -192,7 +194,7 @@
                           (vrs-eval-region (point-min) (point-max) t))
                         (buffer-string))))
           (vrs-reset-session)
-          (let ((process (gethash vrs-vrsctl-command vrs--sessions)))
+          (let ((process (gethash (vrs--current-session) vrs--sessions)))
             (should (equal (evaluate "(def remembered 40)") "40"))
             (evaluate "(defn! echo (x) (+ remembered x))\n(def exports '(echo))")
             (should (equal (evaluate "(echo 2)") "42"))
@@ -210,14 +212,14 @@
             (let ((source (concat "\"" (make-string 65536 ?x) "\\n東京\"")))
               (should (equal (evaluate source) source)))
             (should (equal (evaluate "remembered") "40"))
-            (should (eq process (gethash vrs-vrsctl-command vrs--sessions)))
+            (should (eq process (gethash (vrs--current-session) vrs--sessions)))
             (vrs-reset-session)
             (should-not (process-live-p process))
-            (should-not (eq process (gethash vrs-vrsctl-command vrs--sessions)))
+            (should-not (eq process (gethash (vrs--current-session) vrs--sessions)))
             (should (equal (evaluate "(err? (try remembered))") "true"))
             (should (equal (evaluate "(err? (try (answer!)))") "true"))
             (should (equal (evaluate "(+ 20 22)") "42"))))
-      (vrs--close-session vrs-vrsctl-command))))
+      (vrs--close-session (vrs--current-session)))))
 
 (ert-deftest vrs-macroexpansion-and-quit-with-test-runtime ()
   "Inspect a real service macro, then cancel an accidental server loop."
@@ -279,6 +281,7 @@
                    :command
                    (list (expand-file-name invocation-name invocation-directory)
                          "-Q" (concat "--fg-daemon=" socket)
+                         "-L" (file-name-directory (symbol-file 'vrs-mode))
                          "-l" (symbol-file 'vrs-mode)
                          "--eval" (prin1-to-string
                                      `(setq vrs-vrsctl-command ,(getenv "VRS_TEST_VRSCTL"))))))
@@ -292,7 +295,7 @@
                    (list (executable-find "emacsclient") "--socket-name" socket
                          "--tty" "--create-frame" file)))
             (set-process-window-size client 24 100)
-            (wait-for (lambda () (terminal-contains "(VRS)")))
+            (wait-for (lambda () (terminal-contains "(VRS[")))
             (process-send-string client "\e>\C-c\C-e")
             (wait-for (lambda () (terminal-contains "Evaluating VRS")))
             ;; Earlier ordinary input must not prevent the quit being read.
@@ -541,7 +544,7 @@
                (lambda (start end command output _errors format width &optional literal)
                  (should (equal (buffer-substring-no-properties start end)
                                 "(vrsjmp_browse_functions)"))
-                 (should (equal command "custom-vrsctl"))
+                 (should (equal (vrs--editor-session-base command) "custom-vrsctl"))
                  (should (equal (list format width) '("pretty" 60)))
                  (with-current-buffer output
                    (insert "(focus_window\n  '(:os/window :id 7 :title \"東京\"))\n"))
@@ -728,4 +731,4 @@
             (should (string-match-p ":column 3" result))
             (should (string-match-p ":column 9" result))
             (should (equal (buffer-string) "# 東京\n  (dbg! (+ 20 22))"))))
-      (vrs--close-session vrs-vrsctl-command))))
+      (vrs--close-session (vrs--current-session)))))
