@@ -873,6 +873,18 @@ or alias that can reach the second device:
 Here the SSH alias and VRS node name are both `home`. The runtimes communicate
 through SSH. Direct TCP connections are also supported, as shown below.
 
+#### Discover connected nodes
+
+`ls_nodes` lists the current node and its connected peers:
+
+```vrs
+(ls_nodes) # => ("home" "laptop")
+(node_name) # => "laptop"
+```
+
+The list comes from this runtime's local record of connected peers; it does
+not contact them to check their health.
+
 #### Remote code and services
 
 `remote!` evaluates expressions on a named node:
@@ -894,6 +906,22 @@ using the service's name:
 
 Once this `remote!` expression returns, `:host` is registered and visible to the
 calling node, so the following `bind_srv` can use it immediately.
+
+To move the counter service while retaining its count, fetch the running
+service's state before replacing it:
+
+```vrs
+(remote! "home"
+  (bind_srv :counter)
+  (def count (get_count))
+  (defn! add_count (amount) (set count (+ count amount)))
+  (defn! get_count () count)
+  (spawn_srv! :counter :interface '(add_count get_count)))
+```
+
+`spawn_srv!` stops the previous instance, including one on another node.
+This transfers the saved count, not the running program's execution state;
+updates made during the handoff are not preserved.
 
 To evaluate a local script on a node, use `vrsctl --node home ./service.ll`.
 
@@ -982,6 +1010,11 @@ This waits for registration. It does not call the service to check its health.
 
 ## vrsctl
 
+`vrsctl` is the CLI interface to VRS. It provides an interactive REPL, a
+[JSON RPC interface](#embedded-vrsctl-rpc), and tools such as the debugger.
+
+See `vrsctl --help` for available commands and options.
+
 ### REPL
 
 Run `vrsctl` without arguments for a REPL:
@@ -1043,7 +1076,35 @@ Use `--subscribe` and `--follow` to print values as they are published:
 vrsctl --subscribe clock --follow
 ```
 
-Run `vrsctl --help` for all command-line options.
+### Embedded `vrsctl rpc`
+
+The CLI can be used to integrate with VRS as an alternative to the `libvrs`
+Rust crate. Its `rpc` command exchanges [JSONL](https://jsonlines.org/) over
+stdin and stdout:
+
+```sh
+vrsctl rpc
+vrsctl rpc --node home
+```
+
+Send one JSON request per line to stdin; each response is a line on stdout:
+
+```text
+-> {"source":"(+ 20 22)"}
+<- {"type":"result","output":"42\n"}
+```
+
+Errors return `{"type":"error","message":"..."}`.
+
+| Field | Meaning |
+| --- | --- |
+| `source` | Lyric source to evaluate (required). |
+| `file`, `line`, `column` | Source location for diagnostics and debugging; line and column are one-based. |
+| `format` | Format of the text in `output`: `compact`, `pretty`, `editor` (source-and-results transcript), or `default`. |
+| `width` | Target width for pretty output and transcripts. |
+| `literal` | Return reusable Lyric source, quoting lists and symbols. Rejects unsupported values; incompatible with `editor` format. |
+
+Successful `literal` requests also return `"literal":true`.
 
 ## Hypermedia
 
@@ -1071,12 +1132,15 @@ Load `vrs-mode` in Emacs, using the path to your checkout:
 ;; (setq vrs-vrsctl-command "/path/to/vrsctl")
 ```
 
-### The editor session
+### Sessions and remote nodes
 
-The editor uses `vrsctl` to keep a process running for evaluations. Its
-definitions and service bindings are shared by buffers using the same
-`vrs-vrsctl-command`. Run `M-x vrs-reset-session` to start a fresh process with
-a new namespace.
+The editor evaluates expressions in a *session*, which keeps its state between
+evaluations, like a REPL.
+
+By default, sessions run on the local node. Use `vrs-select-session` to select
+or create a session locally or on a connected peer.
+
+`vrs-reset-session` clears the active session's state.
 
 ### Evaluate expressions and retain values
 
@@ -1156,7 +1220,11 @@ action on a value instead, use `M-x vrs-execute-action`.
 | `C-c C-a` | Choose an action for a value and construct its call. |
 | `M-x vrs-choose-field` | Choose a field from a value and insert it. |
 | `M-x vrs-execute-action` | Choose and run an action for a value. |
-| `M-x vrs-reset-session` | Start a fresh evaluation session. |
+| `M-x vrs-select-session` | Select a session, or create one by entering a new name. |
+| `C-u M-x vrs-select-session` | Create a fresh session on a chosen node, with an optional name. |
+| `M-x vrs-rename-session` | Rename the selected session without resetting it. |
+| `M-x vrs-reset-session` | Clear the selected session's state. |
+| `M-x vrs-open-debugger` | Open the [browser debugger](#debugging) for the selected node. |
 
 <a id="debugging"></a>
 
