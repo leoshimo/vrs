@@ -17,7 +17,7 @@ pub(crate) use mailbox::recv_fn;
 pub(crate) use mailbox::send_fn;
 pub(crate) use mailbox::validate_message_fn;
 pub(crate) use node::configure_fn;
-pub(crate) use node::{eval_remote_fn, wait_srv_fn};
+pub(crate) use node::{eval_remote_fn, ls_nodes_fn, wait_srv_fn};
 
 pub(crate) use proc::call_timeout_fn;
 pub(crate) use proc::kill_fn;

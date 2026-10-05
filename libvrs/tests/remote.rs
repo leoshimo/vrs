@@ -292,3 +292,47 @@ async fn cancelling_remote_evaluation_and_closing_session_release_remote_process
     .await
     .unwrap();
 }
+
+#[tokio::test]
+async fn node_discovery_includes_peers_without_services() {
+    let alpha = Runtime::new("alpha");
+    let beta = Runtime::new("beta");
+    let a = client(&alpha).await;
+    assert_eq!(
+        eval(&a, "(ls_nodes)").await,
+        Form::from_expr("(\"alpha\")").unwrap()
+    );
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    beta.listen_for_nodes(port).await.unwrap();
+    eval(
+        &a,
+        &format!("(configure :nodes '(\"tcp://127.0.0.1:{port}\"))"),
+    )
+    .await;
+    timeout(Duration::from_secs(5), async {
+        loop {
+            if eval(&a, "(ls_nodes)").await == Form::from_expr("(\"alpha\" \"beta\")").unwrap() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    let b = client(&beta).await;
+    assert_eq!(
+        eval(&b, "(ls_nodes)").await,
+        Form::from_expr("(\"alpha\" \"beta\")").unwrap()
+    );
+    assert_eq!(
+        eval(&a, "(err? (try (ls_nodes 1)))").await,
+        Form::Bool(true)
+    );
+    // A missing configured endpoint must never appear as a connected node.
+    eval(&a, "(configure :nodes '(\"tcp://127.0.0.1:1\"))").await;
+    assert_eq!(eval(&a, "(len (ls_nodes))").await, Form::Int(2));
+}

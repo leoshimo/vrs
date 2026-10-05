@@ -3,6 +3,23 @@
 use crate::{Extern, Fiber, NativeAsyncFn, Val};
 use lyric::{kwargs, Error, KeywordId, Result};
 
+pub(crate) fn ls_nodes_fn() -> NativeAsyncFn {
+    NativeAsyncFn {
+        metadata: vec![],
+        doc: "(ls_nodes) - List this node and its connected peers from the local connection snapshot; does not check peer health.".into(),
+        func: |fiber, args| Box::new(async move {
+            if !args.is_empty() {
+                return Err(Error::UnexpectedArguments("ls_nodes expects no arguments".into()));
+            }
+            let nodes = match &fiber.locals().peers {
+                Some(peers) => peers.nodes().await.map_err(|e| Error::Runtime(e.to_string()))?,
+                None => vec![fiber.locals().node_name.clone()],
+            };
+            Ok(Val::List(nodes.into_iter().map(Val::String).collect()))
+        }),
+    }
+}
+
 pub(crate) fn eval_remote_fn() -> NativeAsyncFn {
     // VRS host binding, not a Lyric special form: the VM's normal native-async
     // path awaits this future and resumes the calling fiber with its result.

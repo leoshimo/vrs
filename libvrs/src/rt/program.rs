@@ -295,6 +295,7 @@ pub fn proc_env() -> Env {
 
     {
         e.bind_native_async(SymbolId::from("configure"), bindings::configure_fn());
+        e.bind_native_async(SymbolId::from("ls_nodes"), bindings::ls_nodes_fn());
         e.bind_native_async(SymbolId::from("eval_remote"), bindings::eval_remote_fn());
         e.bind_native_async(SymbolId::from("wait_srv"), bindings::wait_srv_fn());
     }

@@ -39,6 +39,9 @@ pub(crate) struct PeerManager;
 
 #[derive(Debug)]
 pub(crate) enum ManagerCmd {
+    Nodes {
+        response: oneshot::Sender<Vec<String>>,
+    },
     Eval {
         node: String,
         id: u64,
@@ -161,6 +164,15 @@ pub(crate) enum WireVal {
 }
 
 impl PeerHandle {
+    pub(crate) async fn nodes(&self) -> Result<Vec<String>> {
+        let (response, result) = oneshot::channel();
+        self.tx
+            .send(ManagerCmd::Nodes { response })
+            .await
+            .map_err(|_| Error::ConnectionClosed)?;
+        result.await.map_err(|_| Error::ConnectionClosed)
+    }
+
     pub(crate) async fn eval(&self, node: String, code: Val) -> Result<Val> {
         let code = WireVal::from_val(code)?;
         let id = NEXT_REMOTE_ID.fetch_add(1, Ordering::Relaxed);
@@ -277,6 +289,12 @@ impl PeerManager {
             loop {
                 tokio::select! {
                     Some(command) = commands.recv() => match command {
+                        ManagerCmd::Nodes { response } => {
+                            let mut nodes: Vec<_> = sessions.keys().cloned().collect();
+                            nodes.push(node_name.clone());
+                            nodes.sort();
+                            let _ = response.send(nodes);
+                        }
                         ManagerCmd::Eval { node, id, code, response } => {
                             if let Some(session) = sessions.get(&node) {
                                 remote.start_eval(session.id, &session.tx, id, code, response).await;
