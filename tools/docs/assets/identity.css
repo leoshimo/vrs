@@ -8,7 +8,7 @@
 .wordmark { display:flex; align-items:center; flex:none; width:57px; height:34px; }
 .wordmark img { width:57px; filter:grayscale(1) contrast(8); mix-blend-mode:multiply; }
 .site-masthead nav { gap:26px; }
-.site-masthead nav a { font:400 15px/1.4 var(--serif); padding:8px 0; }
+.site-masthead nav a, .site-masthead nav span { font:400 15px/1.4 var(--serif); padding:8px 0; }
 .github { display:flex; align-items:center; margin-left:auto; color:var(--ink); padding:7px; margin-right:-7px; }
 @media (max-width:760px) {
   .site-masthead { height:58px; gap:22px; }
@@ -18,7 +18,7 @@
   .site-masthead { height:54px; gap:16px; margin-top:16px; }
   .wordmark,.wordmark img { width:48px; }
   .site-masthead nav { gap:16px; }
-  .site-masthead nav a { font-size:14px; }
+  .site-masthead nav a, .site-masthead nav span { font-size:14px; }
   .github svg { width:18px; height:18px; }
 }
 
