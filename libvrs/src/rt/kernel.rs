@@ -288,6 +288,7 @@ impl Kernel {
         match self.proc_hdls.get(&pid) {
             Some(hdl) => {
                 hdl.kill().await;
+                hdl.clone().join().await?;
                 Ok(())
             }
             None => Err(Error::UnknownProcess),

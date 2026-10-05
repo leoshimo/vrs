@@ -91,7 +91,7 @@ pub(crate) fn ps_fn() -> NativeAsyncFn {
 pub(crate) fn kill_fn() -> NativeAsyncFn {
     NativeAsyncFn {
         metadata: vec![],
-        doc: "(kill PID) - Kill process with process id PID".to_string(),
+        doc: "(kill PID) - Stop a process on its owning node and wait for termination".to_string(),
         func: |f, args| Box::new(kill_impl(f, args)),
     }
 }
@@ -157,10 +157,33 @@ async fn kill_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
         [Val::Int(pid)] => ProcessId::new(fiber.locals().node_name.clone(), pid as usize),
         _ => {
             return Err(Error::UnexpectedArguments(
-                "kill should have one integer argument".to_string(),
+                "kill expects a process ID or a local numeric ID".to_string(),
             ))
         }
     };
+    if pid.node() != fiber.locals().node_name {
+        let peers = fiber
+            .locals()
+            .peers
+            .as_ref()
+            .ok_or_else(|| Error::Runtime("This process has no node transport".into()))?;
+        return peers
+            .eval(
+                pid.node().to_string(),
+                Val::List(vec![
+                    Val::symbol("kill"),
+                    Val::List(vec![
+                        Val::symbol("quote"),
+                        Val::Extern(Extern::ProcessId(pid)),
+                    ]),
+                ]),
+            )
+            .await
+            .map_err(|e| match e {
+                crate::Error::EvaluationError(e) => e,
+                e => Error::Runtime(e.to_string()),
+            });
+    }
     let kernel = fiber
         .locals()
         .kernel

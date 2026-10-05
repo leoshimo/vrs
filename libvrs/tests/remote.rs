@@ -336,3 +336,35 @@ async fn node_discovery_includes_peers_without_services() {
     eval(&a, "(configure :nodes '(\"tcp://127.0.0.1:1\"))").await;
     assert_eq!(eval(&a, "(len (ls_nodes))").await, Form::Int(2));
 }
+
+#[tokio::test]
+async fn remote_kill_and_state_transfer_replace_the_old_running_service() {
+    let (_alpha, _beta, a, b) = nodes().await;
+    let old = eval(&a, "(begin (def articles '(\"first\")) (defn! save_article (url) (set articles (push articles url))) (defn! get_articles () articles) (spawn_srv! :reading_list :interface '(save_article get_articles)))").await;
+    eval(&a, "(bind_srv :reading_list)").await;
+    eval(&a, "(save_article \"second\")").await;
+    let saved = eval(&a, "(get_articles)").await;
+    let replacement = eval(&a, "(remote! \"beta\" (bind_srv :reading_list) (def articles (get_articles)) (defn! save_article (url) (set articles (push articles url))) (defn! get_articles () articles) (spawn_srv! :reading_list :interface '(save_article get_articles)))").await;
+    assert_ne!(old, replacement);
+    assert_eq!(eval(&a, "(get_articles)").await, saved);
+    eval(&b, "(bind_srv :reading_list)").await;
+    eval(&b, "(save_article \"third\")").await;
+    assert_eq!(
+        eval(&a, "(get_articles)").await,
+        eval(&b, "(get_articles)").await
+    );
+    let Form::List(local_processes) = eval(&a, "(ps)").await else {
+        panic!("expected process list")
+    };
+    assert!(!local_processes.contains(&old), "old service still running");
+    // Numeric process ids are local, but an actual PID carries its owner.
+    eval(&a, "(kill (find_srv :reading_list))").await;
+    let Form::List(remote_processes) = eval(&b, "(ps)").await else {
+        panic!("expected process list")
+    };
+    assert!(
+        !remote_processes.contains(&replacement),
+        "remote kill did not stop service"
+    );
+    assert_eq!(eval(&a, "(err? (try (kill -1)))").await, Form::Bool(true));
+}

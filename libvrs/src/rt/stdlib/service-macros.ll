@@ -129,9 +129,11 @@
   (vrs/topic_clauses topics nil)
   (def service (gensym "service"))
   (def parent (gensym "parent"))
+  (def previous (gensym "previous"))
   `(let ((,service ,name) (,parent (self)))
      # The native helper races this child's readiness against its exit. It owns
      # the exit handle from spawn, avoiding a spawn-then-monitor race.
      (vrs/spawn_service (fn ()
-       (try (kill (find_srv ,service)))
+       (let ((,previous (try (find_srv ,service))))
+         (if (not? (err? ,previous)) (kill ,previous)))
        (srv! ,service :interface ',interface :topics ',topics :ready ,parent)))))

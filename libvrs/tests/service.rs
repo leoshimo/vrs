@@ -388,3 +388,18 @@ async fn spawn_srv_reports_child_killed_before_readiness() {
     .await;
     assert_eq!(result, Val::Bool(true));
 }
+
+#[tokio::test]
+async fn replacement_does_not_ignore_failure_to_stop_the_previous_service() {
+    let result = run_service_program(
+        r#"(begin
+      (defn! ping () :original)
+      (def original (spawn_srv! :worker :interface '(ping)))
+      (defn! kill (pid) (error "stop failed"))
+      (def failure (try (spawn_srv! :worker :interface '(ping))))
+      (list (err? failure) (eq? original (find_srv :worker))
+            (call original '(:ping))))"#,
+    )
+    .await;
+    assert_eq!(result, Val::from_expr("(true true :original)").unwrap());
+}
