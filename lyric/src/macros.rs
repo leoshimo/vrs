@@ -33,6 +33,24 @@ impl<T: Extern, L: Locals> Default for MacroEnv<T, L> {
     }
 }
 impl<T: Extern, L: Locals> MacroEnv<T, L> {
+    pub(crate) fn isolated_copy(&self, copy: &mut crate::env::EnvCopy<T, L>) -> Self {
+        Self {
+            definitions: self
+                .definitions
+                .iter()
+                .map(|(name, definition)| {
+                    (
+                        name.clone(),
+                        Definition {
+                            rest: definition.rest,
+                            function: copy.lambda(&definition.function),
+                        },
+                    )
+                })
+                .collect(),
+        }
+    }
+
     pub(crate) fn define(
         &mut self,
         source: &Val<T, L>,

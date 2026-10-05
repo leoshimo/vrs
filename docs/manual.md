@@ -597,8 +597,7 @@ message:
 ```vrs
 (def parent (self))
 (spawn (fn () (send parent '(:greeting "hello"))))
-(match (recv)
-  ((:greeting message) message)) # => "hello"
+(recv) # => (:greeting "hello")
 ```
 
 `recv` can take a quoted pattern to wait for a matching message, leaving other
@@ -607,9 +606,26 @@ messages in the mailbox. `ls_msgs` lists queued messages without consuming them:
 ```vrs
 (send (self) '(:status "busy"))
 (send (self) '(:greeting "hello"))
+(ls_msgs)            # => ((:status "busy") (:greeting "hello"))
 (recv '(:greeting _)) # => (:greeting "hello")
 (ls_msgs)            # => ((:status "busy"))
 ```
+
+#### Restrictions on message payloads
+
+Message payloads may contain data, including lists and process IDs. Function
+values cannot be sent, even embedded inside other structures.
+
+This restriction applies to every feature that uses message passing, including
+service calls, replies, and pubsub events, both locally and across devices.
+
+This restriction does not apply to process forking through `spawn`: the child
+inherits its starting function's environment, including functions, as an
+isolated copy.
+
+This restriction exists to preserve process isolation. Functions can capture
+references to variables in the scope where they were defined; sharing those
+references would let one process read or change another's state directly.
 
 ### Services
 

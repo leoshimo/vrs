@@ -827,20 +827,35 @@ async fn write_message<W: AsyncWrite + Unpin>(
 }
 
 impl WireVal {
+    /// One message contract for local mailboxes, publications, and node links.
+    pub(super) fn validate(value: &Val) -> lyric::Result<()> {
+        match value {
+            Val::List(values) => values.iter().try_for_each(Self::validate),
+            Val::Nil | Val::Bool(_) | Val::Int(_) | Val::String(_)
+            | Val::Symbol(_) | Val::Keyword(_) | Val::Error(_) | Val::Ref(_)
+            | Val::Extern(Extern::ProcessId(_)) => Ok(()),
+            Val::Lambda(_) | Val::NativeFn(_) | Val::NativeAsyncFn(_)
+            | Val::Bytecode(_) | Val::Extern(Extern::RequestId(_)) =>
+                Err(lyric::Error::UnexpectedType(
+                    "messages must contain data only; functions, bytecode, and request IDs cannot be sent".to_string()
+                )),
+        }
+    }
+
     pub(super) fn from_val(value: Val) -> Result<Self> {
-        Ok(match value {
+        Self::validate(&value)?;
+        Ok(Self::encode(value))
+    }
+
+    fn encode(value: Val) -> Self {
+        match value {
             Val::Nil => Self::Nil,
             Val::Bool(value) => Self::Bool(value),
             Val::Int(value) => Self::Int(value),
             Val::String(value) => Self::String(value),
             Val::Symbol(value) => Self::Symbol(value),
             Val::Keyword(value) => Self::Keyword(value),
-            Val::List(values) => Self::List(
-                values
-                    .into_iter()
-                    .map(Self::from_val)
-                    .collect::<Result<_>>()?,
-            ),
+            Val::List(values) => Self::List(values.into_iter().map(Self::encode).collect()),
             Val::Error(value) => Self::Error(value),
             Val::Ref(value) => Self::Ref(value),
             Val::Extern(Extern::ProcessId(pid)) => Self::Process(pid),
@@ -849,11 +864,9 @@ impl WireVal {
             | Val::NativeAsyncFn(_)
             | Val::Bytecode(_)
             | Val::Extern(Extern::RequestId(_)) => {
-                return Err(Error::RegistryError(
-                    "message contains a value that cannot cross nodes".to_string(),
-                ))
+                unreachable!("message was validated before encoding")
             }
-        })
+        }
     }
 
     pub(super) fn into_val(self) -> Result<Val> {
@@ -882,6 +895,28 @@ mod tests {
     use super::*;
     use tokio::io::{duplex, split};
     use tokio::time::timeout;
+
+    #[test]
+    fn wire_values_reject_functions_and_bytecode_inside_lists() {
+        let lambda = crate::Lambda {
+            metadata: vec![],
+            doc: None,
+            params: vec![],
+            parent: None,
+            code: vec![lyric::Inst::PushConst(Val::Int(1))],
+        };
+        for value in [
+            Val::Lambda(lambda),
+            Val::Bytecode(vec![]),
+            super::super::program::proc_env().get(&"+".into()).unwrap(),
+            super::super::program::proc_env()
+                .get(&"send".into())
+                .unwrap(),
+        ] {
+            assert!(WireVal::from_val(value.clone()).is_err());
+            assert!(WireVal::from_val(Val::List(vec![Val::List(vec![value])])).is_err());
+        }
+    }
 
     #[tokio::test]
     async fn publication_fanout_skips_full_links_and_preconnection_events() {

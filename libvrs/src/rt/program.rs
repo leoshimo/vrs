@@ -2,7 +2,10 @@
 //! Program that specifies a process
 
 use lyric::{Error, Result, SymbolId};
-use std::time::Duration;
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use crate::ProcessHandle;
 
@@ -14,11 +17,13 @@ use super::pubsub::PubSubHandle;
 use super::registry::Registry;
 use super::term::TermHandle;
 
-/// Program used to spawn new processes
+/// Program used to spawn new processes. Captures are copied when converted to
+/// a fiber, so each execution (including clones of a Program) owns its state.
 #[derive(Debug, Clone)]
 pub struct Program {
     code: Bytecode,
-    env: Env,
+    env: lyric::env::EnvRef<Extern, Locals>,
+    macros: Option<lyric::macros::MacroEnv<Extern, Locals>>,
 }
 
 /// Form for vrs
@@ -92,7 +97,8 @@ impl Program {
     pub fn from_bytecode(code: Bytecode) -> Self {
         Self {
             code,
-            env: proc_env(),
+            env: Arc::new(Mutex::new(proc_env())),
+            macros: None,
         }
     }
 
@@ -127,18 +133,20 @@ impl Program {
             ));
         }
 
-        let code = lambda.code;
-        let env = lambda.parent.as_ref();
-        let prog = Self::from_bytecode(code).env(match env {
-            Some(env) => env.lock().unwrap().fork(),
-            None => proc_env(),
-        });
-
-        Ok(prog)
+        // Retain the root's identity until the entire program (including any
+        // explicit macro namespace) is copied together at process startup.
+        Ok(Self {
+            code: lambda.code,
+            env: lambda
+                .parent
+                .unwrap_or_else(|| Arc::new(Mutex::new(proc_env()))),
+            macros: None,
+        })
     }
 
     pub fn env(mut self, env: Env) -> Self {
-        self.env = env;
+        self.env = Arc::new(Mutex::new(env));
+        self.macros = None;
         self
     }
 
@@ -146,7 +154,7 @@ impl Program {
         mut self,
         macros: lyric::macros::MacroEnv<crate::Extern, crate::Locals>,
     ) -> Self {
-        self.env.set_macro_env(macros);
+        self.macros = Some(macros);
         self
     }
 
@@ -155,7 +163,7 @@ impl Program {
             .debug
             .as_ref()
             .map(|store| store.observer(locals.pid.to_string()));
-        let mut fiber = Fiber::from_bytecode(self.code, self.env, locals);
+        let mut fiber = Fiber::fork(&self.code, &self.env, self.macros.as_ref(), locals);
         if let Some(observer) = observer {
             fiber.set_observer(observer);
         }
@@ -315,6 +323,10 @@ pub fn proc_env() -> Env {
             .bind_native_async(SymbolId::from("publish"), bindings::publish_fn());
     }
 
+    e.bind_native(
+        "vrs/validate_message".into(),
+        bindings::validate_message_fn(),
+    );
     bindings::install_service_library(&mut e);
     e
 }
@@ -325,4 +337,45 @@ pub fn term_env() -> Env {
     env.bind_native_async(SymbolId::from("recv_req"), bindings::recv_req_fn())
         .bind_native_async(SymbolId::from("send_resp"), bindings::send_resp_fn());
     env
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lyric::{Inst, Signal};
+
+    #[test]
+    fn every_program_entry_copies_host_captures_and_cloned_programs() {
+        let locals = Locals::new(ProcessId::new("test", 0));
+        let mut source = Fiber::from_expr(
+            "(begin (def count 0) (fn () (set count (+ count 1))))",
+            proc_env(),
+            locals.clone(),
+        )
+        .unwrap();
+        let Signal::Done(Val::Lambda(increment)) = source.start().unwrap() else {
+            panic!("expected function");
+        };
+        let mut env = proc_env();
+        env.define("inc".into(), Val::Lambda(increment.clone()));
+        let programs = [
+            Program::from_lambda(increment.clone()).unwrap(),
+            Program::from_bytecode(vec![
+                Inst::PushConst(Val::Lambda(increment.clone())),
+                Inst::CallFunc(0),
+            ]),
+            Program::from_val(Val::List(vec![Val::Lambda(increment)])).unwrap(),
+            Program::from_expr("(inc)").unwrap().env(env),
+        ];
+        for program in programs {
+            for _ in 0..2 {
+                let mut fiber = program.clone().into_fiber(locals.clone());
+                assert_eq!(fiber.start().unwrap(), Signal::Done(Val::Int(1)));
+            }
+        }
+        assert_eq!(
+            source.global_env().lock().unwrap().get(&"count".into()),
+            Some(Val::Int(0))
+        );
+    }
 }

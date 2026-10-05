@@ -13,6 +13,25 @@ pub(crate) fn send_fn() -> NativeAsyncFn {
     }
 }
 
+/// Validate a service result inside its error handler, so callers receive an
+/// error reply instead of waiting for a response that cannot be sent.
+pub(crate) fn validate_message_fn() -> super::super::program::NativeFn {
+    super::super::program::NativeFn {
+        metadata: vec![],
+        doc: "(vrs/validate_message VALUE) - Check that VALUE can be sent as a message."
+            .to_string(),
+        func: |_, args| {
+            let [value] = args else {
+                return Err(Error::UnexpectedArguments(
+                    "expected one message".to_string(),
+                ));
+            };
+            super::super::peer::WireVal::validate(value)?;
+            Ok(lyric::NativeFnOp::Return(value.clone()))
+        },
+    }
+}
+
 /// Binding to recv messages
 pub(crate) fn recv_fn() -> NativeAsyncFn {
     NativeAsyncFn {
@@ -114,7 +133,8 @@ async fn send_impl(fiber: &mut Fiber, args: Vec<Val>) -> Result<Val> {
             .as_ref()
             .expect("process should have self handle")
             .notify_message(Message::new(msg.clone()))
-            .await;
+            .await
+            .map_err(|e| Error::Runtime(format!("{e}")))?;
     } else if dst.node() == fiber.locals().node_name {
         let kernel = fiber
             .locals()

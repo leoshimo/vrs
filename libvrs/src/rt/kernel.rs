@@ -1,5 +1,11 @@
 //! Runtime Kernel Task
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+};
 
 use super::mailbox::Message;
 use super::peer::PeerHandle;
@@ -17,12 +23,16 @@ use tracing::{debug, info};
 #[derive(Debug, Clone)]
 pub(crate) struct KernelHandle {
     ev_tx: mpsc::Sender<Event>,
+    node_name: String,
+    next_proc_id: Arc<AtomicUsize>,
 }
 
 /// Handle to `Kernel`
 #[derive(Debug, Clone)]
 pub(crate) struct WeakKernelHandle {
     ev_tx: mpsc::WeakSender<Event>,
+    node_name: String,
+    next_proc_id: Arc<AtomicUsize>,
 }
 
 /// Starts the kernel task, which manages processes for one runtime node.
@@ -34,7 +44,11 @@ pub(crate) fn start(
 ) -> KernelHandle {
     let (ev_tx, mut ev_rx) = mpsc::channel(32);
 
-    let handle = KernelHandle { ev_tx };
+    let handle = KernelHandle {
+        ev_tx,
+        node_name: node_name.clone(),
+        next_proc_id: Arc::new(AtomicUsize::new(0)),
+    };
     let mut kernel = Kernel::new(handle.clone(), node_name, registry, pubsub, peers);
     tokio::spawn(async move {
         loop {
@@ -70,9 +84,16 @@ pub(crate) fn start_test() -> KernelHandle {
 impl KernelHandle {
     /// Spawn a new program
     pub(crate) async fn spawn_prog(&self, prog: Program) -> Result<ProcessHandle> {
+        // Copy on the caller before yielding: its scopes may be reclaimed if
+        // it is cancelled while this request waits in the kernel queue.
+        let id = ProcessId::new(
+            self.node_name.clone(),
+            self.next_proc_id.fetch_add(1, Ordering::Relaxed),
+        );
+        let process = Process::from_prog(id, prog);
         let (tx, rx) = oneshot::channel();
         self.ev_tx
-            .send(Event::SpawnProg(prog, tx))
+            .send(Event::SpawnProg(process, tx))
             .await
             .map_err(|_| Error::NoMessageReceiver("spawn failed".to_string()))?;
         rx.await
@@ -114,6 +135,7 @@ impl KernelHandle {
 
     /// Handle a message being sent from one process to another
     pub(crate) async fn send_message(&self, dst: ProcessId, val: program::Val) -> Result<()> {
+        super::peer::WireVal::validate(&val)?;
         let (tx, rx) = oneshot::channel();
         self.ev_tx
             .send(Event::ProcessSendMessage(dst, val, tx))
@@ -127,6 +149,8 @@ impl KernelHandle {
     pub(crate) fn downgrade(&self) -> WeakKernelHandle {
         WeakKernelHandle {
             ev_tx: self.ev_tx.downgrade(),
+            node_name: self.node_name.clone(),
+            next_proc_id: self.next_proc_id.clone(),
         }
     }
 }
@@ -135,7 +159,11 @@ impl WeakKernelHandle {
     /// Update a weak process handle into strong ref
     pub(crate) fn upgrade(&self) -> Option<KernelHandle> {
         let ev_tx = self.ev_tx.upgrade()?;
-        Some(KernelHandle { ev_tx })
+        Some(KernelHandle {
+            ev_tx,
+            node_name: self.node_name.clone(),
+            next_proc_id: self.next_proc_id.clone(),
+        })
     }
 }
 
@@ -148,7 +176,7 @@ impl std::cmp::PartialEq for WeakKernelHandle {
 /// Messages for [Kernel]
 #[derive(Debug)]
 pub enum Event {
-    SpawnProg(Program, oneshot::Sender<ProcessHandle>),
+    SpawnProg(Process, oneshot::Sender<ProcessHandle>),
     SpawnTermProc(Connection, oneshot::Sender<ProcessHandle>),
     ProcessExit(ProcessExit),
     ListProcess(oneshot::Sender<Vec<ProcessId>>),
@@ -161,7 +189,7 @@ struct Kernel {
     weak_hdl: WeakKernelHandle,
     procs: ProcessSet,
     proc_hdls: HashMap<ProcessId, ProcessHandle>,
-    next_proc_id: usize,
+    next_proc_id: Arc<AtomicUsize>,
     registry: Registry,
     pubsub: PubSubHandle,
     debug: crate::debug::Store,
@@ -184,7 +212,7 @@ impl Kernel {
             weak_hdl: handle.downgrade(),
             procs: ProcessSet::new(),
             proc_hdls: HashMap::new(),
-            next_proc_id: 0,
+            next_proc_id: handle.next_proc_id.clone(),
             registry,
             pubsub,
             node_name,
@@ -195,8 +223,7 @@ impl Kernel {
     pub async fn handle_ev(&mut self, ev: Event) -> Result<()> {
         debug!("handle_ev - {ev:?}");
         match ev {
-            Event::SpawnProg(prog, tx) => {
-                let proc = Process::from_prog(self.next_pid(), prog);
+            Event::SpawnProg(proc, tx) => {
                 let hdl = self.spawn(proc)?;
                 let _ = tx.send(hdl);
                 Ok(())
@@ -270,15 +297,15 @@ impl Kernel {
     /// Dispatch a message to a process on this node.
     async fn dispatch_msg(&self, dst: ProcessId, msg: program::Val) -> Result<()> {
         let dst = self.proc_hdls.get(&dst).ok_or(Error::UnknownProcess)?;
-        dst.notify_message(Message::new(msg)).await;
-        Ok(())
+        dst.notify_message(Message::new(msg)).await
     }
 
     /// Get the next process id
     fn next_pid(&mut self) -> ProcessId {
-        let id = ProcessId::new(self.node_name.clone(), self.next_proc_id);
-        self.next_proc_id = self.next_proc_id.wrapping_add(1);
-        id
+        ProcessId::new(
+            self.node_name.clone(),
+            self.next_proc_id.fetch_add(1, Ordering::Relaxed),
+        )
     }
 }
 
@@ -291,6 +318,38 @@ mod tests {
     use tokio::time::timeout;
 
     use super::*;
+
+    #[tokio::test]
+    async fn queued_spawn_survives_cancellation_of_the_parent() {
+        let (ev_tx, mut ev_rx) = mpsc::channel(1);
+        let handle = KernelHandle {
+            ev_tx,
+            node_name: "test".into(),
+            next_proc_id: Arc::new(AtomicUsize::new(1)),
+        };
+        let mut parent =
+            Program::from_expr("(begin (def count 41) (defn! read () (+ count 1)) read)")
+                .unwrap()
+                .into_fiber(program::Locals::new(ProcessId::new("test", 0)));
+        let lyric::Signal::Done(Val::Lambda(read)) = parent.start().unwrap() else {
+            panic!("expected closure");
+        };
+        {
+            let spawn = handle.spawn_prog(Program::from_lambda(read).unwrap());
+            tokio::pin!(spawn);
+            assert!(futures::poll!(spawn).is_pending());
+        } // Cancel the sender while its request is still queued.
+        drop(parent);
+        let Event::SpawnProg(process, _) = ev_rx.recv().await.unwrap() else {
+            panic!("expected spawn");
+        };
+        let mut processes = ProcessSet::new();
+        let child = process.spawn(&mut processes).unwrap();
+        assert_eq!(
+            child.join().await.unwrap().status.unwrap(),
+            ProcessResult::Done(Val::Int(42))
+        );
+    }
 
     #[tokio::test]
     async fn kernel_proc_for_conn() {

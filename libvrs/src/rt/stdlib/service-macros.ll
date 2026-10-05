@@ -109,9 +109,10 @@
          ((,request ,source ,message)
           (if (vrs/service_request? ,incoming) (begin
            (def ,response
-             (try (match ,message
-                    ,@clauses
-                    (_ '(:err "Unrecognized message")))))
+             (try (vrs/validate_message
+                    (match ,message
+                      ,@clauses
+                      (_ '(:err "Unrecognized message"))))))
            # A departed caller must not kill the service.
            (try (send ,source (list ,request ,response))))))
          (_ nil)))))

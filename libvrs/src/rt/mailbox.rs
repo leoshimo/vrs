@@ -45,6 +45,7 @@ struct PendingPoll {
 impl MailboxHandle {
     /// Push a new message to mailbox
     pub(crate) async fn push(&self, msg: Message) -> Result<()> {
+        super::peer::WireVal::validate(&msg.contents)?;
         self.tx
             .send(Cmd::Push(msg))
             .await

@@ -23,6 +23,7 @@ pub struct Fiber<T: Extern, L: Locals> {
     global: Arc<Mutex<Env<T, L>>>,
     locals: L,
     observer: Option<Arc<dyn crate::debug::Observer>>,
+    owned_environments: Option<crate::env::OwnedEnvironments<T, L>>,
 }
 
 /// The status of fiber
@@ -89,7 +90,15 @@ struct Expansion<T: Extern, L: Locals> {
 impl<T: Extern, L: Locals> Fiber<T, L> {
     /// Create a new fiber from given bytecode
     pub fn from_bytecode(bytecode: Bytecode<T, L>, env: Env<T, L>, locals: L) -> Self {
-        let global = Arc::new(Mutex::new(env));
+        Self::from_bytecode_in_env(bytecode, Arc::new(Mutex::new(env)), locals)
+    }
+
+    /// Build frames around this exact root to preserve lexical capture identity.
+    fn from_bytecode_in_env(
+        bytecode: Bytecode<T, L>,
+        global: crate::env::EnvRef<T, L>,
+        locals: L,
+    ) -> Self {
         Fiber {
             status: Status::New,
             stack: vec![],
@@ -102,7 +111,34 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
             global,
             locals,
             observer: None,
+            owned_environments: None,
         }
+    }
+
+    /// Start an isolated execution with private copies of code, lexical scopes,
+    /// and macros. Shared captures within the source remain shared in the copy.
+    ///
+    /// Copied scopes and scopes created during execution belong to this fiber:
+    /// dropping it clears them, including closure cycles. Captured values must
+    /// not outlive it. Use from_bytecode for host-managed capture lifetimes.
+    /// The source must be quiescent and no environment locks may be held while
+    /// forking. Host Extern::clone implementations must not share mutable state.
+    pub fn fork(
+        code: &Bytecode<T, L>,
+        env: &crate::env::EnvRef<T, L>,
+        macros: Option<&crate::macros::MacroEnv<T, L>>,
+        locals: L,
+    ) -> Self {
+        let mut copy = crate::env::EnvCopy::default();
+        let env = copy.env(env);
+        let code = copy.bytecode(code);
+        if let Some(macros) = macros {
+            let macros = copy.macros(macros);
+            env.lock().unwrap().set_macro_env(macros);
+        }
+        let mut fiber = Self::from_bytecode_in_env(code, env, locals);
+        fiber.owned_environments = Some(copy.into_owner());
+        fiber
     }
 
     /// Create a new fiber from value
@@ -662,7 +698,8 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
                                 l.params.len()
                             )));
                         }
-                        self.cframes.push(self.lambda_frame(l, args));
+                        let frame = self.lambda_frame(l, args);
+                        self.cframes.push(frame);
                     }
                     Some(Val::NativeFn(n)) => {
                         let args = args.collect::<Vec<_>>();
@@ -757,7 +794,7 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
     }
 
     fn lambda_frame(
-        &self,
+        &mut self,
         function: Lambda<T, L>,
         args: impl IntoIterator<Item = Val<T, L>>,
     ) -> CallFrame<T, L> {
@@ -765,8 +802,12 @@ impl<T: Extern, L: Locals> Fiber<T, L> {
         for (name, value) in function.params.into_iter().zip(args) {
             env.define(name, value);
         }
+        let env = Arc::new(Mutex::new(env));
+        if let Some(owner) = &mut self.owned_environments {
+            owner.register(&env);
+        }
         CallFrame::from_bytecode(
-            Arc::new(Mutex::new(env)),
+            env,
             function.code,
             self.stack.len(),
             self.cf().unwind_cf_len,

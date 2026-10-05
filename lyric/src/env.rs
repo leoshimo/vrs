@@ -3,7 +3,7 @@ use crate::{
 };
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, Weak},
 };
 
 /// An environment of bindings
@@ -96,20 +96,6 @@ impl<T: Extern, L: Locals> Env<T, L> {
         }
     }
 
-    /// Fork this environment in to a *deep copy*
-    pub fn fork(&self) -> Self {
-        let parent = self
-            .parent
-            .as_ref()
-            .map(|parent| Arc::new(Mutex::new(parent.as_ref().lock().unwrap().clone())));
-        Self {
-            bindings: self.bindings.clone(),
-            parent,
-            completions: self.completions.clone(),
-            macros: self.macros.clone(),
-        }
-    }
-
     /// Define a new symbol with given value in current environment
     pub fn define(&mut self, symbol: SymbolId, value: Val<T, L>) {
         self.bindings.insert(symbol.clone(), value);
@@ -192,7 +178,8 @@ impl<T: Extern, L: Locals> Env<T, L> {
         }
     }
 
-    /// Snapshot the macro namespace when creating a process or installing a library.
+    /// Clone the macro namespace, retaining its lexical captures.
+    /// Use Fiber::fork when starting an isolated execution.
     pub fn macro_env(&self) -> crate::macros::MacroEnv<T, L> {
         self.macros
             .clone()
@@ -250,18 +237,175 @@ impl<T: Extern, L: Locals> Env<T, L> {
     }
 }
 
-impl<T: Extern, L: Locals> std::clone::Clone for Env<T, L> {
-    // Clone by value, not by ref via Arc::clone
-    fn clone(&self) -> Self {
-        let parent = self
-            .parent
-            .as_ref()
-            .map(|parent| Arc::new(Mutex::new(parent.as_ref().lock().unwrap().clone())));
+/// Copies the roots of one fiber, preserving shared scopes and cycles.
+pub(crate) struct EnvCopy<T: Extern, L: Locals> {
+    environments: HashMap<usize, EnvRef<T, L>>,
+    // Keep source addresses stable while copying additional roots.
+    sources: Vec<EnvRef<T, L>>,
+}
+
+impl<T: Extern, L: Locals> Default for EnvCopy<T, L> {
+    fn default() -> Self {
         Self {
-            bindings: self.bindings.clone(),
-            parent,
-            completions: self.completions.clone(),
-            macros: self.macros.clone(),
+            environments: HashMap::new(),
+            sources: Vec::new(),
+        }
+    }
+}
+
+impl<T: Extern, L: Locals> EnvCopy<T, L> {
+    pub(crate) fn into_owner(self) -> OwnedEnvironments<T, L> {
+        let scopes = self
+            .environments
+            .values()
+            .map(Arc::downgrade)
+            .collect::<Vec<_>>();
+        let prune_at = (scopes.len() * 2).max(256);
+        OwnedEnvironments { scopes, prune_at }
+    }
+
+    pub(crate) fn env(&mut self, source: &EnvRef<T, L>) -> EnvRef<T, L> {
+        let key = Arc::as_ptr(source) as usize;
+        if let Some(target) = self.environments.get(&key) {
+            return target.clone();
+        }
+        let target = Arc::new(Mutex::new(Env {
+            bindings: HashMap::new(),
+            parent: None,
+            completions: CompletionConfig::default(),
+            macros: None,
+        }));
+        // Register before traversing captures: recursive functions and macro
+        // definitions commonly point back to this very environment.
+        self.sources.push(source.clone());
+        self.environments.insert(key, target.clone());
+        let (bindings, parent, completions, macros) = {
+            let source = source.lock().unwrap();
+            (
+                source.bindings.clone(),
+                source.parent.clone(),
+                source.completions.clone(),
+                source.macros.clone(),
+            )
+        }; // Never hold a source lock while following an edge.
+        let copy = Env {
+            bindings: bindings
+                .into_iter()
+                .map(|(k, v)| (k, self.value(&v)))
+                .collect(),
+            parent: parent.as_ref().map(|p| self.env(p)),
+            completions,
+            macros: macros.as_ref().map(|m| m.isolated_copy(self)),
+        };
+        *target.lock().unwrap() = copy;
+        target
+    }
+
+    fn value(&mut self, value: &Val<T, L>) -> Val<T, L> {
+        match value {
+            Val::List(values) => Val::List(values.iter().map(|v| self.value(v)).collect()),
+            Val::Lambda(lambda) => Val::Lambda(self.lambda(lambda)),
+            Val::Bytecode(code) => Val::Bytecode(self.bytecode(code)),
+            Val::Nil
+            | Val::Bool(_)
+            | Val::Int(_)
+            | Val::String(_)
+            | Val::Symbol(_)
+            | Val::Keyword(_)
+            | Val::NativeFn(_)
+            | Val::NativeAsyncFn(_)
+            | Val::Error(_)
+            | Val::Ref(_)
+            | Val::Extern(_) => value.clone(),
+        }
+    }
+
+    pub(crate) fn lambda(&mut self, lambda: &Lambda<T, L>) -> Lambda<T, L> {
+        Lambda {
+            metadata: lambda.metadata.clone(),
+            doc: lambda.doc.clone(),
+            params: lambda.params.clone(),
+            code: self.bytecode(&lambda.code),
+            parent: lambda.parent.as_ref().map(|p| self.env(p)),
+        }
+    }
+
+    pub(crate) fn bytecode(&mut self, code: &crate::Bytecode<T, L>) -> crate::Bytecode<T, L> {
+        use crate::Inst::*;
+        code.iter()
+            .map(|inst| match inst {
+                Prepare(v) => Prepare(self.value(v)),
+                DefineMacro(v) => DefineMacro(self.value(v)),
+                PushConst(v) => PushConst(self.value(v)),
+                DebugScope(code, site) => DebugScope(self.bytecode(code), site.clone()),
+                Expand(_)
+                | ValidateExpansion
+                | EvalCallsite
+                | GetSym(_)
+                | DefSym(_)
+                | DefBind
+                | SetSym(_)
+                | MakeFunc
+                | CallFunc(_)
+                | CallAt(_, _)
+                | CallCallback(_)
+                | FunctionSource(_)
+                | ListPush
+                | ListExtend
+                | PopTop
+                | JumpFwd(_)
+                | JumpBck(_)
+                | PopJumpFwdIfTrue(_)
+                | YieldTop
+                | Eval(_) => inst.clone(),
+            })
+            .collect()
+    }
+
+    pub(crate) fn macros(
+        &mut self,
+        macros: &crate::macros::MacroEnv<T, L>,
+    ) -> crate::macros::MacroEnv<T, L> {
+        macros.isolated_copy(self)
+    }
+}
+
+/// Scopes belong to one forked fiber. Break closure cycles when it is dropped.
+/// Weak entries allow ordinary call frames to be freed during execution.
+#[derive(Debug)]
+pub(crate) struct OwnedEnvironments<T: Extern, L: Locals> {
+    scopes: Vec<Weak<Mutex<Env<T, L>>>>,
+    prune_at: usize,
+}
+
+impl<T: Extern, L: Locals> OwnedEnvironments<T, L> {
+    pub(crate) fn register(&mut self, env: &EnvRef<T, L>) {
+        if self.scopes.len() >= self.prune_at {
+            self.scopes.retain(|scope| scope.strong_count() > 0);
+            self.prune_at = (self.scopes.len() * 2).max(256);
+        }
+        self.scopes.push(Arc::downgrade(env));
+    }
+}
+
+impl<T: Extern, L: Locals> Drop for OwnedEnvironments<T, L> {
+    fn drop(&mut self) {
+        // Keep every surviving scope alive until all edges have been removed.
+        let scopes = self
+            .scopes
+            .iter()
+            .filter_map(Weak::upgrade)
+            .collect::<Vec<_>>();
+        for scope in &scopes {
+            let contents = {
+                let mut scope = scope.lock().unwrap_or_else(|e| e.into_inner());
+                (
+                    std::mem::take(&mut scope.bindings),
+                    scope.parent.take(),
+                    scope.macros.take(),
+                )
+            };
+            drop(contents); // Drop captures outside the scope lock.
         }
     }
 }
@@ -363,5 +507,56 @@ mod tests {
         );
     }
 
-    // TODO: Test Clone Isolation
+    #[test]
+    fn scope_tracking_prunes_dead_call_frames() {
+        let mut owner = EnvCopy::<Void, Void>::default().into_owner();
+        for _ in 0..10_000 {
+            let scope = Arc::new(Mutex::new(Env::standard()));
+            owner.register(&scope);
+        }
+        assert!(owner.scopes.len() <= 256);
+    }
+
+    #[test]
+    fn isolated_copy_preserves_cycles_and_distinct_scopes() {
+        let root = Arc::new(Mutex::new(Env::standard()));
+        let inner = Arc::new(Mutex::new(Env::extend(&root)));
+        let lambda = Lambda {
+            metadata: vec![],
+            doc: None,
+            params: vec![],
+            code: vec![],
+            parent: Some(inner.clone()),
+        };
+        root.lock()
+            .unwrap()
+            .define("nested".into(), Val::Lambda(lambda));
+        root.lock().unwrap().define("count".into(), Val::Int(0));
+        inner.lock().unwrap().define("local".into(), Val::Int(10));
+
+        let mut copy = EnvCopy::default();
+        let copied_root = copy.env(&root);
+        let copied_inner = copy.env(&inner);
+        assert!(!Arc::ptr_eq(&root, &copied_root));
+        assert!(!Arc::ptr_eq(&inner, &copied_inner));
+        assert!(!Arc::ptr_eq(&copied_root, &copied_inner));
+        let Val::Lambda(nested) = copied_root.lock().unwrap().get(&"nested".into()).unwrap() else {
+            panic!("expected closure");
+        };
+        assert!(Arc::ptr_eq(nested.parent.as_ref().unwrap(), &copied_inner));
+        assert!(Arc::ptr_eq(
+            copied_inner.lock().unwrap().parent.as_ref().unwrap(),
+            &copied_root
+        ));
+        copied_inner
+            .lock()
+            .unwrap()
+            .set(&"count".into(), Val::Int(42))
+            .unwrap();
+        assert_eq!(
+            copied_root.lock().unwrap().get(&"count".into()),
+            Some(Val::Int(42))
+        );
+        assert_eq!(root.lock().unwrap().get(&"count".into()), Some(Val::Int(0)));
+    }
 }

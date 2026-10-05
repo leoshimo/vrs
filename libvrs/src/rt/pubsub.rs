@@ -89,6 +89,9 @@ impl PubSubHandle {
     /// Best-effort publication from synchronous observation hooks. Never wait
     /// for the broker or a subscriber; callers decide how to recover from loss.
     pub(crate) fn try_publish(&self, topic: &KeywordId, val: Val) -> bool {
+        if super::peer::WireVal::validate(&val).is_err() {
+            return false;
+        }
         self.tx
             .try_send(Cmd::TryPublish {
                 topic: topic.clone(),
@@ -128,6 +131,7 @@ impl PubSubHandle {
         val: Val,
         forward_to_peers: bool,
     ) -> Result<()> {
+        super::peer::WireVal::validate(&val)?;
         let (resp_tx, resp_rx) = oneshot::channel();
         self.tx
             .send(Cmd::Publish {

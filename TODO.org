@@ -599,7 +599,7 @@ and handles crossing process boundaries. Use command recording as one example
 of a resource whose lifetime spans several service calls. Defer this broader
 design; it is not a prerequisite for service topic handlers.
 
-** TODO [#A] BUG: Lambdas can be used to break process isolation
+** DONE [#A] BUG: Lambdas can be used to break process isolation
 
 A process can send a lambda (which captures its environment) to another process
 to break process isolation
@@ -615,6 +615,11 @@ Not an issue in erlang / elixir due to pure functional types. No values mutating
 via references captured.
 
 Thought: Allow but discourage passing lambdas
+
+** TODO Reclaim unreachable closure cycles in running processes
+
+Collect unused scopes kept alive by their own local functions, so long-lived
+services do not retain old request data until process exit.
 
 ** TODO Shell macro
 

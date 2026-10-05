@@ -178,11 +178,11 @@ async fn publications_reach_local_and_remote_subscribers() {
     // Requests on the same connection follow SubscriptionStart, so this also
     // confirms the broker has installed each subscription before publishing.
     beta.request(Form::keyword("ready")).await.unwrap();
-    // Non-transferable values keep working locally even with connected peers.
+    // Function values are rejected before reaching either local or remote subscribers.
     assert_eq!(
-        alpha.request(Form::from_expr("(begin (subscribe :local_function) (publish :local_function (fn () 7)) ((get (recv '(:topic_updated :local_function _)) 2)))").unwrap())
+        alpha.request(Form::from_expr("(begin (subscribe :local_function) (list (err? (try (publish :local_function (list (fn () 7))))) (ls_msgs)))").unwrap())
             .await.unwrap().contents.unwrap(),
-        Form::Int(7),
+        Form::from_expr("(true ())").unwrap(),
     );
     alpha
         .request(Form::from_expr("(publish :count 42)").unwrap())

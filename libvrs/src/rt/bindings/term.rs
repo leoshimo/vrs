@@ -90,7 +90,13 @@ mod tests {
         let (local, mut remote) = Connection::pair().unwrap();
 
         let mut procs = ProcessSet::new();
-        let prog = Program::from_expr("(recv_req)").unwrap().env(term_env());
+        let mut env = term_env();
+        env.define("expected_id".into(), Val::Extern(Extern::RequestId(2)));
+        let prog = Program::from_expr(
+            "(begin (def (id contents) (recv_req)) (list (eq? id expected_id) contents))",
+        )
+        .unwrap()
+        .env(env);
         let _ = Process::from_prog(ProcessId::new("test", 0), prog)
             .term(Term::spawn(local, PubSub::spawn()))
             .spawn(&mut procs);
@@ -105,10 +111,9 @@ mod tests {
         let res = procs.join_next().await.unwrap().unwrap();
         assert_eq!(
             res.status.unwrap(),
-            ProcessResult::Done(Val::List(vec![
-                Val::Extern(Extern::RequestId(2)),
-                Val::string("Hello world"),
-            ])),
+            ProcessResult::Done(Val::List(
+                vec![Val::Bool(true), Val::string("Hello world"),]
+            )),
             "recv_req returns request id and contents"
         );
     }

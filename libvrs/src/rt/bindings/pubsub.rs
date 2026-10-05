@@ -20,7 +20,7 @@ pub(crate) fn subscribe_fn() -> NativeAsyncFn {
 pub(crate) fn publish_fn() -> NativeAsyncFn {
     NativeAsyncFn {
         metadata: vec![],
-        doc: "(publish TOPIC DATA) - Notify active subscribers locally and on directly connected nodes. Best-effort, with no replay; functions and other non-transferable values are local-only."
+        doc: "(publish TOPIC DATA) - Notify active subscribers locally and on directly connected nodes. Best-effort, with no replay; messages must contain data only."
             .to_string(),
         func: |f, args| Box::new(publish_impl(f, args)),
     }
@@ -141,7 +141,8 @@ mod tests {
             } else {
                 owner
                     .notify_message(Message::new(Val::keyword("finish")))
-                    .await;
+                    .await
+                    .unwrap();
             }
             owner.join().await.unwrap();
             tokio::time::timeout(Duration::from_secs(1), forwarding)

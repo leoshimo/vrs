@@ -1,7 +1,7 @@
 use super::kernel::WeakKernelHandle;
 use super::mailbox::Message;
 use super::peer::PeerHandle;
-use super::program::{Extern, Locals, Val};
+use super::program::{Extern, Fiber, Locals, Val};
 use super::pubsub::PubSubHandle;
 use super::registry::Registry;
 use super::term::TermHandle;
@@ -25,10 +25,10 @@ pub struct ProcessId {
 }
 
 /// A running process in runtime
+#[derive(Debug)]
 pub struct Process {
     id: ProcessId,
-    prog: Program,
-    locals: Locals,
+    fiber: Fiber,
 }
 
 /// A handle to [Process]
@@ -46,7 +46,7 @@ pub struct ProcessHandle {
 /// The result of process
 #[derive(Debug, Clone, PartialEq)]
 pub enum ProcessResult {
-    /// Completed with value
+    /// Completed with a data-only value.
     Done(Val),
     /// Cancelled for closed event loop
     Cancelled,
@@ -64,52 +64,52 @@ impl Process {
     pub(crate) fn from_prog(id: ProcessId, prog: Program) -> Self {
         Self {
             id: id.clone(),
-            prog,
-            locals: Locals::new(id),
+            fiber: prog.into_fiber(Locals::new(id)),
         }
     }
 
     /// Set kernel handle for process
     pub(crate) fn kernel(mut self, k: WeakKernelHandle) -> Self {
-        self.locals.kernel(k);
+        self.fiber.locals_mut().kernel(k);
         self
     }
 
     /// Set registry handle for process
     pub(crate) fn registry(mut self, r: Registry) -> Self {
-        self.locals.registry(r);
+        self.fiber.locals_mut().registry(r);
         self
     }
 
     pub(crate) fn peers(mut self, peers: PeerHandle) -> Self {
-        self.locals.peers(peers);
+        self.fiber.locals_mut().peers(peers);
         self
     }
 
     pub(crate) fn node_name(mut self, node_name: String) -> Self {
-        self.locals.node_name(node_name);
+        self.fiber.locals_mut().node_name(node_name);
         self
     }
 
     pub(crate) fn debug(mut self, debug: crate::debug::Store) -> Self {
-        self.locals.debug = Some(debug);
+        self.fiber.set_observer(debug.observer(self.id.to_string()));
+        self.fiber.locals_mut().debug = Some(debug);
         self
     }
 
     pub(crate) fn history(mut self, history: super::history::Store) -> Self {
-        self.locals.history = Some(history);
+        self.fiber.locals_mut().history = Some(history);
         self
     }
 
     /// Set pubsub handle for process
     pub(crate) fn pubsub(mut self, pubsub: PubSubHandle) -> Self {
-        self.locals.pubsub(pubsub);
+        self.fiber.locals_mut().pubsub(pubsub);
         self
     }
 
     /// Set connection for process, if any
     pub(crate) fn term(mut self, term: TermHandle) -> Self {
-        self.locals.term(term);
+        self.fiber.locals_mut().term(term);
         self
     }
 
@@ -127,10 +127,10 @@ impl Process {
             exit_rx: exit_rx.shared(),
             mailbox,
         };
-        self.locals.handle(proc_hdl.clone());
+        self.fiber.locals_mut().handle(proc_hdl.clone());
 
-        let connection = self.locals.term.clone();
-        let mut fiber = self.prog.into_fiber(self.locals);
+        let connection = self.fiber.locals().term.clone();
+        let mut fiber = self.fiber;
 
         procs.spawn(async move {
             // TODO: Implement ProcessResult::Disconnected when Error::ConnectionClosed is returned
@@ -150,7 +150,9 @@ impl Process {
                     match res {
                         Ok(v) => ProcessExit {
                             id: self.id.clone(),
-                            status: Ok(ProcessResult::Done(v)),
+                            status: super::peer::WireVal::validate(&v)
+                                .map(|()| ProcessResult::Done(v))
+                                .map_err(Error::EvaluationError),
                         },
                         Err(e) => ProcessExit {
                             id: self.id.clone(),
@@ -166,6 +168,7 @@ impl Process {
                 },
             };
 
+            drop(fiber); // Reclaim captured scopes before publishing completion.
             let _ = exit_tx.send(exit.clone());
             info!("proc exit - {} - {}", self.id, exit);
             exit
@@ -195,9 +198,9 @@ impl ProcessHandle {
         Ok(self.exit_rx.await?)
     }
 
-    /// Send a new message to process's mailbox
-    pub(crate) async fn notify_message(&self, msg: Message) {
-        let _ = self.mailbox.push(msg).await;
+    /// Send a new data-only message to the process's mailbox.
+    pub(crate) async fn notify_message(&self, msg: Message) -> Result<()> {
+        self.mailbox.push(msg).await
     }
 
     /// Get reference to process mailbox
@@ -338,6 +341,69 @@ mod tests {
             ProcessResult::Done(Val::Extern(Extern::ProcessId(test_pid(99)))),
             "(self) should return assigned PID"
         );
+    }
+
+    #[tokio::test]
+    async fn process_results_cannot_export_captured_scopes() {
+        let mut processes = ProcessSet::new();
+        let process = Process::from_prog(
+            test_pid(99),
+            Program::from_expr("(begin (def count 0) (fn () count))").unwrap(),
+        );
+        let scope = std::sync::Arc::downgrade(process.fiber.global_env());
+        let handle = process.spawn(&mut processes).unwrap();
+        for _ in 0..2 {
+            assert_matches!(
+                handle.clone().join().await.unwrap().status,
+                Err(Error::EvaluationError(lyric::Error::UnexpectedType(_)))
+            );
+        }
+        assert!(scope.upgrade().is_none());
+    }
+
+    #[test]
+    fn unstarted_process_reclaims_its_copied_scopes() {
+        let mut source = Program::from_expr("(begin (def count 0) (defn! read () count) read)")
+            .unwrap()
+            .into_fiber(Locals::new(test_pid(98)));
+        let lyric::Signal::Done(Val::Lambda(read)) = source.start().unwrap() else {
+            panic!("expected closure");
+        };
+        let process = Process::from_prog(test_pid(99), Program::from_lambda(read).unwrap());
+        let scope = std::sync::Arc::downgrade(process.fiber.global_env());
+        drop(process);
+        assert!(scope.upgrade().is_none());
+        assert_eq!(
+            source.global_env().lock().unwrap().get(&"count".into()),
+            Some(Val::Int(0))
+        );
+    }
+
+    #[tokio::test]
+    async fn process_scopes_are_reclaimed_on_completion_error_kill_and_abort() {
+        for source in [
+            "(begin (defn! recurse () (recurse)) :done)",
+            "(begin (defn! recurse () (recurse)) missing)",
+            "(begin (defn! recurse () (recurse)) (sleep 60))",
+        ] {
+            for abort in [false, true] {
+                let mut processes = ProcessSet::new();
+                let process = Process::from_prog(test_pid(99), Program::from_expr(source).unwrap());
+                let scope = std::sync::Arc::downgrade(process.fiber.global_env());
+                let handle = process.spawn(&mut processes).unwrap();
+                tokio::task::yield_now().await;
+                if abort {
+                    processes.abort_all();
+                } else if source.contains("sleep") {
+                    handle.kill().await;
+                }
+                while processes.join_next().await.is_some() {}
+                assert!(
+                    scope.upgrade().is_none(),
+                    "scope leaked: {source}, abort={abort}"
+                );
+            }
+        }
     }
 
     // TODO: Implement + test preemption

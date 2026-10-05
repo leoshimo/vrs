@@ -185,7 +185,7 @@ async fn service_history_is_executable_and_quotes_data_arguments() {
 }
 
 #[tokio::test]
-async fn capture_does_not_break_handlers_with_opaque_values_or_shadowing_parameters() {
+async fn capture_rejects_callbacks_and_preserves_shadowing_parameters() {
     let runtime = Runtime::new("test");
     setup(
         &runtime,
@@ -200,7 +200,10 @@ async fn capture_does_not_break_handlers_with_opaque_values_or_shadowing_paramet
     .await;
     let (client, _) = connect(&runtime).await;
     eval(&client, "(bind_srv :worker)").await;
-    assert_eq!(eval(&client, "(execute (fn () 42))").await, Form::Int(42));
+    assert_eq!(
+        eval(&client, "(err? (try (execute (fn () 42))))").await,
+        Form::Bool(true)
+    );
     assert_eq!(
         eval(&client, "(history :worker)").await,
         parse("()").unwrap()
