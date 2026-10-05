@@ -40,7 +40,7 @@
           (with-temp-buffer
             (insert source)
             (should (= 0 (vrs--run-region (point-min) (point-max)
-                                          vrs-vrsctl-command output errors "compact" nil 90))))
+                                          vrs-vrsctl-command output errors "compact" 90))))
           (with-current-buffer output (string-remove-suffix "\n" (buffer-string))))
       (kill-buffer output) (kill-buffer errors))))
 
@@ -67,9 +67,9 @@
     (setq mark-active t)
     (let ((transient-mark-mode t))
       (cl-letf (((symbol-function 'vrs--run-region)
-                 (lambda (start end command output _errors format raw width)
+                 (lambda (start end command output _errors format width)
                    (should (equal command "custom-vrsctl"))
-                   (should (equal (list format raw width) '("compact" nil 60)))
+                   (should (equal (list format width) '("compact" 60)))
                    (should (equal (buffer-substring-no-properties start end)
                                   "(vrs/editor_choices (begin\n(def x 1)\n  (list x) # trailing comment\n) false)"))
                    (with-current-buffer output (insert "((\"1\" \"1\"))\n"))

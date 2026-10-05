@@ -38,14 +38,14 @@ fn session_history_distinguishes_submitted_code_from_service_calls() -> Result<(
         .iter()
         .map(|request| format!("{request}\n"))
         .collect::<String>();
-    let output = runtime.pipe_input(&["--session", "--format", "compact"], Some(&input));
+    let output = runtime.pipe_input(&["rpc", "--format", "compact"], Some(&input));
     let replies = output
         .lines()
         .map(serde_json::from_str::<serde_json::Value>)
         .collect::<std::result::Result<Vec<_>, _>>()?;
     assert_eq!(replies.len(), requests.len());
     for reply in &replies {
-        assert_eq!(reply["ok"], true, "{reply}");
+        assert_eq!(reply["type"], "result", "{reply}");
     }
     assert_eq!(replies[1]["output"], "2\n");
     assert_eq!(
@@ -301,7 +301,7 @@ fn dbg_views_share_real_recording_filters_and_editor_source_origins() -> Result<
         serde_json::json!({"source":source,"file":"/tmp/observe.ll","line":20,"column":1});
     let mut transcript = runtime.terminal(&["dbg", "--all", "--width", "200"], false, 200)?;
     thread::sleep(Duration::from_millis(200));
-    runtime.pipe_input(&["--session"], Some(&format!("{request}\n")));
+    runtime.pipe_input(&["rpc"], Some(&format!("{request}\n")));
     transcript.expect("# arg 1: 2")?;
     transcript.expect("twice  # => 4")?;
     transcript.expect("# arg 1: 3")?;
@@ -319,7 +319,7 @@ fn dbg_views_share_real_recording_filters_and_editor_source_origins() -> Result<
     let mut filtered =
         runtime.terminal(&["dbg", "--filter", "file:observe.ll:20:18"], false, 160)?;
     thread::sleep(Duration::from_millis(200));
-    runtime.pipe_input(&["--session"], Some(&format!("{request}\n")));
+    runtime.pipe_input(&["rpc"], Some(&format!("{request}\n")));
     filtered.expect("(+ x x)  # => 4  [observe.ll:20:18 · ")?;
     filtered.expect("ms]")?;
     filtered.expect("(+ x x)  # => 6  [observe.ll:20:18 · ")?;

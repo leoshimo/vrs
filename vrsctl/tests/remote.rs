@@ -91,7 +91,7 @@ async fn local_file_remote_execution_persistent_client_and_reload() {
     let mut editor = Command::new(env!("CARGO_BIN_EXE_vrsctl"))
         .arg("--socket")
         .arg(&socket)
-        .args(["--node", "beta", "--session"])
+        .args(["rpc", "--node", "beta"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -121,7 +121,7 @@ async fn local_file_remote_execution_persistent_client_and_reload() {
             .unwrap()
             .unwrap();
         let reply: serde_json::Value = serde_json::from_str(&line).unwrap();
-        assert_eq!(reply["ok"], true);
+        assert_eq!(reply["type"], "result");
         assert_eq!(reply["output"], expected);
     }
     drop(input);

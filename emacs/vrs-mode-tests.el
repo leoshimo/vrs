@@ -37,7 +37,7 @@
     (let ((output (generate-new-buffer " *VRS test output*"))
           (errors (generate-new-buffer " *VRS test errors*"))
           (command (concat "sh -c " (shell-quote-argument
-                    "read request; printf diagnostic >&2; printf '%s\\n' '{\"ok\":true,\"output\":\"東京\\n\"}'; cat >/dev/null"))))
+                    "read request; printf diagnostic >&2; printf '%s\\n' '{\"type\":\"result\",\"output\":\"東京\\n\"}'; cat >/dev/null"))))
       (unwind-protect
           (progn
             (should (= 0 (vrs--run-region (point-min) (point-max) command output errors)))
@@ -69,33 +69,23 @@
       (should-not (process-live-p child))
       (should (equal (buffer-string) "(srv! :test :interface '())")))))
 
-(ert-deftest vrs-retention-rejects-an-old-client-without-changing-source ()
-  (with-temp-buffer
-    (vrs-mode)
-    (insert "(list 1 2)")
-    (let ((vrs-vrsctl-command
-           (concat "sh -c " (shell-quote-argument
-                             "read request; printf '%s\\n' '{\"ok\":true,\"output\":\"(1 2)\\n\"}'; cat >/dev/null"))))
-      (unwind-protect
-          (progn
-            (should-error (vrs-eval-last-sexp t) :type 'user-error)
-            (should (equal (buffer-string) "(list 1 2)"))
-            (with-current-buffer "*VRS Errors*"
-              (should (string-match-p "Update vrsctl" (buffer-string)))))
-        (vrs--close-session vrs-vrsctl-command)))))
-
 (ert-deftest vrs-evaluation-with-test-runtime ()
   "Optional end-to-end evaluation, enabled by the terminal test harness."
   (skip-unless (getenv "VRS_TEST_VRSCTL"))
   (let ((vrs-vrsctl-command (getenv "VRS_TEST_VRSCTL"))
         (vrs-result-width 10))
     (with-temp-buffer
-      (insert "(pretty '((1 2) (3 4)) 10)")
+      (insert "'((1 2) (3 4))")
       (vrs-mode)
       (goto-char (point-max))
       (vrs-eval-last-sexp nil)
       (with-current-buffer "*VRS Result*"
         (should (equal (buffer-string) "((1 2)\n (3 4))\n")))
+      (erase-buffer)
+      (insert "\"Hello world\"")
+      (vrs-eval-last-sexp nil)
+      (with-current-buffer "*VRS Result*"
+        (should (equal (buffer-string) "\"Hello world\"\n")))
       (erase-buffer)
       (insert "(list? (ls_srv))")
       (goto-char (1- (point-max)))
@@ -171,6 +161,24 @@
       (insert "inserted_runs")
       (vrs-eval-last-sexp t)
       (should (equal (buffer-string) "0")))))
+
+(ert-deftest vrs-active-tab-retained-inside-source-with-test-runtime ()
+  "A browser-shaped value is retained once inside a larger source expression."
+  (skip-unless (getenv "VRS_TEST_VRSCTL"))
+  (let ((vrs-vrsctl-command (getenv "VRS_TEST_VRSCTL")))
+    (with-temp-buffer
+      (vrs-mode)
+      (insert "(def reads 0) (defn! active_tab () (set reads (+ reads 1)) '(:title \"Example\" :url \"https://example.com\"))")
+      (vrs-eval-buffer nil)
+      (erase-buffer)
+      (insert "(save_article (active_tab))")
+      (backward-char 2)
+      (vrs-eval-last-sexp t)
+      (should (equal (buffer-string) "(save_article '(:title \"Example\" :url \"https://example.com\"))"))
+      (erase-buffer)
+      (insert "reads")
+      (vrs-eval-last-sexp t)
+      (should (equal (buffer-string) "1")))))
 
 (ert-deftest vrs-session-shares-state-across-buffers-and-resets-with-test-runtime ()
   (skip-unless (getenv "VRS_TEST_VRSCTL"))
@@ -354,10 +362,10 @@
     (vrs-mode)
     (goto-char (point-max))
     (cl-letf (((symbol-function 'vrs--run-region)
-               (lambda (start end _command output _errors format raw width &optional literal)
+               (lambda (start end _command output _errors format width &optional literal)
                  (should (equal (buffer-substring-no-properties start end)
                                 vrs-test--block-expression))
-                 (should (equal (list format raw width) '("pretty" t 90)))
+                 (should (equal (list format width) '("pretty" 90)))
                  (with-current-buffer output (insert "((1 2)\n (3 4))\n"))
                  0))
               ((symbol-function 'display-buffer) #'ignore))
@@ -375,8 +383,8 @@
       (vrs-mode)
       (goto-char (- (point-max) 2))
       (cl-letf (((symbol-function 'vrs--run-region)
-                 (lambda (_start _end _command output _errors format raw width &optional literal)
-                   (should (equal (list format raw width literal) '("pretty" nil 90 t)))
+                 (lambda (_start _end _command output _errors format width &optional literal)
+                   (should (equal (list format width literal) '("pretty" 90 t)))
                    (with-current-buffer output
                      (insert "'((:name :echo\n   :node \"alpha\")\n  (:name :clock))\n"))
                    0)))
@@ -404,8 +412,8 @@
     (insert "(pretty (ls_srv))")
     (vrs-mode)
     (cl-letf (((symbol-function 'vrs--run-region)
-               (lambda (_start _end _command _output _errors format raw width &optional literal)
-                 (should (equal (list format raw width) '("editor" t 90)))
+               (lambda (_start _end _command _output _errors format width &optional literal)
+                 (should (equal (list format width) '("editor" 90)))
                  0))
               ((symbol-function 'display-buffer) #'ignore))
       (vrs-eval-buffer t))))
@@ -530,11 +538,11 @@
     (forward-line 1)
     (end-of-line)
     (cl-letf (((symbol-function 'vrs--run-region)
-               (lambda (start end command output _errors format raw width &optional literal)
+               (lambda (start end command output _errors format width &optional literal)
                  (should (equal (buffer-substring-no-properties start end)
                                 "(vrsjmp_browse_functions)"))
                  (should (equal command "custom-vrsctl"))
-                 (should (equal (list format raw width) '("pretty" nil 60)))
+                 (should (equal (list format width) '("pretty" 60)))
                  (with-current-buffer output
                    (insert "(focus_window\n  '(:os/window :id 7 :title \"東京\"))\n"))
                  0)))
@@ -574,9 +582,8 @@
         (setq-local vrs-vrsctl-command "custom-vrsctl")
         (setq-local vrs-result-width 60)
         (cl-letf (((symbol-function 'vrs--eval)
-                   (lambda (start end replace &optional _editor source-result)
+                   (lambda (start end replace &optional _editor)
                      (should-not replace)
-                     (should source-result)
                      (should (equal vrs-vrsctl-command "custom-vrsctl"))
                      (should (= vrs-result-width 60))
                      (setq captured (buffer-substring-no-properties start end)))))
@@ -591,10 +598,9 @@
     (vrs-mode)
     (goto-char (point-max))
     (cl-letf (((symbol-function 'vrs--run-region)
-               (lambda (start end _command output _errors _format raw &rest _)
+               (lambda (start end _command output _errors _format &rest _)
                  (should (equal (buffer-substring-no-properties start end)
                                 "(macroexpand_1 (quote \"literal\"))"))
-                 (should-not raw)
                  (with-current-buffer output (insert "\"literal\"\n"))
                  0))
               ((symbol-function 'display-buffer) #'ignore))

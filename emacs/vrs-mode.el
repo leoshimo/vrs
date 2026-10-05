@@ -243,7 +243,7 @@ block strings, rather than reading and printing it as Emacs Lisp."
                                             :false-object :false :null-object nil))
           (error
            (process-put process 'response
-                        (list :ok :false :error
+                        (list :type "error" :message
                               (format "Invalid vrsctl session reply: %s"
                                       (error-message-string err))))
            (delete-process process)))))
@@ -261,7 +261,7 @@ block strings, rather than reading and printing it as Emacs Lisp."
             (setq process
                   (make-process :name "VRS session"
                                 :command (list shell-file-name shell-command-switch
-                                               (concat "exec " command " --session"))
+                                               (concat "exec " command " rpc"))
                                 :connection-type 'pipe :coding 'utf-8-unix
                                 :filter #'vrs--session-filter :stderr stderr
                                 :noquery t :sentinel #'ignore))
@@ -275,9 +275,9 @@ block strings, rather than reading and printing it as Emacs Lisp."
         (puthash command process vrs--sessions)))
     process))
 
-(defun vrs--run-region (start end command output errors &optional format raw width literal)
+(defun vrs--run-region (start end command output errors &optional format width literal)
   "Evaluate START to END in COMMAND's session, collecting OUTPUT and ERRORS.
-FORMAT, RAW, WIDTH, and LITERAL apply to this request.  LITERAL requests
+FORMAT, WIDTH, and LITERAL apply to this request.  LITERAL requests
 source that retains the returned value.  C-g closes the connection;
 ordinary evaluation errors leave the session available."
   (let ((process (vrs--session command))
@@ -299,7 +299,6 @@ ordinary evaluation errors leave the session available."
                           :line (line-number-at-pos start t)
                           :column (save-excursion (goto-char start) (1+ (- (point) (line-beginning-position))))
                           :format (or format "pretty") :width (or width 90)
-                          :raw (if raw t :false)
                           :literal (if literal t :false))
                     :false-object :false)
                    "\n"))
@@ -315,20 +314,14 @@ ordinary evaluation errors leave the session available."
                   (push event pending-input)))))
           (while (accept-process-output (process-get process 'stderr) 0.01))
           (let* ((reply (process-get process 'response))
-                 (unsupported-literal
-                  (and literal (eq (plist-get reply :ok) t)
-                       (not (eq (plist-get reply :literal) t))))
-                 (ok (and (eq (plist-get reply :ok) t)
-                          (not unsupported-literal)
+                 (ok (and (equal (plist-get reply :type) "result")
                           (stringp (plist-get reply :output)))))
             (if ok
                 (with-current-buffer output (insert (plist-get reply :output)))
               (let ((diagnostic (with-current-buffer (process-get process 'errors)
                                   (buffer-string))))
                 (with-current-buffer errors
-                  (insert (or (when unsupported-literal
-                                "Update vrsctl and reset the editor session to retain literal values.")
-                              (plist-get reply :error)
+                  (insert (or (plist-get reply :message)
                               (unless (string-empty-p diagnostic) diagnostic)
                               "VRS connection closed; the next evaluation starts a fresh session.")
                           "\n"))))
@@ -363,10 +356,9 @@ All buffers using the same `vrs-vrsctl-command' share this reset."
   (pcase-let ((`(,start . ,end) (vrs--last-sexp-bounds)))
     (buffer-substring-no-properties start end)))
 
-(defun vrs--eval (start end replace &optional editor-format source-result)
+(defun vrs--eval (start end replace &optional editor-format)
   "Evaluate START to END; optionally REPLACE or request EDITOR-FORMAT.
-Display text strings raw, but preserve string syntax when replacing source
-or when SOURCE-RESULT is non-nil.  REPLACE equal to `literal' retains the
+Display values in Lyric notation.  REPLACE equal to `literal' retains the
 value with any necessary quote; other non-nil values insert generated code."
   (unless (and (integerp vrs-result-width) (> vrs-result-width 0))
     (user-error "vrs-result-width must be a positive integer"))
@@ -380,7 +372,6 @@ value with any necessary quote; other non-nil values insert generated code."
           (message "Evaluating VRS (C-g to cancel and reset session)…")
           (let ((status (vrs--run-region start end command output errors
                                         (if editor-format "editor" "pretty")
-                                        (not (or replace source-result))
                                         vrs-result-width
                                         (eq replace 'literal))))
             (unless (equal status 0)
@@ -484,7 +475,7 @@ the shared VRS session are available during expansion."
                       (if repeat-outer "macroexpand" "macroexpand_1") source))
       (let ((vrs-vrsctl-command command)
             (vrs-result-width width))
-        (vrs--eval (point-min) (point-max) nil nil t)))))
+        (vrs--eval (point-min) (point-max) nil)))))
 
 (defvar vrs-mode-map
   (let ((map (make-sparse-keymap)))

@@ -31,7 +31,7 @@
         (vrs--chooser-settings (cons vrs-vrsctl-command vrs-result-width)))
     (funcall function)))
 
-(defun vrs--chooser-request (source &optional raw)
+(defun vrs--chooser-request (source &optional format)
   "Evaluate SOURCE in the shared session, returning text without its newline."
   (vrs--chooser-check)
   (let ((output (generate-new-buffer " *VRS choice*"))
@@ -41,7 +41,7 @@
                         (insert source)
                         (vrs--run-region (point-min) (point-max)
                                          (car vrs--chooser-settings) output errors
-                                         "compact" raw (cdr vrs--chooser-settings)))))
+                                         (or format "compact") (cdr vrs--chooser-settings)))))
           (vrs--chooser-check)
           (unless (eq status 0)
             (user-error "VRS: %s" (with-current-buffer errors (string-trim (buffer-string)))))
@@ -164,8 +164,7 @@ Accept keyword/value records and tagged entities; use native completion."
                                         (if (string-empty-p type) "" (concat " · " type))))))
         (vrs--chooser-check)
         ;; read/pretty construct source; entering (some_action) never runs it.
-        (vrs--chooser-request (format "(pretty (read %s) %d)"
-                                      (vrs--lyric-string source) (cdr vrs--chooser-settings)) t)))))
+        (vrs--chooser-request (format "(read %s)" (vrs--lyric-string source)) "pretty")))))
 
 (defun vrs--filled-call (row arguments)
   "Fill ROW's arguments after the supplied literal ARGUMENTS."

@@ -2,7 +2,7 @@ mod dbg;
 mod editor;
 mod output;
 mod repl;
-mod session;
+mod rpc;
 mod watch;
 
 use anyhow::{Context, Result};
@@ -23,6 +23,7 @@ use vrs::{Client, Connection, Form, KeywordId};
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
     let args = cli().get_matches();
+    validate_mode(&args).unwrap_or_else(|error| error.exit());
 
     let path = args
         .get_one::<String>("socket")
@@ -82,8 +83,8 @@ async fn main() -> Result<()> {
         );
         let mut stdout = io::stdout();
 
-        if args.get_flag("session") {
-            session::run(&client, &output, BufReader::new(io::stdin()), &mut stdout).await
+        if args.subcommand_matches("rpc").is_some() {
+            rpc::run(&client, &output, BufReader::new(io::stdin()), &mut stdout).await
         } else if let Some(cmd) = args.get_one::<String>("command") {
             run_cmd(&client, cmd, &output, &mut stdout).await
         } else if let Some(topic) = args.get_one::<String>("subscribe") {
@@ -128,24 +129,24 @@ async fn main() -> Result<()> {
 /// The clap CLI interface
 fn cli() -> clap::Command {
     command!()
+        .subcommand_precedence_over_arg(true)
         .arg(arg!(node: --node <NODE> "Evaluate on a named connected node; files are read by this client").global(true))
         .subcommand(dbg::command())
+        .subcommand(clap::Command::new("rpc").about("Evaluate JSONL requests over stdin and stdout"))
         .arg(arg!(file: [FILE] "If present, executes contents of FILE")
              .default_value("-")
-             .conflicts_with_all(["command", "subscribe", "session"]))
-        .arg(arg!(session: --session "Keep a connection for editor requests: one JSON object per stdin line")
-             .long_help("Keep a connection for editor requests. Each stdin line is JSON with source (required), format, width, raw, and literal fields. Literal results quote lists and symbols for source retention. Each stdout line is JSON with ok and output or error fields. Definitions persist until the connection closes; evaluation errors leave the session open."))
+             .conflicts_with_all(["command", "subscribe"]))
         .arg(arg!(command: -c --command <EXPR> "If present, EXPR is sent as request, then program exits"))
         .arg(arg!(subscribe: -s --subscribe <TOPIC> "If present, watches a specific topic for data"))
         .group(ArgGroup::new("main")
-               .args(["command", "subscribe", "session"])
+               .args(["command", "subscribe"])
                .required(false))
         .arg(arg!(follow: -f --follow "If present, continues polling subscription after first topic update")
              .requires("subscribe"))
         .arg(arg!(follow_clear: -F --followclear "Like --follow, but clears screen after each value")
             .requires("subscribe"))
         .arg(arg!(format: --format <FORMAT> "Sets format of output")
-             .default_value("default")
+             .default_value("default").global(true)
              .value_parser(EnumValueParser::<Format>::new())
         )
         .arg(arg!(width: --width <COLUMNS> "Target width for pretty/editor output (default 90); atoms may exceed it")
@@ -158,6 +159,28 @@ fn cli() -> clap::Command {
             arg!(socket: -S --socket <SOCKET> "Path to unix socket for vrsd")
                 .default_value(vrs::runtime_socket().into_os_string()).global(true),
         )
+}
+
+/// Reject execution options that a subcommand would otherwise silently ignore.
+fn validate_mode(args: &clap::ArgMatches) -> Result<(), clap::Error> {
+    if let Some(name) = args.subcommand_name() {
+        for option in [
+            "file",
+            "command",
+            "subscribe",
+            "raw",
+            "name",
+            "bind_service",
+        ] {
+            if args.value_source(option) == Some(clap::parser::ValueSource::CommandLine) {
+                return Err(clap::Error::raw(
+                    clap::error::ErrorKind::ArgumentConflict,
+                    format!("{option} cannot be combined with {name}"),
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Open file specified by argument
@@ -298,8 +321,12 @@ mod tests {
             ],
         ] {
             assert_eq!(
-                cli().try_get_matches_from(args).unwrap().subcommand_name(),
-                Some("dbg")
+                cli()
+                    .try_get_matches_from(args.clone())
+                    .unwrap()
+                    .subcommand_name(),
+                Some("dbg"),
+                "{args:?}"
             );
         }
         for mode in [
@@ -309,12 +336,30 @@ mod tests {
             vec!["-"],
             vec!["-s", "topic", "-f"],
             vec!["-s", "topic", "-F"],
-            vec!["--session"],
         ] {
             let mut args = vec!["vrsctl", "--format", "pretty", "--width", "40", "--raw"];
             args.extend(mode);
             cli().try_get_matches_from(args).unwrap();
         }
+        for args in [
+            vec!["vrsctl", "rpc", "--node", "home", "--format", "pretty"],
+            vec!["vrsctl", "--socket", "/tmp/test.sock", "rpc"],
+        ] {
+            assert_eq!(
+                cli()
+                    .try_get_matches_from(args.clone())
+                    .unwrap()
+                    .subcommand_name(),
+                Some("rpc")
+            );
+        }
+        assert!(cli().try_get_matches_from(["vrsctl", "--session"]).is_err());
+        assert!(validate_mode(
+            &cli()
+                .try_get_matches_from(["vrsctl", "--raw", "rpc"])
+                .unwrap()
+        )
+        .is_err());
         for width in ["0", "-1", "abc"] {
             assert!(cli()
                 .try_get_matches_from(["vrsctl", "--width", width])
@@ -324,9 +369,9 @@ mod tests {
             .try_get_matches_from(["vrsctl", "example.ll", "-s", "topic"])
             .is_err());
         for arguments in [
-            vec!["vrsctl", "--session", "-c", "42"],
-            vec!["vrsctl", "--session", "example.ll"],
-            vec!["vrsctl", "--session", "-s", "topic"],
+            vec!["vrsctl", "rpc", "-c", "42"],
+            vec!["vrsctl", "rpc", "example.ll"],
+            vec!["vrsctl", "rpc", "-s", "topic"],
         ] {
             assert!(cli().try_get_matches_from(arguments).is_err());
         }
