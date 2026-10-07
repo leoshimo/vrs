@@ -282,6 +282,7 @@ pub fn proc_env() -> Env {
         e.bind_native_async(SymbolId::from("kill"), bindings::kill_fn())
             .bind_native(SymbolId::from("pid"), bindings::pid_fn())
             .bind_native(SymbolId::from("node_name"), bindings::node_name_fn())
+            .bind_native(SymbolId::from("whereami"), bindings::node_name_fn())
             .bind_native(SymbolId::from("call_timeout"), bindings::call_timeout_fn())
             .bind_native_async(SymbolId::from("ps"), bindings::ps_fn())
             .bind_native(SymbolId::from("self"), bindings::self_fn())
