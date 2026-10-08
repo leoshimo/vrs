@@ -225,6 +225,37 @@ block strings, rather than reading and printing it as Emacs Lisp."
   (pcase-let ((`(,start . ,end) (vrs--last-sexp-bounds)))
     (buffer-substring-no-properties start end)))
 
+(defun vrs--source-service-hints (limit)
+  "Return literal top-level bind_srv services before LIMIT, in source order.
+Skip quoted, nested, computed, and incomplete forms; never evaluate source."
+  (save-excursion
+    (save-restriction
+      (widen)
+      (syntax-propertize limit)
+      (goto-char (point-min))
+      (let (services)
+        (condition-case nil
+            (while (progn (forward-comment (point-max)) (< (point) limit))
+              (let ((start (point)) (end (progn (forward-sexp) (point))))
+                (when (<= end limit)
+                  (save-excursion
+                    (goto-char start)
+                    (when (eq (char-after) ?\()
+                      (forward-char)
+                      (forward-comment (point-max))
+                      (when (looking-at "bind_srv\\_>")
+                        (goto-char (match-end 0))
+                        (forward-comment (point-max))
+                        (when (eq (char-after) ?:)
+                          (let* ((arg-start (point))
+                                 (service (buffer-substring-no-properties
+                                           arg-start (progn (forward-sexp) (point)))))
+                            (forward-comment (point-max))
+                            (when (= (point) (1- end))
+                              (push service services))))))))))
+          (scan-error nil))
+        (nreverse services)))))
+
 (defun vrs--eval (start end replace &optional editor-format)
   "Evaluate START to END; optionally REPLACE or request EDITOR-FORMAT.
 Display values in Lyric notation.  REPLACE equal to `literal' retains the
@@ -241,6 +272,16 @@ value with any necessary quote; other non-nil values insert generated code."
             (let ((inhibit-read-only t)) (erase-buffer)))
           (setq vrs--last-session session)
           (message "Evaluating VRS (C-g to cancel and reset session)…")
+          (when-let* ((services (vrs--source-service-hints start)))
+            (let* ((process (vrs--session session))
+                   (prepared (process-get process 'vrs-prepared-services))
+                   (pending (cl-remove-if (lambda (service) (member service prepared)) services)))
+              (when pending
+                (vrs--session-evaluate
+                 session (format "(vrs/editor_bind_services '(%s))"
+                                 (string-join pending " ")))
+                ;; Only successful preparation is cached; a new connection starts empty.
+                (process-put process 'vrs-prepared-services (append pending prepared)))))
           (let ((status (vrs--run-region start end session output errors
                                          (if editor-format "editor" "pretty")
                                          vrs-result-width

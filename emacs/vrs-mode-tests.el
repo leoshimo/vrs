@@ -15,6 +15,33 @@
    "      path='C:\\tmp'\n"
    "      \"\"\")"))
 
+(ert-deftest vrs-source-service-hints-only-read-complete-literal-imports ()
+  (dolist (case '(("(bind_srv :first)\n(bind_srv # comment\n :second)\n(bind_srv :first)"
+                   ":first" ":second" ":first")
+                  ("# (bind_srv :comment)\n\"(bind_srv :string)\"\n\"\"\"(bind_srv :raw)\"\"\"")
+                  ("'(bind_srv :quoted) `(bind_srv :quasiquoted) (quote (bind_srv :long_quote))")
+                  ("(begin (bind_srv :nested)) (remote! :beta (bind_srv :remote))")
+                  ("(bind_srv service) (bind_srv (keyword name)) (bind_srv :extra :arg)")
+                  ("(bind_srv :complete) (bind_srv :incomplete" ":complete")))
+    (with-temp-buffer
+      (insert (car case))
+      (vrs-mode)
+      (should (equal (vrs--source-service-hints (point-max)) (cdr case))))))
+
+(ert-deftest vrs-source-service-hints-stop-before-selection-and-respect-top-level ()
+  (with-temp-buffer
+    (insert "(bind_srv :before)\n(begin (bind_srv :nested) (target))\n(bind_srv :after)")
+    (vrs-mode)
+    (goto-char (point-min))
+    (search-forward "(begin")
+    (let ((start (- (point) 6)))
+      (search-forward "(target)")
+      (should (equal (vrs--source-service-hints (car (vrs--last-sexp-bounds)))
+                     '(":before")))
+      (narrow-to-region (1+ start) (point))
+      (should (equal (vrs--source-service-hints (car (vrs--last-sexp-bounds)))
+                     '(":before"))))))
+
 (ert-deftest vrs-evaluation-selects-the-form-at-a-closing-paren ()
   (dolist (source '("(ls_srv)" "'((1 2) (3 4))" "`(a ,(get x 0))"
                     "(srv! :test :interface '())"))

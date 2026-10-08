@@ -95,6 +95,101 @@
                                    "exec vrsctl --socket /tmp/example.sock dbg --web --node beta")))))
 		(vrs-open-debugger))))))
 
+(ert-deftest vrs-source-imports-prepare-only-the-selected-session-with-test-runtime ()
+  (skip-unless (getenv "VRS_TEST_VRSCTL"))
+  (vrs-test--sessions
+   (let* ((vrs-vrsctl-command (getenv "VRS_TEST_VRSCTL"))
+          (admin (vrs--fresh-session vrs-vrsctl-command nil))
+          (target (vrs--fresh-session vrs-vrsctl-command nil)))
+     (vrs--session-evaluate
+      admin
+      (concat "(defn! hint_value () :first) (defn! hint_local () :service) "
+              "(register_entity_source :hint_value 'hint_value) "
+              "(register_entity_source :hint_local 'hint_local) "
+              "(spawn_srv! :editor_hint_first :interface '(hint_value hint_local)) "
+              "(defn! hint_value () :second) "
+              "(spawn_srv! :editor_hint_second :interface '(hint_value))"))
+     (vrs--session-evaluate target "(def hint_local nil) (def runs 0) (defn! nested () (hint_value))")
+     (with-temp-buffer
+       (vrs-mode)
+       (setq vrs--selected-session target)
+       ;; A running service alone does not make its functions available.
+       (insert "(hint_value)")
+       (should-error (vrs-eval-last-sexp t) :type 'user-error)
+       (erase-buffer)
+       (let ((prefix (concat "(bind_srv :editor_hint_first)\n"
+                             "(error \"Do not evaluate surrounding source\")\n"
+                             "(bind_srv :editor_hint_second)\n")))
+         (insert prefix "(begin (set runs (+ runs 1)) (list (nested) hint_local runs))")
+         (vrs-eval-last-sexp t)
+         (should (equal (buffer-string) (concat prefix "'(:second nil 1)")))
+         (should (equal (vrs--session-evaluate target "(entity_sources :hint_value)") "(hint_value)"))
+         (should (equal (vrs--session-evaluate target "(entity_sources :hint_local)") "()"))
+         ;; Repeated preparation preserves a later session override.
+         (vrs--session-evaluate target "(defn! hint_value () :override)")
+         (erase-buffer)
+         (insert prefix "(nested)")
+         (vrs-eval-last-sexp t)
+         (should (equal (buffer-string) (concat prefix ":override"))))
+       (erase-buffer)
+       (insert "(bind_srv :editor_hint_missing)\n(set runs 99)")
+       (should-error (vrs-eval-last-sexp t) :type 'user-error)
+       (should (equal (buffer-string) "(bind_srv :editor_hint_missing)\n(set runs 99)"))
+       (should (equal (vrs--session-evaluate target "runs") "1"))
+       (should (equal (vrs--session-evaluate
+                       (vrs--fresh-session vrs-vrsctl-command nil)
+                       "(err? (try hint_value))") "true"))))))
+
+(ert-deftest vrs-source-import-cache-follows-the-connection-with-test-runtime ()
+  (skip-unless (getenv "VRS_TEST_VRSCTL"))
+  (vrs-test--sessions
+   (let* ((vrs-vrsctl-command (getenv "VRS_TEST_VRSCTL"))
+          (admin (vrs--fresh-session vrs-vrsctl-command nil))
+          (target (vrs--fresh-session vrs-vrsctl-command nil))
+          (evaluate (symbol-function 'vrs--session-evaluate))
+          requests)
+     (vrs--session-evaluate
+      admin
+      (concat "(defn! cached_first () 1) (defn! cached_second () 2) "
+              "(spawn_srv! :editor_cache_first :interface '(cached_first)) "
+              "(spawn_srv! :editor_cache_second :interface '(cached_second))"))
+     (cl-letf (((symbol-function 'vrs--session-evaluate)
+                (lambda (session source)
+                  (when (string-prefix-p "(vrs/editor_bind_services " source)
+                    (push source requests))
+                  (funcall evaluate session source))))
+       (cl-labels ((run (session imports expression)
+                     ;; Each call uses a different buffer sharing SESSION.
+                     (with-temp-buffer
+                       (vrs-mode)
+                       (setq vrs--selected-session session)
+                       (insert imports "\n" expression)
+                       (vrs-eval-last-sexp t))))
+         (let* ((first "(bind_srv :editor_cache_first)")
+                (both (concat first "\n(bind_srv :editor_cache_second)")))
+           (run target first "(cached_first)")
+           (run target first "(cached_first)")
+           (should (= (length requests) 1))
+           (run target both "(+ (cached_first) (cached_second))")
+           (should (= (length requests) 2))
+           (should (equal (car requests) "(vrs/editor_bind_services '(:editor_cache_second))"))
+           (with-temp-buffer
+             (vrs-mode)
+             (setq vrs--selected-session target)
+             (vrs-reset-session))
+           (run target both "(+ (cached_first) (cached_second))")
+           (should (= (length requests) 3))
+           (should (equal (car requests) "(vrs/editor_bind_services '(:editor_cache_first :editor_cache_second))"))
+           (delete-process (gethash target vrs--sessions))
+           (run target both "(+ (cached_first) (cached_second))")
+           (should (= (length requests) 4))
+           (run (vrs--fresh-session vrs-vrsctl-command nil) both "(cached_second)")
+           (should (= (length requests) 5))
+           ;; A failed import must be retried, not cached as successful.
+           (dotimes (_ 2)
+             (should-error (run target "(bind_srv :editor_cache_missing)" "nil") :type 'user-error))
+           (should (= (length requests) 7))))))))
+
 (ert-deftest vrs-local-and-remote-sessions-with-test-runtime ()
   (skip-unless (getenv "VRS_TEST_REMOTE_VRSCTL"))
   (vrs-test--sessions
@@ -118,6 +213,12 @@
            (insert "(+ answer 1)")
            (vrs-eval-last-sexp t)
            (should (equal (buffer-string) "43"))
+           (erase-buffer)
+           (insert "(bind_srv :host_probe)\n(list (host_probe) answer)")
+           (vrs-eval-last-sexp t)
+           (should (equal (buffer-string) "(bind_srv :host_probe)\n'((\"beta\" 2) 42)"))
+           (dolist (untouched (list local other))
+             (should (equal (vrs--session-evaluate untouched "(err? (try host_probe))") "true")))
            (vrs-reset-session)
            (should-not (eq process (gethash remote vrs--sessions))))
          (should (equal (vrs--session-evaluate remote "(err? (try answer))") "true"))

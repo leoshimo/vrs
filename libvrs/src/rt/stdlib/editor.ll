@@ -2,6 +2,26 @@
 # symbols, and call forms cross the editor boundary as Lyric source strings.
 # No client needs to read a Lyric value using its own language's reader.
 
+(defn! vrs/editor_bind_services (services)
+  "Prepare literal editor imports, preserving existing session bindings."
+  # Snapshot once: later source imports win for newly introduced names.
+  (def existing (eval_global '(ls_env)))
+  (map services (fn (service)
+    (map (info_srv service :interface_doc) (fn (record)
+      (def exported (symbol (get (get record :interface) 0)))
+      (if (not? (contains? existing exported))
+        (eval_global (vrs/service_stub_form service record)))))))
+  # Import completion providers only where the service's binding is in use.
+  (map services (fn (service)
+    (def completions (info_srv service :entity_completions))
+    (import_entity_completions service
+      (apply concat (map (vrs/record_fields completions) (fn (pair)
+        (list (get pair 0)
+          (filter (get pair 1) (fn (provider)
+            (def metadata (try (meta (eval_global provider))))
+            (if (err? metadata) false (eq? (get metadata :service) service)))))))))))
+  :ok)
+
 (defn! vrs/source (value)
   "Serialize source data losslessly; reject opaque or unprintable values."
   (def source (display value))
