@@ -44,6 +44,79 @@ async fn service_topics_are_ready_and_share_state_with_calls() {
 }
 
 #[tokio::test]
+async fn service_topics_support_zero_and_one_argument_handlers() {
+    for start in [
+        "(spawn_srv! :reading_list_indexer :interface '(snapshot replace)
+          :topics '((:article_saved update_search_index) (:changed remember)))",
+        "(begin
+          (def child (spawn (fn ()
+            (srv! :reading_list_indexer :interface '(snapshot replace)
+              :topics '((:article_saved update_search_index) (:changed remember))
+              :ready parent))))
+          (recv (list :service_ready child))
+          child)",
+    ] {
+        let result = run_service_program(&format!(
+            r#"(begin
+          (def parent (self))
+          (def updates 0)
+          (def latest nil)
+          (defn! update_search_index ()
+            (set updates (+ updates 1))
+            (send parent :indexed))
+          (defn! remember (data)
+            (set latest data)
+            (send parent :remembered))
+          (defn! snapshot () (list updates latest))
+          (defn! replace ()
+            (set update_search_index (fn ()
+              (set updates (+ updates 10))
+              (send parent :reindexed))))
+          (def service {start})
+          (publish :article_saved '(error "payload evaluated"))
+          (publish :changed '(:article :id 7 :command (error "payload evaluated")))
+          (recv :indexed)
+          (recv :remembered)
+          (def before (call service '(:snapshot)))
+          (call service '(:replace))
+          (publish :article_saved nil)
+          (recv :reindexed)
+          (list before (call service '(:snapshot))))"#
+        ))
+        .await;
+        assert_eq!(
+            result,
+            Val::from_expr(
+                r#"((1 (:article :id 7 :command (error "payload evaluated")))
+                    (11 (:article :id 7 :command (error "payload evaluated"))))"#
+            )
+            .unwrap(),
+            "{start}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn service_topic_handler_errors_are_not_retried() {
+    for params in ["()", "(data)"] {
+        let result = run_service_program(&format!(
+            r#"(begin
+          (def attempts 0)
+          (defn! fail {params}
+            (set attempts (+ attempts 1))
+            (error "handler failed after a side effect"))
+          (defn! count_attempts () attempts)
+          (def service (spawn_srv! :events :interface '(count_attempts)
+            :topics '((:changed fail))))
+          (send service '(:topic_updated :changed :payload))
+          (call service '(:count_attempts)))"#
+        ))
+        .await;
+        assert_eq!(result, Val::Int(1), "{params}");
+    }
+}
+
+#[tokio::test]
 async fn service_dispatch_survives_event_errors_and_uses_current_handler() {
     let result = run_service_program(
         r#"(begin

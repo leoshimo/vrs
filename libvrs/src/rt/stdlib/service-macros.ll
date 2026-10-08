@@ -52,7 +52,7 @@
           (concat (list ',name) (map (list ,@params) literal_form))))
         (,name ,@params))))))
 
-# Each topic has one named, single-argument handler. Keep payloads as data.
+# Each topic has one named handler taking zero or one argument. Keep payloads as data.
 (defn! vrs/topic_clauses (topics service)
   (if (not? (list? topics)) (error ":topics must be a list"))
   (def seen '())
@@ -66,12 +66,14 @@
     (if (not? (symbol? handler)) (error "topic handler must be a symbol"))
     (def callable (eval_callsite handler))
     (if (not? (lambda? callable)) (error "topic handler must be a lambda"))
-    (if (not? (eq? (len (get (meta callable) :args)) 1))
-      (error "topic handler must accept exactly one payload argument"))
+    (def arity (len (get (meta callable) :args)))
+    (if (not? (or! (eq? arity 0) (eq? arity 1)))
+      (error "topic handler must accept zero or one payload argument"))
     (def payload (gensym "payload"))
+    (def args (if (eq? arity 0) '() (list payload)))
     (def result (gensym "result"))
     `((:topic_updated ,topic ,payload) (begin
-      (def ,result (try (,handler ,payload)))
+      (def ,result (try (,handler ,@args)))
       (if (err? ,result) (vrs/report_service_event_error ,service ,topic ,result)))))))
 
 (defmacro srv (name & options)

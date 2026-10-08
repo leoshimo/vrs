@@ -247,16 +247,17 @@ async fn topic_declarations_fail_before_spawning_or_evaluating_service_name() {
             "'((:changed 42))",
             "'((:changed missing))",
             "'((:changed constant))",
-            "'((:changed zero))",
+            "'((:changed len))",
             "'((:changed two))",
+            "'((:changed three))",
             "'((:changed handler) (:changed handler))",
         ] {
             let result = run(&format!(
                 r#"(begin
               (def effects 0)
               (defn! handler (data) data)
-              (defn! zero () nil)
               (defn! two (a b) nil)
+              (defn! three (a b c) nil)
               (def constant 42)
               (def failed (err? (try ({name} (set effects 1)
                 :interface '() :topics {topics}))))
@@ -281,9 +282,11 @@ async fn topic_declarations_fail_before_spawning_or_evaluating_service_name() {
 async fn topic_expansion_is_inspectable_without_subscribing() {
     let result = run(r#"(begin
       (defn! event (data) data)
+      (defn! refresh () nil)
       (def expansion (macroexpand_1 '(srv! :listener
-        :interface '() :topics '((:changed event)))))
+        :interface '() :topics '((:changed event) (:refresh refresh)))))
       (publish :changed 42)
+      (publish :refresh 42)
       (list expansion (ls_srv) (ls_msgs)))"#)
     .await;
     let parts = result.as_list().unwrap();
@@ -291,6 +294,9 @@ async fn topic_expansion_is_inspectable_without_subscribing() {
     assert!(source.contains("(subscribe :changed)"), "{source}");
     assert!(source.contains("(:topic_updated :changed "), "{source}");
     assert!(source.contains("(try (event "), "{source}");
+    assert!(source.contains("(subscribe :refresh)"), "{source}");
+    assert!(source.contains("(:topic_updated :refresh "), "{source}");
+    assert!(source.contains("(try (refresh))"), "{source}");
     assert_eq!(parts[1], value("()"));
     assert_eq!(parts[2], value("()"));
 }

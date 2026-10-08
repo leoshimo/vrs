@@ -148,7 +148,7 @@ across the screen when todos are completed:
 <!-- example: celebration-service -->
 ```vrs
 # celebration.ll — evaluate this file to start the subscriber.
-(defn! celebrate (todo)
+(defn! celebrate ()
   (exec "unicornleap"))
 
 (spawn_srv! :celebration

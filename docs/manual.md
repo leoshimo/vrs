@@ -738,7 +738,7 @@ subscribers on connected nodes.
 #### Subscribing a service
 
 Services can handle events using `:topics`. Each entry pairs a topic with a
-function that receives its published value:
+function that receives its published value or takes no arguments:
 
 ```vrs
 (def latest nil)
